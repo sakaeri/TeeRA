@@ -63,6 +63,9 @@ export function RosterView({
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showInviteMenu, setShowInviteMenu] = useState(false);
+  const [teamFilter, setTeamFilter] = useState("");
+  const filteredStaff = teamFilter ? staff.filter((s) => s.teams.some((t) => t.teamId === teamFilter)) : staff;
   const [proxyNamePromptFor, setProxyNamePromptFor] = useState<
     "client" | "agency" | "staff" | null
   >(null);
@@ -121,56 +124,108 @@ export function RosterView({
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between border-b border-border">
-        <div className="flex items-center gap-1">
-          <TabButton active={tab === "staff"} onClick={() => setTab("staff")}>
-            スタッフ一覧
-          </TabButton>
-          {agencyEnabled ? (
-            <TabButton active={tab === "clients"} onClick={() => setTab("clients")}>
-              依頼主一覧
-            </TabButton>
-          ) : null}
-          {dispatchEnabled ? (
-            <TabButton active={tab === "agencies"} onClick={() => setTab("agencies")}>
-              派遣会社一覧
-            </TabButton>
-          ) : null}
-          <div className="relative pb-2">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-4">
+          <h1 className="font-serif-jp text-2xl font-bold">スタッフ名簿</h1>
+          <select
+            value={teamFilter}
+            onChange={(e) => setTeamFilter(e.target.value)}
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
+          >
+            <option value="">全社（すべて表示）</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {tab === "staff" ? (
+          <div className="relative">
             <button
               type="button"
-              onClick={() => setShowAddMenu((v) => !v)}
-              className="px-3 py-2 text-sm text-muted hover:text-primary"
+              onClick={() => setShowInviteMenu((v) => !v)}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
             >
-              ＋ 取引先名簿を追加
+              ＋スタッフを招待する
             </button>
-            {showAddMenu ? (
-              <div className="absolute left-0 z-10 mt-2 w-44 rounded-lg border border-border bg-white shadow-md">
+            {showInviteMenu ? (
+              <div className="absolute right-0 z-10 mt-2 w-48 rounded-lg border border-border bg-white shadow-md">
                 <button
                   type="button"
+                  disabled={pending}
                   className="block w-full px-4 py-2 text-left text-sm hover:bg-background"
                   onClick={() => {
-                    setShowAddMenu(false);
-                    setProxyNamePromptFor("client");
+                    setShowInviteMenu(false);
+                    handleInviteStaff();
                   }}
                 >
-                  依頼主名簿
+                  本アカウントを招待
                 </button>
                 <button
                   type="button"
                   className="block w-full px-4 py-2 text-left text-sm hover:bg-background"
                   onClick={() => {
-                    setShowAddMenu(false);
-                    setProxyNamePromptFor("agency");
+                    setShowInviteMenu(false);
+                    setProxyNamePromptFor("staff");
                   }}
                 >
-                  派遣会社名簿
+                  仮アカウントを作成
                 </button>
               </div>
             ) : null}
           </div>
-        </div>
+        ) : null}
+      </div>
 
+      <div className="mb-4 flex items-center gap-1 border-b border-border">
+        <TabButton active={tab === "staff"} onClick={() => setTab("staff")}>
+          スタッフ一覧
+        </TabButton>
+        {agencyEnabled ? (
+          <TabButton active={tab === "clients"} onClick={() => setTab("clients")}>
+            依頼主一覧
+          </TabButton>
+        ) : null}
+        {dispatchEnabled ? (
+          <TabButton active={tab === "agencies"} onClick={() => setTab("agencies")}>
+            派遣会社一覧
+          </TabButton>
+        ) : null}
+        <div className="relative pb-2">
+          <button
+            type="button"
+            onClick={() => setShowAddMenu((v) => !v)}
+            className="px-3 py-2 text-sm text-muted hover:text-primary"
+          >
+            ＋ 取引先名簿を追加
+          </button>
+          {showAddMenu ? (
+            <div className="absolute left-0 z-10 mt-2 w-44 rounded-lg border border-border bg-white shadow-md">
+              <button
+                type="button"
+                className="block w-full px-4 py-2 text-left text-sm hover:bg-background"
+                onClick={() => {
+                  setShowAddMenu(false);
+                  setProxyNamePromptFor("client");
+                }}
+              >
+                依頼主名簿
+              </button>
+              <button
+                type="button"
+                className="block w-full px-4 py-2 text-left text-sm hover:bg-background"
+                onClick={() => {
+                  setShowAddMenu(false);
+                  setProxyNamePromptFor("agency");
+                }}
+              >
+                派遣会社名簿
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {inviteUrl ? (
@@ -219,23 +274,6 @@ export function RosterView({
 
       {tab === "staff" ? (
         <div>
-          <div className="mb-3 flex gap-2">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={handleInviteStaff}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              ＋本アカウントを招待
-            </button>
-            <button
-              type="button"
-              onClick={() => setProxyNamePromptFor("staff")}
-              className="rounded-lg border border-primary px-4 py-2 text-sm text-primary"
-            >
-              ＋仮アカウントを作成
-            </button>
-          </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-muted">
@@ -248,7 +286,7 @@ export function RosterView({
               </tr>
             </thead>
             <tbody>
-              {staff.map((s) => (
+              {filteredStaff.map((s) => (
                 <tr
                   key={s.membershipId}
                   className="cursor-pointer border-b border-border/60 hover:bg-background"
@@ -302,7 +340,7 @@ export function RosterView({
                   </td>
                 </tr>
               ))}
-              {staff.length === 0 ? (
+              {filteredStaff.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-6 text-center text-muted">
                     スタッフが登録されていません。

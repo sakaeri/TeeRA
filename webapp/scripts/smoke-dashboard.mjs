@@ -26,7 +26,8 @@ try {
 
   // create a staff member to use as a to-do recipient
   await page.click("text=スタッフ名簿");
-  await page.click("text=＋仮アカウントを作成");
+  await page.click("text=＋スタッフを招待する");
+  await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "todo受信スタッフ");
   await page.click("text=作成");
   await page.waitForTimeout(600);

@@ -32,7 +32,8 @@ try {
   // --- admin: invite staff
   await admin.click("text=スタッフ名簿");
   await admin.waitForURL("http://localhost:3000/company/roster");
-  await admin.click("text=＋本アカウントを招待");
+  await admin.click("text=＋スタッフを招待する");
+  await admin.click("text=本アカウントを招待");
   await admin.waitForSelector("text=招待URL:");
   const bodyText = await admin.textContent("body");
   const match = bodyText.match(/http:\/\/localhost:3000\/invite\/[A-Za-z0-9_-]+/);

@@ -28,13 +28,15 @@ try {
   await page.waitForURL("http://localhost:3000/company/roster");
 
   // invite real staff
-  await page.click("text=＋本アカウントを招待");
+  await page.click("text=＋スタッフを招待する");
+  await page.click("text=本アカウントを招待");
   await page.waitForSelector("text=招待URL:");
   let bodyText = await page.textContent("body");
   log("staff invite URL shown", bodyText.includes("招待URL:") && bodyText.includes("/invite/"));
 
   // create proxy staff
-  await page.click("text=＋仮アカウントを作成");
+  await page.click("text=＋スタッフを招待する");
+  await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "仮スタッフ花子");
   await page.click("text=作成");
   await page.waitForTimeout(800);
