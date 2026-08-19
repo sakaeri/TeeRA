@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   createAssignedShiftAction,
@@ -93,8 +93,28 @@ export function CalendarView({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [showRecruitForm, setShowRecruitForm] = useState(false);
+  const [sharingImage, setSharingImage] = useState(false);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const todayStr = new Date().toISOString().slice(0, 10);
+
+  async function shareAsImage() {
+    if (!gridRef.current || sharingImage) return;
+    setSharingImage(true);
+    try {
+      const { toBlob } = await import("html-to-image");
+      const blob = await toBlob(gridRef.current, { backgroundColor: "#ffffff", pixelRatio: 2 });
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `shift-calendar-${year}-${String(month).padStart(2, "0")}.png`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setSharingImage(false);
+    }
+  }
 
   const shiftsByDate = useMemo(() => {
     const map = new Map<string, ShiftRow[]>();
@@ -137,13 +157,30 @@ export function CalendarView({
             ›
           </Link>
         </div>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/api/calendar/pdf?y=${year}&m=${month}`}
+            target="_blank"
+            className="rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
+          >
+            PDF出力
+          </Link>
+          <button
+            type="button"
+            disabled={sharingImage}
+            onClick={shareAsImage}
+            className="rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary disabled:opacity-60"
+          >
+            {sharingImage ? "画像を作成中…" : "画像でシフトを共有"}
+          </button>
+        </div>
       </div>
 
       <p className="mb-4 text-xs text-muted">
         Tee残高: {teeBalance} Tee（公開募集で設定できる人数上限の上限: {affordableMaxEntries}名）
       </p>
 
-      <div className="grid grid-cols-7 overflow-hidden rounded-xl border border-border">
+      <div ref={gridRef} className="grid grid-cols-7 overflow-hidden rounded-xl border border-border">
         {WEEKDAYS.map((w, i) => (
           <div
             key={w}
