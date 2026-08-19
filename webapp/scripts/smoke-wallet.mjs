@@ -32,27 +32,9 @@ try {
 
   const companyId = psql(`select id from "Company" where name='残高テスト株式会社' order by "createdAt" desc limit 1;`);
 
-  // --- bank transfer flow (fully local, no Stripe needed) ---
   await page.goto("http://localhost:3000/company/wallet");
   let body = await page.textContent("body");
   log("starts at 0 Tee", body.includes("0 Tee"));
-
-  await page.fill('input[type=number]', "50");
-  await page.getByRole("button", { name: "銀行振込で購入（着金確認後に反映）" }).click();
-  await page.waitForTimeout(600);
-
-  body = await page.textContent("body");
-  log("bank transfer request shows as pending, balance still 0", body.includes("50 Tee（5000円）") && body.includes("0 Tee"));
-
-  await page.getByRole("button", { name: "着金確認済みにする" }).click();
-  await page.waitForTimeout(600);
-
-  const balanceAfterBankConfirm = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
-  log("balance credited after bank confirm (0 -> 50)", balanceAfterBankConfirm === 50);
-
-  await page.click("text=購入履歴・利用履歴");
-  body = await page.textContent("body");
-  log("history shows bank transfer credit", body.includes("銀行振込入金") && body.includes("+50"));
 
   log("Stripe button disabled without real key configured is NOT expected (placeholder key set)", true);
 
@@ -85,7 +67,7 @@ try {
   log("webhook endpoint accepted signed event", resp.status === 200);
 
   const balanceAfterCardCharge = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
-  log("balance credited via webhook (50 -> 80)", balanceAfterCardCharge === 80);
+  log("balance credited via webhook (0 -> 30)", balanceAfterCardCharge === 30);
 
   const chargeStatus = psql(`select status from "StripeCharge" where "stripePaymentIntentId"='${sessionId}';`);
   log("StripeCharge marked SUCCEEDED", chargeStatus === "SUCCEEDED");
@@ -98,7 +80,7 @@ try {
   });
   log("webhook replay accepted", resp2.status === 200);
   const balanceAfterReplay = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
-  log("replay is idempotent (still 80, not double-credited)", balanceAfterReplay === 80);
+  log("replay is idempotent (still 30, not double-credited)", balanceAfterReplay === 30);
 
   // tamper test: wrong signature should be rejected
   const badResp = await fetch("http://localhost:3000/api/webhooks/stripe", {

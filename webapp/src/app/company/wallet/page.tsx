@@ -6,7 +6,6 @@ import { WalletView } from "@/components/company/WalletView";
 
 const LEDGER_LABEL: Record<string, string> = {
   CHARGE_CARD: "クレジットカード購入",
-  CHARGE_BANK_CONFIRMED: "銀行振込入金",
   LOCK_RECRUITMENT: "公開募集ロック",
   UNLOCK_REFUND_RECRUITMENT: "公開募集ロック解除",
   CONSUME_SALARY_ISSUE: "給与明細書発行",
@@ -17,7 +16,7 @@ const LEDGER_LABEL: Record<string, string> = {
 export default async function WalletPage() {
   const { membership } = await requireCompanyAdminOrEditor();
   const company = await prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } });
-  const { ledgerEntries, bankTransfers } = await listWalletHistory(membership.companyId);
+  const ledgerEntries = await listWalletHistory(membership.companyId);
 
   return (
     <main className="mx-auto w-full max-w-3xl px-8 py-10">
@@ -32,13 +31,6 @@ export default async function WalletPage() {
           amount: e.amount,
           balanceAfter: e.balanceAfter,
           createdAt: e.createdAt.toISOString(),
-        }))}
-        bankTransfers={bankTransfers.map((b) => ({
-          id: b.id,
-          teeAmount: b.teeAmount,
-          yenAmount: b.yenAmount,
-          status: b.status,
-          createdAt: b.createdAt.toISOString(),
         }))}
       />
     </main>

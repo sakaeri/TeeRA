@@ -68,53 +68,6 @@ export async function markStripeChargeFailed(stripeSessionId: string) {
   });
 }
 
-// 銀行振込: request stays PENDING (no Tee credited) until confirmed. In a
-// full production build, confirmation would be reconciled against real bank
-// statements by TeeRA's own back office — this prototype-derived build
-// exposes it as an explicit company-admin action instead, matching how the
-// original design simplified it (no separate platform-ops role exists yet).
-export async function createBankTransferRequest(params: { companyId: string; teeAmount: number }) {
-  return prisma.bankTransferRequest.create({
-    data: {
-      companyId: params.companyId,
-      teeAmount: params.teeAmount,
-      yenAmount: params.teeAmount * teeYenPerUnit(),
-    },
-  });
-}
-
-export async function confirmBankTransferRequest(params: { bankTransferRequestId: string; confirmedByUserId: string }) {
-  const request = await prisma.bankTransferRequest.findUniqueOrThrow({
-    where: { id: params.bankTransferRequestId },
-  });
-  if (request.status !== "PENDING") throw new Error("not_pending");
-
-  return prisma.$transaction(async (tx) => {
-    await tx.bankTransferRequest.update({
-      where: { id: request.id },
-      data: { status: "CONFIRMED", confirmedByUserId: params.confirmedByUserId, confirmedAt: new Date() },
-    });
-    return postLedgerEntry(tx, {
-      companyId: request.companyId,
-      type: "CHARGE_BANK_CONFIRMED",
-      amount: request.teeAmount,
-      bankTransferRequestId: request.id,
-      createdByUserId: params.confirmedByUserId,
-    });
-  });
-}
-
-export async function cancelBankTransferRequest(bankTransferRequestId: string) {
-  return prisma.bankTransferRequest.update({
-    where: { id: bankTransferRequestId },
-    data: { status: "CANCELLED" },
-  });
-}
-
 export async function listWalletHistory(companyId: string) {
-  const [ledgerEntries, bankTransfers] = await Promise.all([
-    prisma.teeLedgerEntry.findMany({ where: { companyId }, orderBy: { createdAt: "desc" }, take: 100 }),
-    prisma.bankTransferRequest.findMany({ where: { companyId }, orderBy: { createdAt: "desc" }, take: 50 }),
-  ]);
-  return { ledgerEntries, bankTransfers };
+  return prisma.teeLedgerEntry.findMany({ where: { companyId }, orderBy: { createdAt: "desc" }, take: 100 });
 }

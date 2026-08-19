@@ -1,28 +1,20 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import {
-  createCheckoutSessionAction,
-  createBankTransferRequestAction,
-  confirmBankTransferRequestAction,
-  cancelBankTransferRequestAction,
-} from "@/app/company/wallet/actions";
+import { createCheckoutSessionAction } from "@/app/company/wallet/actions";
 
 type LedgerEntry = { id: string; label: string; amount: number; balanceAfter: number; createdAt: string };
-type BankTransfer = { id: string; teeAmount: number; yenAmount: number; status: string; createdAt: string };
 
 export function WalletView({
   teeBalance,
   yenPerUnit,
   stripeConfigured,
   ledgerEntries,
-  bankTransfers,
 }: {
   teeBalance: number;
   yenPerUnit: number;
   stripeConfigured: boolean;
   ledgerEntries: LedgerEntry[];
-  bankTransfers: BankTransfer[];
 }) {
   const [tab, setTab] = useState<"purchase" | "history">("purchase");
   const [teeAmount, setTeeAmount] = useState(100);
@@ -85,55 +77,7 @@ export function WalletView({
                   </p>
                 ) : null}
               </div>
-
-              <div>
-                <button
-                  type="button"
-                  disabled={pending || teeAmount < 1}
-                  onClick={() => startTransition(() => createBankTransferRequestAction(teeAmount))}
-                  className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
-                >
-                  銀行振込で購入（着金確認後に反映）
-                </button>
-              </div>
             </div>
-          </section>
-
-          <section className="rounded-2xl border border-border bg-white/60 p-6">
-            <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">銀行振込・着金待ち</h2>
-            {bankTransfers.filter((b) => b.status === "PENDING").length === 0 ? (
-              <p className="text-sm text-muted">着金待ちの振込はありません。</p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {bankTransfers
-                  .filter((b) => b.status === "PENDING")
-                  .map((b) => (
-                    <li key={b.id} className="flex items-center justify-between rounded-lg border border-border/60 p-3 text-sm">
-                      <span>
-                        {b.teeAmount} Tee（{b.yenAmount}円）
-                      </span>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => startTransition(() => confirmBankTransferRequestAction(b.id))}
-                          className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
-                        >
-                          着金確認済みにする
-                        </button>
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => startTransition(() => cancelBankTransferRequestAction(b.id))}
-                          className="rounded-lg border border-border px-3 py-1 text-xs"
-                        >
-                          取消
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-              </ul>
-            )}
           </section>
         </div>
       ) : (
