@@ -8,6 +8,8 @@ import {
   inviteStaff,
   createProxyStaff,
   inviteProxyUpgrade,
+  getStaffMonthDetail,
+  updateStaffNote,
 } from "@/lib/domain/roster";
 import {
   activateAgencyModuleWithProxyClient,
@@ -15,6 +17,8 @@ import {
   addRealClient,
   addRealAgency,
   inviteRelationshipUpgrade,
+  getClientMonthDetail,
+  updateClientNote,
 } from "@/lib/domain/relationships";
 import { createTeam, setTeamMemberRole, setCompanyMemberRole } from "@/lib/domain/teams";
 
@@ -216,4 +220,28 @@ export async function inviteCompanyAdminAction(role: "COMPANY_ADMIN" | "COMPANY_
     targetRole: role,
   });
   return absoluteInviteUrl(invite.token);
+}
+
+export async function getStaffMonthDetailAction(userId: string, year: number, month: number) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  return getStaffMonthDetail({ companyId: membership.companyId, userId, year, month });
+}
+
+export async function updateStaffNoteAction(membershipId: string, note: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await updateStaffNote({ membershipId, note });
+  revalidatePath("/company/roster");
+}
+
+export async function getClientMonthDetailAction(companyRelationshipId: string, year: number, month: number) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  return getClientMonthDetail({ companyId: membership.companyId, companyRelationshipId, year, month });
+}
+
+export async function updateClientNoteAction(companyRelationshipId: string, note: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await updateClientNote({ companyRelationshipId, note });
+  revalidatePath("/company/roster");
 }

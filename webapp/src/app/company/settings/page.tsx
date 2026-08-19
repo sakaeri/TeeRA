@@ -25,8 +25,6 @@ export default async function SettingsPage() {
   const menu = [
     { href: "/company/workreports", label: "業務報告" },
     { href: "/company/contracts", label: "雇用契約書管理" },
-    { href: "/company/payroll", label: "給与計算" },
-    ...(company.agencyEnabled ? [{ href: "/company/invoices", label: "請求書" }] : []),
     { href: "/company/wallet", label: "Tee残高" },
     { href: "/company/promo", label: "販促品" },
   ];

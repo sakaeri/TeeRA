@@ -120,3 +120,73 @@ export async function setRelationshipStatus(params: {
     data: { status: params.status },
   });
 }
+
+const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
+
+// 依頼主詳細パネルの稼働履歴タブ: 対象月のこの取引先向けシフト×業務報告を日付ごとにまとめる。
+export async function getClientMonthDetail(params: {
+  companyId: string;
+  companyRelationshipId: string;
+  year: number;
+  month: number;
+}) {
+  const relationship = await prisma.companyRelationship.findFirstOrThrow({
+    where: { id: params.companyRelationshipId, ownerCompanyId: params.companyId },
+    include: { clientCompany: true },
+  });
+
+  const start = new Date(Date.UTC(params.year, params.month - 1, 1));
+  const end = new Date(Date.UTC(params.year, params.month, 1));
+
+  const [shifts, placementRates] = await Promise.all([
+    prisma.shift.findMany({
+      where: {
+        companyId: params.companyId,
+        companyRelationshipId: params.companyRelationshipId,
+        date: { gte: start, lt: end },
+        status: { not: "SUPERSEDED" },
+      },
+      include: { workReport: true, staff: true },
+      orderBy: { date: "asc" },
+    }),
+    prisma.companyPlacementRate.findMany({
+      where: { companyId: params.companyId, companyRelationshipId: params.companyRelationshipId },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  const staffMap = new Map<string, string>();
+  for (const s of shifts) staffMap.set(s.staffUserId, s.staff.name);
+  const unapprovedCount = shifts.filter((s) => s.workReport && s.workReport.approvalStatus !== "APPROVED").length;
+
+  return {
+    relationshipId: relationship.id,
+    name: relationship.clientCompany?.name ?? relationship.proxyName ?? "",
+    note: relationship.note ?? "",
+    shiftCount: shifts.length,
+    unapprovedCount,
+    staff: Array.from(staffMap.entries()).map(([userId, name]) => ({ userId, name })),
+    placementRates: placementRates.map((r) => ({
+      id: r.id,
+      taskName: r.taskName,
+      amountLabel: `${WAGE_TYPE_LABEL[r.wageType]}${r.amount}円`,
+    })),
+    days: shifts.map((s) => ({
+      shiftId: s.id,
+      date: s.date.toISOString().slice(0, 10),
+      staffName: s.staff.name,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      isAllDay: s.isAllDay,
+      isUndecided: s.isUndecided,
+      approvalStatus: s.workReport?.approvalStatus ?? null,
+    })),
+  };
+}
+
+export async function updateClientNote(params: { companyRelationshipId: string; note: string }) {
+  return prisma.companyRelationship.update({
+    where: { id: params.companyRelationshipId },
+    data: { note: params.note.trim() || null },
+  });
+}

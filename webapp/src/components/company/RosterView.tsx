@@ -10,6 +10,8 @@ import {
   inviteClientUpgradeAction,
   inviteAgencyUpgradeAction,
 } from "@/app/company/actions";
+import { StaffDetailPanel } from "@/components/company/StaffDetailPanel";
+import { ClientDetailPanel } from "@/components/company/ClientDetailPanel";
 
 type StaffRow = {
   membershipId: string;
@@ -56,6 +58,8 @@ export function RosterView({
   dispatchEnabled: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("staff");
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -245,7 +249,11 @@ export function RosterView({
             </thead>
             <tbody>
               {staff.map((s) => (
-                <tr key={s.membershipId} className="border-b border-border/60">
+                <tr
+                  key={s.membershipId}
+                  className="cursor-pointer border-b border-border/60 hover:bg-background"
+                  onClick={() => setSelectedStaffId(s.userId)}
+                >
                   <td className="py-2 font-medium">
                     {s.name}
                     {s.isProxy ? (
@@ -282,7 +290,10 @@ export function RosterView({
                       <button
                         type="button"
                         disabled={pending}
-                        onClick={() => handleUpgradeProxyStaff(s.userId)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUpgradeProxyStaff(s.userId);
+                        }}
                         className="text-xs text-primary underline"
                       >
                         本アカウントと連携する→
@@ -307,6 +318,7 @@ export function RosterView({
         <RelationshipTable
           rows={clients}
           onUpgrade={(id) => handleUpgradeRelationship(id, "client")}
+          onRowClick={(id) => setSelectedRelationshipId(id)}
           pending={pending}
         />
       ) : null}
@@ -323,6 +335,13 @@ export function RosterView({
         <p className="mt-8 text-xs text-muted">
           チーム: {teams.map((t) => t.name).join("、")}（チーム割り当ては設定タブから行えます）
         </p>
+      ) : null}
+
+      {selectedStaffId ? (
+        <StaffDetailPanel userId={selectedStaffId} onClose={() => setSelectedStaffId(null)} />
+      ) : null}
+      {selectedRelationshipId ? (
+        <ClientDetailPanel relationshipId={selectedRelationshipId} onClose={() => setSelectedRelationshipId(null)} />
       ) : null}
     </div>
   );
@@ -353,10 +372,12 @@ function TabButton({
 function RelationshipTable({
   rows,
   onUpgrade,
+  onRowClick,
   pending,
 }: {
   rows: RelationshipRow[];
   onUpgrade: (id: string) => void;
+  onRowClick?: (id: string) => void;
   pending: boolean;
 }) {
   return (
@@ -370,7 +391,11 @@ function RelationshipTable({
       </thead>
       <tbody>
         {rows.map((r) => (
-          <tr key={r.id} className="border-b border-border/60">
+          <tr
+            key={r.id}
+            className={`border-b border-border/60 ${onRowClick ? "cursor-pointer hover:bg-background" : ""}`}
+            onClick={() => onRowClick?.(r.id)}
+          >
             <td className="py-2">
               {r.name}
               {r.isProxy ? (
@@ -387,7 +412,10 @@ function RelationshipTable({
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={() => onUpgrade(r.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUpgrade(r.id);
+                  }}
                   className="text-xs text-primary underline"
                 >
                   招待する

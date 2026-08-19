@@ -154,3 +154,79 @@ export async function inviteProxyUpgrade(params: {
     },
   });
 }
+
+// スタッフ詳細パネルの稼働履歴タブ: 対象月のシフト×業務報告を日付ごとにまとめる。
+export async function getStaffMonthDetail(params: {
+  companyId: string;
+  userId: string;
+  year: number;
+  month: number;
+}) {
+  const membership = await prisma.companyMembership.findFirstOrThrow({
+    where: { userId: params.userId, companyId: params.companyId, role: "STAFF" },
+    include: { user: true },
+  });
+  const teamMemberships = await prisma.teamMembership.findMany({
+    where: { userId: params.userId, team: { companyId: params.companyId } },
+    include: { team: true },
+  });
+
+  const start = new Date(Date.UTC(params.year, params.month - 1, 1));
+  const end = new Date(Date.UTC(params.year, params.month, 1));
+
+  const shifts = await prisma.shift.findMany({
+    where: {
+      companyId: params.companyId,
+      staffUserId: params.userId,
+      date: { gte: start, lt: end },
+      status: { not: "SUPERSEDED" },
+    },
+    include: { workReport: true },
+    orderBy: { date: "asc" },
+  });
+
+  const hours = shifts.reduce((sum, s) => sum + (s.workReport?.computedMinutes ?? 0) / 60, 0);
+  const daysWorked = new Set(shifts.filter((s) => s.workReport).map((s) => s.date.toISOString().slice(0, 10))).size;
+
+  const contracts = await prisma.staffContract.findMany({
+    where: { staffUserId: params.userId, template: { companyId: params.companyId } },
+    include: { template: { include: { companyRelationship: { include: { clientCompany: true } } } } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return {
+    membershipId: membership.id,
+    name: membership.user.name,
+    note: membership.note ?? "",
+    teams: teamMemberships.map((tm) => ({ teamId: tm.teamId, teamName: tm.team.name })),
+    monthlyHours: Math.round(hours * 10) / 10,
+    daysWorked,
+    contracts: contracts.map((c) => ({
+      id: c.id,
+      title: c.template.title,
+      status: c.status,
+      wageLabel: `${WAGE_TYPE_LABEL[c.template.wageType]}${c.wageAmountSnapshot}円`,
+      workplaceName:
+        c.template.workplaceType === "CLIENT"
+          ? c.template.companyRelationship?.clientCompany?.name ?? c.template.companyRelationship?.proxyName ?? "配属先"
+          : "自社",
+    })),
+    days: shifts.map((s) => ({
+      shiftId: s.id,
+      date: s.date.toISOString().slice(0, 10),
+      startTime: s.startTime,
+      endTime: s.endTime,
+      isAllDay: s.isAllDay,
+      isUndecided: s.isUndecided,
+      approvalStatus: s.workReport?.approvalStatus ?? null,
+      outcome: s.workReport?.outcome ?? null,
+    })),
+  };
+}
+
+export async function updateStaffNote(params: { membershipId: string; note: string }) {
+  return prisma.companyMembership.update({
+    where: { id: params.membershipId },
+    data: { note: params.note.trim() || null },
+  });
+}

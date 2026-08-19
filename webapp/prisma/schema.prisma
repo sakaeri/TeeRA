@@ -112,6 +112,7 @@ model CompanyMembership {
   userId    String
   companyId String
   role      CompanyRole
+  note      String? // 情報メモ (roster staff-detail panel)
   createdAt DateTime    @default(now())
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -159,6 +160,7 @@ model CompanyRelationship {
   agencyCompanyId String?
   clientCompanyId String?
   proxyName       String?
+  note            String? // 情報メモ (roster client-detail panel)
   status          RelationshipStatus @default(ACTIVE)
   createdAt       DateTime           @default(now())
 
