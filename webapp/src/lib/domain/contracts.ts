@@ -41,7 +41,10 @@ export type TemplateInput = {
 export async function listTemplates(companyId: string) {
   return prisma.contractTemplate.findMany({
     where: { companyId },
-    include: { staffContracts: { include: { staff: true } }, companyRelationship: true },
+    include: {
+      staffContracts: { include: { staff: true } },
+      companyRelationship: { include: { clientCompany: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -56,7 +59,7 @@ async function countLiveContracts(templateId: string) {
   });
 }
 
-async function recomputeTemplateLock(templateId: string) {
+export async function recomputeTemplateLock(templateId: string) {
   const count = await countLiveContracts(templateId);
   const template = await prisma.contractTemplate.findUniqueOrThrow({ where: { id: templateId } });
   if (template.status === "ARCHIVED") return;

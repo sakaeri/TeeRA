@@ -15,6 +15,7 @@ export async function createInvite(params: {
   createdByUserId: string;
   teamId?: string;
   companyRelationshipId?: string;
+  contractTemplateId?: string;
   targetRole?: CompanyRole;
 }) {
   const token = generateInviteTokenString();
@@ -27,6 +28,7 @@ export async function createInvite(params: {
       companyId: params.companyId,
       teamId: params.teamId,
       companyRelationshipId: params.companyRelationshipId,
+      contractTemplateId: params.contractTemplateId,
       targetRole: params.targetRole,
       createdByUserId: params.createdByUserId,
       expiresAt,
@@ -53,7 +55,7 @@ export async function lookupInvite(token: string) {
 // still require the redeeming user to have or create their own company, since
 // the invite links two companies together, not a person to one.
 export async function redeemInvite(token: string, userId: string) {
-  return prisma.$transaction(async (tx) => {
+  const redeemedInvite = await prisma.$transaction(async (tx) => {
     const invite = await tx.inviteToken.findUnique({ where: { token } });
     if (!invite) throw new Error("invite_not_found");
     if (invite.usedAt) throw new Error("invite_already_used");
@@ -86,6 +88,18 @@ export async function redeemInvite(token: string, userId: string) {
             data: { userId, teamId: invite.teamId, role: "TEAM_MEMBER" },
           });
         }
+        if (invite.contractTemplateId) {
+          const template = await tx.contractTemplate.findUniqueOrThrow({ where: { id: invite.contractTemplateId } });
+          await tx.staffContract.create({
+            data: {
+              templateId: template.id,
+              staffUserId: userId,
+              wageAmountSnapshot: template.wageAmount,
+              status: "ACTIVE",
+              consentedAt: new Date(),
+            },
+          });
+        }
       }
     } else {
       // CLIENT_UPGRADE / AGENCY_UPGRADE: caller must create/select their own
@@ -100,6 +114,13 @@ export async function redeemInvite(token: string, userId: string) {
 
     return invite;
   });
+
+  if (redeemedInvite.contractTemplateId) {
+    const { recomputeTemplateLock } = await import("@/lib/domain/contracts");
+    await recomputeTemplateLock(redeemedInvite.contractTemplateId);
+  }
+
+  return redeemedInvite;
 }
 
 // Links the redeeming user's own company into the CompanyRelationship the

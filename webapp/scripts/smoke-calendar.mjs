@@ -34,10 +34,9 @@ try {
   await admin.waitForURL("http://localhost:3000/company/roster");
   await admin.click("text=＋スタッフを招待する");
   await admin.click("text=本アカウントを招待");
-  await admin.waitForSelector("text=招待URL:");
-  const bodyText = await admin.textContent("body");
-  const match = bodyText.match(/http:\/\/localhost:3000\/invite\/[A-Za-z0-9_-]+/);
-  const inviteUrl = match[0];
+  await admin.getByRole("button", { name: "招待URLを発行する" }).click();
+  await admin.waitForSelector('input[readonly]');
+  const inviteUrl = await admin.locator('input[readonly]').inputValue();
   log("got staff invite url", Boolean(inviteUrl));
 
   // --- staff: register via invite

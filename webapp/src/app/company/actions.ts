@@ -27,7 +27,7 @@ function absoluteInviteUrl(token: string) {
   return `${base}/invite/${token}`;
 }
 
-export async function inviteStaffAction(teamId?: string) {
+export async function inviteStaffAction(teamId?: string, contractTemplateId?: string) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership, teamId)) throw new Error("forbidden");
 
@@ -35,6 +35,7 @@ export async function inviteStaffAction(teamId?: string) {
     companyId: membership.companyId,
     createdByUserId: userId,
     teamId,
+    contractTemplateId,
   });
   revalidatePath("/company/roster");
   return absoluteInviteUrl(invite.token);

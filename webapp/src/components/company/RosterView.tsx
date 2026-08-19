@@ -40,6 +40,14 @@ type RelationshipRow = {
 
 type Team = { id: string; name: string };
 
+type ContractTemplateOption = {
+  id: string;
+  title: string;
+  employmentTypeLabel: string;
+  wageLabel: string;
+  workplaceName: string;
+};
+
 type Tab = "staff" | "clients" | "agencies";
 
 export function RosterView({
@@ -47,6 +55,7 @@ export function RosterView({
   clients,
   agencies,
   teams,
+  templates,
   agencyEnabled,
   dispatchEnabled,
 }: {
@@ -54,6 +63,7 @@ export function RosterView({
   clients: RelationshipRow[];
   agencies: RelationshipRow[];
   teams: Team[];
+  templates: ContractTemplateOption[];
   agencyEnabled: boolean;
   dispatchEnabled: boolean;
 }) {
@@ -61,6 +71,7 @@ export function RosterView({
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [showInviteStaffModal, setShowInviteStaffModal] = useState(false);
   const [pending, startTransition] = useTransition();
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showInviteMenu, setShowInviteMenu] = useState(false);
@@ -78,9 +89,9 @@ export function RosterView({
     }
   }
 
-  function handleInviteStaff() {
+  function handleInviteStaff(contractTemplateId?: string) {
     startTransition(async () => {
-      const url = await inviteStaffAction();
+      const url = await inviteStaffAction(undefined, contractTemplateId);
       copyToClipboard(url);
     });
   }
@@ -158,7 +169,7 @@ export function RosterView({
                   className="block w-full px-4 py-2 text-left text-sm hover:bg-background"
                   onClick={() => {
                     setShowInviteMenu(false);
-                    handleInviteStaff();
+                    setShowInviteStaffModal(true);
                   }}
                 >
                   本アカウントを招待
@@ -381,6 +392,99 @@ export function RosterView({
       {selectedRelationshipId ? (
         <ClientDetailPanel relationshipId={selectedRelationshipId} onClose={() => setSelectedRelationshipId(null)} />
       ) : null}
+      {showInviteStaffModal ? (
+        <InviteStaffModal templates={templates} onClose={() => setShowInviteStaffModal(false)} />
+      ) : null}
+    </div>
+  );
+}
+
+function InviteStaffModal({
+  templates,
+  onClose,
+}: {
+  templates: ContractTemplateOption[];
+  onClose: () => void;
+}) {
+  const [templateId, setTemplateId] = useState("");
+  const [pending, startTransition] = useTransition();
+  const [url, setUrl] = useState<string | null>(null);
+  const selectedTemplate = templates.find((t) => t.id === templateId);
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">スタッフを招待する</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <p className="mb-4 text-sm text-muted">
+          このURLを共有してください。1回のみ使用できます。URLを開いた方はログインまたは新規アカウント作成後、自動的に自社の直雇用スタッフとして追加されます。
+        </p>
+
+        {templates.length > 0 ? (
+          <div className="mb-4">
+            <label className="mb-1 block text-xs text-muted">どのテンプレートで契約書を発行しますか？</label>
+            <select
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+            >
+              <option value="">選択しない</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+            {selectedTemplate ? (
+              <div className="mt-3 rounded-lg border border-border bg-background p-3 text-xs text-muted">
+                <p>雇用形態: {selectedTemplate.employmentTypeLabel}</p>
+                <p>賃金: {selectedTemplate.wageLabel}</p>
+                <p>就業場所: {selectedTemplate.workplaceName}</p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {!url ? (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                const generated = await inviteStaffAction(undefined, templateId || undefined);
+                setUrl(generated);
+              })
+            }
+            className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            招待URLを発行する
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              readOnly
+              value={url}
+              className="flex-1 rounded-lg border border-border px-3 py-2 text-sm text-muted"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof navigator !== "undefined" && navigator.clipboard) {
+                  navigator.clipboard.writeText(url).catch(() => {});
+                }
+              }}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+            >
+              コピー
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

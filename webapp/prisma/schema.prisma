@@ -216,6 +216,7 @@ model InviteToken {
   companyId             String
   teamId                String?
   companyRelationshipId String? // for CLIENT_UPGRADE / AGENCY_UPGRADE
+  contractTemplateId    String? // STAFF invite: issue this contract to the invitee on join
   targetRole            CompanyRole? // role granted on redemption (STAFF invites etc.)
   upgradeProxyUserId    String? // 本アカウントと連携する: reassigns this proxy User's membership to the real account instead of creating a new one
   createdByUserId       String
@@ -227,6 +228,7 @@ model InviteToken {
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   team                Team?                @relation(fields: [teamId], references: [id], onDelete: Cascade)
   companyRelationship CompanyRelationship? @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
+  contractTemplate    ContractTemplate?    @relation(fields: [contractTemplateId], references: [id], onDelete: SetNull)
   createdBy           User                 @relation("InviteCreatedBy", fields: [createdByUserId], references: [id])
   usedBy              User?                @relation("InviteUsedBy", fields: [usedByUserId], references: [id])
 
@@ -504,6 +506,7 @@ model ContractTemplate {
   parentTemplate      ContractTemplate?    @relation("TemplateVersions", fields: [parentTemplateId], references: [id])
   childVersions       ContractTemplate[]   @relation("TemplateVersions")
   staffContracts      StaffContract[]
+  inviteTokens        InviteToken[]
 
   @@index([companyId])
 }

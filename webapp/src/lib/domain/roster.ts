@@ -86,12 +86,14 @@ export async function inviteStaff(params: {
   companyId: string;
   createdByUserId: string;
   teamId?: string;
+  contractTemplateId?: string;
 }) {
   return createInvite({
     kind: "STAFF",
     companyId: params.companyId,
     createdByUserId: params.createdByUserId,
     teamId: params.teamId,
+    contractTemplateId: params.contractTemplateId,
     targetRole: "STAFF",
   });
 }
