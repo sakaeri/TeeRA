@@ -53,6 +53,8 @@ export default async function SettingsPage() {
       <SettingsView
         companyName={company.name}
         invoiceRegistrationNumber={company.invoiceRegistrationNumber ?? ""}
+        address={company.address ?? ""}
+        phoneNumber={company.phoneNumber ?? ""}
         admins={admins.map((a) => ({
           userId: a.userId,
           name: a.user.name,

@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import {
   updateCompanyNameAction,
   updateCompanyInvoiceRegistrationNumberAction,
+  updateCompanyAddressAction,
+  updateCompanyPhoneNumberAction,
   setCompanyMemberRoleAction,
   inviteCompanyAdminAction,
   createTeamAction,
@@ -24,19 +26,28 @@ type StaffOption = { userId: string; name: string };
 export function SettingsView({
   companyName,
   invoiceRegistrationNumber,
+  address,
+  phoneNumber,
   admins,
   teams,
   staff,
 }: {
   companyName: string;
   invoiceRegistrationNumber: string;
+  address: string;
+  phoneNumber: string;
   admins: Admin[];
   teams: Team[];
   staff: StaffOption[];
 }) {
   return (
     <div className="flex flex-col gap-10">
-      <CompanyInfoSection companyName={companyName} invoiceRegistrationNumber={invoiceRegistrationNumber} />
+      <CompanyInfoSection
+        companyName={companyName}
+        invoiceRegistrationNumber={invoiceRegistrationNumber}
+        address={address}
+        phoneNumber={phoneNumber}
+      />
       <AdminsSection admins={admins} />
       <TeamsSection teams={teams} staff={staff} />
     </div>
@@ -63,13 +74,19 @@ function SectionCard({
 function CompanyInfoSection({
   companyName,
   invoiceRegistrationNumber,
+  address,
+  phoneNumber,
 }: {
   companyName: string;
   invoiceRegistrationNumber: string;
+  address: string;
+  phoneNumber: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(companyName);
   const [regNumber, setRegNumber] = useState(invoiceRegistrationNumber);
+  const [addressValue, setAddressValue] = useState(address);
+  const [phoneValue, setPhoneValue] = useState(phoneNumber);
   const [pending, startTransition] = useTransition();
 
   if (!editing) {
@@ -80,6 +97,14 @@ function CompanyInfoSection({
             <div>
               <p className="text-xs text-muted">会社名</p>
               <p className="font-medium">{name}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">住所</p>
+              <p className="font-medium">{addressValue || "未登録"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">電話番号</p>
+              <p className="font-medium">{phoneValue || "未登録"}</p>
             </div>
             <div>
               <p className="text-xs text-muted">登録番号（インボイス番号）</p>
@@ -111,6 +136,24 @@ function CompanyInfoSection({
           />
         </label>
         <label className="flex flex-col gap-1 text-xs">
+          住所
+          <input
+            type="text"
+            value={addressValue}
+            onChange={(e) => setAddressValue(e.target.value)}
+            className="rounded-lg border border-border px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          電話番号
+          <input
+            type="text"
+            value={phoneValue}
+            onChange={(e) => setPhoneValue(e.target.value)}
+            className="rounded-lg border border-border px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
           登録番号（インボイス番号）
           <input
             type="text"
@@ -127,6 +170,8 @@ function CompanyInfoSection({
               startTransition(async () => {
                 await updateCompanyNameAction(name);
                 await updateCompanyInvoiceRegistrationNumberAction(regNumber);
+                await updateCompanyAddressAction(addressValue);
+                await updateCompanyPhoneNumberAction(phoneValue);
                 setEditing(false);
               })
             }

@@ -57,6 +57,8 @@ enum CompanyRole {
 model Company {
   id                        String   @id @default(cuid())
   name                      String
+  address                   String?
+  phoneNumber               String?
   agencyEnabled             Boolean  @default(false) // 他社へスタッフを派遣する (companyModules.agency)
   dispatchEnabled           Boolean  @default(false) // 派遣会社と連携する (companyModules.dispatch)
   invoiceRegistrationNumber String? // インボイス（適格請求書発行事業者）登録番号

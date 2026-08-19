@@ -167,6 +167,28 @@ export async function updateCompanyInvoiceRegistrationNumberAction(number: strin
   revalidatePath("/company/settings");
 }
 
+export async function updateCompanyAddressAction(address: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  await prisma.company.update({
+    where: { id: membership.companyId },
+    data: { address: address.trim() || null },
+  });
+  revalidatePath("/company/settings");
+}
+
+export async function updateCompanyPhoneNumberAction(phoneNumber: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  await prisma.company.update({
+    where: { id: membership.companyId },
+    data: { phoneNumber: phoneNumber.trim() || null },
+  });
+  revalidatePath("/company/settings");
+}
+
 export async function setCompanyMemberRoleAction(
   targetUserId: string,
   role: "COMPANY_ADMIN" | "COMPANY_EDITOR",
