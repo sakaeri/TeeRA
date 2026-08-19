@@ -1,0 +1,156 @@
+import "server-only";
+import { randomBytes } from "node:crypto";
+import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/prisma";
+import { createInvite } from "@/lib/domain/invites";
+
+export async function listStaff(companyId: string) {
+  const memberships = await prisma.companyMembership.findMany({
+    where: { companyId, role: "STAFF" },
+    include: { user: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const userIds = memberships.map((m) => m.userId);
+  const teamMemberships = await prisma.teamMembership.findMany({
+    where: { userId: { in: userIds }, team: { companyId } },
+    include: { team: true },
+  });
+
+  return memberships.map((m) => ({
+    membershipId: m.id,
+    userId: m.userId,
+    name: m.user.name,
+    email: m.user.email,
+    isProxy: m.user.isProxy,
+    createdAt: m.createdAt,
+    teams: teamMemberships
+      .filter((tm) => tm.userId === m.userId)
+      .map((tm) => ({ teamId: tm.teamId, teamName: tm.team.name, role: tm.role })),
+  }));
+}
+
+const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
+
+// Roster table summary: 今月稼働 (hours worked this month from approved WORKED
+// reports), 現在の単価 (from the staff's active contract), 契約書 status pill.
+export async function listStaffWithSummary(companyId: string) {
+  const staff = await listStaff(companyId);
+  const userIds = staff.map((s) => s.userId);
+  if (userIds.length === 0) return staff.map((s) => ({ ...s, monthlyHours: 0, currentRateLabel: "—", contractStatus: "未送付" as const }));
+
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+  const [reports, contracts] = await Promise.all([
+    prisma.workReport.findMany({
+      where: {
+        staffUserId: { in: userIds },
+        outcome: "WORKED",
+        approvalStatus: "APPROVED",
+        shift: { date: { gte: start, lt: end } },
+      },
+    }),
+    prisma.staffContract.findMany({
+      where: { staffUserId: { in: userIds }, status: { in: ["ACTIVE", "PENDING_CONSENT"] } },
+      include: { template: { include: { companyRelationship: { include: { clientCompany: true } } } } },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  return staff.map((s) => {
+    const hours = reports
+      .filter((r) => r.staffUserId === s.userId)
+      .reduce((sum, r) => sum + r.computedMinutes / 60, 0);
+
+    const contract = contracts.find((c) => c.staffUserId === s.userId);
+    const workplaceName =
+      contract?.template.workplaceType === "CLIENT"
+        ? contract.template.companyRelationship?.clientCompany?.name ?? contract.template.companyRelationship?.proxyName ?? "配属先"
+        : "自社";
+    const currentRateLabel = contract
+      ? `${workplaceName}：${WAGE_TYPE_LABEL[contract.template.wageType]}${contract.wageAmountSnapshot}円`
+      : "—";
+    const contractStatus = contract
+      ? contract.status === "ACTIVE"
+        ? ("確認済み" as const)
+        : ("確認待ち" as const)
+      : ("未送付" as const);
+
+    return { ...s, monthlyHours: Math.round(hours * 10) / 10, currentRateLabel, contractStatus };
+  });
+}
+
+export async function inviteStaff(params: {
+  companyId: string;
+  createdByUserId: string;
+  teamId?: string;
+}) {
+  return createInvite({
+    kind: "STAFF",
+    companyId: params.companyId,
+    createdByUserId: params.createdByUserId,
+    teamId: params.teamId,
+    targetRole: "STAFF",
+  });
+}
+
+// 仮アカウントを作成: a name-only placeholder staff member with no real
+// login yet. Tagged isProxy so it can later be linked to a real account via
+// a "本アカウントと連携する" invite (see inviteProxyUpgrade below).
+export async function createProxyStaff(params: {
+  companyId: string;
+  createdByUserId: string;
+  name: string;
+  teamId?: string;
+}) {
+  const placeholderEmail = `proxy-${randomBytes(8).toString("hex")}@proxy.teera.internal`;
+  const unusablePasswordHash = await bcrypt.hash(randomBytes(24).toString("hex"), 12);
+
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        name: params.name,
+        email: placeholderEmail,
+        passwordHash: unusablePasswordHash,
+        isProxy: true,
+      },
+    });
+    await tx.companyMembership.create({
+      data: { userId: user.id, companyId: params.companyId, role: "STAFF" },
+    });
+    if (params.teamId) {
+      await tx.teamMembership.create({
+        data: { userId: user.id, teamId: params.teamId, role: "TEAM_MEMBER" },
+      });
+    }
+    return user;
+  });
+}
+
+export async function inviteProxyUpgrade(params: {
+  proxyUserId: string;
+  companyId: string;
+  createdByUserId: string;
+}) {
+  const membership = await prisma.companyMembership.findFirst({
+    where: { userId: params.proxyUserId, companyId: params.companyId },
+  });
+  if (!membership) throw new Error("proxy_membership_not_found");
+
+  const token = randomBytes(24).toString("base64url");
+  const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+
+  return prisma.inviteToken.create({
+    data: {
+      token,
+      kind: "STAFF",
+      companyId: params.companyId,
+      targetRole: "STAFF",
+      upgradeProxyUserId: params.proxyUserId,
+      createdByUserId: params.createdByUserId,
+      expiresAt,
+    },
+  });
+}

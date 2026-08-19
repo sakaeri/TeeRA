@@ -1,0 +1,831 @@
+// TeeRA — shift management platform
+// Prisma schema. See /project/開発指示書.dc.html and /project/CLAUDE.md (repo root)
+// for the business rules this models. Account architecture follows the final
+// 2-login design (会社 / スタッフ) confirmed for this build: 依頼主/派遣会社 are
+// CompanyRelationship rows, not separate login roles.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Accounts / Company / Team
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  isProxy      Boolean  @default(false) // 仮アカウント — placeholder person with no real login yet
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  companyMemberships CompanyMembership[]
+  teamMemberships    TeamMembership[]
+
+  createdInvites             InviteToken[]            @relation("InviteCreatedBy")
+  usedInvite                 InviteToken?             @relation("InviteUsedBy")
+  createdTodoItems           TodoItem[]               @relation("TodoCreatedBy")
+  assignedTodoItems          TodoItem[]               @relation("TodoRecipient")
+  todoComments               TodoComment[]
+  workReportsAsStaff         WorkReport[]             @relation("WorkReportStaff")
+  approvedWorkReports        WorkReport[]             @relation("WorkReportApprover")
+  shiftsAsStaff              Shift[]                  @relation("ShiftStaff")
+  shiftRequests              ShiftRequest[]
+  recruitmentEntries         RecruitmentEntry[]
+  staffContracts             StaffContract[]
+  pointsLedgerEntries        StaffPointsLedgerEntry[]
+  promoRedemptions           PromoRedemption[]
+  conflictOverridesConfirmed ConflictOverride[]
+  salarySlips                SalarySlip[]
+
+  @@index([email])
+}
+
+enum CompanyRole {
+  COMPANY_ADMIN // 本部管理者
+  COMPANY_EDITOR // 本部編集者
+  STAFF // スタッフ
+}
+
+model Company {
+  id                        String   @id @default(cuid())
+  name                      String
+  agencyEnabled             Boolean  @default(false) // 他社へスタッフを派遣する (companyModules.agency)
+  dispatchEnabled           Boolean  @default(false) // 派遣会社と連携する (companyModules.dispatch)
+  invoiceRegistrationNumber String? // インボイス（適格請求書発行事業者）登録番号
+  teeBalance                Int      @default(0) // cached; must always equal sum(TeeLedgerEntry.amount) — see wallet.ts
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  memberships          CompanyMembership[]
+  teams                Team[]
+  ownedRelationships   CompanyRelationship[]  @relation("OwnerSide") // relationships this company created
+  agencyRelationships  CompanyRelationship[]  @relation("AgencySide") // this company sends staff out
+  clientRelationships  CompanyRelationship[]  @relation("ClientSide") // this company receives staff
+  placementRates       CompanyPlacementRate[]
+  contractTemplates    ContractTemplate[]
+  shifts               Shift[]
+  publicRecruitments   PublicRecruitment[]
+  shiftRequests        ShiftRequest[]
+  salarySlips          SalarySlip[]
+  issuedInvoices       Invoice[]
+  teeLedgerEntries     TeeLedgerEntry[]
+  bankTransferRequests BankTransferRequest[]
+  stripeCharges        StripeCharge[]
+  promoItems           PromoItem[]
+  todoItems            TodoItem[]
+  inviteTokens         InviteToken[]
+
+  @@index([name])
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  createdAt DateTime @default(now())
+
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  memberships        TeamMembership[]
+  shifts             Shift[]
+  publicRecruitments PublicRecruitment[]
+  shiftRequests      ShiftRequest[]
+  todoItems          TodoItem[]
+  inviteTokens       InviteToken[]
+
+  @@index([companyId])
+}
+
+// A user's relationship to a company: company-scope admin/editor, or staff
+// (a worker employed by / affiliated with this company).
+model CompanyMembership {
+  id        String      @id @default(cuid())
+  userId    String
+  companyId String
+  role      CompanyRole
+  createdAt DateTime    @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@index([companyId, role])
+}
+
+enum TeamRole {
+  TEAM_MANAGER // チームマネージャー — full company-admin-equivalent powers within the team
+  TEAM_LEADER // チームリーダー — view-only on contracts/billing
+  TEAM_MEMBER // plain team affiliation (e.g. staff assigned to this team)
+}
+
+// Staff and clients can belong to multiple teams simultaneously (団体共有).
+model TeamMembership {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  role      TeamRole @default(TEAM_MEMBER)
+  createdAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+enum RelationshipStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// A dispatch relationship: agencyCompany sends staff to clientCompany.
+// ownerCompanyId is whichever real company created the row (always matches
+// agencyCompanyId or clientCompanyId). The *other* side may be null when
+// that counterpart hasn't onboarded yet (仮アカウント / proxy) — proxyName
+// holds its display name in that case, until upgraded via CLIENT_UPGRADE /
+// AGENCY_UPGRADE invite redemption.
+model CompanyRelationship {
+  id              String             @id @default(cuid())
+  ownerCompanyId  String
+  agencyCompanyId String?
+  clientCompanyId String?
+  proxyName       String?
+  status          RelationshipStatus @default(ACTIVE)
+  createdAt       DateTime           @default(now())
+
+  ownerCompany  Company  @relation("OwnerSide", fields: [ownerCompanyId], references: [id], onDelete: Cascade)
+  agencyCompany Company? @relation("AgencySide", fields: [agencyCompanyId], references: [id], onDelete: SetNull)
+  clientCompany Company? @relation("ClientSide", fields: [clientCompanyId], references: [id], onDelete: SetNull)
+
+  placementRates    CompanyPlacementRate[]
+  contractTemplates ContractTemplate[]
+  shifts            Shift[]
+  invoices          Invoice[]
+  inviteTokens      InviteToken[]
+
+  @@index([ownerCompanyId])
+  @@index([agencyCompanyId])
+  @@index([clientCompanyId])
+}
+
+enum WageType {
+  HOURLY
+  DAILY
+  MONTHLY
+}
+
+// Wage/billing rate table, keyed by 配属先（自社 or a client relationship）＋業務内容.
+model CompanyPlacementRate {
+  id                    String   @id @default(cuid())
+  companyId             String
+  companyRelationshipId String? // null = 自社（本社/支社）
+  taskName              String
+  wageType              WageType
+  amount                Int
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyRelationship CompanyRelationship? @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+}
+
+enum InviteKind {
+  STAFF
+  COMPANY_ADMIN_TRANSFER // handing off/adding another company-scope admin/editor
+  CLIENT_UPGRADE // 仮アカウントの依頼主 -> 本アカウント連携
+  AGENCY_UPGRADE // 仮アカウントの派遣会社 -> 本アカウント連携
+}
+
+model InviteToken {
+  id                    String       @id @default(cuid())
+  token                 String       @unique
+  kind                  InviteKind
+  companyId             String
+  teamId                String?
+  companyRelationshipId String? // for CLIENT_UPGRADE / AGENCY_UPGRADE
+  targetRole            CompanyRole? // role granted on redemption (STAFF invites etc.)
+  upgradeProxyUserId    String? // 本アカウントと連携する: reassigns this proxy User's membership to the real account instead of creating a new one
+  createdByUserId       String
+  expiresAt             DateTime
+  usedAt                DateTime?
+  usedByUserId          String?      @unique
+  createdAt             DateTime     @default(now())
+
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  team                Team?                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  companyRelationship CompanyRelationship? @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
+  createdBy           User                 @relation("InviteCreatedBy", fields: [createdByUserId], references: [id])
+  usedBy              User?                @relation("InviteUsedBy", fields: [usedByUserId], references: [id])
+
+  @@index([companyId])
+}
+
+// ---------------------------------------------------------------------------
+// Shifts / recruitment / work reports
+// ---------------------------------------------------------------------------
+
+enum ShiftSource {
+  INHOUSE // 自社 shift — self-company approves work reports
+  CLIENT // sourced from a client's order — client (or agency-on-their-behalf if proxy) approves
+}
+
+enum ShiftCreatedVia {
+  ASSIGN // company created & assigned directly (シフトを作成)
+  STAFF_APPLICATION // matched from a staff ShiftRequest (希望を出す)
+  PUBLIC_RECRUIT_ENTRY // matched from a confirmed PublicRecruitment entry
+}
+
+enum ShiftStatus {
+  CONFIRMED
+  CANCELLED
+  SUPERSEDED // overridden by a conflict-override; kept read-only, excluded from counts
+}
+
+model Shift {
+  id                    String          @id @default(cuid())
+  companyId             String
+  teamId                String?
+  staffUserId           String
+  source                ShiftSource
+  companyRelationshipId String? // set when source = CLIENT
+  date                  DateTime        @db.Date
+  startTime             String? // "HH:mm"; null when isUndecided
+  endTime               String?
+  isAllDay              Boolean         @default(false)
+  isUndecided           Boolean         @default(false)
+  note                  String?
+  status                ShiftStatus     @default(CONFIRMED)
+  createdVia            ShiftCreatedVia
+  publicRecruitmentId   String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  team                Team?                @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  staff               User                 @relation("ShiftStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
+  companyRelationship CompanyRelationship? @relation(fields: [companyRelationshipId], references: [id], onDelete: SetNull)
+  publicRecruitment   PublicRecruitment?   @relation(fields: [publicRecruitmentId], references: [id], onDelete: SetNull)
+
+  workReport      WorkReport?
+  supersededBy    ConflictOverride? @relation("OverriddenShift")
+  supersedes      ConflictOverride? @relation("NewShift")
+  salarySlipLines SalarySlipLine[]
+  invoiceLines    InvoiceLine[]
+
+  @@index([staffUserId, date])
+  @@index([companyId, date])
+}
+
+// The employer-side conflict check (chat17/27/30) records an explicit
+// override when a company knowingly assigns over an existing shift/leave.
+model ConflictOverride {
+  id                String   @id @default(cuid())
+  newShiftId        String   @unique
+  overriddenShiftId String   @unique
+  confirmedByUserId String
+  confirmedAt       DateTime @default(now())
+
+  newShift        Shift @relation("NewShift", fields: [newShiftId], references: [id], onDelete: Cascade)
+  overriddenShift Shift @relation("OverriddenShift", fields: [overriddenShiftId], references: [id], onDelete: Cascade)
+  confirmedBy     User  @relation(fields: [confirmedByUserId], references: [id])
+}
+
+enum ShiftRequestDesire {
+  WORK // 出勤希望
+  OFF // 休み希望
+}
+
+enum ShiftRequestStatus {
+  PENDING
+  MATCHED
+  DISMISSED
+}
+
+// 未確定シフト: staff's self-submitted availability, treated as confirmed on
+// submission — the employer only decides whether/how to match it to a slot.
+model ShiftRequest {
+  id             String             @id @default(cuid())
+  staffUserId    String
+  companyId      String
+  teamId         String?
+  desire         ShiftRequestDesire
+  dates          DateTime[]         @db.Date
+  note           String?
+  status         ShiftRequestStatus @default(PENDING)
+  matchedShiftId String?
+  createdAt      DateTime           @default(now())
+
+  staff   User    @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  team    Team?   @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@index([staffUserId])
+  @@index([companyId])
+}
+
+enum RecruitmentStatus {
+  DRAFT
+  PUBLISHED
+  STOPPED
+  DELETED
+}
+
+// 公開募集: billing locks capacity × perEntryTeeCost at the moment maxEntries
+// is set (開発指示書 §2.1) — NOT per-entry billing (that model was superseded,
+// see CLAUDE.md's stale "実装済み" note vs. the final chat30 design).
+model PublicRecruitment {
+  id              String            @id @default(cuid())
+  companyId       String
+  teamId          String?
+  title           String
+  jobDescription  String?
+  date            DateTime          @db.Date
+  startTime       String?
+  endTime         String?
+  hourlyWage      Int?
+  maxEntries      Int
+  perEntryTeeCost Int               @default(10)
+  lockedTee       Int // maxEntries * perEntryTeeCost currently locked from company balance
+  status          RecruitmentStatus @default(DRAFT)
+  publishedAt     DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  company          Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  team             Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  entries          RecruitmentEntry[]
+  shifts           Shift[]
+  teeLedgerEntries TeeLedgerEntry[]
+
+  @@index([companyId, status])
+}
+
+enum RecruitmentEntryStatus {
+  APPLIED
+  CONFIRMED
+  REJECTED
+}
+
+model RecruitmentEntry {
+  id                  String                 @id @default(cuid())
+  publicRecruitmentId String
+  staffUserId         String
+  status              RecruitmentEntryStatus @default(APPLIED)
+  appliedAt           DateTime               @default(now())
+  confirmedAt         DateTime?
+  resultingShiftId    String?
+
+  publicRecruitment PublicRecruitment @relation(fields: [publicRecruitmentId], references: [id], onDelete: Cascade)
+  staff             User              @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@unique([publicRecruitmentId, staffUserId])
+}
+
+enum WorkReportOutcome {
+  WORKED // 出勤した
+  ABSENT // 欠勤
+  CANCELLED_BY_EMPLOYER // 勤務先からのキャンセル
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Absence from this table for a past Shift = unreported, defaults to 0 hours
+// for payroll/invoicing (business logic, not a stored row) — chat24/27.
+model WorkReport {
+  id              String            @id @default(cuid())
+  shiftId         String            @unique
+  staffUserId     String
+  outcome         WorkReportOutcome
+  clockIn         DateTime?
+  clockOut        DateTime?
+  breakMinutes    Int               @default(0)
+  computedMinutes Int               @default(0) // derived from clockIn/clockOut - breakMinutes; never manually edited
+  comment         String?
+  approvalStatus  ApprovalStatus    @default(PENDING)
+  approverUserId  String?
+  approvedAt      DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  shift    Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  staff    User  @relation("WorkReportStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
+  approver User? @relation("WorkReportApprover", fields: [approverUserId], references: [id])
+
+  @@index([staffUserId])
+  @@index([approvalStatus])
+}
+
+// ---------------------------------------------------------------------------
+// Contracts / wage rates
+// ---------------------------------------------------------------------------
+
+enum EmploymentType {
+  PART_TIME // アルバイト
+  FIXED_TERM_EMPLOYEE // 契約社員
+  FULL_TIME // 正社員
+  CONTRACTOR // 業務委託
+  DISPATCH_STAFF // 派遣社員
+}
+
+enum WorkplaceType {
+  INHOUSE // 自社
+  CLIENT // 配属先（派遣社員のみ必須）
+}
+
+enum ContractScheduleType {
+  FIXED // 固定
+  SHIFT // シフト制
+}
+
+enum ContractPeriodType {
+  INDEFINITE // 無期
+  FIXED_TERM // 有期
+}
+
+enum ContractTemplateStatus {
+  ACTIVE // 0 contracted staff — fully editable, deletable
+  LOCKED // >=1 contracted staff — read-only; edits fork a duplicate
+  ARCHIVED
+}
+
+model ContractTemplate {
+  id                    String                 @id @default(cuid())
+  companyId             String
+  title                 String // auto: 雇用形態＋業務内容 (editable, internal-only)
+  employmentType        EmploymentType
+  workplaceType         WorkplaceType
+  companyRelationshipId String? // required when workplaceType = CLIENT
+  jobDescription        String
+  scheduleType          ContractScheduleType
+  workStartTime         String?
+  workEndTime           String?
+  actualWorkMinutes     Int?
+  breakMinutes          Int?
+  hasOvertime           Boolean                @default(false)
+  overtimeNote          String?
+  fixedWeekdays         Int[]                  @default([]) // 0=Sun..6=Sat, for scheduleType=FIXED
+  shiftPatternNote      String? // e.g. "4勤2休", for scheduleType=SHIFT
+  restNote              String?
+  wageType              WageType
+  wageAmount            Int
+  paymentClosingDay     String? // 締め日
+  paymentDay            String? // 支払日
+  paymentMethod         String?
+  contractPeriodType    ContractPeriodType
+  contractStartDate     DateTime               @db.Date
+  contractEndDate       DateTime?              @db.Date
+  hasRenewal            Boolean                @default(false)
+  probationPeriodNote   String?
+  extraItems            Json                   @default("[]") // quick-add chips: 交通費/社会保険/... [{label, value}]
+  status                ContractTemplateStatus @default(ACTIVE)
+  parentTemplateId      String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyRelationship CompanyRelationship? @relation(fields: [companyRelationshipId], references: [id], onDelete: SetNull)
+  parentTemplate      ContractTemplate?    @relation("TemplateVersions", fields: [parentTemplateId], references: [id])
+  childVersions       ContractTemplate[]   @relation("TemplateVersions")
+  staffContracts      StaffContract[]
+
+  @@index([companyId])
+}
+
+enum StaffContractStatus {
+  PENDING_CONSENT
+  ACTIVE
+  ENDED
+}
+
+model StaffContract {
+  id                 String              @id @default(cuid())
+  templateId         String
+  staffUserId        String
+  wageAmountSnapshot Int // wage amount at the moment of consent — a rate change invalidates consent (chat27 fix)
+  consentedAt        DateTime?
+  status             StaffContractStatus @default(PENDING_CONSENT)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  template ContractTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  staff    User             @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@index([staffUserId])
+  @@index([templateId])
+}
+
+// ---------------------------------------------------------------------------
+// Payroll (salary slips) / invoicing
+// ---------------------------------------------------------------------------
+
+enum SalarySlipStatus {
+  DRAFT
+  FINALIZED // 確定 — locked numbers, no charge, no PDF
+  ISSUED // 発行 — 1 Tee charged (first time), PDF generated
+}
+
+model SalarySlip {
+  id                   String           @id @default(cuid())
+  companyId            String
+  staffUserId          String
+  targetMonth          String // "YYYY-MM"
+  status               SalarySlipStatus @default(DRAFT)
+  deductions           Json             @default("[]") // [{label, amount}] fixed + custom qty*unitPrice items
+  paidLeaveDaysUsed    Int              @default(0)
+  paidLeaveDailyRate   Int              @default(0)
+  paidLeaveGrantDays   Int              @default(10) // annual grant, edit-and-save-only
+  carriedOverFromMonth String? // set when a month's manual items/deductions/leave carry forward
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  company Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  staff   User              @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+  lines   SalarySlipLine[]
+  issues  SalarySlipIssue[]
+
+  @@unique([companyId, staffUserId, targetMonth])
+}
+
+enum SalarySlipLineKind {
+  SHIFT
+  CUSTOM
+}
+
+model SalarySlipLine {
+  id           String             @id @default(cuid())
+  salarySlipId String
+  shiftId      String?
+  kind         SalarySlipLineKind
+  description  String
+  hours        Float
+  rate         Int
+  amount       Int
+  sortOrder    Int                @default(0)
+
+  salarySlip SalarySlip @relation(fields: [salarySlipId], references: [id], onDelete: Cascade)
+  shift      Shift?     @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+}
+
+// Immutable point-in-time snapshot created on each 発行/再発行 — watermarked
+// preview until re-issued for real. First issue in a target month charges
+// 1 Tee; subsequent re-issues of the SAME month are free (chat25/27/29).
+model SalarySlipIssue {
+  id           String   @id @default(cuid())
+  salarySlipId String
+  snapshot     Json
+  chargedTee   Boolean // false on free re-issue
+  issuedAt     DateTime @default(now())
+
+  salarySlip SalarySlip @relation(fields: [salarySlipId], references: [id], onDelete: Cascade)
+}
+
+enum InvoiceStatus {
+  DRAFT
+  CONFIRMED
+  ISSUED
+}
+
+model Invoice {
+  id                                String        @id @default(cuid())
+  issuingCompanyId                  String
+  companyRelationshipId             String
+  periodLabel                       String // e.g. "2026-08"
+  invoiceRegistrationNumberSnapshot String?
+  dueDate                           DateTime?     @db.Date // required before confirm/issue
+  note                              String?
+  invoicedShiftIds                  Json          @default("[]") // locked ONLY at actual issuance, not at confirm (chat29/30 bugfix)
+  status                            InvoiceStatus @default(DRAFT)
+  createdAt                         DateTime      @default(now())
+  updatedAt                         DateTime      @updatedAt
+
+  issuingCompany      Company             @relation(fields: [issuingCompanyId], references: [id], onDelete: Cascade)
+  companyRelationship CompanyRelationship @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
+  lines               InvoiceLine[]
+  issues              InvoiceIssue[]
+
+  @@unique([issuingCompanyId, companyRelationshipId, periodLabel])
+}
+
+model InvoiceLine {
+  id             String  @id @default(cuid())
+  invoiceId      String
+  shiftId        String?
+  staffName      String
+  description    String
+  hours          Float
+  rate           Int
+  amount         Int
+  taxRatePercent Int // 10 or 8
+  sortOrder      Int     @default(0)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  shift   Shift?  @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+}
+
+// Every issuance (including re-issues) charges 1 Tee — invoice content
+// differs shift-to-shift, so unlike salary slips there is no free reissue.
+model InvoiceIssue {
+  id        String   @id @default(cuid())
+  invoiceId String
+  snapshot  Json
+  issuedAt  DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Tee wallet (transactional ledger — see 開発指示書 §5 on ledger integrity)
+// ---------------------------------------------------------------------------
+
+enum TeeLedgerEntryType {
+  CHARGE_CARD
+  CHARGE_BANK_CONFIRMED
+  LOCK_RECRUITMENT
+  UNLOCK_REFUND_RECRUITMENT
+  CONSUME_SALARY_ISSUE
+  CONSUME_INVOICE_ISSUE
+  ADJUSTMENT
+}
+
+model TeeLedgerEntry {
+  id                    String             @id @default(cuid())
+  companyId             String
+  type                  TeeLedgerEntryType
+  amount                Int // signed: +charge/refund, -lock/consume
+  balanceAfter          Int
+  publicRecruitmentId   String?
+  stripeChargeId        String?
+  bankTransferRequestId String?
+  createdByUserId       String?
+  createdAt             DateTime           @default(now())
+
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  publicRecruitment   PublicRecruitment?   @relation(fields: [publicRecruitmentId], references: [id], onDelete: SetNull)
+  stripeCharge        StripeCharge?        @relation(fields: [stripeChargeId], references: [id], onDelete: SetNull)
+  bankTransferRequest BankTransferRequest? @relation(fields: [bankTransferRequestId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+}
+
+enum BankTransferStatus {
+  PENDING // 着金待ち — no Tee credited yet
+  CONFIRMED // 着金確認後に反映
+  CANCELLED
+}
+
+model BankTransferRequest {
+  id                String             @id @default(cuid())
+  companyId         String
+  teeAmount         Int
+  yenAmount         Int
+  status            BankTransferStatus @default(PENDING)
+  confirmedByUserId String?
+  confirmedAt       DateTime?
+  createdAt         DateTime           @default(now())
+
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  teeLedgerEntries TeeLedgerEntry[]
+}
+
+enum StripeChargeStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+model StripeCharge {
+  id                    String             @id @default(cuid())
+  companyId             String
+  stripePaymentIntentId String             @unique
+  yenAmount             Int
+  teeAmount             Int
+  status                StripeChargeStatus @default(PENDING)
+  createdAt             DateTime           @default(now())
+
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  teeLedgerEntries TeeLedgerEntry[]
+}
+
+// ---------------------------------------------------------------------------
+// Staff points / promo rewards (separate from company Tee — never conflated)
+// ---------------------------------------------------------------------------
+
+enum StaffPointsLedgerEntryType {
+  EARN_REPORT_APPROVAL
+  REDEEM_PROMO
+  ADJUSTMENT
+}
+
+model StaffPointsLedgerEntry {
+  id                  String                     @id @default(cuid())
+  staffUserId         String
+  type                StaffPointsLedgerEntryType
+  points              Int // signed
+  balanceAfter        Int
+  relatedWorkReportId String?
+  relatedRedemptionId String?
+  createdAt           DateTime                   @default(now())
+
+  staff User @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@index([staffUserId, createdAt])
+}
+
+model PromoItem {
+  id          String   @id @default(cuid())
+  companyId   String
+  imageUrl    String
+  name        String
+  pointsCost  Int
+  stock       Int
+  description String?
+  createdAt   DateTime @default(now())
+
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  redemptions PromoRedemption[]
+}
+
+enum PromoRedemptionStatus {
+  PENDING_SHIPMENT // 発送待ち
+  SHIPPED // 発送済み — manually marked by admin, no courier API
+}
+
+model PromoRedemption {
+  id          String                @id @default(cuid())
+  promoItemId String
+  staffUserId String
+  pointsSpent Int
+  status      PromoRedemptionStatus @default(PENDING_SHIPMENT)
+  shippedAt   DateTime?
+  createdAt   DateTime              @default(now())
+
+  promoItem PromoItem @relation(fields: [promoItemId], references: [id], onDelete: Cascade)
+  staff     User      @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard / To-Do list
+// ---------------------------------------------------------------------------
+
+enum TodoKind {
+  MANUAL // リスト
+  AUTO_SHORTAGE // 欠員
+  AUTO_SHIFT_UNCONFIRMED // シフト未確定
+  AUTO_WORK_REPORT // 業務報告
+  AUTO_CONTRACT // 契約書
+  AUTO_PROMO // 販促品
+}
+
+enum TodoStatus {
+  OPEN
+  RESOLVED
+}
+
+model TodoItem {
+  id                String     @id @default(cuid())
+  companyId         String
+  teamId            String?
+  kind              TodoKind
+  title             String
+  dueDate           DateTime?  @db.Date
+  recipientUserId   String? // restricted to same-company/same-team members only
+  createdByUserId   String?
+  imageUrl          String?
+  status            TodoStatus @default(OPEN)
+  resolvedAt        DateTime?
+  relatedEntityType String?
+  relatedEntityId   String?
+  createdAt         DateTime   @default(now())
+
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  team      Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  recipient User?         @relation("TodoRecipient", fields: [recipientUserId], references: [id])
+  createdBy User?         @relation("TodoCreatedBy", fields: [createdByUserId], references: [id])
+  comments  TodoComment[]
+
+  @@index([companyId, status])
+}
+
+model TodoComment {
+  id           String   @id @default(cuid())
+  todoItemId   String
+  authorUserId String
+  body         String
+  createdAt    DateTime @default(now())
+
+  todoItem TodoItem @relation(fields: [todoItemId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [authorUserId], references: [id])
+}

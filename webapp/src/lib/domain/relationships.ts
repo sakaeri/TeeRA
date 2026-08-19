@@ -1,0 +1,122 @@
+import "server-only";
+import { randomBytes } from "node:crypto";
+import { prisma } from "@/lib/prisma";
+
+// 依頼主一覧 (from this company's perspective as the sending/agency side):
+// companies this company sends staff to.
+export async function listClients(companyId: string) {
+  return prisma.companyRelationship.findMany({
+    where: { ownerCompanyId: companyId, agencyCompanyId: companyId },
+    include: { clientCompany: true },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+// 派遣会社一覧 (from this company's perspective as the receiving/client side):
+// companies that send staff to this company.
+export async function listAgencies(companyId: string) {
+  return prisma.companyRelationship.findMany({
+    where: { ownerCompanyId: companyId, clientCompanyId: companyId },
+    include: { agencyCompany: true },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+// "+ 取引先名簿を追加" -> 依頼主名簿: activates companyModules.agency and
+// creates a proxy client relationship in one step (chat29's one-click flow).
+export async function activateAgencyModuleWithProxyClient(params: {
+  companyId: string;
+  proxyName: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    await tx.company.update({
+      where: { id: params.companyId },
+      data: { agencyEnabled: true },
+    });
+    return tx.companyRelationship.create({
+      data: {
+        ownerCompanyId: params.companyId,
+        agencyCompanyId: params.companyId,
+        clientCompanyId: null,
+        proxyName: params.proxyName,
+      },
+    });
+  });
+}
+
+// "+ 取引先名簿を追加" -> 派遣会社名簿: activates companyModules.dispatch and
+// creates a proxy agency relationship in one step.
+export async function activateDispatchModuleWithProxyAgency(params: {
+  companyId: string;
+  proxyName: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    await tx.company.update({
+      where: { id: params.companyId },
+      data: { dispatchEnabled: true },
+    });
+    return tx.companyRelationship.create({
+      data: {
+        ownerCompanyId: params.companyId,
+        clientCompanyId: params.companyId,
+        agencyCompanyId: null,
+        proxyName: params.proxyName,
+      },
+    });
+  });
+}
+
+export async function addRealClient(params: { companyId: string; proxyName: string }) {
+  return prisma.companyRelationship.create({
+    data: {
+      ownerCompanyId: params.companyId,
+      agencyCompanyId: params.companyId,
+      clientCompanyId: null,
+      proxyName: params.proxyName,
+    },
+  });
+}
+
+export async function addRealAgency(params: { companyId: string; proxyName: string }) {
+  return prisma.companyRelationship.create({
+    data: {
+      ownerCompanyId: params.companyId,
+      clientCompanyId: params.companyId,
+      agencyCompanyId: null,
+      proxyName: params.proxyName,
+    },
+  });
+}
+
+// 招待する: invite the proxy counterpart to link their own real company
+// account to this relationship (CLIENT_UPGRADE / AGENCY_UPGRADE).
+export async function inviteRelationshipUpgrade(params: {
+  companyRelationshipId: string;
+  companyId: string; // owner company issuing the invite
+  createdByUserId: string;
+  kind: "CLIENT_UPGRADE" | "AGENCY_UPGRADE";
+}) {
+  const token = randomBytes(24).toString("base64url");
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+  return prisma.inviteToken.create({
+    data: {
+      token,
+      kind: params.kind,
+      companyId: params.companyId,
+      companyRelationshipId: params.companyRelationshipId,
+      createdByUserId: params.createdByUserId,
+      expiresAt,
+    },
+  });
+}
+
+export async function setRelationshipStatus(params: {
+  companyRelationshipId: string;
+  status: "ACTIVE" | "INACTIVE";
+}) {
+  return prisma.companyRelationship.update({
+    where: { id: params.companyRelationshipId },
+    data: { status: params.status },
+  });
+}
