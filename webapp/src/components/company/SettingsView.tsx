@@ -329,7 +329,9 @@ function TeamsSection({
                 );
               })}
               {staff.length === 0 ? (
-                <p className="text-xs text-muted">スタッフが未登録です。</p>
+                <p className="text-xs text-muted">
+                  会社にスタッフがいません。スタッフ名簿から招待すると、ここでチームへの割り当てができます。
+                </p>
               ) : null}
             </div>
           </div>

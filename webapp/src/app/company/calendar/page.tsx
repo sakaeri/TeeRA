@@ -16,9 +16,10 @@ export default async function CompanyCalendarPage({
   const now = new Date();
   const year = Number(sp.y) || now.getUTCFullYear();
   const month = Number(sp.m) || now.getUTCMonth() + 1;
+  const teamId = typeof sp.team === "string" && sp.team ? sp.team : undefined;
 
   const [shifts, staff, teams, shiftRequests, recruitments, company] = await Promise.all([
-    listShiftsForMonth({ companyId: membership.companyId, year, month }),
+    listShiftsForMonth({ companyId: membership.companyId, year, month, teamId }),
     listStaff(membership.companyId),
     listTeams(membership.companyId),
     listShiftRequests({ companyId: membership.companyId, status: "PENDING" }),
@@ -31,10 +32,10 @@ export default async function CompanyCalendarPage({
 
   return (
     <main className="mx-auto w-full max-w-6xl px-8 py-10">
-      <h1 className="mb-6 font-serif-jp text-2xl font-bold">シフトカレンダー</h1>
       <CalendarView
         year={year}
         month={month}
+        selectedTeamId={teamId}
         shifts={shifts.map((s) => ({
           id: s.id,
           date: s.date.toISOString().slice(0, 10),

@@ -84,7 +84,7 @@ try {
   await admin.locator("button", { hasText: "＋" }).last().click();
   await admin.getByText("シフトを作成").click();
   await admin.waitForSelector('input[type="date"]');
-  await admin.selectOption("select >> nth=1", { label: "GREEN TABLE 渋谷店" });
+  await admin.selectOption("select >> nth=2", { label: "GREEN TABLE 渋谷店" });
   await admin.fill('input[type=date]', today);
   await admin.getByRole("button", { name: "作成する" }).click();
   await admin.waitForTimeout(800);

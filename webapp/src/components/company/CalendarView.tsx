@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   createAssignedShiftAction,
   matchShiftRequestAction,
@@ -70,6 +71,7 @@ function weekdayColor(dow: number) {
 export function CalendarView({
   year,
   month,
+  selectedTeamId,
   shifts,
   staffOptions,
   teams,
@@ -81,6 +83,7 @@ export function CalendarView({
 }: {
   year: number;
   month: number;
+  selectedTeamId?: string;
   shifts: ShiftRow[];
   staffOptions: StaffOption[];
   teams: Team[];
@@ -90,6 +93,7 @@ export function CalendarView({
   affordableMaxEntries: number;
   clients: { id: string; name: string }[];
 }) {
+  const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [showRecruitForm, setShowRecruitForm] = useState(false);
@@ -145,17 +149,25 @@ export function CalendarView({
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href={`?y=${prev.y}&m=${prev.m}`} className="text-lg text-muted">
-            ‹
-          </Link>
-          <div className="font-serif-jp text-lg font-bold">
-            {year}年{month}月
-          </div>
-          <Link href={`?y=${next.y}&m=${next.m}`} className="text-lg text-muted">
-            ›
-          </Link>
+          <h1 className="font-serif-jp text-2xl font-bold">シフトカレンダー</h1>
+          <select
+            value={selectedTeamId ?? ""}
+            onChange={(e) => {
+              const params = new URLSearchParams({ y: String(year), m: String(month) });
+              if (e.target.value) params.set("team", e.target.value);
+              router.push(`?${params.toString()}`);
+            }}
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
+          >
+            <option value="">全社（すべて表示）</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="flex items-center gap-2">
           <Link
@@ -176,9 +188,18 @@ export function CalendarView({
         </div>
       </div>
 
-      <p className="mb-4 text-xs text-muted">
-        Tee残高: {teeBalance} Tee（公開募集で設定できる人数上限の上限: {affordableMaxEntries}名）
-      </p>
+      <div className="rounded-2xl border border-border bg-white/60 p-6">
+      <div className="mb-4 flex items-center justify-center gap-4">
+        <Link href={`?y=${prev.y}&m=${prev.m}${selectedTeamId ? `&team=${selectedTeamId}` : ""}`} className="text-lg text-muted">
+          ‹
+        </Link>
+        <div className="font-serif-jp text-lg font-bold">
+          {year}年{month}月
+        </div>
+        <Link href={`?y=${next.y}&m=${next.m}${selectedTeamId ? `&team=${selectedTeamId}` : ""}`} className="text-lg text-muted">
+          ›
+        </Link>
+      </div>
 
       <div ref={gridRef} className="grid grid-cols-7 overflow-hidden rounded-xl border border-border">
         {WEEKDAYS.map((w, i) => (
@@ -237,6 +258,7 @@ export function CalendarView({
             </button>
           );
         })}
+      </div>
       </div>
 
       {selectedDate ? (
