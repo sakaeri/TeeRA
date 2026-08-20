@@ -6,6 +6,7 @@ import {
   deletePromoItemAction,
   markRedemptionShippedAction,
 } from "@/app/company/promo/actions";
+import { uploadFile } from "@/lib/uploadFile";
 
 type Item = {
   id: string;
@@ -29,6 +30,8 @@ export function PromoManageView({ items, redemptions }: { items: Item[]; redempt
   const [pending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [pointsCost, setPointsCost] = useState("");
   const [stock, setStock] = useState("");
@@ -52,6 +55,37 @@ export function PromoManageView({ items, redemptions }: { items: Item[]; redempt
 
         {showForm ? (
           <div className="mb-4 grid grid-cols-2 gap-3 rounded-xl border border-border p-4">
+            <div className="col-span-2 flex items-center gap-3">
+              {imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={imageUrl} alt="" className="h-16 w-16 rounded-lg object-cover" />
+              ) : null}
+              <label className="flex flex-col gap-1 text-xs">
+                商品画像
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={uploading}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploading(true);
+                    setUploadError(null);
+                    try {
+                      const url = await uploadFile(file);
+                      setImageUrl(url);
+                    } catch (err) {
+                      setUploadError(err instanceof Error ? err.message : "アップロードに失敗しました");
+                    } finally {
+                      setUploading(false);
+                    }
+                  }}
+                  className="text-sm"
+                />
+              </label>
+              {uploading ? <span className="text-xs text-muted">アップロード中...</span> : null}
+              {uploadError ? <span className="text-xs text-red-600">{uploadError}</span> : null}
+            </div>
             <input
               type="text"
               placeholder="画像URL"
@@ -59,6 +93,7 @@ export function PromoManageView({ items, redemptions }: { items: Item[]; redempt
               onChange={(e) => setImageUrl(e.target.value)}
               className="col-span-2 rounded-lg border border-border px-2 py-2 text-sm"
             />
+            <p className="col-span-2 -mt-2 text-xs text-muted">アップロードすると自動入力されます。直接貼り付けも可。</p>
             <input
               type="text"
               placeholder="商品名"
