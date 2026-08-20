@@ -30,7 +30,7 @@ type OpenTodo = {
 
 type ResolvedTodo = { id: string; title: string; dueDate: string; recipientName: string; resolvedAt: string };
 
-type PromoItem = { id: string; name: string; pointsCost: number; stock: number };
+type PromoItem = { id: string; imageUrl: string; name: string; pointsCost: number; stock: number };
 type PromoOrder = { id: string; itemName: string; staffName: string; status: string; createdAt: string };
 
 const KPI_CARDS: { key: keyof Kpis; label: string; href: string }[] = [
@@ -305,11 +305,20 @@ function TodoSection({
       {tab === "promoList" ? (
         <ul className="flex flex-col gap-2">
           {promoItems.map((p) => (
-            <li key={p.id} className="flex items-center justify-between rounded-lg border border-border/60 p-3 text-sm">
-              <span>{p.name}</span>
+            <li key={p.id} className="flex items-center gap-3 rounded-lg border border-border/60 p-3 text-sm">
+              {p.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={p.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+              ) : (
+                <div className="h-10 w-10 shrink-0 rounded-lg bg-background" />
+              )}
+              <span className="flex-1">{p.name}</span>
               <span className="text-muted">
                 {p.pointsCost}pt ／ 在庫 {p.stock}
               </span>
+              <Link href="/company/settings?tab=promo" className="text-xs text-primary underline">
+                編集・削除する
+              </Link>
             </li>
           ))}
           {promoItems.length === 0 ? <p className="text-center text-muted">販促品が登録されていません。</p> : null}
