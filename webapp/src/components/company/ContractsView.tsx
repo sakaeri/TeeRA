@@ -728,11 +728,18 @@ function TemplateModal({
 
           <Row label="その他項目">
             {preview ? (
-              <span className="text-sm">
-                {extraItems.length > 0
-                  ? extraItems.map((i) => `${i.label}${i.value ? `（${i.value}）` : ""}`).join("、")
-                  : "なし"}
-              </span>
+              extraItems.length > 0 ? (
+                <div className="flex flex-col gap-1.5">
+                  {extraItems.map((i) => (
+                    <p key={i.label} className="text-sm">
+                      <span className="font-semibold">{i.label}</span>
+                      {i.value ? `：${i.value}` : ""}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-sm">なし</span>
+              )
             ) : (
               <div className="flex flex-col gap-2">
                 {extraItems.length > 0 ? (
