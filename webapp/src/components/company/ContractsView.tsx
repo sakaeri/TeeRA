@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import {
   createTemplateAction,
+  updateTemplateAction,
   deleteTemplateAction,
   upsertPlacementRateAction,
   deletePlacementRateAction,
@@ -13,9 +14,28 @@ type Template = {
   title: string;
   employmentType: string;
   workplaceType: string;
+  workplaceNote: string | null;
   clientName: string | null;
+  jobDescription: string;
+  scheduleType: string;
+  workStartTime: string | null;
+  workEndTime: string | null;
+  actualWorkMinutes: number | null;
+  breakMinutes: number | null;
+  hasOvertime: boolean;
+  overtimeNote: string | null;
+  fixedWeekdays: number[];
+  shiftPatternNote: string | null;
+  restNote: string | null;
   wageType: string;
   wageAmount: number;
+  paymentClosingDay: string | null;
+  paymentDay: string | null;
+  paymentMethod: string | null;
+  contractPeriodType: string;
+  contractStartDate: string;
+  contractEndDate: string | null;
+  extraItems: { label: string; value: string }[];
   status: string;
   contractedStaffNames: string[];
 };
@@ -187,6 +207,8 @@ function TemplatesSection({
   companyName: string;
 }) {
   const [showModal, setShowModal] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   return (
@@ -201,6 +223,14 @@ function TemplatesSection({
 
       {showModal ? (
         <TemplateModal clients={clients} companyName={companyName} onClose={() => setShowModal(false)} />
+      ) : null}
+      {editingTemplate ? (
+        <TemplateModal
+          clients={clients}
+          companyName={companyName}
+          editingTemplate={editingTemplate}
+          onClose={() => setEditingTemplate(null)}
+        />
       ) : null}
 
       <ul className="mt-4 flex flex-col gap-3">
@@ -224,16 +254,37 @@ function TemplatesSection({
             {t.contractedStaffNames.length > 0 ? (
               <p className="text-xs text-muted">契約中: {t.contractedStaffNames.join("、")}</p>
             ) : null}
-            {t.status !== "LOCKED" ? (
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => startTransition(() => deleteTemplateAction(t.id))}
-                className="mt-2 text-xs text-red-600 underline"
-              >
-                削除
-              </button>
-            ) : null}
+
+            {confirmDeleteId === t.id ? (
+              <div className="mt-2 flex items-center gap-2 text-xs">
+                <span className="text-red-600">本当に削除しますか？</span>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => startTransition(async () => {
+                    await deleteTemplateAction(t.id);
+                    setConfirmDeleteId(null);
+                  })}
+                  className="rounded-lg bg-red-600 px-2 py-1 font-semibold text-white disabled:opacity-60"
+                >
+                  削除する
+                </button>
+                <button type="button" onClick={() => setConfirmDeleteId(null)} className="text-muted underline">
+                  キャンセル
+                </button>
+              </div>
+            ) : (
+              <div className="mt-2 flex items-center gap-3 text-xs">
+                <button type="button" onClick={() => setEditingTemplate(t)} className="text-primary underline">
+                  編集
+                </button>
+                {t.status !== "LOCKED" ? (
+                  <button type="button" onClick={() => setConfirmDeleteId(t.id)} className="text-red-600 underline">
+                    削除
+                  </button>
+                ) : null}
+              </div>
+            )}
           </li>
         ))}
         {templates.length === 0 ? (
@@ -309,36 +360,50 @@ const fieldInput = "rounded-lg border border-border px-2 py-2 text-sm";
 function TemplateModal({
   clients,
   companyName,
+  editingTemplate,
   onClose,
 }: {
   clients: ClientOption[];
   companyName: string;
+  editingTemplate?: Template;
   onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
-  const [customTitle, setCustomTitle] = useState("");
-  const [employmentType, setEmploymentType] = useState("PART_TIME");
-  const [workplaceNote, setWorkplaceNote] = useState("");
-  const [jobDescription, setJobDescription] = useState("");
-  const [contractPeriodType, setContractPeriodType] = useState<"INDEFINITE" | "FIXED_TERM">("INDEFINITE");
-  const [contractStartDate, setContractStartDate] = useState(new Date().toISOString().slice(0, 10));
-  const [contractEndDate, setContractEndDate] = useState("");
-  const [wageType, setWageType] = useState("HOURLY");
-  const [wageAmount, setWageAmount] = useState("");
-  const [scheduleType, setScheduleType] = useState<"FIXED" | "SHIFT">("FIXED");
-  const [workStartTime, setWorkStartTime] = useState("");
-  const [workEndTime, setWorkEndTime] = useState("");
-  const [actualWorkHours, setActualWorkHours] = useState("8");
-  const [breakMinutes, setBreakMinutes] = useState("60");
-  const [hasOvertime, setHasOvertime] = useState(false);
-  const [overtimeNote, setOvertimeNote] = useState("");
-  const [fixedWeekdays, setFixedWeekdays] = useState<number[]>([]);
-  const [shiftPatternNote, setShiftPatternNote] = useState("");
-  const [restNote, setRestNote] = useState("");
-  const [paymentClosingDay, setPaymentClosingDay] = useState("");
-  const [paymentDay, setPaymentDay] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("振込");
-  const [extraItems, setExtraItems] = useState<{ label: string; value: string }[]>([]);
+  const [customTitle, setCustomTitle] = useState(editingTemplate?.title ?? "");
+  const [employmentType, setEmploymentType] = useState(editingTemplate?.employmentType ?? "PART_TIME");
+  const [workplaceNote, setWorkplaceNote] = useState(editingTemplate?.workplaceNote ?? "");
+  const [jobDescription, setJobDescription] = useState(editingTemplate?.jobDescription ?? "");
+  const [contractPeriodType, setContractPeriodType] = useState<"INDEFINITE" | "FIXED_TERM">(
+    (editingTemplate?.contractPeriodType as "INDEFINITE" | "FIXED_TERM") ?? "INDEFINITE",
+  );
+  const [contractStartDate, setContractStartDate] = useState(
+    editingTemplate?.contractStartDate ?? new Date().toISOString().slice(0, 10),
+  );
+  const [contractEndDate, setContractEndDate] = useState(editingTemplate?.contractEndDate ?? "");
+  const [wageType, setWageType] = useState(editingTemplate?.wageType ?? "HOURLY");
+  const [wageAmount, setWageAmount] = useState(editingTemplate ? String(editingTemplate.wageAmount) : "");
+  const [scheduleType, setScheduleType] = useState<"FIXED" | "SHIFT">(
+    (editingTemplate?.scheduleType as "FIXED" | "SHIFT") ?? "FIXED",
+  );
+  const [workStartTime, setWorkStartTime] = useState(editingTemplate?.workStartTime ?? "");
+  const [workEndTime, setWorkEndTime] = useState(editingTemplate?.workEndTime ?? "");
+  const [actualWorkHours, setActualWorkHours] = useState(
+    editingTemplate?.actualWorkMinutes ? String(editingTemplate.actualWorkMinutes / 60) : "8",
+  );
+  const [breakMinutes, setBreakMinutes] = useState(
+    editingTemplate?.breakMinutes != null ? String(editingTemplate.breakMinutes) : "60",
+  );
+  const [hasOvertime, setHasOvertime] = useState(editingTemplate?.hasOvertime ?? false);
+  const [overtimeNote, setOvertimeNote] = useState(editingTemplate?.overtimeNote ?? "");
+  const [fixedWeekdays, setFixedWeekdays] = useState<number[]>(editingTemplate?.fixedWeekdays ?? []);
+  const [shiftPatternNote, setShiftPatternNote] = useState(editingTemplate?.shiftPatternNote ?? "");
+  const [restNote, setRestNote] = useState(editingTemplate?.restNote ?? "");
+  const [paymentClosingDay, setPaymentClosingDay] = useState(editingTemplate?.paymentClosingDay ?? "");
+  const [paymentDay, setPaymentDay] = useState(editingTemplate?.paymentDay ?? "");
+  const [paymentMethod, setPaymentMethod] = useState(editingTemplate?.paymentMethod ?? "振込");
+  const [extraItems, setExtraItems] = useState<{ label: string; value: string }[]>(
+    editingTemplate?.extraItems ?? [],
+  );
   const [customChipLabel, setCustomChipLabel] = useState("");
   const [customChipValue, setCustomChipValue] = useState("");
   const [showCustomChipForm, setShowCustomChipForm] = useState(false);
@@ -374,10 +439,10 @@ function TemplateModal({
   const canSubmit = Boolean(jobDescription) && Boolean(wageAmount);
 
   async function submitTemplate() {
-    await createTemplateAction({
+    const payload = {
       title,
       employmentType: employmentType as never,
-      workplaceType: workplaceNote.trim() ? "CLIENT" : "INHOUSE",
+      workplaceType: (workplaceNote.trim() ? "CLIENT" : "INHOUSE") as never,
       workplaceNote: workplaceNote.trim() || undefined,
       jobDescription,
       scheduleType,
@@ -402,7 +467,13 @@ function TemplateModal({
         contractPeriodType === "FIXED_TERM" && contractEndDate ? new Date(`${contractEndDate}T00:00:00.000Z`) : undefined,
       hasRenewal: false,
       extraItems,
-    });
+    };
+
+    if (editingTemplate) {
+      await updateTemplateAction(editingTemplate.id, payload);
+    } else {
+      await createTemplateAction(payload);
+    }
   }
 
   return (
@@ -412,7 +483,10 @@ function TemplateModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-serif-jp text-lg font-bold text-primary">雇用契約書{preview ? "" : "テンプレート"}</h3>
+          <h3 className="font-serif-jp text-lg font-bold text-primary">
+            雇用契約書{preview ? "" : "テンプレート"}
+            {editingTemplate && !preview ? "の編集" : ""}
+          </h3>
           <button type="button" onClick={onClose} className="text-muted">
             ✕
           </button>
@@ -855,9 +929,14 @@ function TemplateModal({
             }
             className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
-            テンプレートを生成
+            {editingTemplate ? "更新する" : "テンプレートを生成"}
           </button>
         </div>
+        {editingTemplate?.status === "LOCKED" ? (
+          <p className="mt-2 text-xs text-muted">
+            このテンプレートは契約中のスタッフがいるため、更新すると複製として新しく保存されます（元のテンプレートはそのまま残ります）。
+          </p>
+        ) : null}
       </div>
     </div>
   );
