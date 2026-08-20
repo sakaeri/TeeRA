@@ -51,7 +51,7 @@ export function ImageDropzone({
           const file = e.dataTransfer.files?.[0];
           if (file) handleFile(file);
         }}
-        className={`flex h-40 w-40 cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border-2 border-dashed p-3 text-center ${
+        className={`flex aspect-square w-full cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border-2 border-dashed p-3 text-center ${
           dragOver ? "border-primary bg-primary/5" : "border-border"
         }`}
       >

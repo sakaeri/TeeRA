@@ -222,14 +222,13 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
                 className="rounded-lg border border-border px-2 py-2 text-sm"
               />
             </label>
-            <label className="flex flex-col gap-1 text-xs">
+            <label className="flex flex-1 flex-col gap-1 text-xs">
               詳細説明文（任意）
               <textarea
                 placeholder="商品の説明など"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                rows={4}
-                className="rounded-lg border border-border px-2 py-2 text-sm"
+                className="flex-1 resize-none rounded-lg border border-border px-2 py-2 text-sm"
               />
             </label>
           </div>
