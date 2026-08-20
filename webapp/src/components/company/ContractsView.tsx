@@ -315,7 +315,7 @@ function TemplateModal({
   const [contractEndDate, setContractEndDate] = useState("");
   const [wageType, setWageType] = useState("HOURLY");
   const [wageAmount, setWageAmount] = useState("");
-  const [scheduleType, setScheduleType] = useState<"FIXED" | "SHIFT">("SHIFT");
+  const [scheduleType, setScheduleType] = useState<"FIXED" | "SHIFT">("FIXED");
   const [workStartTime, setWorkStartTime] = useState("");
   const [workEndTime, setWorkEndTime] = useState("");
   const [actualWorkHours, setActualWorkHours] = useState("8");
@@ -330,7 +330,7 @@ function TemplateModal({
   const [paymentMethod, setPaymentMethod] = useState("振込");
   const [extraItems, setExtraItems] = useState<{ label: string; value: string }[]>([]);
   const [customChipLabel, setCustomChipLabel] = useState("");
-  const [showPreview, setShowPreview] = useState(false);
+  const [mode, setMode] = useState<"form" | "preview">("form");
 
   const autoTitle = `${EMPLOYMENT_TYPE_LABEL[employmentType]}${jobDescription ? "・" + jobDescription : ""}`;
   const title = customTitle.trim() || autoTitle;
@@ -361,29 +361,87 @@ function TemplateModal({
     Boolean(wageAmount) &&
     (workplaceType === "INHOUSE" || Boolean(companyRelationshipId));
 
-  function buildPreviewText() {
+  function previewIntroText() {
+    return `${companyName}（以下「甲」）と（スタッフ名/自動反映）（以下「乙」）は、${
+      contractStartDate || "開始日未設定"
+    }より、以下の内容で雇用契約を締結する。`;
+  }
+
+  function previewRows(): { label: string; value: string }[] {
     const clientName = clients.find((c) => c.id === companyRelationshipId)?.name;
-    const lines = [
-      `${companyName}（以下「甲」）と（スタッフ名/自動反映）（以下「乙」）は、${contractStartDate || "開始日未設定"}より、以下の内容で雇用契約を締結する。`,
-      "",
-      `雇用主（甲）：${companyName}`,
-      "従業員（乙）：（自動反映）",
-      `雇用形態：${EMPLOYMENT_TYPE_LABEL[employmentType]}`,
-      `就業場所：${workplaceType === "CLIENT" ? clientName ?? "配属先未選択" : "自社"}`,
-      `業務内容：${jobDescription || "未入力"}`,
-      `契約期間：${contractPeriodType === "INDEFINITE" ? "無期" : `有期（${contractStartDate}〜${contractEndDate || "未設定"}）`}`,
-      `賃金：${WAGE_TYPE_LABEL[wageType]} ${wageAmount || "未入力"}円`,
-      scheduleType === "FIXED"
-        ? `所定の勤務時間：${workStartTime || "--:--"}〜${workEndTime || "--:--"}（実働${actualWorkHours}時間／休憩${breakMinutes}分）`
-        : `所定の勤務時間：シフト制${shiftPatternNote ? `（${shiftPatternNote}）` : ""}`,
-      `残業の有無：${hasOvertime ? `あり${overtimeNote ? `（${overtimeNote}）` : ""}` : "なし"}`,
-      scheduleType === "FIXED"
-        ? `勤務日：${workingDayLabel || "未選択"}／休み：${workingDayLabel ? `選択日以外（${workingDayLabel}）が休み` : "未設定"}${restNote ? `・${restNote}` : ""}`
-        : `休み：${restNote || "未設定"}`,
-      `賃金の支払方法：締め日 ${paymentClosingDay || "未設定"}／支払日 ${paymentDay || "未設定"}／${paymentMethod}`,
-      ...(extraItems.length > 0 ? [`その他項目：${extraItems.map((i) => `${i.label}${i.value ? `（${i.value}）` : ""}`).join("、")}`] : []),
+    return [
+      { label: "雇用形態", value: EMPLOYMENT_TYPE_LABEL[employmentType] },
+      { label: "雇用開始日", value: contractStartDate || "未設定" },
+      {
+        label: "契約期間",
+        value:
+          contractPeriodType === "INDEFINITE" ? "無期" : `有期（${contractStartDate}〜${contractEndDate || "未設定"}）`,
+      },
+      { label: "就業場所", value: workplaceType === "CLIENT" ? clientName ?? "配属先未選択" : "自社" },
+      { label: "業務内容", value: jobDescription || "未設定" },
+      {
+        label: "シフト",
+        value:
+          scheduleType === "FIXED"
+            ? `固定（${workingDayLabel || "未設定"}）`
+            : `シフト制${shiftPatternNote ? `（${shiftPatternNote}）` : ""}`,
+      },
+      {
+        label: "休み",
+        value:
+          scheduleType === "FIXED"
+            ? `${workingDayLabel ? `${workingDayLabel}以外` : "未設定"}${restNote ? `・${restNote}` : ""}`
+            : restNote || "未設定",
+      },
+      {
+        label: "所定の勤務時間",
+        value:
+          scheduleType === "FIXED"
+            ? `${workStartTime || "--:--"}〜${workEndTime || "--:--"}（実働${actualWorkHours}時間／休憩${breakMinutes}分）`
+            : "シフト制",
+      },
+      { label: "残業の有無", value: hasOvertime ? `あり${overtimeNote ? `（${overtimeNote}）` : ""}` : "なし" },
+      { label: "賃金", value: `${WAGE_TYPE_LABEL[wageType]} ${wageAmount || "未設定"}円` },
+      {
+        label: "賃金の支払方法",
+        value: `締め日 ${paymentClosingDay || "未設定"}／支払日 ${paymentDay || "未設定"}／${paymentMethod}`,
+      },
+      ...(extraItems.length > 0
+        ? [{ label: "その他項目", value: extraItems.map((i) => `${i.label}${i.value ? `（${i.value}）` : ""}`).join("、") }]
+        : []),
     ];
-    return lines.join("\n");
+  }
+
+  async function submitTemplate() {
+    await createTemplateAction({
+      title,
+      employmentType: employmentType as never,
+      workplaceType,
+      companyRelationshipId: workplaceType === "CLIENT" ? companyRelationshipId : undefined,
+      jobDescription,
+      scheduleType,
+      workStartTime: scheduleType === "FIXED" ? workStartTime || undefined : undefined,
+      workEndTime: scheduleType === "FIXED" ? workEndTime || undefined : undefined,
+      actualWorkMinutes:
+        scheduleType === "FIXED" && actualWorkHours ? Math.round(Number(actualWorkHours) * 60) : undefined,
+      breakMinutes: scheduleType === "FIXED" && breakMinutes ? Number(breakMinutes) : undefined,
+      hasOvertime,
+      overtimeNote: hasOvertime ? overtimeNote || undefined : undefined,
+      fixedWeekdays: scheduleType === "FIXED" ? fixedWeekdays : [],
+      shiftPatternNote: scheduleType === "SHIFT" ? shiftPatternNote || undefined : undefined,
+      restNote: restNote || undefined,
+      wageType: wageType as never,
+      wageAmount: Number(wageAmount),
+      paymentClosingDay: paymentClosingDay || undefined,
+      paymentDay: paymentDay || undefined,
+      paymentMethod: paymentMethod || undefined,
+      contractPeriodType,
+      contractStartDate: new Date(`${contractStartDate}T00:00:00.000Z`),
+      contractEndDate:
+        contractPeriodType === "FIXED_TERM" && contractEndDate ? new Date(`${contractEndDate}T00:00:00.000Z`) : undefined,
+      hasRenewal: false,
+      extraItems,
+    });
   }
 
   return (
@@ -393,12 +451,57 @@ function TemplateModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-serif-jp text-lg font-bold text-primary">雇用契約書テンプレート</h3>
-          <button type="button" onClick={onClose} className="text-muted">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">
+            {mode === "form" ? "雇用契約書テンプレート" : "雇用契約書"}
+          </h3>
+          <button
+            type="button"
+            onClick={() => (mode === "form" ? onClose() : setMode("form"))}
+            className="text-muted"
+          >
             ✕
           </button>
         </div>
 
+        {mode === "preview" ? (
+          <div>
+            <p className="mb-4 text-xs text-muted">テンプレート名：{title}</p>
+            <p className="text-sm leading-relaxed">{previewIntroText()}</p>
+            <div className="my-4 border-t border-border" />
+            <div className="flex flex-col gap-4">
+              {previewRows().map((row) => (
+                <div key={row.label} className="flex items-baseline gap-4">
+                  <span className="w-32 shrink-0 text-xs font-semibold text-muted">{row.label}</span>
+                  <span className="text-sm text-foreground">{row.value}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setMode("form")}
+                className="flex-1 rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary"
+              >
+                内容を編集する
+              </button>
+              <button
+                type="button"
+                disabled={pending || !canSubmit}
+                onClick={() =>
+                  startTransition(async () => {
+                    await submitTemplate();
+                    onClose();
+                  })
+                }
+                className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                テンプレートを生成
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
         <label className="mb-4 flex flex-col gap-1 text-xs">
           テンプレート名（管理用・スタッフには表示されません）
           <input
@@ -409,12 +512,6 @@ function TemplateModal({
             className="rounded-lg border border-border px-2 py-2 text-sm"
           />
         </label>
-
-        {showPreview ? (
-          <pre className="mb-4 whitespace-pre-wrap rounded-lg border border-accent bg-accent/10 p-3 text-xs">
-            {buildPreviewText()}
-          </pre>
-        ) : null}
 
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1 text-xs">
@@ -731,8 +828,9 @@ function TemplateModal({
         <div className="mt-6 flex gap-2">
           <button
             type="button"
-            onClick={() => setShowPreview((v) => !v)}
-            className="flex-1 rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary"
+            disabled={!canSubmit}
+            onClick={() => setMode("preview")}
+            className="flex-1 rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary disabled:opacity-60"
           >
             プレビュー
           </button>
@@ -741,37 +839,7 @@ function TemplateModal({
             disabled={pending || !canSubmit}
             onClick={() =>
               startTransition(async () => {
-                await createTemplateAction({
-                  title,
-                  employmentType: employmentType as never,
-                  workplaceType,
-                  companyRelationshipId: workplaceType === "CLIENT" ? companyRelationshipId : undefined,
-                  jobDescription,
-                  scheduleType,
-                  workStartTime: scheduleType === "FIXED" ? workStartTime || undefined : undefined,
-                  workEndTime: scheduleType === "FIXED" ? workEndTime || undefined : undefined,
-                  actualWorkMinutes:
-                    scheduleType === "FIXED" && actualWorkHours ? Math.round(Number(actualWorkHours) * 60) : undefined,
-                  breakMinutes: scheduleType === "FIXED" && breakMinutes ? Number(breakMinutes) : undefined,
-                  hasOvertime,
-                  overtimeNote: hasOvertime ? overtimeNote || undefined : undefined,
-                  fixedWeekdays: scheduleType === "FIXED" ? fixedWeekdays : [],
-                  shiftPatternNote: scheduleType === "SHIFT" ? shiftPatternNote || undefined : undefined,
-                  restNote: restNote || undefined,
-                  wageType: wageType as never,
-                  wageAmount: Number(wageAmount),
-                  paymentClosingDay: paymentClosingDay || undefined,
-                  paymentDay: paymentDay || undefined,
-                  paymentMethod: paymentMethod || undefined,
-                  contractPeriodType,
-                  contractStartDate: new Date(`${contractStartDate}T00:00:00.000Z`),
-                  contractEndDate:
-                    contractPeriodType === "FIXED_TERM" && contractEndDate
-                      ? new Date(`${contractEndDate}T00:00:00.000Z`)
-                      : undefined,
-                  hasRenewal: false,
-                  extraItems,
-                });
+                await submitTemplate();
                 onClose();
               })
             }
@@ -780,6 +848,8 @@ function TemplateModal({
             テンプレートを生成
           </button>
         </div>
+          </>
+        )}
       </div>
     </div>
   );
