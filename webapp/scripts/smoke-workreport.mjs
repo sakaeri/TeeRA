@@ -81,7 +81,7 @@ try {
   log("shows 承認待ち after submit", staffBody.includes("承認待ち"));
 
   // admin: approve
-  await admin.goto("http://localhost:3000/company/workreports");
+  await admin.goto("http://localhost:3000/company/settings?tab=workreports");
   let adminBody = await admin.textContent("body");
   log("admin sees pending report", adminBody.includes("業務報告スタッフ"));
 

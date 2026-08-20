@@ -148,7 +148,12 @@ export function SettingsView({
       ) : null}
 
       {tab === "contracts" ? (
-        <ContractsView templates={contractTemplates} rates={placementRates} clients={contractClients} />
+        <ContractsView
+          templates={contractTemplates}
+          rates={placementRates}
+          clients={contractClients}
+          companyName={companyName}
+        />
       ) : null}
 
       {tab === "workreports" ? <WorkReportsQueue reports={workReports} /> : null}

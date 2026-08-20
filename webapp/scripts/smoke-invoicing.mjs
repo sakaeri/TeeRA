@@ -54,7 +54,7 @@ try {
   log("proxy client relationship created", Boolean(companyRelationshipId));
 
   // placement rate for this client: 1500/hr
-  await admin.goto("http://localhost:3000/company/contracts");
+  await admin.goto("http://localhost:3000/company/settings?tab=contracts");
   await admin.selectOption("select", { label: "GREEN TABLE 渋谷店" });
   await admin.fill('input[placeholder="業務内容"]', "接客");
   await admin.fill('input[placeholder="金額"]', "1500");
@@ -104,7 +104,7 @@ try {
   await staff.getByRole("button", { name: "業務報告を提出する" }).click();
   await staff.waitForTimeout(600);
 
-  await admin.goto("http://localhost:3000/company/workreports");
+  await admin.goto("http://localhost:3000/company/settings?tab=workreports");
   let body = await admin.textContent("body");
   log("agency sees pending report for proxy-client shift (approves on their behalf)", body.includes("請求スタッフ"));
   await admin.getByRole("button", { name: "承認する" }).click();

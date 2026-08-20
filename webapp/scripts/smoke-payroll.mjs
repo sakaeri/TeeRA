@@ -59,11 +59,11 @@ try {
   await staff.waitForURL("http://localhost:3000/staff");
 
   // contract with wage rate 1300/hr
-  await admin.goto("http://localhost:3000/company/contracts");
+  await admin.goto("http://localhost:3000/company/settings?tab=contracts");
   await admin.getByRole("button", { name: "＋テンプレートを作成" }).click();
   await admin.locator("label:has-text('業務内容') input").fill("レジ業務");
   await admin.locator("label:has-text('賃金') input[type=number]").fill("1300");
-  await admin.getByRole("button", { name: "作成する" }).click();
+  await admin.getByRole("button", { name: "テンプレートを生成" }).click();
   await admin.waitForTimeout(600);
 
   await staff.goto("http://localhost:3000/staff/contracts");
@@ -92,7 +92,7 @@ try {
   await staff.getByRole("button", { name: "業務報告を提出する" }).click();
   await staff.waitForTimeout(600);
 
-  await admin.goto("http://localhost:3000/company/workreports");
+  await admin.goto("http://localhost:3000/company/settings?tab=workreports");
   await admin.getByRole("button", { name: "承認する" }).click();
   await admin.waitForTimeout(600);
 

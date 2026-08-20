@@ -27,7 +27,7 @@ try {
   await admin.waitForURL("http://localhost:3000/company");
 
   // register a promo item costing 1pt, stock 2
-  await admin.goto("http://localhost:3000/company/promo");
+  await admin.goto("http://localhost:3000/company/settings?tab=promo");
   await admin.click("text=＋販促品を登録");
   await admin.fill('input[placeholder="画像URL"]', "https://example.com/mug.png");
   await admin.fill('input[placeholder="商品名"]', "オリジナルマグカップ");
@@ -73,7 +73,7 @@ try {
   await staff.getByRole("button", { name: "業務報告を提出する" }).click();
   await staff.waitForTimeout(600);
 
-  await admin.goto("http://localhost:3000/company/workreports");
+  await admin.goto("http://localhost:3000/company/settings?tab=workreports");
   await admin.getByRole("button", { name: "承認する" }).click();
   await admin.waitForTimeout(600);
 
@@ -98,7 +98,7 @@ try {
   log("balance back to 0pt after redemption", body.includes("0pt"));
 
   // admin sees pending shipment, marks shipped
-  await admin.goto("http://localhost:3000/company/promo");
+  await admin.goto("http://localhost:3000/company/settings?tab=promo");
   body = await admin.textContent("body");
   log("admin sees pending shipment and reduced stock", body.includes("販促品スタッフ") && body.includes("在庫 1"));
 

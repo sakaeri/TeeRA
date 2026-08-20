@@ -17,7 +17,7 @@ export async function createPromoItemAction(input: {
   if (!canManage(membership)) throw new Error("forbidden");
 
   await createPromoItem({ ...input, companyId: membership.companyId });
-  revalidatePath("/company/promo");
+  revalidatePath("/company/settings");
 }
 
 export async function updatePromoItemAction(
@@ -29,7 +29,7 @@ export async function updatePromoItemAction(
   if (item.companyId !== membership.companyId || !canManage(membership)) throw new Error("forbidden");
 
   await updatePromoItem(id, changes);
-  revalidatePath("/company/promo");
+  revalidatePath("/company/settings");
 }
 
 export async function deletePromoItemAction(id: string) {
@@ -38,7 +38,7 @@ export async function deletePromoItemAction(id: string) {
   if (item.companyId !== membership.companyId || !canManage(membership)) throw new Error("forbidden");
 
   await deletePromoItem(id);
-  revalidatePath("/company/promo");
+  revalidatePath("/company/settings");
 }
 
 export async function markRedemptionShippedAction(redemptionId: string) {
@@ -52,5 +52,5 @@ export async function markRedemptionShippedAction(redemptionId: string) {
   }
 
   await markRedemptionShipped(redemptionId);
-  revalidatePath("/company/promo");
+  revalidatePath("/company/settings");
 }

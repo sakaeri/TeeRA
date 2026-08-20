@@ -19,7 +19,7 @@ export async function createTemplateAction(input: CreateTemplateInput) {
   if (!canManage(membership)) throw new Error("forbidden");
 
   await createTemplate({ ...input, companyId: membership.companyId });
-  revalidatePath("/company/contracts");
+  revalidatePath("/company/settings");
 }
 
 export async function updateTemplateAction(
@@ -31,7 +31,7 @@ export async function updateTemplateAction(
   if (!canManage(membership)) throw new Error("forbidden");
 
   await updateOrDuplicateTemplate({ templateId, changes, duplicateTitle });
-  revalidatePath("/company/contracts");
+  revalidatePath("/company/settings");
 }
 
 export async function deleteTemplateAction(templateId: string) {
@@ -39,7 +39,7 @@ export async function deleteTemplateAction(templateId: string) {
   if (!canManage(membership)) throw new Error("forbidden");
 
   await deleteTemplate(templateId);
-  revalidatePath("/company/contracts");
+  revalidatePath("/company/settings");
 }
 
 export async function upsertPlacementRateAction(input: {
@@ -52,7 +52,7 @@ export async function upsertPlacementRateAction(input: {
   if (!canManage(membership)) throw new Error("forbidden");
 
   await upsertPlacementRate({ ...input, companyId: membership.companyId });
-  revalidatePath("/company/contracts");
+  revalidatePath("/company/settings");
 }
 
 export async function deletePlacementRateAction(id: string) {
@@ -60,5 +60,5 @@ export async function deletePlacementRateAction(id: string) {
   if (!canManage(membership)) throw new Error("forbidden");
 
   await deletePlacementRate(id);
-  revalidatePath("/company/contracts");
+  revalidatePath("/company/settings");
 }

@@ -22,7 +22,7 @@ export async function approveWorkReportAction(workReportId: string) {
   if (!canManage(membership, report.shift.teamId)) throw new Error("forbidden");
 
   await approveWorkReport({ workReportId, approverUserId: userId });
-  revalidatePath("/company/workreports");
+  revalidatePath("/company/settings");
 }
 
 export async function rejectWorkReportAction(workReportId: string) {
@@ -31,5 +31,5 @@ export async function rejectWorkReportAction(workReportId: string) {
   if (!canManage(membership, report.shift.teamId)) throw new Error("forbidden");
 
   await rejectWorkReport({ workReportId, approverUserId: userId });
-  revalidatePath("/company/workreports");
+  revalidatePath("/company/settings");
 }
