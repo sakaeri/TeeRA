@@ -72,6 +72,10 @@ export function StaffPointsView({
             const disabled = pending || i.stock <= 0 || balance < i.pointsCost || isRedeemed;
             return (
               <li key={i.id} className="rounded-xl border border-border bg-white/60 p-3 text-sm">
+                {i.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={i.imageUrl} alt="" className="mb-2 h-24 w-full rounded-lg object-cover" />
+                ) : null}
                 <div className="mb-1 font-medium">{i.name}</div>
                 <p className="text-muted">
                   {i.pointsCost}pt ／ 在庫 {i.stock}

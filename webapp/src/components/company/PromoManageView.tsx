@@ -152,20 +152,30 @@ export function PromoManageView({ items, redemptions }: { items: Item[]; redempt
         <ul className="grid grid-cols-2 gap-3">
           {items.map((i) => (
             <li key={i.id} className="rounded-xl border border-border/60 p-3 text-sm">
-              <div className="mb-1 flex items-center justify-between">
-                <span className="font-medium">{i.name}</span>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => startTransition(() => deletePromoItemAction(i.id))}
-                  className="text-xs text-red-600"
-                >
-                  削除
-                </button>
+              <div className="mb-2 flex items-center gap-3">
+                {i.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={i.imageUrl} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
+                ) : (
+                  <div className="h-12 w-12 shrink-0 rounded-lg bg-background" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{i.name}</span>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => startTransition(() => deletePromoItemAction(i.id))}
+                      className="text-xs text-red-600"
+                    >
+                      削除
+                    </button>
+                  </div>
+                  <p className="text-muted">
+                    {i.pointsCost}pt ／ 在庫 {i.stock}
+                  </p>
+                </div>
               </div>
-              <p className="text-muted">
-                {i.pointsCost}pt ／ 在庫 {i.stock}
-              </p>
             </li>
           ))}
           {items.length === 0 ? <p className="col-span-2 text-center text-muted">商品がありません。</p> : null}
