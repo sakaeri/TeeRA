@@ -318,7 +318,6 @@ function TemplateModal({
   const [pending, startTransition] = useTransition();
   const [customTitle, setCustomTitle] = useState("");
   const [employmentType, setEmploymentType] = useState("PART_TIME");
-  const [workplaceType, setWorkplaceType] = useState<"INHOUSE" | "CLIENT">("INHOUSE");
   const [workplaceNote, setWorkplaceNote] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [contractPeriodType, setContractPeriodType] = useState<"INDEFINITE" | "FIXED_TERM">("INDEFINITE");
@@ -371,17 +370,14 @@ function TemplateModal({
     setExtraItems((prev) => prev.filter((i) => i.label !== label));
   }
 
-  const canSubmit =
-    Boolean(jobDescription) &&
-    Boolean(wageAmount) &&
-    (workplaceType === "INHOUSE" || Boolean(workplaceNote.trim()));
+  const canSubmit = Boolean(jobDescription) && Boolean(wageAmount);
 
   async function submitTemplate() {
     await createTemplateAction({
       title,
       employmentType: employmentType as never,
-      workplaceType,
-      workplaceNote: workplaceType === "CLIENT" ? workplaceNote.trim() || undefined : undefined,
+      workplaceType: workplaceNote.trim() ? "CLIENT" : "INHOUSE",
+      workplaceNote: workplaceNote.trim() || undefined,
       jobDescription,
       scheduleType,
       workStartTime: scheduleType === "FIXED" ? workStartTime || undefined : undefined,
@@ -501,39 +497,25 @@ function TemplateModal({
 
           <Row label="就業場所">
             {preview ? (
-              <span className="text-sm">
-                {workplaceType === "CLIENT" ? workplaceNote || "未設定" : "自社"}
-              </span>
+              <span className="text-sm">{workplaceNote || "自社"}</span>
             ) : (
               <div className="flex flex-col gap-2">
-                <select
-                  value={workplaceType}
-                  onChange={(e) => setWorkplaceType(e.target.value as "INHOUSE" | "CLIENT")}
+                <input
+                  type="text"
+                  list="workplace-note-options"
+                  value={workplaceNote}
+                  onChange={(e) => setWorkplaceNote(e.target.value)}
+                  placeholder="例：本社／〇〇支店／A社（空欄の場合は自社として扱われます）"
                   className={fieldInput}
-                >
-                  <option value="INHOUSE">自社</option>
-                  <option value="CLIENT">配属先</option>
-                </select>
-                {workplaceType === "CLIENT" ? (
-                  <>
-                    <input
-                      type="text"
-                      list="workplace-note-options"
-                      value={workplaceNote}
-                      onChange={(e) => setWorkplaceNote(e.target.value)}
-                      placeholder="例：本社／〇〇支店／A社"
-                      className={fieldInput}
-                    />
-                    <datalist id="workplace-note-options">
-                      {clients.map((c) => (
-                        <option key={c.id} value={c.name} />
-                      ))}
-                    </datalist>
-                    <p className="text-xs text-muted">
-                      自由入力です。実際の請求・給与計算は賃金単価・請求単価表とシフト作成時の配属先選択で行われます。
-                    </p>
-                  </>
-                ) : null}
+                />
+                <datalist id="workplace-note-options">
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.name} />
+                  ))}
+                </datalist>
+                <p className="text-xs text-muted">
+                  自由入力です。実際の請求・給与計算は賃金単価・請求単価表とシフト作成時の配属先選択で行われます。
+                </p>
               </div>
             )}
           </Row>
