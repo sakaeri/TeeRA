@@ -211,7 +211,9 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
           <ImageDropzone label="商品画像" imageUrl={imageUrl} onChange={setImageUrl} required />
           <div className="flex flex-col gap-3">
             <label className="flex flex-col gap-1 text-xs">
-              商品名<span className="text-red-600"> *</span>
+              <span>
+                商品名<span className="text-red-600"> *</span>
+              </span>
               <input
                 type="text"
                 placeholder="例：オリジナルタオル"
@@ -235,7 +237,9 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
 
         <div className="mt-4 grid grid-cols-2 gap-4">
           <label className="flex flex-col gap-1 text-xs">
-            交換ポイント<span className="text-red-600"> *</span>
+            <span>
+              交換ポイント<span className="text-red-600"> *</span>
+            </span>
             <input
               type="number"
               placeholder="例：500"
@@ -245,7 +249,9 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
             />
           </label>
           <label className="flex flex-col gap-1 text-xs">
-            在庫数<span className="text-red-600"> *</span>
+            <span>
+              在庫数<span className="text-red-600"> *</span>
+            </span>
             <input
               type="number"
               placeholder="例：20"
