@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   updateCompanyNameAction,
   updateCompanyInvoiceRegistrationNumberAction,
@@ -11,6 +12,9 @@ import {
   createTeamAction,
   setTeamMemberRoleAction,
 } from "@/app/company/actions";
+import { ContractsView } from "@/components/company/ContractsView";
+import { WorkReportsQueue } from "@/components/company/WorkReportsQueue";
+import { PromoManageView } from "@/components/company/PromoManageView";
 
 type Admin = {
   userId: string;
@@ -23,7 +27,63 @@ type TeamMember = { userId: string; name: string; role: string };
 type Team = { id: string; name: string; members: TeamMember[] };
 type StaffOption = { userId: string; name: string };
 
+type ContractTemplate = {
+  id: string;
+  title: string;
+  employmentType: string;
+  workplaceType: string;
+  clientName: string | null;
+  wageType: string;
+  wageAmount: number;
+  status: string;
+  contractedStaffNames: string[];
+};
+type PlacementRate = {
+  id: string;
+  clientName: string;
+  companyRelationshipId: string | null;
+  taskName: string;
+  wageType: string;
+  amount: number;
+};
+type ContractClientOption = { id: string; name: string };
+
+type WorkReportRow = {
+  id: string;
+  staffName: string;
+  outcome: string;
+  date: string;
+  computedHours: string;
+  comment: string | null;
+};
+
+type PromoItem = {
+  id: string;
+  imageUrl: string;
+  name: string;
+  pointsCost: number;
+  stock: number;
+  description: string | null;
+};
+type PromoRedemption = {
+  id: string;
+  itemName: string;
+  staffName: string;
+  pointsSpent: number;
+  status: string;
+  createdAt: string;
+};
+
+const TABS = [
+  { key: "basic", label: "基本情報" },
+  { key: "contracts", label: "契約関連" },
+  { key: "workreports", label: "業務報告" },
+  { key: "promo", label: "販促品" },
+] as const;
+type TabKey = (typeof TABS)[number]["key"];
+
 export function SettingsView({
+  initialTab,
   companyName,
   invoiceRegistrationNumber,
   address,
@@ -31,7 +91,14 @@ export function SettingsView({
   admins,
   teams,
   staff,
+  contractTemplates,
+  placementRates,
+  contractClients,
+  workReports,
+  promoItems,
+  promoRedemptions,
 }: {
+  initialTab: string;
   companyName: string;
   invoiceRegistrationNumber: string;
   address: string;
@@ -39,17 +106,54 @@ export function SettingsView({
   admins: Admin[];
   teams: Team[];
   staff: StaffOption[];
+  contractTemplates: ContractTemplate[];
+  placementRates: PlacementRate[];
+  contractClients: ContractClientOption[];
+  workReports: WorkReportRow[];
+  promoItems: PromoItem[];
+  promoRedemptions: PromoRedemption[];
 }) {
+  const router = useRouter();
+  const tab: TabKey = TABS.some((t) => t.key === initialTab) ? (initialTab as TabKey) : "basic";
+
   return (
-    <div className="flex flex-col gap-10">
-      <CompanyInfoSection
-        companyName={companyName}
-        invoiceRegistrationNumber={invoiceRegistrationNumber}
-        address={address}
-        phoneNumber={phoneNumber}
-      />
-      <AdminsSection admins={admins} />
-      <TeamsSection teams={teams} staff={staff} />
+    <div>
+      <h1 className="mb-6 font-serif-jp text-2xl font-bold">設定</h1>
+      <div className="mb-8 flex gap-1 border-b border-border">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => router.push(`?tab=${t.key}`)}
+            className={`border-b-2 px-4 py-2 text-sm font-semibold ${
+              tab === t.key ? "border-accent text-primary" : "border-transparent text-muted"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "basic" ? (
+        <div className="flex flex-col gap-10">
+          <CompanyInfoSection
+            companyName={companyName}
+            invoiceRegistrationNumber={invoiceRegistrationNumber}
+            address={address}
+            phoneNumber={phoneNumber}
+          />
+          <AdminsSection admins={admins} />
+          <TeamsSection teams={teams} staff={staff} />
+        </div>
+      ) : null}
+
+      {tab === "contracts" ? (
+        <ContractsView templates={contractTemplates} rates={placementRates} clients={contractClients} />
+      ) : null}
+
+      {tab === "workreports" ? <WorkReportsQueue reports={workReports} /> : null}
+
+      {tab === "promo" ? <PromoManageView items={promoItems} redemptions={promoRedemptions} /> : null}
     </div>
   );
 }

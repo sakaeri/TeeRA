@@ -102,7 +102,7 @@ export async function listAutoTodoItems(companyId: string): Promise<AutoTodoItem
       kind: "業務報告",
       text: `${report.staff.name}さんの業務報告が未承認です`,
       actionLabel: "確認する",
-      actionHref: "/company/workreports",
+      actionHref: "/company/settings?tab=workreports",
     });
   }
 
@@ -112,7 +112,7 @@ export async function listAutoTodoItems(companyId: string): Promise<AutoTodoItem
       kind: "契約書",
       text: `${contract.staff.name}さんの契約書が未締結です`,
       actionLabel: "確認する",
-      actionHref: "/company/contracts",
+      actionHref: "/company/settings?tab=contracts",
     });
   }
 
@@ -122,7 +122,7 @@ export async function listAutoTodoItems(companyId: string): Promise<AutoTodoItem
       kind: "販促品",
       text: `発送待ち：${redemption.promoItem.name}の注文があります（${redemption.staff.name}さん）`,
       actionLabel: "確認する",
-      actionHref: "/company/promo",
+      actionHref: "/company/settings?tab=promo",
     });
   }
 

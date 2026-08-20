@@ -1,15 +1,27 @@
-import Link from "next/link";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { listTeams } from "@/lib/domain/teams";
 import { listStaff } from "@/lib/domain/roster";
+import { listTemplates, listPlacementRates } from "@/lib/domain/contracts";
+import { listClients } from "@/lib/domain/relationships";
+import { listPendingReportsForCompany } from "@/lib/domain/workReports";
+import { listPromoItems, listRedemptionsForCompany } from "@/lib/domain/promo";
 import { SettingsView } from "@/components/company/SettingsView";
 
-export default async function SettingsPage() {
-  const { membership } = await requireCompanyAdminOrEditor();
+const OUTCOME_LABEL: Record<string, string> = {
+  WORKED: "出勤した",
+  ABSENT: "欠勤",
+  CANCELLED_BY_EMPLOYER: "勤務先からのキャンセル",
+};
 
-  const [company, admins, teams, staff] = await Promise.all([
-    prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
+export default async function SettingsPage({ searchParams }: PageProps<"/company/settings">) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const sp = await searchParams;
+  const initialTab = typeof sp.tab === "string" ? sp.tab : "basic";
+
+  const company = await prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } });
+
+  const [admins, teams, staff, templates, rates, clients, reports, promoItems, redemptions] = await Promise.all([
     prisma.companyMembership.findMany({
       where: {
         companyId: membership.companyId,
@@ -20,35 +32,23 @@ export default async function SettingsPage() {
     }),
     listTeams(membership.companyId),
     listStaff(membership.companyId),
+    listTemplates(membership.companyId),
+    listPlacementRates(membership.companyId),
+    company.agencyEnabled ? listClients(membership.companyId) : Promise.resolve([]),
+    listPendingReportsForCompany(membership.companyId),
+    listPromoItems(membership.companyId),
+    listRedemptionsForCompany(membership.companyId),
   ]);
 
-  const menu = [
-    { href: "/company/workreports", label: "業務報告" },
-    { href: "/company/contracts", label: "雇用契約書管理" },
-    { href: "/company/wallet", label: "Tee残高" },
-    { href: "/company/promo", label: "販促品" },
-  ];
+  const shifts = await prisma.shift.findMany({
+    where: { id: { in: reports.map((r) => r.shiftId) } },
+  });
+  const shiftById = new Map(shifts.map((s) => [s.id, s]));
 
   return (
     <main className="mx-auto w-full max-w-5xl px-8 py-10">
-      <h1 className="mb-6 font-serif-jp text-2xl font-bold">設定</h1>
-
-      <section className="mb-10 rounded-2xl border border-border bg-white/60 p-6">
-        <h2 className="mb-4 font-serif-jp text-lg font-bold text-primary">管理メニュー</h2>
-        <div className="grid grid-cols-3 gap-3">
-          {menu.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="rounded-xl border border-border bg-background px-4 py-3 text-sm hover:border-primary hover:text-primary"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </div>
-      </section>
-
       <SettingsView
+        initialTab={initialTab}
         companyName={company.name}
         invoiceRegistrationNumber={company.invoiceRegistrationNumber ?? ""}
         address={company.address ?? ""}
@@ -69,6 +69,58 @@ export default async function SettingsPage() {
           })),
         }))}
         staff={staff.map((s) => ({ userId: s.userId, name: s.name }))}
+        contractTemplates={templates.map((t) => ({
+          id: t.id,
+          title: t.title,
+          employmentType: t.employmentType,
+          workplaceType: t.workplaceType,
+          clientName: t.companyRelationship?.clientCompany?.name ?? t.companyRelationship?.proxyName ?? null,
+          wageType: t.wageType,
+          wageAmount: t.wageAmount,
+          status: t.status,
+          contractedStaffNames: t.staffContracts
+            .filter((sc) => sc.status !== "ENDED")
+            .map((sc) => sc.staff.name),
+        }))}
+        placementRates={rates.map((r) => ({
+          id: r.id,
+          clientName: r.companyRelationship?.proxyName ?? "自社",
+          companyRelationshipId: r.companyRelationshipId,
+          taskName: r.taskName,
+          wageType: r.wageType,
+          amount: r.amount,
+        }))}
+        contractClients={clients.map((c) => ({
+          id: c.id,
+          name: c.clientCompany?.name ?? c.proxyName ?? "(名称未設定)",
+        }))}
+        workReports={reports.map((r) => {
+          const shift = shiftById.get(r.shiftId);
+          return {
+            id: r.id,
+            staffName: r.staff.name,
+            outcome: OUTCOME_LABEL[r.outcome] ?? r.outcome,
+            date: shift?.date.toISOString().slice(0, 10) ?? "",
+            computedHours: (r.computedMinutes / 60).toFixed(1),
+            comment: r.comment,
+          };
+        })}
+        promoItems={promoItems.map((i) => ({
+          id: i.id,
+          imageUrl: i.imageUrl,
+          name: i.name,
+          pointsCost: i.pointsCost,
+          stock: i.stock,
+          description: i.description,
+        }))}
+        promoRedemptions={redemptions.map((r) => ({
+          id: r.id,
+          itemName: r.promoItem.name,
+          staffName: r.staff.name,
+          pointsSpent: r.pointsSpent,
+          status: r.status,
+          createdAt: r.createdAt.toISOString(),
+        }))}
       />
     </main>
   );

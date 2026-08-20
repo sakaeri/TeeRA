@@ -36,10 +36,10 @@ type PromoOrder = { id: string; itemName: string; staffName: string; status: str
 const KPI_CARDS: { key: keyof Kpis; label: string; href: string }[] = [
   { key: "shortageCount", label: "欠員件数", href: "/company/calendar" },
   { key: "unconfirmedShiftCount", label: "未確定シフト", href: "/company/calendar" },
-  { key: "pendingReportCount", label: "業務報告未承認", href: "/company/workreports" },
-  { key: "pendingContractCount", label: "契約書未確認", href: "/company/contracts" },
-  { key: "promoItemCount", label: "販促品登録数", href: "/company/promo" },
-  { key: "pendingShipmentCount", label: "発送待ち", href: "/company/promo" },
+  { key: "pendingReportCount", label: "業務報告未承認", href: "/company/settings?tab=workreports" },
+  { key: "pendingContractCount", label: "契約書未確認", href: "/company/settings?tab=contracts" },
+  { key: "promoItemCount", label: "販促品登録数", href: "/company/settings?tab=promo" },
+  { key: "pendingShipmentCount", label: "発送待ち", href: "/company/settings?tab=promo" },
 ];
 
 const TAG_STYLE: Record<string, string> = {

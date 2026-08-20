@@ -451,7 +451,7 @@ function InviteStaffModal({
         ) : (
           <div className="mb-4 rounded-lg border border-dashed border-border bg-background p-3 text-xs text-muted">
             契約書テンプレートがまだありません。先に作成すると、招待と同時に契約書も発行できます。
-            <Link href="/company/contracts" target="_blank" className="ml-1 font-semibold text-primary underline">
+            <Link href="/company/settings?tab=contracts" target="_blank" className="ml-1 font-semibold text-primary underline">
               テンプレートを作成する →
             </Link>
           </div>
