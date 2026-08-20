@@ -37,13 +37,22 @@ export default async function CompanyDashboardPage() {
           resolvedAt: t.resolvedAt?.toISOString().slice(0, 10) ?? "",
         }))}
         staffOptions={staff.map((s) => ({ id: s.userId, name: s.name }))}
-        promoItems={promoItems.map((p) => ({ id: p.id, imageUrl: p.imageUrl, name: p.name, pointsCost: p.pointsCost, stock: p.stock }))}
+        promoItems={promoItems.map((p) => ({
+          id: p.id,
+          imageUrl: p.imageUrl,
+          name: p.name,
+          pointsCost: p.pointsCost,
+          stock: p.stock,
+          description: p.description,
+        }))}
         promoOrders={redemptions.map((r) => ({
           id: r.id,
           itemName: r.promoItem.name,
           staffName: r.staff.name,
           status: r.status,
           createdAt: r.createdAt.toISOString().slice(0, 10),
+          shippingAddress: r.shippingAddress,
+          shippingPhone: r.shippingPhone,
         }))}
       />
     </main>

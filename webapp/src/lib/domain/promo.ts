@@ -50,7 +50,12 @@ export async function getStaffTierProgress(staffUserId: string) {
   return { approvedCount, currentRate, nextThreshold, remaining };
 }
 
-export async function redeemPromoItem(params: { promoItemId: string; staffUserId: string }) {
+export async function redeemPromoItem(params: {
+  promoItemId: string;
+  staffUserId: string;
+  shippingAddress: string;
+  shippingPhone: string;
+}) {
   return prisma.$transaction(async (tx) => {
     const item = await tx.promoItem.findUniqueOrThrow({ where: { id: params.promoItemId } });
     if (item.stock <= 0) throw new Error("out_of_stock");
@@ -64,8 +69,21 @@ export async function redeemPromoItem(params: { promoItemId: string; staffUserId
 
     await tx.promoItem.update({ where: { id: item.id }, data: { stock: item.stock - 1 } });
 
+    // Remember the address for next time, and snapshot it onto this order so a
+    // later change doesn't retroactively alter an already-placed order.
+    await tx.user.update({
+      where: { id: params.staffUserId },
+      data: { address: params.shippingAddress, phoneNumber: params.shippingPhone },
+    });
+
     const redemption = await tx.promoRedemption.create({
-      data: { promoItemId: item.id, staffUserId: params.staffUserId, pointsSpent: item.pointsCost },
+      data: {
+        promoItemId: item.id,
+        staffUserId: params.staffUserId,
+        pointsSpent: item.pointsCost,
+        shippingAddress: params.shippingAddress,
+        shippingPhone: params.shippingPhone,
+      },
     });
 
     await tx.staffPointsLedgerEntry.create({

@@ -10,10 +10,12 @@ import {
 } from "@/app/company/actions-todo";
 import {
   createPromoItemAction,
+  updatePromoItemAction,
   deletePromoItemAction,
   markRedemptionShippedAction,
 } from "@/app/company/promo/actions";
-import { uploadFile } from "@/lib/uploadFile";
+import { ImageDropzone } from "@/components/ImageDropzone";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type Kpis = {
   shortageCount: number;
@@ -36,8 +38,23 @@ type OpenTodo = {
 
 type ResolvedTodo = { id: string; title: string; dueDate: string; recipientName: string; resolvedAt: string };
 
-type PromoItem = { id: string; imageUrl: string; name: string; pointsCost: number; stock: number };
-type PromoOrder = { id: string; itemName: string; staffName: string; status: string; createdAt: string };
+type PromoItem = {
+  id: string;
+  imageUrl: string;
+  name: string;
+  pointsCost: number;
+  stock: number;
+  description: string | null;
+};
+type PromoOrder = {
+  id: string;
+  itemName: string;
+  staffName: string;
+  status: string;
+  createdAt: string;
+  shippingAddress: string | null;
+  shippingPhone: string | null;
+};
 
 type DashboardTab = "active" | "resolved" | "promoList" | "promoOrders";
 
@@ -87,6 +104,7 @@ export function DashboardView({
   const [tab, setTab] = useState<DashboardTab>("active");
   const [showTodoForm, setShowTodoForm] = useState(false);
   const [showPromoModal, setShowPromoModal] = useState(false);
+  const [editingPromoItem, setEditingPromoItem] = useState<PromoItem | null>(null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -152,121 +170,145 @@ export function DashboardView({
         staffOptions={staffOptions}
         promoItems={promoItems}
         promoOrders={promoOrders}
+        onEditPromoItem={setEditingPromoItem}
       />
 
       {showPromoModal ? <PromoItemModal onClose={() => setShowPromoModal(false)} /> : null}
+      {editingPromoItem ? (
+        <PromoItemModal editingItem={editingPromoItem} onClose={() => setEditingPromoItem(null)} />
+      ) : null}
     </div>
   );
 }
 
-function PromoItemModal({ onClose }: { onClose: () => void }) {
+function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onClose: () => void }) {
   const [pending, startTransition] = useTransition();
-  const [imageUrl, setImageUrl] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [pointsCost, setPointsCost] = useState("");
-  const [stock, setStock] = useState("");
-  const [description, setDescription] = useState("");
+  const [imageUrl, setImageUrl] = useState(editingItem?.imageUrl ?? "");
+  const [name, setName] = useState(editingItem?.name ?? "");
+  const [pointsCost, setPointsCost] = useState(editingItem ? String(editingItem.pointsCost) : "");
+  const [stock, setStock] = useState(editingItem ? String(editingItem.stock) : "");
+  const [description, setDescription] = useState(editingItem?.description ?? "");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const canSubmit = Boolean(imageUrl) && Boolean(name) && Boolean(pointsCost) && Boolean(stock);
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-serif-jp text-lg font-bold text-primary">販促品を登録</h3>
+      <div
+        className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">
+            販促品を{editingItem ? "編集" : "登録"}
+          </h3>
           <button type="button" onClick={onClose} className="text-muted">
             ✕
           </button>
         </div>
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            {imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={imageUrl} alt="" className="h-16 w-16 rounded-lg object-cover" />
-            ) : null}
+
+        <div className="grid grid-cols-2 gap-4">
+          <ImageDropzone label="商品画像" imageUrl={imageUrl} onChange={setImageUrl} required />
+          <div className="flex flex-col gap-3">
             <label className="flex flex-col gap-1 text-xs">
-              商品画像
+              商品名<span className="text-red-600"> *</span>
               <input
-                type="file"
-                accept="image/*"
-                disabled={uploading}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  setUploading(true);
-                  setUploadError(null);
-                  try {
-                    const url = await uploadFile(file);
-                    setImageUrl(url);
-                  } catch (err) {
-                    setUploadError(err instanceof Error ? err.message : "アップロードに失敗しました");
-                  } finally {
-                    setUploading(false);
-                  }
-                }}
-                className="text-sm"
+                type="text"
+                placeholder="例：オリジナルタオル"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="rounded-lg border border-border px-2 py-2 text-sm"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              詳細説明文（任意）
+              <textarea
+                placeholder="商品の説明など"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                className="rounded-lg border border-border px-2 py-2 text-sm"
               />
             </label>
           </div>
-          {uploading ? <span className="text-xs text-muted">アップロード中...</span> : null}
-          {uploadError ? <span className="text-xs text-red-600">{uploadError}</span> : null}
-          <input
-            type="text"
-            placeholder="画像URL"
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            className="rounded-lg border border-border px-2 py-2 text-sm"
-          />
-          <p className="-mt-2 text-xs text-muted">アップロードすると自動入力されます。直接貼り付けも可。</p>
-          <input
-            type="text"
-            placeholder="商品名"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="rounded-lg border border-border px-2 py-2 text-sm"
-          />
-          <input
-            type="number"
-            placeholder="交換ポイント"
-            value={pointsCost}
-            onChange={(e) => setPointsCost(e.target.value)}
-            className="rounded-lg border border-border px-2 py-2 text-sm"
-          />
-          <input
-            type="number"
-            placeholder="在庫数"
-            value={stock}
-            onChange={(e) => setStock(e.target.value)}
-            className="rounded-lg border border-border px-2 py-2 text-sm"
-          />
-          <input
-            type="text"
-            placeholder="詳細説明文（任意）"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="rounded-lg border border-border px-2 py-2 text-sm"
-          />
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-4">
+          <label className="flex flex-col gap-1 text-xs">
+            交換ポイント<span className="text-red-600"> *</span>
+            <input
+              type="number"
+              placeholder="例：500"
+              value={pointsCost}
+              onChange={(e) => setPointsCost(e.target.value)}
+              className="rounded-lg border border-border px-2 py-2 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            在庫数<span className="text-red-600"> *</span>
+            <input
+              type="number"
+              placeholder="例：20"
+              value={stock}
+              onChange={(e) => setStock(e.target.value)}
+              className="rounded-lg border border-border px-2 py-2 text-sm"
+            />
+          </label>
+        </div>
+        <p className="mt-2 text-xs text-muted">
+          交換ポイント: スタッフが業務報告を行うとたまるポイントです。たまったポイントで、この販促品と交換できます。商品の価値に見合ったポイント数を設定してください。
+        </p>
+
+        <button
+          type="button"
+          disabled={pending || !canSubmit}
+          onClick={() =>
+            startTransition(async () => {
+              const payload = {
+                imageUrl,
+                name,
+                pointsCost: Number(pointsCost),
+                stock: Number(stock),
+                description: description || undefined,
+              };
+              if (editingItem) {
+                await updatePromoItemAction(editingItem.id, payload);
+              } else {
+                await createPromoItemAction(payload);
+              }
+              onClose();
+            })
+          }
+          className="mt-4 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        >
+          保存する
+        </button>
+
+        {editingItem ? (
           <button
             type="button"
-            disabled={pending || !imageUrl || !name || !pointsCost || !stock}
-            onClick={() =>
-              startTransition(async () => {
-                await createPromoItemAction({
-                  imageUrl,
-                  name,
-                  pointsCost: Number(pointsCost),
-                  stock: Number(stock),
-                  description: description || undefined,
-                });
-                onClose();
-              })
-            }
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            onClick={() => setShowDeleteConfirm(true)}
+            className="mt-3 w-full text-center text-sm text-red-600"
           >
-            登録する
+            この販促品を削除する
           </button>
-        </div>
+        ) : null}
       </div>
+
+      {showDeleteConfirm && editingItem ? (
+        <ConfirmDialog
+          message={`「${editingItem.name}」を削除しますか？`}
+          confirmLabel="削除する"
+          pending={pending}
+          onCancel={() => setShowDeleteConfirm(false)}
+          onConfirm={() =>
+            startTransition(async () => {
+              await deletePromoItemAction(editingItem.id);
+              onClose();
+            })
+          }
+        />
+      ) : null}
     </div>
   );
 }
@@ -282,6 +324,7 @@ function TodoSection({
   staffOptions,
   promoItems,
   promoOrders,
+  onEditPromoItem,
 }: {
   tab: DashboardTab;
   setTab: (t: DashboardTab) => void;
@@ -293,6 +336,7 @@ function TodoSection({
   staffOptions: { id: string; name: string }[];
   promoItems: PromoItem[];
   promoOrders: PromoOrder[];
+  onEditPromoItem: (item: PromoItem) => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
@@ -300,6 +344,15 @@ function TodoSection({
   const [recipientUserId, setRecipientUserId] = useState(staffOptions[0]?.id ?? "");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
+  const [orderFilter, setOrderFilter] = useState<"all" | "pending">("all");
+  const [pageSize, setPageSize] = useState(10);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [shipConfirmId, setShipConfirmId] = useState<string | null>(null);
+
+  const filteredOrders =
+    orderFilter === "pending" ? promoOrders.filter((o) => o.status !== "SHIPPED") : promoOrders;
+  const visibleOrders = filteredOrders.slice(0, pageSize);
+  const shipConfirmOrder = promoOrders.find((o) => o.id === shipConfirmId) ?? null;
 
   return (
     <section className="rounded-2xl border border-border bg-white/60 p-6">
@@ -463,57 +516,123 @@ function TodoSection({
       ) : null}
 
       {tab === "promoList" ? (
-        <ul className="flex flex-col gap-2">
-          {promoItems.map((p) => (
-            <li key={p.id} className="flex items-center gap-3 rounded-lg border border-border/60 p-3 text-sm">
-              {p.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
-              ) : (
-                <div className="h-10 w-10 shrink-0 rounded-lg bg-background" />
-              )}
-              <span className="flex-1">{p.name}</span>
-              <span className="text-muted">
-                {p.pointsCost}pt ／ 在庫 {p.stock}
-              </span>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => startTransition(() => deletePromoItemAction(p.id))}
-                className="shrink-0 text-xs text-red-600"
-              >
-                削除
-              </button>
-            </li>
-          ))}
+        <div>
+          <p className="mb-3 text-xs text-muted">登録済みの販促品一覧です（{promoItems.length}件）</p>
+          <div className="grid grid-cols-3 gap-4">
+            {promoItems.map((p) => (
+              <div key={p.id} className="flex flex-col gap-2">
+                {p.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.imageUrl} alt="" className="aspect-square w-full rounded-xl object-cover" />
+                ) : (
+                  <div className="flex aspect-square w-full items-center justify-center rounded-xl border-2 border-dashed border-border text-xs text-muted">
+                    画像なし
+                  </div>
+                )}
+                <p className="text-sm font-medium">{p.name}</p>
+                <button
+                  type="button"
+                  onClick={() => onEditPromoItem(p)}
+                  className="w-full rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
+                >
+                  編集
+                </button>
+              </div>
+            ))}
+          </div>
           {promoItems.length === 0 ? <p className="text-center text-muted">販促品が登録されていません。</p> : null}
-        </ul>
+        </div>
       ) : null}
 
       {tab === "promoOrders" ? (
-        <ul className="flex flex-col gap-2">
-          {promoOrders.map((o) => (
-            <li key={o.id} className="flex items-center justify-between rounded-lg border border-border/60 p-3 text-sm">
-              <span>
-                {o.staffName} — {o.itemName}
-              </span>
-              <span className="flex items-center gap-3 text-muted">
-                {o.createdAt} ／ {o.status === "SHIPPED" ? "発送済み" : "発送待ち"}
-                {o.status !== "SHIPPED" ? (
+        <div>
+          <div className="mb-3 flex items-center justify-end gap-2">
+            <Link
+              href="/api/promo/pending-shipment-pdf"
+              target="_blank"
+              className="rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
+            >
+              発送待ちをPDF出力
+            </Link>
+            <select
+              value={orderFilter}
+              onChange={(e) => setOrderFilter(e.target.value as "all" | "pending")}
+              className="rounded-lg border border-border px-2 py-1.5 text-xs"
+            >
+              <option value="all">すべて</option>
+              <option value="pending">発送待ち</option>
+            </select>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="rounded-lg border border-border px-2 py-1.5 text-xs"
+            >
+              {[10, 20, 50].map((n) => (
+                <option key={n} value={n}>
+                  表示数{n}件
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <ul className="flex flex-col gap-2">
+            {visibleOrders.map((o) => {
+              const expanded = expandedOrderId === o.id;
+              return (
+                <li key={o.id} className="rounded-lg border border-border/60 p-3 text-sm">
                   <button
                     type="button"
-                    disabled={pending}
-                    onClick={() => startTransition(() => markRedemptionShippedAction(o.id))}
-                    className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
+                    onClick={() => setExpandedOrderId(expanded ? null : o.id)}
+                    className="flex w-full items-center justify-between text-left"
                   >
-                    発送済みにする
+                    <span>
+                      <span className="font-medium">{o.itemName}</span>
+                      <span className="ml-2 text-muted">
+                        注文者：{o.staffName} 注文日：{o.createdAt} 発送日：{o.status === "SHIPPED" ? "済" : "未定"}
+                      </span>
+                      {o.status !== "SHIPPED" ? (
+                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">発送待ち</span>
+                      ) : null}
+                    </span>
+                    <span className="shrink-0 text-muted">{expanded ? "▲" : "▼"}</span>
                   </button>
-                ) : null}
-              </span>
-            </li>
-          ))}
-          {promoOrders.length === 0 ? <p className="text-center text-muted">注文履歴はありません。</p> : null}
-        </ul>
+                  {expanded ? (
+                    <div className="mt-2 border-t border-border/50 pt-2 text-xs">
+                      <p>住所：{o.shippingAddress || "未登録"}</p>
+                      <p>電話番号：{o.shippingPhone || "未登録"}</p>
+                      {o.status !== "SHIPPED" ? (
+                        <button
+                          type="button"
+                          onClick={() => setShipConfirmId(o.id)}
+                          className="mt-2 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+                        >
+                          発送済みにする
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+            {visibleOrders.length === 0 ? <p className="text-center text-muted">注文履歴はありません。</p> : null}
+          </ul>
+        </div>
+      ) : null}
+
+      {shipConfirmOrder ? (
+        <ConfirmDialog
+          message={`${shipConfirmOrder.itemName}を${shipConfirmOrder.staffName}さんに発送済みにしますか？`}
+          confirmLabel="発送済みにする"
+          pending={pending}
+          danger={false}
+          onCancel={() => setShipConfirmId(null)}
+          onConfirm={() =>
+            startTransition(async () => {
+              await markRedemptionShippedAction(shipConfirmOrder.id);
+              setShipConfirmId(null);
+            })
+          }
+        />
       ) : null}
     </section>
   );

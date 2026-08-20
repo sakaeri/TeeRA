@@ -1,8 +1,16 @@
 import { chromium } from "playwright-core";
+import { execSync } from "node:child_process";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
   if (!ok) process.exitCode = 1;
+}
+function psql(sql) {
+  return execSync(
+    `PGPASSWORD=postgres psql -h localhost -U postgres -d teera -t -A -c "${sql.replace(/"/g, '\\"')}"`,
+  )
+    .toString()
+    .trim();
 }
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
@@ -26,18 +34,36 @@ try {
   await admin.click("button[type=submit]");
   await admin.waitForURL("http://localhost:3000/company");
 
-  // register a promo item costing 1pt, stock 2
+  const companyId = psql(
+    `select cm."companyId" from "CompanyMembership" cm join "User" u on cm."userId"=u.id where u.email='${adminEmail}';`,
+  );
+
+  // seed a promo item directly (Blob upload token isn't available in this
+  // local sandbox — the /api/upload route itself is unchanged by this UI
+  // redesign and already verified working in production)
+  psql(
+    `insert into "PromoItem" (id, "companyId", "imageUrl", name, "pointsCost", stock, description, "createdAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', 'https://example.com/mug.png', 'オリジナルタオル', 1, 2, '夏用タオル', now());`,
+  );
+  const itemId = psql(`select id from "PromoItem" where "companyId"='${companyId}' and name='オリジナルタオル';`);
+
+  // admin: item appears in list
   await admin.goto("http://localhost:3000/company");
-  await admin.click("text=＋販促品を登録");
-  await admin.fill('input[placeholder="画像URL"]', "https://example.com/mug.png");
-  await admin.fill('input[placeholder="商品名"]', "オリジナルマグカップ");
-  await admin.fill('input[placeholder="交換ポイント"]', "1");
-  await admin.fill('input[placeholder="在庫数"]', "2");
-  await admin.getByRole("button", { name: "登録する" }).click();
-  await admin.waitForTimeout(600);
   await admin.click("text=販促品一覧");
   let body = await admin.textContent("body");
-  log("promo item created", body.includes("オリジナルマグカップ") && body.includes("在庫 2"));
+  log("seeded promo item appears in list", body.includes("オリジナルタオル"));
+
+  // admin: edit modal opens pre-filled, edit name, save
+  await admin.getByRole("button", { name: "編集" }).click();
+  await admin.waitForTimeout(300);
+  body = await admin.textContent("body");
+  log("edit modal pre-filled", body.includes("販促品を編集") && body.includes("夏用タオル"));
+
+  await admin.fill('input[placeholder="例：オリジナルタオル"]', "オリジナルタオルSサイズ");
+  await admin.getByRole("button", { name: "保存する" }).click();
+  await admin.waitForTimeout(600);
+  body = await admin.textContent("body");
+  log("edit saved, new name shown in list", body.includes("オリジナルタオルSサイズ"));
 
   // invite + register staff
   await admin.click("text=スタッフ名簿");
@@ -83,40 +109,80 @@ try {
   body = await staff.textContent("body");
   log("staff has 1pt", body.includes("1pt") && body.includes("承認済み業務報告 1件"));
 
-  // redeem
+  // redeem: opens shipping-info modal, fill address/phone, confirm
   await staff.getByRole("button", { name: "交換する" }).click();
+  await staff.waitForTimeout(300);
+  body = await staff.textContent("body");
+  log("shipping info modal opens", body.includes("配送先を確認"));
+
+  await staff.fill('input[placeholder="例：東京都渋谷区〇〇1-2-3"]', "東京都新宿区テスト1-1-1");
+  await staff.fill('input[placeholder="例：090-1234-5678"]', "090-0000-1111");
+  await staff.getByRole("button", { name: "この内容で交換する" }).click();
   await staff.waitForTimeout(700);
   body = await staff.textContent("body");
   log("item now shows as redeemed", body.includes("交換済み"));
 
   await staff.click("text=交換履歴");
   body = await staff.textContent("body");
-  log("redemption appears in order history as 発送待ち", body.includes("オリジナルマグカップ") && body.includes("発送待ち"));
+  log("redemption appears in order history as 発送待ち", body.includes("オリジナルタオル") && body.includes("発送待ち"));
 
   // balance should be back to 0
   await staff.goto("http://localhost:3000/staff/points");
   body = await staff.textContent("body");
   log("balance back to 0pt after redemption", body.includes("0pt"));
 
-  // admin sees pending shipment, marks shipped
+  // admin sees reduced stock via edit modal
   await admin.goto("http://localhost:3000/company");
   await admin.click("text=販促品一覧");
-  body = await admin.textContent("body");
-  log("admin sees reduced stock", body.includes("在庫 1"));
+  await admin.getByRole("button", { name: "編集" }).click();
+  await admin.waitForTimeout(300);
+  const stockValue = await admin.locator('input[placeholder="例：20"]').inputValue();
+  log("admin sees reduced stock in edit modal", stockValue === "1");
+  await admin.click("text=✕");
+  await admin.waitForTimeout(200);
 
+  // admin: order history, expand row, see shipping info, mark shipped via confirm popup
   await admin.click("text=販促品注文履歴");
+  await admin.waitForTimeout(300);
   body = await admin.textContent("body");
   log("admin sees pending shipment", body.includes("販促品スタッフ") && body.includes("発送待ち"));
 
+  await admin.click("text=オリジナルタオルSサイズ");
+  await admin.waitForTimeout(300);
+  body = await admin.textContent("body");
+  log("expanded row shows shipping address/phone", body.includes("東京都新宿区テスト1-1-1") && body.includes("090-0000-1111"));
+
   await admin.getByRole("button", { name: "発送済みにする" }).click();
+  await admin.waitForTimeout(300);
+  body = await admin.textContent("body");
+  log("ship confirm popup shown", body.includes("発送済みにしますか"));
+
+  await admin.getByRole("button", { name: "発送済みにする" }).last().click();
   await admin.waitForTimeout(600);
   body = await admin.textContent("body");
-  log("no more pending shipment button after marking shipped", !body.includes("発送済みにする"));
+  log("no more 発送済みにする button after marking shipped", !body.includes("発送済みにする"));
 
   await staff.goto("http://localhost:3000/staff/points");
   await staff.click("text=交換履歴");
   body = await staff.textContent("body");
   log("staff sees order as 発送済み", body.includes("発送済み"));
+
+  // delete via confirm popup
+  await admin.goto("http://localhost:3000/company");
+  await admin.click("text=販促品一覧");
+  await admin.getByRole("button", { name: "編集" }).click();
+  await admin.waitForTimeout(300);
+  await admin.click("text=この販促品を削除する");
+  await admin.waitForTimeout(300);
+  body = await admin.textContent("body");
+  log("delete confirm popup shown", body.includes("削除しますか"));
+  await admin.getByRole("button", { name: "削除する", exact: true }).click();
+  await admin.waitForTimeout(1500);
+  log(
+    "item removed from list after delete",
+    (await admin.getByText("オリジナルタオルSサイズ").count()) === 0 ||
+      !(await admin.getByText("オリジナルタオルSサイズ").first().isVisible().catch(() => false)),
+  );
 
   console.log(process.exitCode ? "PROMO SMOKE TEST HAD FAILURES" : "PROMO SMOKE TEST PASSED");
 } catch (err) {

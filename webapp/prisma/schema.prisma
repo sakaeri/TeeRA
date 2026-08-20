@@ -23,6 +23,8 @@ model User {
   passwordHash String
   name         String
   isProxy      Boolean  @default(false) // 仮アカウント — placeholder person with no real login yet
+  address      String? // shipping address, entered at first promo redemption and reused after
+  phoneNumber  String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -775,13 +777,15 @@ enum PromoRedemptionStatus {
 }
 
 model PromoRedemption {
-  id          String                @id @default(cuid())
-  promoItemId String
-  staffUserId String
-  pointsSpent Int
-  status      PromoRedemptionStatus @default(PENDING_SHIPMENT)
-  shippedAt   DateTime?
-  createdAt   DateTime              @default(now())
+  id              String                @id @default(cuid())
+  promoItemId     String
+  staffUserId     String
+  pointsSpent     Int
+  status          PromoRedemptionStatus @default(PENDING_SHIPMENT)
+  shippingAddress String? // snapshot of the staff's address at redemption time
+  shippingPhone   String?
+  shippedAt       DateTime?
+  createdAt       DateTime              @default(now())
 
   promoItem PromoItem @relation(fields: [promoItemId], references: [id], onDelete: Cascade)
   staff     User      @relation(fields: [staffUserId], references: [id], onDelete: Cascade)

@@ -1,4 +1,5 @@
 import { requireCompanyStaffRole } from "@/lib/auth/session";
+import { prisma } from "@/lib/prisma";
 import {
   listPromoItems,
   listRedemptionsForStaff,
@@ -10,11 +11,12 @@ import { StaffPointsView } from "@/components/staff/StaffPointsView";
 export default async function StaffPointsPage() {
   const { userId, membership } = await requireCompanyStaffRole();
 
-  const [items, redemptions, balance, tier] = await Promise.all([
+  const [items, redemptions, balance, tier, user] = await Promise.all([
     listPromoItems(membership.companyId),
     listRedemptionsForStaff(userId),
     getStaffPointsBalance(userId),
     getStaffTierProgress(userId),
+    prisma.user.findUniqueOrThrow({ where: { id: userId } }),
   ]);
 
   return (
@@ -23,6 +25,8 @@ export default async function StaffPointsPage() {
       <StaffPointsView
         balance={balance}
         tier={tier}
+        savedAddress={user.address ?? ""}
+        savedPhone={user.phoneNumber ?? ""}
         items={items.map((i) => ({
           id: i.id,
           imageUrl: i.imageUrl,
