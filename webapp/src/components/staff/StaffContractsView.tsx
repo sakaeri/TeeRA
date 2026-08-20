@@ -14,7 +14,14 @@ export function StaffContractsView({
   myContracts,
   availableTemplates,
 }: {
-  myContracts: { id: string; title: string; status: string; wageAmountSnapshot: number; wageType: string }[];
+  myContracts: {
+    id: string;
+    title: string;
+    status: string;
+    wageAmountSnapshot: number;
+    wageType: string;
+    contractStartDate: string;
+  }[];
   availableTemplates: { id: string; title: string; wageType: string; wageAmount: number }[];
 }) {
   const [pending, startTransition] = useTransition();
@@ -29,7 +36,10 @@ export function StaffContractsView({
           <ul className="flex flex-col gap-2">
             {myContracts.map((c) => (
               <li key={c.id} className="flex items-center justify-between rounded-lg border border-border/60 p-3 text-sm">
-                <span>{c.title}</span>
+                <div>
+                  <p>{c.title}</p>
+                  <p className="text-xs text-muted">雇用開始日: {c.contractStartDate}</p>
+                </div>
                 <span className="text-muted">
                   {WAGE_TYPE_LABEL[c.wageType]} {c.wageAmountSnapshot}円 ／ {STATUS_LABEL[c.status]}
                 </span>

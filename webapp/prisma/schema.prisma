@@ -217,6 +217,7 @@ model InviteToken {
   teamId                String?
   companyRelationshipId String? // for CLIENT_UPGRADE / AGENCY_UPGRADE
   contractTemplateId    String? // STAFF invite: issue this contract to the invitee on join
+  contractStartDate     DateTime?    @db.Date // overrides the template's default start date for this specific invite
   targetRole            CompanyRole? // role granted on redemption (STAFF invites etc.)
   upgradeProxyUserId    String? // 本アカウントと連携する: reassigns this proxy User's membership to the real account instead of creating a new one
   createdByUserId       String
@@ -523,6 +524,8 @@ model StaffContract {
   templateId         String
   staffUserId        String
   wageAmountSnapshot Int // wage amount at the moment of consent — a rate change invalidates consent (chat27 fix)
+  contractStartDate  DateTime? @db.Date // snapshot at consent; independent per staff even when sharing a template
+  contractEndDate    DateTime? @db.Date
   consentedAt        DateTime?
   status             StaffContractStatus @default(PENDING_CONSENT)
   createdAt          DateTime            @default(now())

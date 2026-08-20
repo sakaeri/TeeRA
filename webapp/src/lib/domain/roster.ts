@@ -90,6 +90,7 @@ export async function inviteStaff(params: {
   createdByUserId: string;
   teamId?: string;
   contractTemplateId?: string;
+  contractStartDate?: Date;
 }) {
   return createInvite({
     kind: "STAFF",
@@ -97,6 +98,7 @@ export async function inviteStaff(params: {
     createdByUserId: params.createdByUserId,
     teamId: params.teamId,
     contractTemplateId: params.contractTemplateId,
+    contractStartDate: params.contractStartDate,
     targetRole: "STAFF",
   });
 }
@@ -218,6 +220,7 @@ export async function getStaffMonthDetail(params: {
             c.template.companyRelationship?.proxyName ??
             "配属先"
           : "自社",
+      contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
     })),
     days: shifts.map((s) => ({
       shiftId: s.id,

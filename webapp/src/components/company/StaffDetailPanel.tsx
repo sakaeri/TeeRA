@@ -11,7 +11,14 @@ type StaffMonthDetail = {
   teams: { teamId: string; teamName: string }[];
   monthlyHours: number;
   daysWorked: number;
-  contracts: { id: string; title: string; status: string; wageLabel: string; workplaceName: string }[];
+  contracts: {
+    id: string;
+    title: string;
+    status: string;
+    wageLabel: string;
+    workplaceName: string;
+    contractStartDate: string;
+  }[];
   days: {
     shiftId: string;
     date: string;
@@ -185,6 +192,7 @@ export function StaffDetailPanel({ userId, onClose }: { userId: string; onClose:
                     <p className="text-muted">
                       {c.workplaceName} ／ {c.wageLabel}
                     </p>
+                    <p className="text-xs text-muted">雇用開始日: {c.contractStartDate}</p>
                     <p className="text-xs text-muted">{c.status === "ACTIVE" ? "確認済み" : "確認待ち"}</p>
                   </li>
                 ))}

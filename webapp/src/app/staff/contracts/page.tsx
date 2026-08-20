@@ -27,6 +27,7 @@ export default async function StaffContractsPage() {
           status: c.status,
           wageAmountSnapshot: c.wageAmountSnapshot,
           wageType: c.template.wageType,
+          contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
         }))}
         availableTemplates={availableTemplates
           .filter((t) => !contractedTemplateIds.has(t.id))

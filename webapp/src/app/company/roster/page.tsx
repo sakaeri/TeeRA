@@ -58,6 +58,7 @@ export default async function RosterPage() {
               t.workplaceType === "CLIENT"
                 ? (t.workplaceNote ?? t.companyRelationship?.clientCompany?.name ?? t.companyRelationship?.proxyName ?? "配属先")
                 : "自社",
+            contractStartDate: t.contractStartDate.toISOString().slice(0, 10),
           }))}
         agencyEnabled={company.agencyEnabled}
         dispatchEnabled={company.dispatchEnabled}

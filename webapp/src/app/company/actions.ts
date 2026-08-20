@@ -27,7 +27,11 @@ function absoluteInviteUrl(token: string) {
   return `${base}/invite/${token}`;
 }
 
-export async function inviteStaffAction(teamId?: string, contractTemplateId?: string) {
+export async function inviteStaffAction(
+  teamId?: string,
+  contractTemplateId?: string,
+  contractStartDate?: string,
+) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership, teamId)) throw new Error("forbidden");
 
@@ -36,6 +40,7 @@ export async function inviteStaffAction(teamId?: string, contractTemplateId?: st
     createdByUserId: userId,
     teamId,
     contractTemplateId,
+    contractStartDate: contractStartDate ? new Date(`${contractStartDate}T00:00:00.000Z`) : undefined,
   });
   revalidatePath("/company/roster");
   return absoluteInviteUrl(invite.token);

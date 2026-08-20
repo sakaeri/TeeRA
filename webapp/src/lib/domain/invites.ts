@@ -16,6 +16,7 @@ export async function createInvite(params: {
   teamId?: string;
   companyRelationshipId?: string;
   contractTemplateId?: string;
+  contractStartDate?: Date;
   targetRole?: CompanyRole;
 }) {
   const token = generateInviteTokenString();
@@ -29,6 +30,7 @@ export async function createInvite(params: {
       teamId: params.teamId,
       companyRelationshipId: params.companyRelationshipId,
       contractTemplateId: params.contractTemplateId,
+      contractStartDate: params.contractStartDate,
       targetRole: params.targetRole,
       createdByUserId: params.createdByUserId,
       expiresAt,
@@ -95,6 +97,8 @@ export async function redeemInvite(token: string, userId: string) {
               templateId: template.id,
               staffUserId: userId,
               wageAmountSnapshot: template.wageAmount,
+              contractStartDate: invite.contractStartDate ?? template.contractStartDate,
+              contractEndDate: template.contractEndDate,
               status: "ACTIVE",
               consentedAt: new Date(),
             },

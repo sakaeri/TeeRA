@@ -130,6 +130,8 @@ export async function startStaffContract(params: { templateId: string; staffUser
       templateId: template.id,
       staffUserId: params.staffUserId,
       wageAmountSnapshot: template.wageAmount,
+      contractStartDate: template.contractStartDate,
+      contractEndDate: template.contractEndDate,
       status: "ACTIVE",
       consentedAt: new Date(),
     },

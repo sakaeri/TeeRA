@@ -47,6 +47,7 @@ type ContractTemplateOption = {
   employmentTypeLabel: string;
   wageLabel: string;
   workplaceName: string;
+  contractStartDate: string;
 };
 
 type Tab = "staff" | "clients" | "agencies";
@@ -408,6 +409,7 @@ function InviteStaffModal({
   onClose: () => void;
 }) {
   const [templateId, setTemplateId] = useState("");
+  const [contractStartDate, setContractStartDate] = useState("");
   const [pending, startTransition] = useTransition();
   const [url, setUrl] = useState<string | null>(null);
   const selectedTemplate = templates.find((t) => t.id === templateId);
@@ -430,7 +432,11 @@ function InviteStaffModal({
             <label className="mb-1 block text-xs text-muted">どのテンプレートで契約書を発行しますか？</label>
             <select
               value={templateId}
-              onChange={(e) => setTemplateId(e.target.value)}
+              onChange={(e) => {
+                setTemplateId(e.target.value);
+                const t = templates.find((opt) => opt.id === e.target.value);
+                setContractStartDate(t?.contractStartDate ?? "");
+              }}
               className="w-full rounded-lg border border-border px-3 py-2 text-sm"
             >
               <option value="">選択しない</option>
@@ -445,6 +451,15 @@ function InviteStaffModal({
                 <p>雇用形態: {selectedTemplate.employmentTypeLabel}</p>
                 <p>賃金: {selectedTemplate.wageLabel}</p>
                 <p>就業場所: {selectedTemplate.workplaceName}</p>
+                <label className="mt-2 flex flex-col gap-1">
+                  このスタッフの雇用開始日
+                  <input
+                    type="date"
+                    value={contractStartDate}
+                    onChange={(e) => setContractStartDate(e.target.value)}
+                    className="rounded-lg border border-border px-2 py-1.5 text-sm text-foreground"
+                  />
+                </label>
               </div>
             ) : null}
           </div>
@@ -463,7 +478,11 @@ function InviteStaffModal({
             disabled={pending}
             onClick={() =>
               startTransition(async () => {
-                const generated = await inviteStaffAction(undefined, templateId || undefined);
+                const generated = await inviteStaffAction(
+                  undefined,
+                  templateId || undefined,
+                  templateId ? contractStartDate || undefined : undefined,
+                );
                 setUrl(generated);
               })
             }
