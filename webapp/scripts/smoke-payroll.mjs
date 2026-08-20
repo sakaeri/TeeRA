@@ -61,8 +61,8 @@ try {
   // contract with wage rate 1300/hr
   await admin.goto("http://localhost:3000/company/settings?tab=contracts");
   await admin.getByRole("button", { name: "＋テンプレートを作成" }).click();
-  await admin.locator("label:has-text('業務内容') input").fill("レジ業務");
-  await admin.locator("label:has-text('賃金') input[type=number]").fill("1300");
+  await admin.getByText("業務内容", { exact: true }).locator("xpath=..").locator("input").fill("レジ業務");
+  await admin.getByText("賃金", { exact: true }).locator("xpath=..").locator("input[type=number]").fill("1300");
   await admin.getByRole("button", { name: "テンプレートを生成" }).click();
   await admin.waitForTimeout(600);
 

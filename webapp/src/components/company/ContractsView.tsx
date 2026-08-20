@@ -295,6 +295,17 @@ function ToggleGroup<T extends string | boolean>({
   );
 }
 
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-4 py-2.5">
+      <span className="w-32 shrink-0 pt-2 text-xs font-semibold text-muted">{label}</span>
+      <div className="flex-1">{children}</div>
+    </div>
+  );
+}
+
+const fieldInput = "rounded-lg border border-border px-2 py-2 text-sm";
+
 function TemplateModal({
   clients,
   companyName,
@@ -330,12 +341,16 @@ function TemplateModal({
   const [paymentMethod, setPaymentMethod] = useState("振込");
   const [extraItems, setExtraItems] = useState<{ label: string; value: string }[]>([]);
   const [customChipLabel, setCustomChipLabel] = useState("");
-  const [mode, setMode] = useState<"form" | "preview">("form");
+  const [mode, setMode] = useState<"edit" | "preview">("edit");
 
   const autoTitle = `${EMPLOYMENT_TYPE_LABEL[employmentType]}${jobDescription ? "・" + jobDescription : ""}`;
   const title = customTitle.trim() || autoTitle;
+  const preview = mode === "preview";
 
   const workingDayLabel = WEEKDAYS.filter((d) => fixedWeekdays.includes(d.value))
+    .map((d) => d.label)
+    .join("・");
+  const offDayLabel = WEEKDAYS.filter((d) => !fixedWeekdays.includes(d.value))
     .map((d) => d.label)
     .join("・");
 
@@ -361,56 +376,7 @@ function TemplateModal({
     Boolean(wageAmount) &&
     (workplaceType === "INHOUSE" || Boolean(companyRelationshipId));
 
-  function previewIntroText() {
-    return `${companyName}（以下「甲」）と（スタッフ名/自動反映）（以下「乙」）は、${
-      contractStartDate || "開始日未設定"
-    }より、以下の内容で雇用契約を締結する。`;
-  }
-
-  function previewRows(): { label: string; value: string }[] {
-    const clientName = clients.find((c) => c.id === companyRelationshipId)?.name;
-    return [
-      { label: "雇用形態", value: EMPLOYMENT_TYPE_LABEL[employmentType] },
-      { label: "雇用開始日", value: contractStartDate || "未設定" },
-      {
-        label: "契約期間",
-        value:
-          contractPeriodType === "INDEFINITE" ? "無期" : `有期（${contractStartDate}〜${contractEndDate || "未設定"}）`,
-      },
-      { label: "就業場所", value: workplaceType === "CLIENT" ? clientName ?? "配属先未選択" : "自社" },
-      { label: "業務内容", value: jobDescription || "未設定" },
-      {
-        label: "シフト",
-        value:
-          scheduleType === "FIXED"
-            ? `固定（${workingDayLabel || "未設定"}）`
-            : `シフト制${shiftPatternNote ? `（${shiftPatternNote}）` : ""}`,
-      },
-      {
-        label: "休み",
-        value:
-          scheduleType === "FIXED"
-            ? `${workingDayLabel ? `${workingDayLabel}以外` : "未設定"}${restNote ? `・${restNote}` : ""}`
-            : restNote || "未設定",
-      },
-      {
-        label: "所定の勤務時間",
-        value:
-          scheduleType === "FIXED"
-            ? `${workStartTime || "--:--"}〜${workEndTime || "--:--"}（実働${actualWorkHours}時間／休憩${breakMinutes}分）`
-            : "シフト制",
-      },
-      { label: "残業の有無", value: hasOvertime ? `あり${overtimeNote ? `（${overtimeNote}）` : ""}` : "なし" },
-      { label: "賃金", value: `${WAGE_TYPE_LABEL[wageType]} ${wageAmount || "未設定"}円` },
-      {
-        label: "賃金の支払方法",
-        value: `締め日 ${paymentClosingDay || "未設定"}／支払日 ${paymentDay || "未設定"}／${paymentMethod}`,
-      },
-      ...(extraItems.length > 0
-        ? [{ label: "その他項目", value: extraItems.map((i) => `${i.label}${i.value ? `（${i.value}）` : ""}`).join("、") }]
-        : []),
-    ];
-  }
+  const clientName = clients.find((c) => c.id === companyRelationshipId)?.name;
 
   async function submitTemplate() {
     await createTemplateAction({
@@ -451,388 +417,406 @@ function TemplateModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-serif-jp text-lg font-bold text-primary">
-            {mode === "form" ? "雇用契約書テンプレート" : "雇用契約書"}
-          </h3>
-          <button
-            type="button"
-            onClick={() => (mode === "form" ? onClose() : setMode("form"))}
-            className="text-muted"
-          >
+          <h3 className="font-serif-jp text-lg font-bold text-primary">雇用契約書{preview ? "" : "テンプレート"}</h3>
+          <button type="button" onClick={onClose} className="text-muted">
             ✕
           </button>
         </div>
 
-        {mode === "preview" ? (
-          <div>
-            <p className="mb-4 text-xs text-muted">テンプレート名：{title}</p>
-            <p className="text-sm leading-relaxed">{previewIntroText()}</p>
-            <div className="my-4 border-t border-border" />
-            <div className="flex flex-col gap-4">
-              {previewRows().map((row) => (
-                <div key={row.label} className="flex items-baseline gap-4">
-                  <span className="w-32 shrink-0 text-xs font-semibold text-muted">{row.label}</span>
-                  <span className="text-sm text-foreground">{row.value}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-6 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setMode("form")}
-                className="flex-1 rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary"
-              >
-                内容を編集する
-              </button>
-              <button
-                type="button"
-                disabled={pending || !canSubmit}
-                onClick={() =>
-                  startTransition(async () => {
-                    await submitTemplate();
-                    onClose();
-                  })
-                }
-                className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-              >
-                テンプレートを生成
-              </button>
-            </div>
-          </div>
+        {preview ? (
+          <p className="mb-3 text-xs text-muted">テンプレート名：{title}</p>
         ) : (
-          <>
-        <label className="mb-4 flex flex-col gap-1 text-xs">
-          テンプレート名（管理用・スタッフには表示されません）
-          <input
-            type="text"
-            value={customTitle}
-            onChange={(e) => setCustomTitle(e.target.value)}
-            placeholder={`未入力の場合、自動生成されます（例：${autoTitle}）`}
-            className="rounded-lg border border-border px-2 py-2 text-sm"
-          />
-        </label>
-
-        <div className="grid grid-cols-2 gap-3">
-          <label className="flex flex-col gap-1 text-xs">
-            雇用形態
-            <select
-              value={employmentType}
-              onChange={(e) => setEmploymentType(e.target.value)}
-              className="rounded-lg border border-border px-2 py-2 text-sm"
-            >
-              {Object.entries(EMPLOYMENT_TYPE_LABEL).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-xs">
-            雇用開始日
-            <input
-              type="date"
-              value={contractStartDate}
-              onChange={(e) => setContractStartDate(e.target.value)}
-              className="rounded-lg border border-border px-2 py-2 text-sm"
-            />
-          </label>
-
-          <div className="col-span-2 flex flex-col gap-1 text-xs">
-            契約期間
-            <ToggleGroup
-              value={contractPeriodType}
-              onChange={setContractPeriodType}
-              options={[
-                { value: "INDEFINITE", label: "無期" },
-                { value: "FIXED_TERM", label: "有期" },
-              ]}
-            />
-          </div>
-          {contractPeriodType === "FIXED_TERM" ? (
-            <label className="col-span-2 flex flex-col gap-1 text-xs">
-              契約終了日
-              <input
-                type="date"
-                value={contractEndDate}
-                onChange={(e) => setContractEndDate(e.target.value)}
-                className="rounded-lg border border-border px-2 py-2 text-sm"
-              />
-            </label>
-          ) : null}
-
-          <label className="flex flex-col gap-1 text-xs">
-            就業場所
-            <select
-              value={workplaceType}
-              onChange={(e) => setWorkplaceType(e.target.value as "INHOUSE" | "CLIENT")}
-              className="rounded-lg border border-border px-2 py-2 text-sm"
-            >
-              <option value="INHOUSE">自社</option>
-              <option value="CLIENT">配属先（派遣社員）</option>
-            </select>
-          </label>
-          {workplaceType === "CLIENT" ? (
-            <label className="flex flex-col gap-1 text-xs">
-              配属先
-              <select
-                value={companyRelationshipId}
-                onChange={(e) => setCompanyRelationshipId(e.target.value)}
-                className="rounded-lg border border-border px-2 py-2 text-sm"
-              >
-                <option value="">選択してください</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-
-          <label className="flex flex-col gap-1 text-xs">
-            賃金
-            <div className="flex gap-1">
-              <select
-                value={wageType}
-                onChange={(e) => setWageType(e.target.value)}
-                className="rounded-lg border border-border px-2 py-2 text-sm"
-              >
-                <option value="HOURLY">時給</option>
-                <option value="DAILY">日給</option>
-                <option value="MONTHLY">月給</option>
-              </select>
-              <input
-                type="number"
-                value={wageAmount}
-                onChange={(e) => setWageAmount(e.target.value)}
-                placeholder="例：1450"
-                className="w-24 rounded-lg border border-border px-2 py-2 text-sm"
-              />
-              <span className="self-center text-muted">円</span>
-            </div>
-          </label>
-          <label className="flex flex-col gap-1 text-xs">
-            業務内容
+          <label className="mb-3 flex flex-col gap-1 text-xs">
+            テンプレート名（管理用・スタッフには表示されません）
             <input
               type="text"
-              value={jobDescription}
-              onChange={(e) => setJobDescription(e.target.value)}
-              placeholder="例：レストランホール接客"
-              className="rounded-lg border border-border px-2 py-2 text-sm"
-            />
-          </label>
-        </div>
-
-        <div className="mt-4 flex flex-col gap-1 text-xs">
-          所定の勤務時間
-          <ToggleGroup
-            value={scheduleType}
-            onChange={setScheduleType}
-            options={[
-              { value: "FIXED", label: "固定" },
-              { value: "SHIFT", label: "シフト制" },
-            ]}
-          />
-        </div>
-
-        {scheduleType === "FIXED" ? (
-          <>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-              <input
-                type="time"
-                value={workStartTime}
-                onChange={(e) => setWorkStartTime(e.target.value)}
-                className="rounded-lg border border-border px-2 py-2 text-sm"
-              />
-              〜
-              <input
-                type="time"
-                value={workEndTime}
-                onChange={(e) => setWorkEndTime(e.target.value)}
-                className="rounded-lg border border-border px-2 py-2 text-sm"
-              />
-              （実働
-              <input
-                type="number"
-                value={actualWorkHours}
-                onChange={(e) => setActualWorkHours(e.target.value)}
-                className="w-14 rounded-lg border border-border px-2 py-1 text-sm"
-              />
-              時間／休憩
-              <input
-                type="number"
-                value={breakMinutes}
-                onChange={(e) => setBreakMinutes(e.target.value)}
-                className="w-14 rounded-lg border border-border px-2 py-1 text-sm"
-              />
-              分）
-            </div>
-            <div className="mt-3 flex flex-col gap-1 text-xs">
-              勤務日
-              <div className="flex flex-wrap gap-1">
-                {WEEKDAYS.map((d) => (
-                  <button
-                    key={d.value}
-                    type="button"
-                    onClick={() => toggleWeekday(d.value)}
-                    className={`h-8 w-8 rounded-lg border text-sm ${
-                      fixedWeekdays.includes(d.value)
-                        ? "border-primary bg-primary/10 font-semibold text-primary"
-                        : "border-border text-muted"
-                    }`}
-                  >
-                    {d.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </>
-        ) : (
-          <label className="mt-3 flex flex-col gap-1 text-xs">
-            シフトパターン
-            <input
-              type="text"
-              value={shiftPatternNote}
-              onChange={(e) => setShiftPatternNote(e.target.value)}
-              placeholder="例：4勤2休"
-              className="rounded-lg border border-border px-2 py-2 text-sm"
+              value={customTitle}
+              onChange={(e) => setCustomTitle(e.target.value)}
+              placeholder={`未入力の場合、自動生成されます（例：${autoTitle}）`}
+              className={fieldInput}
             />
           </label>
         )}
 
-        <div className="mt-4 flex flex-col gap-1 text-xs">
-          残業の有無
-          <ToggleGroup
-            value={hasOvertime}
-            onChange={setHasOvertime}
-            options={[
-              { value: true, label: "あり" },
-              { value: false, label: "なし" },
-            ]}
-          />
-          {hasOvertime ? (
-            <input
-              type="text"
-              value={overtimeNote}
-              onChange={(e) => setOvertimeNote(e.target.value)}
-              placeholder="例：月20時間まで"
-              className="mt-2 rounded-lg border border-border px-2 py-2 text-sm"
-            />
-          ) : null}
-        </div>
+        <p className="text-sm leading-relaxed">
+          {companyName}（以下「甲」）と（スタッフ名/自動反映）（以下「乙」）は、{contractStartDate || "開始日未設定"}
+          より、以下の内容で雇用契約を締結する。
+        </p>
+        <div className="my-4 border-t border-border" />
 
-        <label className="mt-4 flex flex-col gap-1 text-xs">
-          休み
-          {scheduleType === "FIXED" ? (
-            <p className="text-muted">
-              {workingDayLabel ? `勤務日（${workingDayLabel}）以外が休みになります` : "勤務日を選択すると自動で表示されます"}
-            </p>
-          ) : null}
-          <input
-            type="text"
-            value={restNote}
-            onChange={(e) => setRestNote(e.target.value)}
-            placeholder="例：祭日は休み／長期連休あり"
-            className="rounded-lg border border-border px-2 py-2 text-sm"
-          />
-        </label>
+        <div className="flex flex-col divide-y divide-border/40">
+          <Row label="雇用形態">
+            {preview ? (
+              <span className="text-sm">{EMPLOYMENT_TYPE_LABEL[employmentType]}</span>
+            ) : (
+              <select value={employmentType} onChange={(e) => setEmploymentType(e.target.value)} className={fieldInput}>
+                {Object.entries(EMPLOYMENT_TYPE_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Row>
 
-        <div className="mt-4 flex flex-col gap-2 text-xs">
-          賃金の支払方法
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={paymentClosingDay}
-              onChange={(e) => setPaymentClosingDay(e.target.value)}
-              placeholder="締め日（例：月末）"
-              className="flex-1 rounded-lg border border-border px-2 py-2 text-sm"
-            />
-            <input
-              type="text"
-              value={paymentDay}
-              onChange={(e) => setPaymentDay(e.target.value)}
-              placeholder="支払日（例：翌月25日）"
-              className="flex-1 rounded-lg border border-border px-2 py-2 text-sm"
-            />
-          </div>
-          <input
-            type="text"
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value)}
-            className="rounded-lg border border-border px-2 py-2 text-sm"
-          />
-        </div>
+          <Row label="雇用開始日">
+            {preview ? (
+              <span className="text-sm">{contractStartDate || "未設定"}</span>
+            ) : (
+              <input
+                type="date"
+                value={contractStartDate}
+                onChange={(e) => setContractStartDate(e.target.value)}
+                className={fieldInput}
+              />
+            )}
+          </Row>
 
-        <div className="mt-4 flex flex-col gap-2 text-xs">
-          <div className="flex flex-wrap gap-2">
-            {QUICK_ADD_CHIPS.map((label) => {
-              const added = extraItems.some((i) => i.label === label);
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  disabled={added}
-                  onClick={() => addChip(label)}
-                  className={`rounded-full border px-3 py-1 text-xs ${
-                    added ? "border-border text-muted/50" : "border-border text-muted hover:border-primary"
-                  }`}
+          <Row label="契約期間">
+            {preview ? (
+              <span className="text-sm">
+                {contractPeriodType === "INDEFINITE"
+                  ? "無期"
+                  : `有期（${contractStartDate}〜${contractEndDate || "未設定"}）`}
+              </span>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <ToggleGroup
+                  value={contractPeriodType}
+                  onChange={setContractPeriodType}
+                  options={[
+                    { value: "INDEFINITE", label: "無期" },
+                    { value: "FIXED_TERM", label: "有期" },
+                  ]}
+                />
+                {contractPeriodType === "FIXED_TERM" ? (
+                  <input
+                    type="date"
+                    value={contractEndDate}
+                    onChange={(e) => setContractEndDate(e.target.value)}
+                    className={fieldInput}
+                  />
+                ) : null}
+              </div>
+            )}
+          </Row>
+
+          <Row label="就業場所">
+            {preview ? (
+              <span className="text-sm">{workplaceType === "CLIENT" ? clientName ?? "配属先未選択" : "自社"}</span>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <select
+                  value={workplaceType}
+                  onChange={(e) => setWorkplaceType(e.target.value as "INHOUSE" | "CLIENT")}
+                  className={fieldInput}
                 >
-                  ＋{label}
-                </button>
-              );
-            })}
-            <div className="flex items-center gap-1">
+                  <option value="INHOUSE">自社</option>
+                  <option value="CLIENT">配属先（派遣社員）</option>
+                </select>
+                {workplaceType === "CLIENT" ? (
+                  <select
+                    value={companyRelationshipId}
+                    onChange={(e) => setCompanyRelationshipId(e.target.value)}
+                    className={fieldInput}
+                  >
+                    <option value="">選択してください</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+              </div>
+            )}
+          </Row>
+
+          <Row label="業務内容">
+            {preview ? (
+              <span className="text-sm">{jobDescription || "未設定"}</span>
+            ) : (
               <input
                 type="text"
-                value={customChipLabel}
-                onChange={(e) => setCustomChipLabel(e.target.value)}
-                placeholder="項目名"
-                className="w-24 rounded-full border border-border px-3 py-1 text-xs"
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+                placeholder="例：レストランホール接客"
+                className={fieldInput}
               />
-              <button
-                type="button"
-                onClick={() => {
-                  if (!customChipLabel.trim()) return;
-                  addChip(customChipLabel.trim());
-                  setCustomChipLabel("");
-                }}
-                className="rounded-full border border-border px-3 py-1 text-xs text-muted hover:border-primary"
-              >
-                ＋項目追加
-              </button>
-            </div>
-          </div>
+            )}
+          </Row>
 
-          {extraItems.length > 0 ? (
-            <div className="flex flex-col gap-2">
-              {extraItems.map((item) => (
-                <div key={item.label} className="flex items-center gap-2">
-                  <span className="w-40 shrink-0 text-muted">{item.label}</span>
+          <Row label="シフト">
+            {preview ? (
+              <span className="text-sm">
+                {scheduleType === "FIXED"
+                  ? `固定（${workingDayLabel || "未設定"}）`
+                  : `シフト制${shiftPatternNote ? `（${shiftPatternNote}）` : ""}`}
+              </span>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <ToggleGroup
+                  value={scheduleType}
+                  onChange={setScheduleType}
+                  options={[
+                    { value: "FIXED", label: "固定" },
+                    { value: "SHIFT", label: "シフト制" },
+                  ]}
+                />
+                {scheduleType === "FIXED" ? (
+                  <div className="flex flex-wrap gap-1">
+                    {WEEKDAYS.map((d) => (
+                      <button
+                        key={d.value}
+                        type="button"
+                        onClick={() => toggleWeekday(d.value)}
+                        className={`h-8 w-8 rounded-lg border text-sm ${
+                          fixedWeekdays.includes(d.value)
+                            ? "border-primary bg-primary/10 font-semibold text-primary"
+                            : "border-border text-muted"
+                        }`}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
                   <input
                     type="text"
-                    value={item.value}
-                    onChange={(e) => updateChipValue(item.label, e.target.value)}
-                    placeholder="内容（任意）"
-                    className="flex-1 rounded-lg border border-border px-2 py-1.5 text-sm"
+                    value={shiftPatternNote}
+                    onChange={(e) => setShiftPatternNote(e.target.value)}
+                    placeholder="例：4勤2休"
+                    className={fieldInput}
                   />
-                  <button type="button" onClick={() => removeChip(item.label)} className="text-red-600">
-                    ✕
-                  </button>
+                )}
+              </div>
+            )}
+          </Row>
+
+          <Row label="休み">
+            {preview ? (
+              <span className="text-sm">
+                {scheduleType === "FIXED"
+                  ? `${offDayLabel || "未設定"}${restNote ? `・${restNote}` : ""}`
+                  : restNote || "未設定"}
+              </span>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {scheduleType === "FIXED" ? (
+                  <p className="text-sm">{offDayLabel || "勤務日を選択すると自動で表示されます"}</p>
+                ) : null}
+                <input
+                  type="text"
+                  value={restNote}
+                  onChange={(e) => setRestNote(e.target.value)}
+                  placeholder="例：祭日は休み／長期連休あり"
+                  className={fieldInput}
+                />
+              </div>
+            )}
+          </Row>
+
+          <Row label="所定の勤務時間">
+            {preview ? (
+              <span className="text-sm">
+                {scheduleType === "FIXED"
+                  ? `${workStartTime || "--:--"}〜${workEndTime || "--:--"}（実働${actualWorkHours}時間／休憩${breakMinutes}分）`
+                  : "シフト制"}
+              </span>
+            ) : scheduleType === "FIXED" ? (
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <input
+                  type="time"
+                  value={workStartTime}
+                  onChange={(e) => setWorkStartTime(e.target.value)}
+                  className={fieldInput}
+                />
+                〜
+                <input
+                  type="time"
+                  value={workEndTime}
+                  onChange={(e) => setWorkEndTime(e.target.value)}
+                  className={fieldInput}
+                />
+                （実働
+                <input
+                  type="number"
+                  value={actualWorkHours}
+                  onChange={(e) => setActualWorkHours(e.target.value)}
+                  className="w-14 rounded-lg border border-border px-2 py-1 text-sm"
+                />
+                時間／休憩
+                <input
+                  type="number"
+                  value={breakMinutes}
+                  onChange={(e) => setBreakMinutes(e.target.value)}
+                  className="w-14 rounded-lg border border-border px-2 py-1 text-sm"
+                />
+                分）
+              </div>
+            ) : (
+              <span className="text-sm text-muted">シフト制（勤務ごとに異なります）</span>
+            )}
+          </Row>
+
+          <Row label="残業の有無">
+            {preview ? (
+              <span className="text-sm">{hasOvertime ? `あり${overtimeNote ? `（${overtimeNote}）` : ""}` : "なし"}</span>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <ToggleGroup
+                  value={hasOvertime}
+                  onChange={setHasOvertime}
+                  options={[
+                    { value: true, label: "あり" },
+                    { value: false, label: "なし" },
+                  ]}
+                />
+                {hasOvertime ? (
+                  <input
+                    type="text"
+                    value={overtimeNote}
+                    onChange={(e) => setOvertimeNote(e.target.value)}
+                    placeholder="例：月20時間まで"
+                    className={fieldInput}
+                  />
+                ) : null}
+              </div>
+            )}
+          </Row>
+
+          <Row label="賃金">
+            {preview ? (
+              <span className="text-sm">
+                {WAGE_TYPE_LABEL[wageType]} {wageAmount || "未設定"}円
+              </span>
+            ) : (
+              <div className="flex gap-1">
+                <select value={wageType} onChange={(e) => setWageType(e.target.value)} className={fieldInput}>
+                  <option value="HOURLY">時給</option>
+                  <option value="DAILY">日給</option>
+                  <option value="MONTHLY">月給</option>
+                </select>
+                <input
+                  type="number"
+                  value={wageAmount}
+                  onChange={(e) => setWageAmount(e.target.value)}
+                  placeholder="例：1450"
+                  className="w-24 rounded-lg border border-border px-2 py-2 text-sm"
+                />
+                <span className="self-center text-muted">円</span>
+              </div>
+            )}
+          </Row>
+
+          <Row label="賃金の支払方法">
+            {preview ? (
+              <span className="text-sm">
+                締め日 {paymentClosingDay || "未設定"}／支払日 {paymentDay || "未設定"}／{paymentMethod}
+              </span>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={paymentClosingDay}
+                    onChange={(e) => setPaymentClosingDay(e.target.value)}
+                    placeholder="締め日（例：月末）"
+                    className={`flex-1 ${fieldInput}`}
+                  />
+                  <input
+                    type="text"
+                    value={paymentDay}
+                    onChange={(e) => setPaymentDay(e.target.value)}
+                    placeholder="支払日（例：翌月25日）"
+                    className={`flex-1 ${fieldInput}`}
+                  />
                 </div>
-              ))}
-            </div>
-          ) : null}
+                <input type="text" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className={fieldInput} />
+              </div>
+            )}
+          </Row>
+
+          <Row label="その他項目">
+            {preview ? (
+              <span className="text-sm">
+                {extraItems.length > 0
+                  ? extraItems.map((i) => `${i.label}${i.value ? `（${i.value}）` : ""}`).join("、")
+                  : "なし"}
+              </span>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {QUICK_ADD_CHIPS.map((label) => {
+                    const added = extraItems.some((i) => i.label === label);
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        disabled={added}
+                        onClick={() => addChip(label)}
+                        className={`rounded-full border px-3 py-1 text-xs ${
+                          added ? "border-border text-muted/50" : "border-border text-muted hover:border-primary"
+                        }`}
+                      >
+                        ＋{label}
+                      </button>
+                    );
+                  })}
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={customChipLabel}
+                      onChange={(e) => setCustomChipLabel(e.target.value)}
+                      placeholder="項目名"
+                      className="w-24 rounded-full border border-border px-3 py-1 text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!customChipLabel.trim()) return;
+                        addChip(customChipLabel.trim());
+                        setCustomChipLabel("");
+                      }}
+                      className="rounded-full border border-border px-3 py-1 text-xs text-muted hover:border-primary"
+                    >
+                      ＋項目追加
+                    </button>
+                  </div>
+                </div>
+
+                {extraItems.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {extraItems.map((item) => (
+                      <div key={item.label} className="flex items-center gap-2">
+                        <span className="w-40 shrink-0 text-muted">{item.label}</span>
+                        <input
+                          type="text"
+                          value={item.value}
+                          onChange={(e) => updateChipValue(item.label, e.target.value)}
+                          placeholder="内容（任意）"
+                          className="flex-1 rounded-lg border border-border px-2 py-1.5 text-sm"
+                        />
+                        <button type="button" onClick={() => removeChip(item.label)} className="text-red-600">
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </Row>
         </div>
 
         <div className="mt-6 flex gap-2">
           <button
             type="button"
             disabled={!canSubmit}
-            onClick={() => setMode("preview")}
+            onClick={() => setMode(preview ? "edit" : "preview")}
             className="flex-1 rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary disabled:opacity-60"
           >
-            プレビュー
+            {preview ? "内容を編集する" : "プレビュー"}
           </button>
           <button
             type="button"
@@ -848,8 +832,6 @@ function TemplateModal({
             テンプレートを生成
           </button>
         </div>
-          </>
-        )}
       </div>
     </div>
   );

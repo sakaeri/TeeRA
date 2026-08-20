@@ -52,8 +52,8 @@ try {
   log("placement rate added", body.includes("軽作業") && body.includes("1200円"));
 
   await admin.getByRole("button", { name: "＋テンプレートを作成" }).click();
-  await admin.locator("label:has-text('業務内容') input").fill("倉庫内軽作業");
-  await admin.locator("label:has-text('賃金') input[type=number]").fill("1200");
+  await admin.getByText("業務内容", { exact: true }).locator("xpath=..").locator("input").fill("倉庫内軽作業");
+  await admin.getByText("賃金", { exact: true }).locator("xpath=..").locator("input[type=number]").fill("1200");
   await admin.getByRole("button", { name: "テンプレートを生成" }).click();
   await admin.waitForTimeout(600);
   body = await admin.textContent("body");
