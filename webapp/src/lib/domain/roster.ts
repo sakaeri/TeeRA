@@ -67,7 +67,10 @@ export async function listStaffWithSummary(companyId: string) {
     const contract = contracts.find((c) => c.staffUserId === s.userId);
     const workplaceName =
       contract?.template.workplaceType === "CLIENT"
-        ? contract.template.companyRelationship?.clientCompany?.name ?? contract.template.companyRelationship?.proxyName ?? "配属先"
+        ? contract.template.workplaceNote ??
+          contract.template.companyRelationship?.clientCompany?.name ??
+          contract.template.companyRelationship?.proxyName ??
+          "配属先"
         : "自社";
     const currentRateLabel = contract
       ? `${workplaceName}：${WAGE_TYPE_LABEL[contract.template.wageType]}${contract.wageAmountSnapshot}円`
@@ -210,7 +213,10 @@ export async function getStaffMonthDetail(params: {
       wageLabel: `${WAGE_TYPE_LABEL[c.template.wageType]}${c.wageAmountSnapshot}円`,
       workplaceName:
         c.template.workplaceType === "CLIENT"
-          ? c.template.companyRelationship?.clientCompany?.name ?? c.template.companyRelationship?.proxyName ?? "配属先"
+          ? c.template.workplaceNote ??
+            c.template.companyRelationship?.clientCompany?.name ??
+            c.template.companyRelationship?.proxyName ??
+            "配属先"
           : "自社",
     })),
     days: shifts.map((s) => ({

@@ -56,7 +56,7 @@ export default async function RosterPage() {
             wageLabel: `${WAGE_TYPE_LABEL[t.wageType]}${t.wageAmount}円`,
             workplaceName:
               t.workplaceType === "CLIENT"
-                ? (t.companyRelationship?.clientCompany?.name ?? t.companyRelationship?.proxyName ?? "配属先")
+                ? (t.workplaceNote ?? t.companyRelationship?.clientCompany?.name ?? t.companyRelationship?.proxyName ?? "配属先")
                 : "自社",
           }))}
         agencyEnabled={company.agencyEnabled}

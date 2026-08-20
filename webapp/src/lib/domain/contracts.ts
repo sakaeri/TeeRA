@@ -14,6 +14,7 @@ export type TemplateInput = {
   employmentType: EmploymentType;
   workplaceType: WorkplaceType;
   companyRelationshipId?: string;
+  workplaceNote?: string;
   jobDescription: string;
   scheduleType: ContractScheduleType;
   workStartTime?: string;

@@ -74,7 +74,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
           title: t.title,
           employmentType: t.employmentType,
           workplaceType: t.workplaceType,
-          clientName: t.companyRelationship?.clientCompany?.name ?? t.companyRelationship?.proxyName ?? null,
+          clientName: t.workplaceNote ?? t.companyRelationship?.clientCompany?.name ?? t.companyRelationship?.proxyName ?? null,
           wageType: t.wageType,
           wageAmount: t.wageAmount,
           status: t.status,

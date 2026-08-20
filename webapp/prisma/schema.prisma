@@ -473,7 +473,8 @@ model ContractTemplate {
   title                 String // auto: 雇用形態＋業務内容 (editable, internal-only)
   employmentType        EmploymentType
   workplaceType         WorkplaceType
-  companyRelationshipId String? // required when workplaceType = CLIENT
+  companyRelationshipId String? // optional link to a registered client (display only, not required)
+  workplaceNote         String? // free-text workplace label shown on the contract when workplaceType = CLIENT
   jobDescription        String
   scheduleType          ContractScheduleType
   workStartTime         String?
