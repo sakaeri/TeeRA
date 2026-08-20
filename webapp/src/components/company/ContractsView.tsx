@@ -340,6 +340,8 @@ function TemplateModal({
   const [paymentMethod, setPaymentMethod] = useState("振込");
   const [extraItems, setExtraItems] = useState<{ label: string; value: string }[]>([]);
   const [customChipLabel, setCustomChipLabel] = useState("");
+  const [customChipValue, setCustomChipValue] = useState("");
+  const [showCustomChipForm, setShowCustomChipForm] = useState(false);
   const [mode, setMode] = useState<"edit" | "preview">("edit");
 
   const autoTitle = `${EMPLOYMENT_TYPE_LABEL[employmentType]}${jobDescription ? "・" + jobDescription : ""}`;
@@ -357,9 +359,8 @@ function TemplateModal({
     setFixedWeekdays((prev) => (prev.includes(v) ? prev.filter((d) => d !== v) : [...prev, v]));
   }
 
-  function addChip(label: string) {
-    if (extraItems.some((i) => i.label === label)) return;
-    setExtraItems((prev) => [...prev, { label, value: "" }]);
+  function addChip(label: string, value = "") {
+    setExtraItems((prev) => (prev.some((i) => i.label === label) ? prev : [...prev, { label, value }]));
   }
 
   function updateChipValue(label: string, value: string) {
@@ -734,45 +735,6 @@ function TemplateModal({
               </span>
             ) : (
               <div className="flex flex-col gap-2">
-                <div className="flex flex-wrap gap-2">
-                  {QUICK_ADD_CHIPS.map((label) => {
-                    const added = extraItems.some((i) => i.label === label);
-                    return (
-                      <button
-                        key={label}
-                        type="button"
-                        disabled={added}
-                        onClick={() => addChip(label)}
-                        className={`rounded-full border px-3 py-1 text-xs ${
-                          added ? "border-border text-muted/50" : "border-border text-muted hover:border-primary"
-                        }`}
-                      >
-                        ＋{label}
-                      </button>
-                    );
-                  })}
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="text"
-                      value={customChipLabel}
-                      onChange={(e) => setCustomChipLabel(e.target.value)}
-                      placeholder="項目名"
-                      className="w-24 rounded-full border border-border px-3 py-1 text-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!customChipLabel.trim()) return;
-                        addChip(customChipLabel.trim());
-                        setCustomChipLabel("");
-                      }}
-                      className="rounded-full border border-border px-3 py-1 text-xs text-muted hover:border-primary"
-                    >
-                      ＋項目追加
-                    </button>
-                  </div>
-                </div>
-
                 {extraItems.length > 0 ? (
                   <div className="flex flex-col gap-2">
                     {extraItems.map((item) => (
@@ -792,6 +754,75 @@ function TemplateModal({
                     ))}
                   </div>
                 ) : null}
+
+                {showCustomChipForm ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={customChipLabel}
+                      onChange={(e) => setCustomChipLabel(e.target.value)}
+                      placeholder="項目名"
+                      className="w-32 rounded-lg border border-border px-2 py-1.5 text-sm"
+                    />
+                    <input
+                      type="text"
+                      value={customChipValue}
+                      onChange={(e) => setCustomChipValue(e.target.value)}
+                      placeholder="内容（任意）"
+                      className="flex-1 rounded-lg border border-border px-2 py-1.5 text-sm"
+                    />
+                    <button
+                      type="button"
+                      disabled={!customChipLabel.trim()}
+                      onClick={() => {
+                        addChip(customChipLabel.trim(), customChipValue);
+                        setCustomChipLabel("");
+                        setCustomChipValue("");
+                        setShowCustomChipForm(false);
+                      }}
+                      className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                    >
+                      追加
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCustomChipForm(false);
+                        setCustomChipLabel("");
+                        setCustomChipValue("");
+                      }}
+                      className="text-muted"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-wrap gap-2">
+                  {QUICK_ADD_CHIPS.map((label) => {
+                    const added = extraItems.some((i) => i.label === label);
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        disabled={added}
+                        onClick={() => addChip(label)}
+                        className={`rounded-full border px-3 py-1 text-xs ${
+                          added ? "border-border text-muted/50" : "border-border text-muted hover:border-primary"
+                        }`}
+                      >
+                        ＋{label}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomChipForm(true)}
+                    className="rounded-full border border-border px-3 py-1 text-xs text-muted hover:border-primary"
+                  >
+                    ＋項目追加
+                  </button>
+                </div>
               </div>
             )}
           </Row>
