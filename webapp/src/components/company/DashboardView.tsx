@@ -8,6 +8,12 @@ import {
   reopenTodoAction,
   addTodoCommentAction,
 } from "@/app/company/actions-todo";
+import {
+  createPromoItemAction,
+  deletePromoItemAction,
+  markRedemptionShippedAction,
+} from "@/app/company/promo/actions";
+import { uploadFile } from "@/lib/uploadFile";
 
 type Kpis = {
   shortageCount: number;
@@ -33,13 +39,15 @@ type ResolvedTodo = { id: string; title: string; dueDate: string; recipientName:
 type PromoItem = { id: string; imageUrl: string; name: string; pointsCost: number; stock: number };
 type PromoOrder = { id: string; itemName: string; staffName: string; status: string; createdAt: string };
 
-const KPI_CARDS: { key: keyof Kpis; label: string; href: string }[] = [
+type DashboardTab = "active" | "resolved" | "promoList" | "promoOrders";
+
+const KPI_CARDS: { key: keyof Kpis; label: string; href?: string; tab?: DashboardTab }[] = [
   { key: "shortageCount", label: "欠員件数", href: "/company/calendar" },
   { key: "unconfirmedShiftCount", label: "未確定シフト", href: "/company/calendar" },
   { key: "pendingReportCount", label: "業務報告未承認", href: "/company/settings?tab=workreports" },
   { key: "pendingContractCount", label: "契約書未確認", href: "/company/settings?tab=contracts" },
-  { key: "promoItemCount", label: "販促品登録数", href: "/company/settings?tab=promo" },
-  { key: "pendingShipmentCount", label: "発送待ち", href: "/company/settings?tab=promo" },
+  { key: "promoItemCount", label: "販促品登録数", tab: "promoList" },
+  { key: "pendingShipmentCount", label: "発送待ち", tab: "promoOrders" },
 ];
 
 const TAG_STYLE: Record<string, string> = {
@@ -76,25 +84,68 @@ export function DashboardView({
   promoItems: PromoItem[];
   promoOrders: PromoOrder[];
 }) {
+  const [tab, setTab] = useState<DashboardTab>("active");
+  const [showTodoForm, setShowTodoForm] = useState(false);
+  const [showPromoModal, setShowPromoModal] = useState(false);
+
   return (
-    <div className="flex flex-col gap-8">
-      <section className="grid grid-cols-3 gap-4">
-        {KPI_CARDS.map((card) => (
-          <Link
-            key={card.key}
-            href={card.href}
-            className="rounded-2xl border border-border bg-white/60 p-5 hover:border-primary"
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <h1 className="font-serif-jp text-2xl font-bold">ダッシュボード</h1>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setShowPromoModal(true)}
+            className="rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary"
           >
-            <p className="text-xs text-muted">{card.label}</p>
-            <p className="font-serif-jp text-2xl font-bold text-primary">
-              {kpis[card.key]}
-              <span className="ml-1 text-xs text-accent">件 ▾</span>
-            </p>
-          </Link>
-        ))}
+            ＋販促品を登録
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowTodoForm((v) => !v)}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+          >
+            {showTodoForm ? "閉じる" : "＋やることリスト作成"}
+          </button>
+        </div>
+      </div>
+
+      <section className="grid grid-cols-3 gap-4">
+        {KPI_CARDS.map((card) =>
+          card.tab ? (
+            <button
+              key={card.key}
+              type="button"
+              onClick={() => setTab(card.tab as DashboardTab)}
+              className="rounded-2xl border border-border bg-white/60 p-5 text-left hover:border-primary"
+            >
+              <p className="text-xs text-muted">{card.label}</p>
+              <p className="font-serif-jp text-2xl font-bold text-primary">
+                {kpis[card.key]}
+                <span className="ml-1 text-xs text-accent">件 ▾</span>
+              </p>
+            </button>
+          ) : (
+            <Link
+              key={card.key}
+              href={card.href!}
+              className="rounded-2xl border border-border bg-white/60 p-5 hover:border-primary"
+            >
+              <p className="text-xs text-muted">{card.label}</p>
+              <p className="font-serif-jp text-2xl font-bold text-primary">
+                {kpis[card.key]}
+                <span className="ml-1 text-xs text-accent">件 ▾</span>
+              </p>
+            </Link>
+          ),
+        )}
       </section>
 
       <TodoSection
+        tab={tab}
+        setTab={setTab}
+        showTodoForm={showTodoForm}
+        setShowTodoForm={setShowTodoForm}
         autoTodos={autoTodos}
         openTodos={openTodos}
         resolvedTodos={resolvedTodos}
@@ -102,11 +153,129 @@ export function DashboardView({
         promoItems={promoItems}
         promoOrders={promoOrders}
       />
+
+      {showPromoModal ? <PromoItemModal onClose={() => setShowPromoModal(false)} /> : null}
+    </div>
+  );
+}
+
+function PromoItemModal({ onClose }: { onClose: () => void }) {
+  const [pending, startTransition] = useTransition();
+  const [imageUrl, setImageUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [pointsCost, setPointsCost] = useState("");
+  const [stock, setStock] = useState("");
+  const [description, setDescription] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">販促品を登録</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            {imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imageUrl} alt="" className="h-16 w-16 rounded-lg object-cover" />
+            ) : null}
+            <label className="flex flex-col gap-1 text-xs">
+              商品画像
+              <input
+                type="file"
+                accept="image/*"
+                disabled={uploading}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setUploading(true);
+                  setUploadError(null);
+                  try {
+                    const url = await uploadFile(file);
+                    setImageUrl(url);
+                  } catch (err) {
+                    setUploadError(err instanceof Error ? err.message : "アップロードに失敗しました");
+                  } finally {
+                    setUploading(false);
+                  }
+                }}
+                className="text-sm"
+              />
+            </label>
+          </div>
+          {uploading ? <span className="text-xs text-muted">アップロード中...</span> : null}
+          {uploadError ? <span className="text-xs text-red-600">{uploadError}</span> : null}
+          <input
+            type="text"
+            placeholder="画像URL"
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            className="rounded-lg border border-border px-2 py-2 text-sm"
+          />
+          <p className="-mt-2 text-xs text-muted">アップロードすると自動入力されます。直接貼り付けも可。</p>
+          <input
+            type="text"
+            placeholder="商品名"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="rounded-lg border border-border px-2 py-2 text-sm"
+          />
+          <input
+            type="number"
+            placeholder="交換ポイント"
+            value={pointsCost}
+            onChange={(e) => setPointsCost(e.target.value)}
+            className="rounded-lg border border-border px-2 py-2 text-sm"
+          />
+          <input
+            type="number"
+            placeholder="在庫数"
+            value={stock}
+            onChange={(e) => setStock(e.target.value)}
+            className="rounded-lg border border-border px-2 py-2 text-sm"
+          />
+          <input
+            type="text"
+            placeholder="詳細説明文（任意）"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="rounded-lg border border-border px-2 py-2 text-sm"
+          />
+          <button
+            type="button"
+            disabled={pending || !imageUrl || !name || !pointsCost || !stock}
+            onClick={() =>
+              startTransition(async () => {
+                await createPromoItemAction({
+                  imageUrl,
+                  name,
+                  pointsCost: Number(pointsCost),
+                  stock: Number(stock),
+                  description: description || undefined,
+                });
+                onClose();
+              })
+            }
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            登録する
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 function TodoSection({
+  tab,
+  setTab,
+  showTodoForm,
+  setShowTodoForm,
   autoTodos,
   openTodos,
   resolvedTodos,
@@ -114,6 +283,10 @@ function TodoSection({
   promoItems,
   promoOrders,
 }: {
+  tab: DashboardTab;
+  setTab: (t: DashboardTab) => void;
+  showTodoForm: boolean;
+  setShowTodoForm: (v: boolean) => void;
   autoTodos: AutoTodo[];
   openTodos: OpenTodo[];
   resolvedTodos: ResolvedTodo[];
@@ -121,8 +294,6 @@ function TodoSection({
   promoItems: PromoItem[];
   promoOrders: PromoOrder[];
 }) {
-  const [tab, setTab] = useState<"active" | "resolved" | "promoList" | "promoOrders">("active");
-  const [showForm, setShowForm] = useState(false);
   const [pending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -132,18 +303,7 @@ function TodoSection({
 
   return (
     <section className="rounded-2xl border border-border bg-white/60 p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-serif-jp text-lg font-bold text-primary">やることリスト</h2>
-        <button
-          type="button"
-          onClick={() => setShowForm((v) => !v)}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-        >
-          {showForm ? "閉じる" : "＋やることリスト作成"}
-        </button>
-      </div>
-
-      {showForm ? (
+      {showTodoForm ? (
         <div className="mb-4 grid grid-cols-2 gap-3 rounded-xl border border-border p-4">
           <input
             type="text"
@@ -177,7 +337,7 @@ function TodoSection({
                 await createManualTodoAction({ title, dueDate, recipientUserId });
                 setTitle("");
                 setDueDate("");
-                setShowForm(false);
+                setShowTodoForm(false);
               })
             }
             className="col-span-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
@@ -197,7 +357,7 @@ function TodoSection({
           <button
             key={t.key}
             type="button"
-            onClick={() => setTab(t.key as typeof tab)}
+            onClick={() => setTab(t.key as DashboardTab)}
             className={`border-b-2 px-3 py-2 text-sm font-semibold ${tab === t.key ? "border-accent text-primary" : "border-transparent text-muted"}`}
           >
             {t.label}
@@ -316,9 +476,14 @@ function TodoSection({
               <span className="text-muted">
                 {p.pointsCost}pt ／ 在庫 {p.stock}
               </span>
-              <Link href="/company/settings?tab=promo" className="text-xs text-primary underline">
-                編集・削除する
-              </Link>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => startTransition(() => deletePromoItemAction(p.id))}
+                className="shrink-0 text-xs text-red-600"
+              >
+                削除
+              </button>
             </li>
           ))}
           {promoItems.length === 0 ? <p className="text-center text-muted">販促品が登録されていません。</p> : null}
@@ -332,8 +497,18 @@ function TodoSection({
               <span>
                 {o.staffName} — {o.itemName}
               </span>
-              <span className="text-muted">
+              <span className="flex items-center gap-3 text-muted">
                 {o.createdAt} ／ {o.status === "SHIPPED" ? "発送済み" : "発送待ち"}
+                {o.status !== "SHIPPED" ? (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => startTransition(() => markRedemptionShippedAction(o.id))}
+                    className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
+                  >
+                    発送済みにする
+                  </button>
+                ) : null}
               </span>
             </li>
           ))}

@@ -14,7 +14,6 @@ import {
 } from "@/app/company/actions";
 import { ContractsView } from "@/components/company/ContractsView";
 import { WorkReportsQueue } from "@/components/company/WorkReportsQueue";
-import { PromoManageView } from "@/components/company/PromoManageView";
 
 type Admin = {
   userId: string;
@@ -76,28 +75,10 @@ type WorkReportRow = {
   comment: string | null;
 };
 
-type PromoItem = {
-  id: string;
-  imageUrl: string;
-  name: string;
-  pointsCost: number;
-  stock: number;
-  description: string | null;
-};
-type PromoRedemption = {
-  id: string;
-  itemName: string;
-  staffName: string;
-  pointsSpent: number;
-  status: string;
-  createdAt: string;
-};
-
 const TABS = [
   { key: "basic", label: "基本情報" },
   { key: "contracts", label: "契約関連" },
   { key: "workreports", label: "業務報告" },
-  { key: "promo", label: "販促品" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -114,8 +95,6 @@ export function SettingsView({
   placementRates,
   contractClients,
   workReports,
-  promoItems,
-  promoRedemptions,
 }: {
   initialTab: string;
   companyName: string;
@@ -129,8 +108,6 @@ export function SettingsView({
   placementRates: PlacementRate[];
   contractClients: ContractClientOption[];
   workReports: WorkReportRow[];
-  promoItems: PromoItem[];
-  promoRedemptions: PromoRedemption[];
 }) {
   const router = useRouter();
   const tab: TabKey = TABS.some((t) => t.key === initialTab) ? (initialTab as TabKey) : "basic";
@@ -176,8 +153,6 @@ export function SettingsView({
       ) : null}
 
       {tab === "workreports" ? <WorkReportsQueue reports={workReports} /> : null}
-
-      {tab === "promo" ? <PromoManageView items={promoItems} redemptions={promoRedemptions} /> : null}
     </div>
   );
 }

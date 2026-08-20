@@ -5,7 +5,6 @@ import { listStaff } from "@/lib/domain/roster";
 import { listTemplates, listPlacementRates } from "@/lib/domain/contracts";
 import { listClients } from "@/lib/domain/relationships";
 import { listPendingReportsForCompany } from "@/lib/domain/workReports";
-import { listPromoItems, listRedemptionsForCompany } from "@/lib/domain/promo";
 import { SettingsView } from "@/components/company/SettingsView";
 
 const OUTCOME_LABEL: Record<string, string> = {
@@ -21,7 +20,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
 
   const company = await prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } });
 
-  const [admins, teams, staff, templates, rates, clients, reports, promoItems, redemptions] = await Promise.all([
+  const [admins, teams, staff, templates, rates, clients, reports] = await Promise.all([
     prisma.companyMembership.findMany({
       where: {
         companyId: membership.companyId,
@@ -36,8 +35,6 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
     listPlacementRates(membership.companyId),
     company.agencyEnabled ? listClients(membership.companyId) : Promise.resolve([]),
     listPendingReportsForCompany(membership.companyId),
-    listPromoItems(membership.companyId),
-    listRedemptionsForCompany(membership.companyId),
   ]);
 
   const shifts = await prisma.shift.findMany({
@@ -124,22 +121,6 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
             comment: r.comment,
           };
         })}
-        promoItems={promoItems.map((i) => ({
-          id: i.id,
-          imageUrl: i.imageUrl,
-          name: i.name,
-          pointsCost: i.pointsCost,
-          stock: i.stock,
-          description: i.description,
-        }))}
-        promoRedemptions={redemptions.map((r) => ({
-          id: r.id,
-          itemName: r.promoItem.name,
-          staffName: r.staff.name,
-          pointsSpent: r.pointsSpent,
-          status: r.status,
-          createdAt: r.createdAt.toISOString(),
-        }))}
       />
     </main>
   );

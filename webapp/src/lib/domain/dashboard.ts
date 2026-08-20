@@ -122,7 +122,7 @@ export async function listAutoTodoItems(companyId: string): Promise<AutoTodoItem
       kind: "販促品",
       text: `発送待ち：${redemption.promoItem.name}の注文があります（${redemption.staff.name}さん）`,
       actionLabel: "確認する",
-      actionHref: "/company/settings?tab=promo",
+      actionHref: "/company",
     });
   }
 
