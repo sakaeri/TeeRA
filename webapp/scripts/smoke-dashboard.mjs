@@ -36,7 +36,7 @@ try {
   await page.waitForURL("http://localhost:3000/company");
 
   await page.click("text=＋やることリスト作成");
-  await page.fill('input[placeholder="タイトル"]', "契約書を確認してください");
+  await page.fill('input[placeholder="やることを入力"]', "契約書を確認してください");
   await page.fill('input[type=date]', "2026-09-01");
   await page.selectOption("select", { label: "todo受信スタッフ" });
   await page.getByRole("button", { name: "作成する" }).click();

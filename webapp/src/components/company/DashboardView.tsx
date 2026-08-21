@@ -120,10 +120,10 @@ export function DashboardView({
           </button>
           <button
             type="button"
-            onClick={() => setShowTodoForm((v) => !v)}
+            onClick={() => setShowTodoForm(true)}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
           >
-            {showTodoForm ? "閉じる" : "＋やることリスト作成"}
+            ＋やることリスト作成
           </button>
         </div>
       </div>
@@ -162,12 +162,9 @@ export function DashboardView({
       <TodoSection
         tab={tab}
         setTab={setTab}
-        showTodoForm={showTodoForm}
-        setShowTodoForm={setShowTodoForm}
         autoTodos={autoTodos}
         openTodos={openTodos}
         resolvedTodos={resolvedTodos}
-        staffOptions={staffOptions}
         promoItems={promoItems}
         promoOrders={promoOrders}
         onEditPromoItem={setEditingPromoItem}
@@ -177,6 +174,110 @@ export function DashboardView({
       {editingPromoItem ? (
         <PromoItemModal editingItem={editingPromoItem} onClose={() => setEditingPromoItem(null)} />
       ) : null}
+      {showTodoForm ? <TodoModal staffOptions={staffOptions} onClose={() => setShowTodoForm(false)} /> : null}
+    </div>
+  );
+}
+
+function TodoModal({
+  staffOptions,
+  onClose,
+}: {
+  staffOptions: { id: string; name: string }[];
+  onClose: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [title, setTitle] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [recipientUserId, setRecipientUserId] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">やることリストを作成</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-muted">
+          担当者に対応してほしい内容を登録します。期日と宛先を指定してください。
+        </p>
+
+        <h4 className="mb-2 text-xs font-semibold text-muted">内容</h4>
+        <div className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-xs">
+            <span>
+              タイトル<span className="text-red-600"> *</span>
+            </span>
+            <input
+              type="text"
+              placeholder="やることを入力"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="rounded-lg border border-border px-2 py-2 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            <span>
+              いつまでにやるか（目安日）<span className="text-red-600"> *</span>
+            </span>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="rounded-lg border border-border px-2 py-2 text-sm"
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1 text-xs">
+              誰が出したか
+              <input
+                type="text"
+                value="本部（自動入力）"
+                disabled
+                className="rounded-lg border border-border bg-background px-2 py-2 text-sm text-muted"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span>
+                誰宛か<span className="text-red-600"> *</span>
+              </span>
+              <select
+                value={recipientUserId}
+                onChange={(e) => setRecipientUserId(e.target.value)}
+                className="rounded-lg border border-border px-2 py-2 text-sm"
+              >
+                <option value="">選択してください</option>
+                {staffOptions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <ImageDropzone label="画像添付（任意）" imageUrl={imageUrl} onChange={setImageUrl} />
+        </div>
+
+        <button
+          type="button"
+          disabled={pending || !title || !dueDate || !recipientUserId}
+          onClick={() =>
+            startTransition(async () => {
+              await createManualTodoAction({ title, dueDate, recipientUserId, imageUrl: imageUrl || undefined });
+              onClose();
+            })
+          }
+          className="mt-4 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        >
+          作成する
+        </button>
+      </div>
     </div>
   );
 }
@@ -321,32 +422,23 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
 function TodoSection({
   tab,
   setTab,
-  showTodoForm,
-  setShowTodoForm,
   autoTodos,
   openTodos,
   resolvedTodos,
-  staffOptions,
   promoItems,
   promoOrders,
   onEditPromoItem,
 }: {
   tab: DashboardTab;
   setTab: (t: DashboardTab) => void;
-  showTodoForm: boolean;
-  setShowTodoForm: (v: boolean) => void;
   autoTodos: AutoTodo[];
   openTodos: OpenTodo[];
   resolvedTodos: ResolvedTodo[];
-  staffOptions: { id: string; name: string }[];
   promoItems: PromoItem[];
   promoOrders: PromoOrder[];
   onEditPromoItem: (item: PromoItem) => void;
 }) {
   const [pending, startTransition] = useTransition();
-  const [title, setTitle] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [recipientUserId, setRecipientUserId] = useState(staffOptions[0]?.id ?? "");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [orderFilter, setOrderFilter] = useState<"all" | "pending">("all");
@@ -361,50 +453,6 @@ function TodoSection({
 
   return (
     <section className="rounded-2xl border border-border bg-white/60 p-6">
-      {showTodoForm ? (
-        <div className="mb-4 grid grid-cols-2 gap-3 rounded-xl border border-border p-4">
-          <input
-            type="text"
-            placeholder="タイトル"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="col-span-2 rounded-lg border border-border px-2 py-2 text-sm"
-          />
-          <input
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            className="rounded-lg border border-border px-2 py-2 text-sm"
-          />
-          <select
-            value={recipientUserId}
-            onChange={(e) => setRecipientUserId(e.target.value)}
-            className="rounded-lg border border-border px-2 py-2 text-sm"
-          >
-            {staffOptions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            disabled={pending || !title || !dueDate || !recipientUserId}
-            onClick={() =>
-              startTransition(async () => {
-                await createManualTodoAction({ title, dueDate, recipientUserId });
-                setTitle("");
-                setDueDate("");
-                setShowTodoForm(false);
-              })
-            }
-            className="col-span-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-          >
-            作成する
-          </button>
-        </div>
-      ) : null}
-
       <div className="mb-3 flex gap-1 border-b border-border">
         {[
           { key: "active", label: "やることリスト" },
