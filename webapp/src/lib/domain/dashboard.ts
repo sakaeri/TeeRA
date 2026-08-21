@@ -38,6 +38,76 @@ export async function getKpis(companyId: string) {
   };
 }
 
+export async function listShortageEntries(companyId: string) {
+  const recruitments = await prisma.publicRecruitment.findMany({
+    where: { companyId, status: "PUBLISHED" },
+    include: { entries: true },
+    orderBy: { date: "asc" },
+  });
+
+  return recruitments
+    .map((r) => ({
+      id: r.id,
+      title: r.title,
+      date: r.date.toISOString().slice(0, 10),
+      startTime: r.startTime,
+      endTime: r.endTime,
+      filled: r.entries.filter((e) => e.status !== "REJECTED").length,
+      maxEntries: r.maxEntries,
+    }))
+    .filter((r) => r.filled < r.maxEntries);
+}
+
+export async function listUnconfirmedShiftEntries(companyId: string) {
+  const requests = await prisma.shiftRequest.findMany({
+    where: { companyId, status: "PENDING" },
+    include: { staff: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return requests.map((r) => ({
+    id: r.id,
+    staffName: r.staff.name,
+    desire: r.desire,
+    dates: r.dates.map((d) => d.toISOString().slice(0, 10)),
+    note: r.note,
+  }));
+}
+
+const REPORT_OUTCOME_LABEL: Record<string, string> = {
+  WORKED: "出勤した",
+  ABSENT: "欠勤",
+  CANCELLED_BY_EMPLOYER: "勤務先からのキャンセル",
+};
+
+function formatJstTime(date: Date) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Tokyo",
+  }).format(date);
+}
+
+export async function listPendingReportEntries(companyId: string) {
+  const reports = await listPendingReportsForCompany(companyId);
+
+  return reports.map((r) => ({
+    id: r.id,
+    staffName: r.staff.name,
+    teamName: r.shift.team?.name ?? null,
+    date: r.shift.date.toISOString().slice(0, 10),
+    startTime: r.shift.startTime,
+    endTime: r.shift.endTime,
+    outcome: REPORT_OUTCOME_LABEL[r.outcome] ?? r.outcome,
+    clockIn: r.clockIn ? formatJstTime(r.clockIn) : null,
+    clockOut: r.clockOut ? formatJstTime(r.clockOut) : null,
+    breakMinutes: r.breakMinutes,
+    computedHours: (r.computedMinutes / 60).toFixed(2),
+    comment: r.comment,
+  }));
+}
+
 export type AutoTodoItem = {
   id: string;
   kind: "業務報告" | "欠員" | "シフト" | "契約書" | "販促品";

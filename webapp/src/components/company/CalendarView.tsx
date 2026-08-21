@@ -80,6 +80,7 @@ export function CalendarView({
   teeBalance,
   affordableMaxEntries,
   clients,
+  initialSelectedDate,
 }: {
   year: number;
   month: number;
@@ -92,9 +93,10 @@ export function CalendarView({
   teeBalance: number;
   affordableMaxEntries: number;
   clients: { id: string; name: string }[];
+  initialSelectedDate?: string;
 }) {
   const router = useRouter();
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(initialSelectedDate ?? null);
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [showRecruitForm, setShowRecruitForm] = useState(false);
   const [sharingImage, setSharingImage] = useState(false);

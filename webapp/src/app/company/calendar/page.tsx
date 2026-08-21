@@ -14,8 +14,10 @@ export default async function CompanyCalendarPage({
   const sp = await searchParams;
 
   const now = new Date();
-  const year = Number(sp.y) || now.getUTCFullYear();
-  const month = Number(sp.m) || now.getUTCMonth() + 1;
+  const dateParam = typeof sp.date === "string" && sp.date ? sp.date : undefined;
+  const [dateYear, dateMonth] = dateParam ? dateParam.split("-").map(Number) : [];
+  const year = Number(sp.y) || dateYear || now.getUTCFullYear();
+  const month = Number(sp.m) || dateMonth || now.getUTCMonth() + 1;
   const teamId = typeof sp.team === "string" && sp.team ? sp.team : undefined;
 
   const [shifts, staff, teams, shiftRequests, recruitments, company] = await Promise.all([
@@ -71,6 +73,7 @@ export default async function CompanyCalendarPage({
         teeBalance={company.teeBalance}
         affordableMaxEntries={affordable}
         clients={clients.map((c) => ({ id: c.id, name: c.clientCompany?.name ?? c.proxyName ?? "" }))}
+        initialSelectedDate={dateParam}
       />
     </main>
   );

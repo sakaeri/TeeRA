@@ -88,7 +88,7 @@ export async function submitWorkReport(params: {
 export async function listPendingReportsForCompany(companyId: string) {
   const reports = await prisma.workReport.findMany({
     where: { approvalStatus: "PENDING" },
-    include: { shift: { include: { companyRelationship: true } }, staff: true },
+    include: { shift: { include: { companyRelationship: true, team: true } }, staff: true },
     orderBy: { createdAt: "asc" },
   });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import {
   createManualTodoAction,
@@ -13,8 +13,19 @@ import {
   deletePromoItemAction,
   markRedemptionShippedAction,
 } from "@/app/company/promo/actions";
+import { approveWorkReportAction, rejectWorkReportAction } from "@/app/company/workreports/actions";
 import { ImageDropzone } from "@/components/ImageDropzone";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+
+const WEEKDAYS_JA = ["日", "月", "火", "水", "木", "金", "土"];
+function formatDateJa(dateStr: string) {
+  const d = new Date(dateStr + "T00:00:00Z");
+  return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日（${WEEKDAYS_JA[d.getUTCDay()]}）`;
+}
+function formatTimeRange(startTime: string | null, endTime: string | null) {
+  if (!startTime && !endTime) return "";
+  return `${startTime ?? ""}〜${endTime ?? ""}`;
+}
 
 type Kpis = {
   shortageCount: number;
@@ -45,6 +56,39 @@ type ResolvedTodo = {
   comments: { id: string; authorName: string; body: string }[];
 };
 
+type ShortageEntry = {
+  id: string;
+  title: string;
+  date: string;
+  startTime: string | null;
+  endTime: string | null;
+  filled: number;
+  maxEntries: number;
+};
+
+type UnconfirmedShiftEntry = {
+  id: string;
+  staffName: string;
+  desire: string;
+  dates: string[];
+  note: string | null;
+};
+
+type PendingReportEntry = {
+  id: string;
+  staffName: string;
+  teamName: string | null;
+  date: string;
+  startTime: string | null;
+  endTime: string | null;
+  outcome: string;
+  clockIn: string | null;
+  clockOut: string | null;
+  breakMinutes: number;
+  computedHours: string;
+  comment: string | null;
+};
+
 type PromoItem = {
   id: string;
   imageUrl: string;
@@ -65,10 +109,12 @@ type PromoOrder = {
 
 type DashboardTab = "active" | "resolved" | "promoList" | "promoOrders";
 
-const KPI_CARDS: { key: keyof Kpis; label: string; href?: string; tab?: DashboardTab }[] = [
-  { key: "shortageCount", label: "欠員件数", href: "/company/calendar" },
-  { key: "unconfirmedShiftCount", label: "未確定シフト", href: "/company/calendar" },
-  { key: "pendingReportCount", label: "業務報告未承認", href: "/company/settings?tab=workreports" },
+type PopupKind = "shortage" | "unconfirmed" | "reports";
+
+const KPI_CARDS: { key: keyof Kpis; label: string; href?: string; tab?: DashboardTab; popup?: PopupKind }[] = [
+  { key: "shortageCount", label: "欠員件数", popup: "shortage" },
+  { key: "unconfirmedShiftCount", label: "未確定シフト", popup: "unconfirmed" },
+  { key: "pendingReportCount", label: "業務報告未承認", popup: "reports" },
   { key: "pendingContractCount", label: "契約書未確認", href: "/company/settings?tab=contracts" },
   { key: "promoItemCount", label: "販促品登録数", tab: "promoList" },
   { key: "pendingShipmentCount", label: "発送待ち", tab: "promoOrders" },
@@ -100,6 +146,9 @@ export function DashboardView({
   recipientOptions,
   promoItems,
   promoOrders,
+  shortageEntries,
+  unconfirmedShiftEntries,
+  pendingReportEntries,
 }: {
   kpis: Kpis;
   autoTodos: AutoTodo[];
@@ -109,11 +158,16 @@ export function DashboardView({
   recipientOptions: { id: string; name: string }[];
   promoItems: PromoItem[];
   promoOrders: PromoOrder[];
+  shortageEntries: ShortageEntry[];
+  unconfirmedShiftEntries: UnconfirmedShiftEntry[];
+  pendingReportEntries: PendingReportEntry[];
 }) {
   const [tab, setTab] = useState<DashboardTab>("active");
   const [showTodoForm, setShowTodoForm] = useState(false);
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [editingPromoItem, setEditingPromoItem] = useState<PromoItem | null>(null);
+  const [openPopup, setOpenPopup] = useState<PopupKind | null>(null);
+  const [reportDetail, setReportDetail] = useState<PendingReportEntry | null>(null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -139,11 +193,11 @@ export function DashboardView({
 
       <section className="grid grid-cols-3 gap-4">
         {KPI_CARDS.map((card) =>
-          card.tab ? (
+          card.tab || card.popup ? (
             <button
               key={card.key}
               type="button"
-              onClick={() => setTab(card.tab as DashboardTab)}
+              onClick={() => (card.popup ? setOpenPopup(card.popup) : setTab(card.tab as DashboardTab))}
               className="rounded-2xl border border-border bg-white/60 p-5 text-left hover:border-primary"
             >
               <p className="text-xs text-muted">{card.label}</p>
@@ -189,6 +243,26 @@ export function DashboardView({
           recipientOptions={recipientOptions}
           onClose={() => setShowTodoForm(false)}
         />
+      ) : null}
+
+      {openPopup === "shortage" ? (
+        <ShortagePopup entries={shortageEntries} onClose={() => setOpenPopup(null)} />
+      ) : null}
+      {openPopup === "unconfirmed" ? (
+        <UnconfirmedShiftPopup entries={unconfirmedShiftEntries} onClose={() => setOpenPopup(null)} />
+      ) : null}
+      {openPopup === "reports" ? (
+        <PendingReportsPopup
+          entries={pendingReportEntries}
+          onSelect={(entry) => {
+            setOpenPopup(null);
+            setReportDetail(entry);
+          }}
+          onClose={() => setOpenPopup(null)}
+        />
+      ) : null}
+      {reportDetail ? (
+        <WorkReportDetailModal entry={reportDetail} onClose={() => setReportDetail(null)} />
       ) : null}
     </div>
   );
@@ -431,6 +505,217 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
           }
         />
       ) : null}
+    </div>
+  );
+}
+
+function PopupShell({
+  title,
+  subtitle,
+  onClose,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div
+        className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">{title}</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-muted">{subtitle}</p>
+        <div className="flex flex-col gap-2">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function ShortagePopup({ entries, onClose }: { entries: ShortageEntry[]; onClose: () => void }) {
+  return (
+    <PopupShell
+      title="欠員シフト"
+      subtitle="担当スタッフが決まっていない募集中のシフトです。ここから直接割当できます"
+      onClose={onClose}
+    >
+      {entries.map((r) => (
+        <div key={r.id} className="flex items-center justify-between rounded-xl border border-border/60 p-4 text-sm">
+          <div>
+            <p className="font-medium">{formatDateJa(r.date)}</p>
+            <p className="text-muted">
+              {r.title} {formatTimeRange(r.startTime, r.endTime)} 残り{r.maxEntries - r.filled}名（{r.filled}/
+              {r.maxEntries}）
+            </p>
+          </div>
+          <Link
+            href={`/company/calendar?date=${r.date}`}
+            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+          >
+            カレンダーで確認
+          </Link>
+        </div>
+      ))}
+      {entries.length === 0 ? <p className="text-center text-muted">欠員のあるシフトはありません。</p> : null}
+    </PopupShell>
+  );
+}
+
+const DESIRE_LABEL: Record<string, string> = {
+  WORK: "出勤希望",
+  OFF: "休み希望",
+};
+
+function UnconfirmedShiftPopup({ entries, onClose }: { entries: UnconfirmedShiftEntry[]; onClose: () => void }) {
+  return (
+    <PopupShell
+      title="未確定シフト"
+      subtitle="スタッフから提出された希望シフトです。ここから直接カレンダーで確認できます"
+      onClose={onClose}
+    >
+      {entries.map((r) => (
+        <div key={r.id} className="flex items-center justify-between rounded-xl border border-border/60 p-4 text-sm">
+          <div>
+            <p className="font-medium">
+              {r.staffName}さん（{DESIRE_LABEL[r.desire] ?? r.desire}）
+            </p>
+            <p className="text-muted">
+              {r.dates.map((d) => formatDateJa(d)).join("、")}
+              {r.note ? ` ・${r.note}` : ""}
+            </p>
+          </div>
+          <Link
+            href={`/company/calendar?date=${r.dates[0]}`}
+            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+          >
+            カレンダーで確認
+          </Link>
+        </div>
+      ))}
+      {entries.length === 0 ? <p className="text-center text-muted">未確定の希望シフトはありません。</p> : null}
+    </PopupShell>
+  );
+}
+
+function PendingReportsPopup({
+  entries,
+  onSelect,
+  onClose,
+}: {
+  entries: PendingReportEntry[];
+  onSelect: (entry: PendingReportEntry) => void;
+  onClose: () => void;
+}) {
+  return (
+    <PopupShell title="業務報告未承認" subtitle="確認して承認・差戻しを行ってください" onClose={onClose}>
+      {entries.map((r) => (
+        <div key={r.id} className="flex items-center justify-between rounded-xl border border-border/60 p-4 text-sm">
+          <div>
+            <p className="font-medium">{r.staffName}</p>
+            <p className="text-muted">
+              {r.teamName ?? "自社"}・{formatDateJa(r.date)}・{formatTimeRange(r.startTime, r.endTime)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onSelect(r)}
+            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+          >
+            確認する
+          </button>
+        </div>
+      ))}
+      {entries.length === 0 ? <p className="text-center text-muted">承認待ちの業務報告はありません。</p> : null}
+    </PopupShell>
+  );
+}
+
+function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; onClose: () => void }) {
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div
+        className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">業務報告の確認</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-muted">
+          {entry.staffName}・{entry.teamName ?? "自社"}・{formatDateJa(entry.date)}
+        </p>
+
+        {entry.outcome === "出勤した" ? (
+          <>
+            <p className="mb-2 text-xs font-semibold text-muted">タイムカード（アプリ打刻）</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-background p-3">
+                <p className="text-xs text-muted">出勤</p>
+                <p className="text-lg font-semibold">{entry.clockIn ?? "—"}</p>
+              </div>
+              <div className="rounded-xl bg-background p-3">
+                <p className="text-xs text-muted">退勤</p>
+                <p className="text-lg font-semibold">{entry.clockOut ?? "—"}</p>
+              </div>
+              <div className="rounded-xl bg-background p-3">
+                <p className="text-xs text-muted">休憩時間</p>
+                <p className="text-lg font-semibold">
+                  {entry.breakMinutes > 0 ? `${entry.breakMinutes}分` : "—"}
+                </p>
+              </div>
+              <div className="rounded-xl bg-background p-3">
+                <p className="text-xs text-muted">実働時間</p>
+                <p className="text-lg font-semibold">{entry.computedHours}時間</p>
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="rounded-xl bg-background p-3 text-sm">{entry.outcome}</p>
+        )}
+
+        <p className="mb-1 mt-4 text-xs font-semibold text-muted">本人のコメント</p>
+        <p className="text-sm">{entry.comment || "コメントはありません"}</p>
+
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                await approveWorkReportAction(entry.id);
+                onClose();
+              })
+            }
+            className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            承認する
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                await rejectWorkReportAction(entry.id);
+                onClose();
+              })
+            }
+            className="flex-1 rounded-lg border border-border px-4 py-2 text-sm text-foreground/70 disabled:opacity-60"
+          >
+            差し戻す
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

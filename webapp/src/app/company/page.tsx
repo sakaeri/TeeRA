@@ -1,5 +1,12 @@
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { getKpis, listManualTodos, listAutoTodoItems } from "@/lib/domain/dashboard";
+import {
+  getKpis,
+  listManualTodos,
+  listAutoTodoItems,
+  listShortageEntries,
+  listUnconfirmedShiftEntries,
+  listPendingReportEntries,
+} from "@/lib/domain/dashboard";
 import { listPromoItems, listRedemptionsForCompany } from "@/lib/domain/promo";
 import { prisma } from "@/lib/prisma";
 import { DashboardView } from "@/components/company/DashboardView";
@@ -7,7 +14,18 @@ import { DashboardView } from "@/components/company/DashboardView";
 export default async function CompanyDashboardPage() {
   const { userId, membership } = await requireCompanyAdminOrEditor();
 
-  const [kpis, autoTodos, openTodos, resolvedTodos, admins, promoItems, redemptions] = await Promise.all([
+  const [
+    kpis,
+    autoTodos,
+    openTodos,
+    resolvedTodos,
+    admins,
+    promoItems,
+    redemptions,
+    shortageEntries,
+    unconfirmedShiftEntries,
+    pendingReportEntries,
+  ] = await Promise.all([
     getKpis(membership.companyId),
     listAutoTodoItems(membership.companyId),
     listManualTodos(membership.companyId, "OPEN"),
@@ -19,6 +37,9 @@ export default async function CompanyDashboardPage() {
     }),
     listPromoItems(membership.companyId),
     listRedemptionsForCompany(membership.companyId),
+    listShortageEntries(membership.companyId),
+    listUnconfirmedShiftEntries(membership.companyId),
+    listPendingReportEntries(membership.companyId),
   ]);
 
   const currentUserName = admins.find((a) => a.userId === userId)?.user.name ?? "";
@@ -63,6 +84,9 @@ export default async function CompanyDashboardPage() {
           shippingAddress: r.shippingAddress,
           shippingPhone: r.shippingPhone,
         }))}
+        shortageEntries={shortageEntries}
+        unconfirmedShiftEntries={unconfirmedShiftEntries}
+        pendingReportEntries={pendingReportEntries}
       />
     </main>
   );

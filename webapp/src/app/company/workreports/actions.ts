@@ -23,6 +23,7 @@ export async function approveWorkReportAction(workReportId: string) {
 
   await approveWorkReport({ workReportId, approverUserId: userId });
   revalidatePath("/company/settings");
+  revalidatePath("/company");
 }
 
 export async function rejectWorkReportAction(workReportId: string) {
@@ -32,4 +33,5 @@ export async function rejectWorkReportAction(workReportId: string) {
 
   await rejectWorkReport({ workReportId, approverUserId: userId });
   revalidatePath("/company/settings");
+  revalidatePath("/company");
 }
