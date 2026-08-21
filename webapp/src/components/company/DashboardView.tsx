@@ -89,7 +89,8 @@ export function DashboardView({
   autoTodos,
   openTodos,
   resolvedTodos,
-  staffOptions,
+  currentUserName,
+  recipientOptions,
   promoItems,
   promoOrders,
 }: {
@@ -97,7 +98,8 @@ export function DashboardView({
   autoTodos: AutoTodo[];
   openTodos: OpenTodo[];
   resolvedTodos: ResolvedTodo[];
-  staffOptions: { id: string; name: string }[];
+  currentUserName: string;
+  recipientOptions: { id: string; name: string }[];
   promoItems: PromoItem[];
   promoOrders: PromoOrder[];
 }) {
@@ -174,16 +176,24 @@ export function DashboardView({
       {editingPromoItem ? (
         <PromoItemModal editingItem={editingPromoItem} onClose={() => setEditingPromoItem(null)} />
       ) : null}
-      {showTodoForm ? <TodoModal staffOptions={staffOptions} onClose={() => setShowTodoForm(false)} /> : null}
+      {showTodoForm ? (
+        <TodoModal
+          currentUserName={currentUserName}
+          recipientOptions={recipientOptions}
+          onClose={() => setShowTodoForm(false)}
+        />
+      ) : null}
     </div>
   );
 }
 
 function TodoModal({
-  staffOptions,
+  currentUserName,
+  recipientOptions,
   onClose,
 }: {
-  staffOptions: { id: string; name: string }[];
+  currentUserName: string;
+  recipientOptions: { id: string; name: string }[];
   onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
@@ -238,7 +248,7 @@ function TodoModal({
               誰が出したか
               <input
                 type="text"
-                value="本部（自動入力）"
+                value={`${currentUserName}（自動入力）`}
                 disabled
                 className="rounded-lg border border-border bg-background px-2 py-2 text-sm text-muted"
               />
@@ -253,7 +263,7 @@ function TodoModal({
                 className="rounded-lg border border-border px-2 py-2 text-sm"
               >
                 <option value="">選択してください</option>
-                {staffOptions.map((s) => (
+                {recipientOptions.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>
@@ -261,7 +271,7 @@ function TodoModal({
               </select>
             </label>
           </div>
-          <ImageDropzone label="画像添付（任意）" imageUrl={imageUrl} onChange={setImageUrl} />
+          <ImageDropzone label="画像添付（任意）" imageUrl={imageUrl} onChange={setImageUrl} size="sm" />
         </div>
 
         <button

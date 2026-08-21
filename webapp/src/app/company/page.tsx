@@ -1,21 +1,27 @@
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { getKpis, listManualTodos, listAutoTodoItems } from "@/lib/domain/dashboard";
-import { listStaff } from "@/lib/domain/roster";
 import { listPromoItems, listRedemptionsForCompany } from "@/lib/domain/promo";
+import { prisma } from "@/lib/prisma";
 import { DashboardView } from "@/components/company/DashboardView";
 
 export default async function CompanyDashboardPage() {
-  const { membership } = await requireCompanyAdminOrEditor();
+  const { userId, membership } = await requireCompanyAdminOrEditor();
 
-  const [kpis, autoTodos, openTodos, resolvedTodos, staff, promoItems, redemptions] = await Promise.all([
+  const [kpis, autoTodos, openTodos, resolvedTodos, admins, promoItems, redemptions] = await Promise.all([
     getKpis(membership.companyId),
     listAutoTodoItems(membership.companyId),
     listManualTodos(membership.companyId, "OPEN"),
     listManualTodos(membership.companyId, "RESOLVED"),
-    listStaff(membership.companyId),
+    prisma.companyMembership.findMany({
+      where: { companyId: membership.companyId, role: { in: ["COMPANY_ADMIN", "COMPANY_EDITOR"] } },
+      include: { user: true },
+      orderBy: { createdAt: "asc" },
+    }),
     listPromoItems(membership.companyId),
     listRedemptionsForCompany(membership.companyId),
   ]);
+
+  const currentUserName = admins.find((a) => a.userId === userId)?.user.name ?? "";
 
   return (
     <main className="mx-auto w-full max-w-5xl px-8 py-10">
@@ -36,7 +42,8 @@ export default async function CompanyDashboardPage() {
           recipientName: t.recipient?.name ?? "",
           resolvedAt: t.resolvedAt?.toISOString().slice(0, 10) ?? "",
         }))}
-        staffOptions={staff.map((s) => ({ id: s.userId, name: s.name }))}
+        currentUserName={currentUserName}
+        recipientOptions={admins.map((a) => ({ id: a.userId, name: a.user.name }))}
         promoItems={promoItems.map((p) => ({
           id: p.id,
           imageUrl: p.imageUrl,

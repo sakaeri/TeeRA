@@ -8,11 +8,13 @@ export function ImageDropzone({
   imageUrl,
   onChange,
   required,
+  size = "lg",
 }: {
   label: string;
   imageUrl: string;
   onChange: (url: string) => void;
   required?: boolean;
+  size?: "sm" | "lg";
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -51,13 +53,15 @@ export function ImageDropzone({
           const file = e.dataTransfer.files?.[0];
           if (file) handleFile(file);
         }}
-        className={`flex aspect-square w-full cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border-2 border-dashed p-3 text-center ${
-          dragOver ? "border-primary bg-primary/5" : "border-border"
-        }`}
+        className={`flex cursor-pointer flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border-2 border-dashed text-center ${
+          size === "sm" ? "h-16 w-16 p-1" : "aspect-square w-full p-3"
+        } ${dragOver ? "border-primary bg-primary/5" : "border-border"}`}
       >
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={imageUrl} alt="" className="h-full w-full rounded-lg object-cover" />
+        ) : size === "sm" ? (
+          <span className="text-lg">🖼</span>
         ) : (
           <>
             <span className="text-2xl">🖼</span>
@@ -69,6 +73,14 @@ export function ImageDropzone({
           </>
         )}
       </div>
+      {size === "sm" && !imageUrl ? (
+        <p className="mt-1 text-xs text-muted">
+          ドラッグ＆ドロップ or{" "}
+          <button type="button" onClick={() => inputRef.current?.click()} className="text-primary underline">
+            browse files
+          </button>
+        </p>
+      ) : null}
       <input
         ref={inputRef}
         type="file"

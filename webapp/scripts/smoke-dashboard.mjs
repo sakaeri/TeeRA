@@ -24,11 +24,12 @@ try {
   let body = await page.textContent("body");
   log("KPI cards render with 0 counts initially", body.includes("欠員件数") && body.includes("未確定シフト"));
 
-  // create a staff member to use as a to-do recipient
+  // create a regular staff member — they must NOT be an assignable recipient
+  // (only company admins/editors can see this dashboard and resolve todos)
   await page.click("text=スタッフ名簿");
   await page.click("text=＋スタッフを招待する");
   await page.click("text=仮アカウントを作成");
-  await page.fill('input[placeholder="名称を入力"]', "todo受信スタッフ");
+  await page.fill('input[placeholder="名称を入力"]', "一般スタッフ");
   await page.click("text=作成");
   await page.waitForTimeout(600);
 
@@ -36,14 +37,19 @@ try {
   await page.waitForURL("http://localhost:3000/company");
 
   await page.click("text=＋やることリスト作成");
+  const createdByValue = await page.locator('input[disabled]').inputValue();
+  log("誰が出したか shows the current admin's real name", createdByValue === "ダッシュボード管理者（自動入力）");
+  body = await page.textContent("body");
+  log("regular staff is not offered as a recipient", !body.includes("一般スタッフ"));
+
   await page.fill('input[placeholder="やることを入力"]', "契約書を確認してください");
   await page.fill('input[type=date]', "2026-09-01");
-  await page.selectOption("select", { label: "todo受信スタッフ" });
+  await page.selectOption("select", { label: "ダッシュボード管理者" });
   await page.getByRole("button", { name: "作成する" }).click();
   await page.waitForTimeout(600);
 
   body = await page.textContent("body");
-  log("manual todo appears in 未対応 tab", body.includes("契約書を確認してください") && body.includes("todo受信スタッフ宛"));
+  log("manual todo appears in 未対応 tab", body.includes("契約書を確認してください") && body.includes("ダッシュボード管理者宛"));
 
   // add a comment
   await page.click("text=コメント（0）");
