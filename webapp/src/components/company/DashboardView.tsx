@@ -114,14 +114,14 @@ export function DashboardView({
           <button
             type="button"
             onClick={() => setShowPromoModal(true)}
-            className="rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary"
+            className="rounded-lg border border-primary bg-white px-4 py-2 text-sm font-semibold text-primary shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
           >
             ＋販促品を登録
           </button>
           <button
             type="button"
             onClick={() => setShowTodoForm((v) => !v)}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
           >
             {showTodoForm ? "閉じる" : "＋やることリスト作成"}
           </button>
