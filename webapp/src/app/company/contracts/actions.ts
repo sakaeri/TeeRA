@@ -3,12 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManage } from "@/lib/auth/permissions";
+import { prisma } from "@/lib/prisma";
 import {
   createTemplate,
   updateOrDuplicateTemplate,
   deleteTemplate,
   upsertPlacementRate,
   deletePlacementRate,
+  startStaffContract,
   type TemplateInput,
 } from "@/lib/domain/contracts";
 
@@ -61,4 +63,21 @@ export async function deletePlacementRateAction(id: string) {
 
   await deletePlacementRate(id);
   revalidatePath("/company/settings");
+}
+
+export async function generateStaffContractAction(templateId: string, staffUserId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManage(membership)) throw new Error("forbidden");
+
+  const template = await prisma.contractTemplate.findUniqueOrThrow({ where: { id: templateId } });
+  if (template.companyId !== membership.companyId) throw new Error("forbidden");
+
+  const staffMembership = await prisma.companyMembership.findFirst({
+    where: { userId: staffUserId, companyId: membership.companyId, role: "STAFF" },
+  });
+  if (!staffMembership) throw new Error("forbidden");
+
+  await startStaffContract({ templateId, staffUserId });
+  revalidatePath("/company/settings");
+  revalidatePath("/company");
 }

@@ -6,6 +6,7 @@ import {
   listShortageEntries,
   listUnconfirmedShiftEntries,
   listPendingReportEntries,
+  listPendingContractStaff,
 } from "@/lib/domain/dashboard";
 import { listPromoItems, listRedemptionsForCompany } from "@/lib/domain/promo";
 import { prisma } from "@/lib/prisma";
@@ -25,6 +26,8 @@ export default async function CompanyDashboardPage() {
     shortageEntries,
     unconfirmedShiftEntries,
     pendingReportEntries,
+    pendingContractStaff,
+    contractTemplates,
   ] = await Promise.all([
     getKpis(membership.companyId),
     listAutoTodoItems(membership.companyId),
@@ -40,6 +43,12 @@ export default async function CompanyDashboardPage() {
     listShortageEntries(membership.companyId),
     listUnconfirmedShiftEntries(membership.companyId),
     listPendingReportEntries(membership.companyId),
+    listPendingContractStaff(membership.companyId),
+    prisma.contractTemplate.findMany({
+      where: { companyId: membership.companyId, status: "ACTIVE" },
+      select: { id: true, title: true },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
 
   const currentUserName = admins.find((a) => a.userId === userId)?.user.name ?? "";
@@ -87,6 +96,8 @@ export default async function CompanyDashboardPage() {
         shortageEntries={shortageEntries}
         unconfirmedShiftEntries={unconfirmedShiftEntries}
         pendingReportEntries={pendingReportEntries}
+        pendingContractStaff={pendingContractStaff}
+        contractTemplates={contractTemplates}
       />
     </main>
   );

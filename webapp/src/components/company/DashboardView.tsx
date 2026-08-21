@@ -14,6 +14,7 @@ import {
   markRedemptionShippedAction,
 } from "@/app/company/promo/actions";
 import { approveWorkReportAction, rejectWorkReportAction } from "@/app/company/workreports/actions";
+import { generateStaffContractAction } from "@/app/company/contracts/actions";
 import { ImageDropzone } from "@/components/ImageDropzone";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
@@ -89,6 +90,9 @@ type PendingReportEntry = {
   comment: string | null;
 };
 
+type PendingContractStaff = { userId: string; name: string };
+type ContractTemplateOption = { id: string; title: string };
+
 type PromoItem = {
   id: string;
   imageUrl: string;
@@ -109,13 +113,13 @@ type PromoOrder = {
 
 type DashboardTab = "active" | "resolved" | "promoList" | "promoOrders";
 
-type PopupKind = "shortage" | "unconfirmed" | "reports";
+type PopupKind = "shortage" | "unconfirmed" | "reports" | "contracts";
 
 const KPI_CARDS: { key: keyof Kpis; label: string; href?: string; tab?: DashboardTab; popup?: PopupKind }[] = [
   { key: "shortageCount", label: "欠員件数", popup: "shortage" },
   { key: "unconfirmedShiftCount", label: "未確定シフト", popup: "unconfirmed" },
   { key: "pendingReportCount", label: "業務報告未承認", popup: "reports" },
-  { key: "pendingContractCount", label: "契約書未確認", href: "/company/settings?tab=contracts" },
+  { key: "pendingContractCount", label: "契約書未確認", popup: "contracts" },
   { key: "promoItemCount", label: "販促品登録数", tab: "promoList" },
   { key: "pendingShipmentCount", label: "発送待ち", tab: "promoOrders" },
 ];
@@ -149,6 +153,8 @@ export function DashboardView({
   shortageEntries,
   unconfirmedShiftEntries,
   pendingReportEntries,
+  pendingContractStaff,
+  contractTemplates,
 }: {
   kpis: Kpis;
   autoTodos: AutoTodo[];
@@ -161,6 +167,8 @@ export function DashboardView({
   shortageEntries: ShortageEntry[];
   unconfirmedShiftEntries: UnconfirmedShiftEntry[];
   pendingReportEntries: PendingReportEntry[];
+  pendingContractStaff: PendingContractStaff[];
+  contractTemplates: ContractTemplateOption[];
 }) {
   const [tab, setTab] = useState<DashboardTab>("active");
   const [showTodoForm, setShowTodoForm] = useState(false);
@@ -168,6 +176,7 @@ export function DashboardView({
   const [editingPromoItem, setEditingPromoItem] = useState<PromoItem | null>(null);
   const [openPopup, setOpenPopup] = useState<PopupKind | null>(null);
   const [reportDetail, setReportDetail] = useState<PendingReportEntry | null>(null);
+  const [generateTarget, setGenerateTarget] = useState<PendingContractStaff | null>(null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -263,6 +272,23 @@ export function DashboardView({
       ) : null}
       {reportDetail ? (
         <WorkReportDetailModal entry={reportDetail} onClose={() => setReportDetail(null)} />
+      ) : null}
+      {openPopup === "contracts" ? (
+        <PendingContractPopup
+          staff={pendingContractStaff}
+          onSelect={(staff) => {
+            setOpenPopup(null);
+            setGenerateTarget(staff);
+          }}
+          onClose={() => setOpenPopup(null)}
+        />
+      ) : null}
+      {generateTarget ? (
+        <GenerateContractModal
+          staff={generateTarget}
+          templates={contractTemplates}
+          onClose={() => setGenerateTarget(null)}
+        />
       ) : null}
     </div>
   );
@@ -715,6 +741,103 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
             差し戻す
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PendingContractPopup({
+  staff,
+  onSelect,
+  onClose,
+}: {
+  staff: PendingContractStaff[];
+  onSelect: (staff: PendingContractStaff) => void;
+  onClose: () => void;
+}) {
+  return (
+    <PopupShell title="契約書未確認" subtitle="未締結の契約書です" onClose={onClose}>
+      {staff.map((s) => (
+        <div key={s.userId} className="flex items-center justify-between rounded-xl border border-border/60 p-4 text-sm">
+          <div className="flex items-center gap-2">
+            <p className="font-medium">{s.name}</p>
+            <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs text-rose-800">未送付</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onSelect(s)}
+            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+          >
+            契約書を生成
+          </button>
+        </div>
+      ))}
+      {staff.length === 0 ? <p className="text-center text-muted">未締結の契約書はありません。</p> : null}
+    </PopupShell>
+  );
+}
+
+function GenerateContractModal({
+  staff,
+  templates,
+  onClose,
+}: {
+  staff: PendingContractStaff;
+  templates: ContractTemplateOption[];
+  onClose: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [templateId, setTemplateId] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">契約書を生成</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-muted">{staff.name}さんに契約書を割り当てて締結します</p>
+
+        {templates.length === 0 ? (
+          <p className="text-sm text-muted">利用できる契約書テンプレートがありません。先にテンプレートを作成してください。</p>
+        ) : (
+          <label className="flex flex-col gap-1 text-xs">
+            <span>
+              テンプレート<span className="text-red-600"> *</span>
+            </span>
+            <select
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              className="rounded-lg border border-border px-2 py-2 text-sm"
+            >
+              <option value="">選択してください</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <button
+          type="button"
+          disabled={pending || !templateId}
+          onClick={() =>
+            startTransition(async () => {
+              await generateStaffContractAction(templateId, staff.userId);
+              onClose();
+            })
+          }
+          className="mt-4 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        >
+          生成する
+        </button>
       </div>
     </div>
   );

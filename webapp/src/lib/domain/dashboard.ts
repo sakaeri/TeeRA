@@ -1,13 +1,14 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { listPendingReportsForCompany } from "@/lib/domain/workReports";
+import { listStaffWithSummary } from "@/lib/domain/roster";
 
 // KPI counts are computed live from current state rather than materialized
 // via a background job — the "未確定シフト" list, recruitment fill counts,
 // and pending queues are already the source of truth elsewhere in the app,
 // so re-deriving them here keeps the dashboard always consistent with them.
 export async function getKpis(companyId: string) {
-  const [shortageRecruitments, unconfirmedShiftCount, pendingReports, pendingContractCount, promoItemCount, pendingShipmentCount] =
+  const [shortageRecruitments, unconfirmedShiftCount, pendingReports, pendingContractStaff, promoItemCount, pendingShipmentCount] =
     await Promise.all([
       prisma.publicRecruitment.findMany({
         where: { companyId, status: "PUBLISHED" },
@@ -15,9 +16,7 @@ export async function getKpis(companyId: string) {
       }),
       prisma.shiftRequest.count({ where: { companyId, status: "PENDING" } }),
       listPendingReportsForCompany(companyId),
-      prisma.staffContract.count({
-        where: { status: "PENDING_CONSENT", template: { companyId } },
-      }),
+      listPendingContractStaff(companyId),
       prisma.promoItem.count({ where: { companyId } }),
       prisma.promoRedemption.count({
         where: { status: "PENDING_SHIPMENT", promoItem: { companyId } },
@@ -32,7 +31,7 @@ export async function getKpis(companyId: string) {
     shortageCount,
     unconfirmedShiftCount,
     pendingReportCount: pendingReports.length,
-    pendingContractCount,
+    pendingContractCount: pendingContractStaff.length,
     promoItemCount,
     pendingShipmentCount,
   };
@@ -108,6 +107,11 @@ export async function listPendingReportEntries(companyId: string) {
   }));
 }
 
+export async function listPendingContractStaff(companyId: string) {
+  const staff = await listStaffWithSummary(companyId);
+  return staff.filter((s) => s.contractStatus === "未送付").map((s) => ({ userId: s.userId, name: s.name }));
+}
+
 export type AutoTodoItem = {
   id: string;
   kind: "業務報告" | "欠員" | "シフト" | "契約書" | "販促品";
@@ -119,11 +123,11 @@ export type AutoTodoItem = {
 // Auto-generated to-do rows are derived live from the same queues shown
 // elsewhere (work-report approvals, shift requests, recruitment shortfall,
 // pending shipments) rather than materialized by a background job — see
-// getKpis for why. Contract items use StaffContract.PENDING_CONSENT, which
-// this build's simplified 契約を結ぶ flow never actually leaves in that
-// state (see startStaffContract), so this list is empty for that kind in v1.
+// getKpis for why. Contract items are staff with no live StaffContract yet
+// (see listPendingContractStaff) — the 契約を結ぶ flow is self-service and
+// immediate (see startStaffContract), so there is no separate 確認待ち state.
 export async function listAutoTodoItems(companyId: string): Promise<AutoTodoItem[]> {
-  const [shortageRecruitments, shiftRequests, pendingReports, pendingContracts, pendingShipments] =
+  const [shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, pendingShipments] =
     await Promise.all([
       prisma.publicRecruitment.findMany({
         where: { companyId, status: "PUBLISHED" },
@@ -131,10 +135,7 @@ export async function listAutoTodoItems(companyId: string): Promise<AutoTodoItem
       }),
       prisma.shiftRequest.findMany({ where: { companyId, status: "PENDING" }, include: { staff: true } }),
       listPendingReportsForCompany(companyId),
-      prisma.staffContract.findMany({
-        where: { status: "PENDING_CONSENT", template: { companyId } },
-        include: { staff: true },
-      }),
+      listPendingContractStaff(companyId),
       prisma.promoRedemption.findMany({
         where: { status: "PENDING_SHIPMENT", promoItem: { companyId } },
         include: { promoItem: true, staff: true },
@@ -176,13 +177,13 @@ export async function listAutoTodoItems(companyId: string): Promise<AutoTodoItem
     });
   }
 
-  for (const contract of pendingContracts) {
+  for (const staff of pendingContractStaff) {
     items.push({
-      id: `contract-${contract.id}`,
+      id: `contract-${staff.userId}`,
       kind: "契約書",
-      text: `${contract.staff.name}さんの契約書が未締結です`,
+      text: `${staff.name}さんの契約書が未送付です`,
       actionLabel: "確認する",
-      actionHref: "/company/settings?tab=contracts",
+      actionHref: "/company",
     });
   }
 

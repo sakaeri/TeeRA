@@ -39,8 +39,11 @@ try {
   await page.click("text=＋やることリスト作成");
   const createdByValue = await page.locator('input[disabled]').inputValue();
   log("誰が出したか shows the current admin's real name", createdByValue === "ダッシュボード管理者（自動入力）");
-  body = await page.textContent("body");
-  log("regular staff is not offered as a recipient", !body.includes("一般スタッフ"));
+  // scoped to the 誰宛か <select> specifically — 一般スタッフ legitimately
+  // appears elsewhere on the page now (e.g. an auto 契約書 to-do, since they
+  // have no contract), so a whole-body text check would be a false positive
+  const recipientOptionLabels = await page.locator("select").first().locator("option").allTextContents();
+  log("regular staff is not offered as a recipient", !recipientOptionLabels.includes("一般スタッフ"));
 
   await page.fill('input[placeholder="やることを入力"]', "契約書を確認してください");
   await page.fill('input[type=date]', "2026-09-01");
@@ -62,8 +65,13 @@ try {
   // resolve it
   await page.getByRole("button", { name: "解決済みにする" }).click();
   await page.waitForTimeout(600);
-  body = await page.textContent("body");
-  log("todo removed from 未対応 after resolving", body.includes("未対応のリストはありません"));
+  // 一般スタッフ has no contract, so an unrelated auto 契約書 to-do now
+  // legitimately stays in 未対応 — check the manual todo specifically left,
+  // not that the tab is fully empty
+  log(
+    "todo removed from 未対応 after resolving",
+    !(await page.getByText("契約書を確認してください").isVisible().catch(() => false)),
+  );
 
   await page.click("text=解決済みリスト");
   body = await page.textContent("body");
