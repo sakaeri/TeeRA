@@ -156,6 +156,9 @@ export function DashboardView({
   contractTemplates,
   companyName,
   contractClients,
+  initialTab,
+  initialOpenPopup,
+  initialReportDetailId,
 }: {
   kpis: Kpis;
   autoTodos: AutoTodo[];
@@ -172,13 +175,18 @@ export function DashboardView({
   contractTemplates: ContractTemplate[];
   companyName: string;
   contractClients: ClientOption[];
+  initialTab?: DashboardTab;
+  initialOpenPopup?: PopupKind;
+  initialReportDetailId?: string;
 }) {
-  const [tab, setTab] = useState<DashboardTab>("active");
+  const [tab, setTab] = useState<DashboardTab>(initialTab ?? "active");
   const [showTodoForm, setShowTodoForm] = useState(false);
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [editingPromoItem, setEditingPromoItem] = useState<PromoItem | null>(null);
-  const [openPopup, setOpenPopup] = useState<PopupKind | null>(null);
-  const [reportDetail, setReportDetail] = useState<PendingReportEntry | null>(null);
+  const [openPopup, setOpenPopup] = useState<PopupKind | null>(initialOpenPopup ?? null);
+  const [reportDetail, setReportDetail] = useState<PendingReportEntry | null>(
+    initialReportDetailId ? (pendingReportEntries.find((r) => r.id === initialReportDetailId) ?? null) : null,
+  );
   const [generateTarget, setGenerateTarget] = useState<PendingContractStaff | null>(null);
   const [generateBaseTemplate, setGenerateBaseTemplate] = useState<ContractTemplate | null>(null);
 

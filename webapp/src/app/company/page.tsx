@@ -14,8 +14,11 @@ import { listClients } from "@/lib/domain/relationships";
 import { prisma } from "@/lib/prisma";
 import { DashboardView } from "@/components/company/DashboardView";
 
-export default async function CompanyDashboardPage() {
+export default async function CompanyDashboardPage({ searchParams }: PageProps<"/company">) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
+  const sp = await searchParams;
+  const open = typeof sp.open === "string" ? sp.open : undefined;
+  const reportId = typeof sp.reportId === "string" ? sp.reportId : undefined;
 
   const [
     kpis,
@@ -54,10 +57,14 @@ export default async function CompanyDashboardPage() {
   const clients = company.agencyEnabled ? await listClients(membership.companyId) : [];
 
   const currentUserName = admins.find((a) => a.userId === userId)?.user.name ?? "";
+  const initialTab = open === "promoOrders" ? ("promoOrders" as const) : undefined;
+  const initialOpenPopup = open === "contracts" ? ("contracts" as const) : undefined;
+  const initialReportDetailId = open === "reports" ? reportId : undefined;
 
   return (
     <main className="mx-auto w-full max-w-5xl px-8 py-10">
       <DashboardView
+        key={`${open ?? "default"}-${reportId ?? ""}`}
         kpis={kpis}
         autoTodos={autoTodos}
         openTodos={openTodos.map((t) => ({
@@ -136,6 +143,9 @@ export default async function CompanyDashboardPage() {
             status: t.status,
             contractedStaffNames: t.staffContracts.filter((sc) => sc.status !== "ENDED").map((sc) => sc.staff.name),
           }))}
+        initialTab={initialTab}
+        initialOpenPopup={initialOpenPopup}
+        initialReportDetailId={initialReportDetailId}
       />
     </main>
   );

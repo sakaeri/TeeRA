@@ -152,33 +152,39 @@ export async function listAutoTodoItems(companyId: string): Promise<AutoTodoItem
   for (const r of shortageRecruitments) {
     const filled = r.entries.filter((e) => e.status !== "REJECTED").length;
     if (filled < r.maxEntries) {
+      const dateStr = r.date.toISOString().slice(0, 10);
       items.push({
         id: `shortage-${r.id}`,
         kind: "欠員",
-        text: `${r.title}（${r.date.toISOString().slice(0, 10)}）が${r.maxEntries - filled}名不足しています`,
+        text: `${r.title}（${dateStr}）が${r.maxEntries - filled}名不足しています`,
         actionLabel: "カレンダーで確認",
-        actionHref: "/company/calendar",
+        actionHref: `/company/calendar?date=${dateStr}`,
       });
     }
   }
 
   for (const sr of shiftRequests) {
+    const dateStr = sr.dates[0]?.toISOString().slice(0, 10) ?? "";
     items.push({
       id: `shift-${sr.id}`,
       kind: "シフト",
-      text: `${sr.staff.name}さんの希望シフト（${sr.dates[0]?.toISOString().slice(0, 10) ?? ""}）が未確定です`,
+      text: `${sr.staff.name}さんの希望シフト（${dateStr}）が未確定です`,
       actionLabel: "カレンダーで確認",
-      actionHref: "/company/calendar",
+      actionHref: dateStr ? `/company/calendar?date=${dateStr}` : "/company/calendar",
     });
   }
 
   for (const report of pendingReports) {
+    const teamName = report.shift.team?.name ?? "自社";
+    const dateStr = report.shift.date.toISOString().slice(0, 10);
+    const timeRange =
+      report.shift.startTime && report.shift.endTime ? `・${report.shift.startTime}〜${report.shift.endTime}` : "";
     items.push({
       id: `report-${report.id}`,
       kind: "業務報告",
-      text: `${report.staff.name}さんの業務報告が未承認です`,
+      text: `${report.staff.name}さんの業務（${teamName}）（${dateStr}${timeRange}）業務報告が未承認です`,
       actionLabel: "確認する",
-      actionHref: "/company/settings?tab=workreports",
+      actionHref: `/company?open=reports&reportId=${report.id}`,
     });
   }
 
@@ -188,7 +194,7 @@ export async function listAutoTodoItems(companyId: string): Promise<AutoTodoItem
       kind: "契約書",
       text: `${staff.name}さんの契約書が未送付です`,
       actionLabel: "確認する",
-      actionHref: "/company",
+      actionHref: "/company?open=contracts",
     });
   }
 
@@ -198,7 +204,7 @@ export async function listAutoTodoItems(companyId: string): Promise<AutoTodoItem
       kind: "販促品",
       text: `発送待ち：${redemption.promoItem.name}の注文があります（${redemption.staff.name}さん）`,
       actionLabel: "確認する",
-      actionHref: "/company",
+      actionHref: "/company?open=promoOrders",
     });
   }
 
