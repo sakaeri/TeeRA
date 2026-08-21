@@ -41,6 +41,7 @@ export function ImageDropzone({
         {required ? <span className="text-red-600"> *</span> : null}
       </label>
       <div
+        title="ドラッグ＆ドロップ、またはクリックして選択"
         onClick={() => inputRef.current?.click()}
         onDragOver={(e) => {
           e.preventDefault();
@@ -73,14 +74,6 @@ export function ImageDropzone({
           </>
         )}
       </div>
-      {size === "sm" && !imageUrl ? (
-        <p className="mt-1 text-xs text-muted">
-          ドラッグ＆ドロップ or{" "}
-          <button type="button" onClick={() => inputRef.current?.click()} className="text-primary underline">
-            browse files
-          </button>
-        </p>
-      ) : null}
       <input
         ref={inputRef}
         type="file"
