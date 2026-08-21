@@ -68,6 +68,17 @@ try {
   await page.click("text=解決済みリスト");
   body = await page.textContent("body");
   log("todo appears in 解決済み tab", body.includes("契約書を確認してください"));
+  log("no 再オープン button in 解決済み tab", !body.includes("再オープン"));
+  log("コメント link shown in 解決済み tab", body.includes("コメント（1）"));
+
+  // the comment thread stayed expanded from the 未対応 tab interaction above
+  // (expandedId state carries across tabs), so collapse then re-expand it here
+  await page.click("text=コメント（1）");
+  await page.waitForTimeout(300);
+  await page.click("text=コメント（1）");
+  await page.waitForTimeout(300);
+  body = await page.textContent("body");
+  log("resolved todo comment thread is viewable", body.includes("確認お願いします"));
 
   console.log(process.exitCode ? "DASHBOARD SMOKE TEST HAD FAILURES" : "DASHBOARD SMOKE TEST PASSED");
 } catch (err) {

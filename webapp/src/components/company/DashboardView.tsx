@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   createManualTodoAction,
   resolveTodoAction,
-  reopenTodoAction,
   addTodoCommentAction,
 } from "@/app/company/actions-todo";
 import {
@@ -36,7 +35,14 @@ type OpenTodo = {
   comments: { id: string; authorName: string; body: string }[];
 };
 
-type ResolvedTodo = { id: string; title: string; dueDate: string; recipientName: string; resolvedAt: string };
+type ResolvedTodo = {
+  id: string;
+  title: string;
+  dueDate: string;
+  recipientName: string;
+  resolvedAt: string;
+  comments: { id: string; authorName: string; body: string }[];
+};
 
 type PromoItem = {
   id: string;
@@ -560,18 +566,29 @@ function TodoSection({
       {tab === "resolved" ? (
         <ul className="flex flex-col gap-2">
           {resolvedTodos.map((t) => (
-            <li key={t.id} className="flex items-center justify-between rounded-lg border border-border/60 p-3 text-sm">
-              <span>
-                {t.title} — {t.recipientName}宛（対応日 {t.resolvedAt}）
-              </span>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => startTransition(() => reopenTodoAction(t.id))}
-                className="text-xs text-muted underline"
-              >
-                再オープン
-              </button>
+            <li key={t.id} className="rounded-lg border border-border/60 p-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span>
+                  {t.title} — {t.recipientName}宛（対応日 {t.resolvedAt}）
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setExpandedId(expandedId === t.id ? null : t.id)}
+                  className="shrink-0 text-xs text-muted underline"
+                >
+                  コメント（{t.comments.length}）
+                </button>
+              </div>
+              {expandedId === t.id ? (
+                <div className="mt-2 border-t border-border/50 pt-2">
+                  {t.comments.map((c) => (
+                    <p key={c.id} className="text-xs text-muted">
+                      {c.authorName}: {c.body}
+                    </p>
+                  ))}
+                  {t.comments.length === 0 ? <p className="text-xs text-muted">コメントはありません。</p> : null}
+                </div>
+              ) : null}
             </li>
           ))}
           {resolvedTodos.length === 0 ? <p className="text-center text-muted">対応済みのリストはありません。</p> : null}
