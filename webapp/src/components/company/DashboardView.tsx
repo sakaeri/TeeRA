@@ -523,7 +523,7 @@ function TodoSection({
       {tab === "promoList" ? (
         <div>
           <p className="mb-3 text-xs text-muted">登録済みの販促品一覧です（{promoItems.length}件）</p>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             {promoItems.map((p) => (
               <div key={p.id} className="flex flex-col gap-2">
                 <div className="relative">
