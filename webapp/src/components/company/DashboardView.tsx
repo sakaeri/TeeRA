@@ -39,6 +39,7 @@ type ResolvedTodo = {
   id: string;
   title: string;
   dueDate: string;
+  createdByName: string;
   recipientName: string;
   resolvedAt: string;
   comments: { id: string; authorName: string; body: string }[];
@@ -568,9 +569,12 @@ function TodoSection({
           {resolvedTodos.map((t) => (
             <li key={t.id} className="rounded-lg border border-border/60 p-3 text-sm">
               <div className="flex items-center justify-between">
-                <span>
-                  {t.title} — {t.recipientName}宛（対応日 {t.resolvedAt}）
-                </span>
+                <div>
+                  <p>{t.title}</p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {t.createdByName} → {t.recipientName}宛（解決日 {t.resolvedAt}）
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => setExpandedId(expandedId === t.id ? null : t.id)}

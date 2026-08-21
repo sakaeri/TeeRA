@@ -68,6 +68,10 @@ try {
   await page.click("text=解決済みリスト");
   body = await page.textContent("body");
   log("todo appears in 解決済み tab", body.includes("契約書を確認してください"));
+  log(
+    "解決済み tab shows small 誰から→誰宛（解決日）subtext",
+    body.includes("ダッシュボード管理者 → ダッシュボード管理者宛（解決日"),
+  );
   log("no 再オープン button in 解決済み tab", !body.includes("再オープン"));
   log("コメント link shown in 解決済み tab", body.includes("コメント（1）"));
 

@@ -39,6 +39,7 @@ export default async function CompanyDashboardPage() {
           id: t.id,
           title: t.title,
           dueDate: t.dueDate?.toISOString().slice(0, 10) ?? "",
+          createdByName: t.createdBy?.name ?? "",
           recipientName: t.recipient?.name ?? "",
           resolvedAt: t.resolvedAt?.toISOString().slice(0, 10) ?? "",
           comments: t.comments.map((c) => ({ id: c.id, authorName: c.author.name, body: c.body })),
