@@ -14,7 +14,7 @@ import {
   markRedemptionShippedAction,
 } from "@/app/company/promo/actions";
 import { approveWorkReportAction, rejectWorkReportAction } from "@/app/company/workreports/actions";
-import { generateStaffContractAction } from "@/app/company/contracts/actions";
+import { TemplateModal, type Template as ContractTemplate, type ClientOption } from "@/components/company/ContractsView";
 import { ImageDropzone } from "@/components/ImageDropzone";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
@@ -91,7 +91,6 @@ type PendingReportEntry = {
 };
 
 type PendingContractStaff = { userId: string; name: string };
-type ContractTemplateOption = { id: string; title: string };
 
 type PromoItem = {
   id: string;
@@ -155,6 +154,8 @@ export function DashboardView({
   pendingReportEntries,
   pendingContractStaff,
   contractTemplates,
+  companyName,
+  contractClients,
 }: {
   kpis: Kpis;
   autoTodos: AutoTodo[];
@@ -168,7 +169,9 @@ export function DashboardView({
   unconfirmedShiftEntries: UnconfirmedShiftEntry[];
   pendingReportEntries: PendingReportEntry[];
   pendingContractStaff: PendingContractStaff[];
-  contractTemplates: ContractTemplateOption[];
+  contractTemplates: ContractTemplate[];
+  companyName: string;
+  contractClients: ClientOption[];
 }) {
   const [tab, setTab] = useState<DashboardTab>("active");
   const [showTodoForm, setShowTodoForm] = useState(false);
@@ -177,6 +180,7 @@ export function DashboardView({
   const [openPopup, setOpenPopup] = useState<PopupKind | null>(null);
   const [reportDetail, setReportDetail] = useState<PendingReportEntry | null>(null);
   const [generateTarget, setGenerateTarget] = useState<PendingContractStaff | null>(null);
+  const [generateBaseTemplate, setGenerateBaseTemplate] = useState<ContractTemplate | null>(null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -283,11 +287,24 @@ export function DashboardView({
           onClose={() => setOpenPopup(null)}
         />
       ) : null}
-      {generateTarget ? (
-        <GenerateContractModal
-          staff={generateTarget}
+      {generateTarget && !generateBaseTemplate ? (
+        <ChooseBaseTemplateModal
+          staffName={generateTarget.name}
           templates={contractTemplates}
+          onNext={(t) => setGenerateBaseTemplate(t)}
           onClose={() => setGenerateTarget(null)}
+        />
+      ) : null}
+      {generateTarget && generateBaseTemplate ? (
+        <TemplateModal
+          clients={contractClients}
+          companyName={companyName}
+          editingTemplate={generateBaseTemplate}
+          generateForStaff={{ userId: generateTarget.userId, name: generateTarget.name }}
+          onClose={() => {
+            setGenerateTarget(null);
+            setGenerateBaseTemplate(null);
+          }}
         />
       ) : null}
     </div>
@@ -777,17 +794,19 @@ function PendingContractPopup({
   );
 }
 
-function GenerateContractModal({
-  staff,
+function ChooseBaseTemplateModal({
+  staffName,
   templates,
+  onNext,
   onClose,
 }: {
-  staff: PendingContractStaff;
-  templates: ContractTemplateOption[];
+  staffName: string;
+  templates: ContractTemplate[];
+  onNext: (template: ContractTemplate) => void;
   onClose: () => void;
 }) {
-  const [pending, startTransition] = useTransition();
   const [templateId, setTemplateId] = useState("");
+  const selected = templates.find((t) => t.id === templateId) ?? null;
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
@@ -801,7 +820,9 @@ function GenerateContractModal({
             ✕
           </button>
         </div>
-        <p className="mb-4 text-xs text-muted">{staff.name}さんに契約書を割り当てて締結します</p>
+        <p className="mb-4 text-xs text-muted">
+          ベースにするテンプレートを選んでください。次の画面で複製した内容を{staffName}さん用に編集・プレビューできます
+        </p>
 
         {templates.length === 0 ? (
           <p className="text-sm text-muted">利用できる契約書テンプレートがありません。先にテンプレートを作成してください。</p>
@@ -827,16 +848,11 @@ function GenerateContractModal({
 
         <button
           type="button"
-          disabled={pending || !templateId}
-          onClick={() =>
-            startTransition(async () => {
-              await generateStaffContractAction(templateId, staff.userId);
-              onClose();
-            })
-          }
+          disabled={!selected}
+          onClick={() => selected && onNext(selected)}
           className="mt-4 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
-          生成する
+          次へ
         </button>
       </div>
     </div>

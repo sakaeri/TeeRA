@@ -107,9 +107,14 @@ export async function listPendingReportEntries(companyId: string) {
   }));
 }
 
+// 仮アカウント（isProxy）は本人ログインができず自己サービスの同意フローに
+// 乗れない一時的なプレースホルダーなので、本アカウント連携されるまで
+// 契約書未確認からは除外する。
 export async function listPendingContractStaff(companyId: string) {
   const staff = await listStaffWithSummary(companyId);
-  return staff.filter((s) => s.contractStatus === "未送付").map((s) => ({ userId: s.userId, name: s.name }));
+  return staff
+    .filter((s) => s.contractStatus === "未送付" && !s.isProxy)
+    .map((s) => ({ userId: s.userId, name: s.name }));
 }
 
 export type AutoTodoItem = {

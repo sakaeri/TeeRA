@@ -7,9 +7,10 @@ import {
   deleteTemplateAction,
   upsertPlacementRateAction,
   deletePlacementRateAction,
+  generateStaffContractAction,
 } from "@/app/company/contracts/actions";
 
-type Template = {
+export type Template = {
   id: string;
   title: string;
   employmentType: string;
@@ -49,7 +50,7 @@ type Rate = {
   amount: number;
 };
 
-type ClientOption = { id: string; name: string };
+export type ClientOption = { id: string; name: string };
 
 const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
   PART_TIME: "アルバイト",
@@ -357,19 +358,25 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 const fieldInput = "rounded-lg border border-border px-2 py-2 text-sm";
 
-function TemplateModal({
+export function TemplateModal({
   clients,
   companyName,
   editingTemplate,
+  generateForStaff,
   onClose,
 }: {
   clients: ClientOption[];
   companyName: string;
   editingTemplate?: Template;
+  generateForStaff?: { userId: string; name: string };
   onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
-  const [customTitle, setCustomTitle] = useState(editingTemplate?.title ?? "");
+  const [customTitle, setCustomTitle] = useState(
+    generateForStaff && editingTemplate
+      ? `${editingTemplate.title}（${generateForStaff.name}様）`
+      : (editingTemplate?.title ?? ""),
+  );
   const [employmentType, setEmploymentType] = useState(editingTemplate?.employmentType ?? "PART_TIME");
   const [workplaceNote, setWorkplaceNote] = useState(editingTemplate?.workplaceNote ?? "");
   const [jobDescription, setJobDescription] = useState(editingTemplate?.jobDescription ?? "");
@@ -469,7 +476,9 @@ function TemplateModal({
       extraItems,
     };
 
-    if (editingTemplate) {
+    if (generateForStaff) {
+      await generateStaffContractAction(payload, generateForStaff.userId);
+    } else if (editingTemplate) {
       await updateTemplateAction(editingTemplate.id, payload);
     } else {
       await createTemplateAction(payload);
@@ -484,13 +493,20 @@ function TemplateModal({
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">
-            雇用契約書{preview ? "" : "テンプレート"}
-            {editingTemplate && !preview ? "の編集" : ""}
+            {generateForStaff
+              ? `契約書を生成${preview ? "" : "（" + generateForStaff.name + "様）"}`
+              : `雇用契約書${preview ? "" : "テンプレート"}${editingTemplate && !preview ? "の編集" : ""}`}
           </h3>
           <button type="button" onClick={onClose} className="text-muted">
             ✕
           </button>
         </div>
+        {generateForStaff && !preview ? (
+          <p className="mb-3 text-xs text-muted">
+            {editingTemplate ? `「${editingTemplate.title}」を複製し、` : ""}
+            この内容を編集して{generateForStaff.name}さん専用の契約書として生成します
+          </p>
+        ) : null}
 
         {preview ? (
           <p className="mb-3 text-xs text-muted">テンプレート名：{title}</p>
@@ -508,7 +524,8 @@ function TemplateModal({
         )}
 
         <p className="text-sm leading-relaxed">
-          {companyName}（以下「甲」）と（スタッフ名/自動反映）（以下「乙」）は、{contractStartDate || "開始日未設定"}
+          {companyName}（以下「甲」）と{generateForStaff?.name ?? "（スタッフ名/自動反映）"}（以下「乙」）は、
+          {contractStartDate || "開始日未設定"}
           より、以下の内容で雇用契約を締結する。
         </p>
         <div className="my-4 border-t border-border" />
@@ -929,10 +946,10 @@ function TemplateModal({
             }
             className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
-            {editingTemplate ? "更新する" : "テンプレートを生成"}
+            {generateForStaff ? "生成する" : editingTemplate ? "更新する" : "テンプレートを生成"}
           </button>
         </div>
-        {editingTemplate?.status === "LOCKED" ? (
+        {editingTemplate?.status === "LOCKED" && !generateForStaff ? (
           <p className="mt-2 text-xs text-muted">
             このテンプレートは契約中のスタッフがいるため、更新すると複製として新しく保存されます（元のテンプレートはそのまま残ります）。
           </p>

@@ -10,7 +10,7 @@ import {
   deleteTemplate,
   upsertPlacementRate,
   deletePlacementRate,
-  startStaffContract,
+  generateStaffContractFromNewTemplate,
   type TemplateInput,
 } from "@/lib/domain/contracts";
 
@@ -65,19 +65,20 @@ export async function deletePlacementRateAction(id: string) {
   revalidatePath("/company/settings");
 }
 
-export async function generateStaffContractAction(templateId: string, staffUserId: string) {
+export async function generateStaffContractAction(input: CreateTemplateInput, staffUserId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
-
-  const template = await prisma.contractTemplate.findUniqueOrThrow({ where: { id: templateId } });
-  if (template.companyId !== membership.companyId) throw new Error("forbidden");
 
   const staffMembership = await prisma.companyMembership.findFirst({
     where: { userId: staffUserId, companyId: membership.companyId, role: "STAFF" },
   });
   if (!staffMembership) throw new Error("forbidden");
 
-  await startStaffContract({ templateId, staffUserId });
+  await generateStaffContractFromNewTemplate({
+    companyId: membership.companyId,
+    staffUserId,
+    templateInput: input,
+  });
   revalidatePath("/company/settings");
   revalidatePath("/company");
 }

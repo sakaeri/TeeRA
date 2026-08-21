@@ -45,6 +45,19 @@ try {
       `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'STAFF');`,
   );
 
+  // seed a proxy-account staff member too — they must NOT appear in 契約書未確認
+  // (isProxy accounts have no real login, so they can never be party to a contract)
+  const proxyEmail = `proxy-staff-${Date.now()}@example.com`;
+  psql(
+    `insert into "User" (id, email, "passwordHash", name, "isProxy", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${proxyEmail}', 'x', '仮契約スタッフ', true, now());`,
+  );
+  const proxyUserId = psql(`select id from "User" where email='${proxyEmail}';`);
+  psql(
+    `insert into "CompanyMembership" (id, "companyId", "userId", role) ` +
+      `values (gen_random_uuid()::text, '${companyId}', '${proxyUserId}', 'STAFF');`,
+  );
+
   // seed an ACTIVE contract template for that company
   psql(
     `insert into "ContractTemplate" (id, "companyId", title, "employmentType", "workplaceType", "jobDescription", ` +
@@ -55,27 +68,49 @@ try {
 
   await page.goto("http://localhost:3000/company");
   let body = await page.textContent("body");
-  log("契約書未確認 KPI shows 1", /契約書未確認[\s\S]{0,20}1/.test(body));
+  log("契約書未確認 KPI shows 1 (proxy excluded)", /契約書未確認[\s\S]{0,20}1/.test(body));
 
   await page.getByText("契約書未確認").click();
   await page.waitForTimeout(400);
   body = await page.textContent("body");
   log("契約書未確認 popup shows the unstarted staff with 未送付 tag", body.includes("未契約スタッフ") && body.includes("未送付"));
+  log("proxy staff not shown in the popup", !body.includes("仮契約スタッフ"));
   log("no 再送信 button (not needed)", !body.includes("再送信"));
 
   await page.click("text=契約書を生成");
   await page.waitForTimeout(400);
   body = await page.textContent("body");
-  log("generate modal shows the template option", body.includes("アルバイト・事務"));
+  log("base-template picker shows the template option", body.includes("アルバイト・事務"));
 
   await page.selectOption("select", { label: "アルバイト・事務" });
+  await page.getByRole("button", { name: "次へ" }).click();
+  await page.waitForTimeout(400);
+  body = await page.textContent("body");
+  log("full edit form opens, pre-filled from the base template, addressed to the staff", body.includes("未契約スタッフ様"));
+
+  // edit the wage amount for this specific staff before generating
+  await page.fill('input[type=number]', "1500");
+
+  // preview toggle shows the real staff name in the 甲乙 sentence
+  await page.getByRole("button", { name: "プレビュー" }).click();
+  await page.waitForTimeout(300);
+  body = await page.textContent("body");
+  log("preview shows the real staff name instead of the placeholder", body.includes("未契約スタッフ（以下「乙」）"));
+
+  await page.getByRole("button", { name: "内容を編集する" }).click();
+  await page.waitForTimeout(300);
   await page.getByRole("button", { name: "生成する" }).click();
   await page.waitForTimeout(700);
 
-  const contractCount = psql(
-    `select count(*) from "StaffContract" where "staffUserId"='${staffUserId}' and status='ACTIVE';`,
+  const contract = psql(
+    `select sc."wageAmountSnapshot", ct.title from "StaffContract" sc join "ContractTemplate" ct on sc."templateId"=ct.id ` +
+      `where sc."staffUserId"='${staffUserId}' and sc.status='ACTIVE';`,
   );
-  log("StaffContract created as ACTIVE", contractCount === "1");
+  log("StaffContract created as ACTIVE with the edited wage (1500)", contract.startsWith("1500|"));
+  log("a new duplicate template was created (not the original)", contract.includes("未契約スタッフ様"));
+
+  const templateCount = psql(`select count(*) from "ContractTemplate" where "companyId"='${companyId}';`);
+  log("original template preserved alongside the new duplicate (2 total)", templateCount === "2");
 
   await page.goto("http://localhost:3000/company");
   body = await page.textContent("body");

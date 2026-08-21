@@ -141,6 +141,20 @@ export async function startStaffContract(params: { templateId: string; staffUser
   return contract;
 }
 
+// ダッシュボードの「契約書を生成」: an admin duplicates a template (pre-filled
+// into the same create/edit/preview form used for templates), edits any
+// field freely for this one staff member (wage, dates, etc.), and the result
+// is saved as its own new ContractTemplate rather than mutating the base one
+// — consistent with how editing a LOCKED template already always duplicates.
+export async function generateStaffContractFromNewTemplate(params: {
+  companyId: string;
+  staffUserId: string;
+  templateInput: Omit<TemplateInput, "companyId">;
+}) {
+  const template = await createTemplate({ ...params.templateInput, companyId: params.companyId });
+  return startStaffContract({ templateId: template.id, staffUserId: params.staffUserId });
+}
+
 export async function endStaffContract(staffContractId: string) {
   const contract = await prisma.staffContract.update({
     where: { id: staffContractId },

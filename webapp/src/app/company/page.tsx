@@ -9,6 +9,8 @@ import {
   listPendingContractStaff,
 } from "@/lib/domain/dashboard";
 import { listPromoItems, listRedemptionsForCompany } from "@/lib/domain/promo";
+import { listTemplates } from "@/lib/domain/contracts";
+import { listClients } from "@/lib/domain/relationships";
 import { prisma } from "@/lib/prisma";
 import { DashboardView } from "@/components/company/DashboardView";
 
@@ -27,7 +29,8 @@ export default async function CompanyDashboardPage() {
     unconfirmedShiftEntries,
     pendingReportEntries,
     pendingContractStaff,
-    contractTemplates,
+    templates,
+    company,
   ] = await Promise.all([
     getKpis(membership.companyId),
     listAutoTodoItems(membership.companyId),
@@ -44,12 +47,11 @@ export default async function CompanyDashboardPage() {
     listUnconfirmedShiftEntries(membership.companyId),
     listPendingReportEntries(membership.companyId),
     listPendingContractStaff(membership.companyId),
-    prisma.contractTemplate.findMany({
-      where: { companyId: membership.companyId, status: "ACTIVE" },
-      select: { id: true, title: true },
-      orderBy: { createdAt: "asc" },
-    }),
+    listTemplates(membership.companyId),
+    prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
   ]);
+
+  const clients = company.agencyEnabled ? await listClients(membership.companyId) : [];
 
   const currentUserName = admins.find((a) => a.userId === userId)?.user.name ?? "";
 
@@ -97,7 +99,43 @@ export default async function CompanyDashboardPage() {
         unconfirmedShiftEntries={unconfirmedShiftEntries}
         pendingReportEntries={pendingReportEntries}
         pendingContractStaff={pendingContractStaff}
-        contractTemplates={contractTemplates}
+        companyName={company.name}
+        contractClients={clients.map((c) => ({
+          id: c.id,
+          name: c.clientCompany?.name ?? c.proxyName ?? "(名称未設定)",
+        }))}
+        contractTemplates={templates
+          .filter((t) => t.status === "ACTIVE")
+          .map((t) => ({
+            id: t.id,
+            title: t.title,
+            employmentType: t.employmentType,
+            workplaceType: t.workplaceType,
+            workplaceNote: t.workplaceNote,
+            clientName: t.workplaceNote ?? t.companyRelationship?.clientCompany?.name ?? t.companyRelationship?.proxyName ?? null,
+            jobDescription: t.jobDescription,
+            scheduleType: t.scheduleType,
+            workStartTime: t.workStartTime,
+            workEndTime: t.workEndTime,
+            actualWorkMinutes: t.actualWorkMinutes,
+            breakMinutes: t.breakMinutes,
+            hasOvertime: t.hasOvertime,
+            overtimeNote: t.overtimeNote,
+            fixedWeekdays: t.fixedWeekdays,
+            shiftPatternNote: t.shiftPatternNote,
+            restNote: t.restNote,
+            wageType: t.wageType,
+            wageAmount: t.wageAmount,
+            paymentClosingDay: t.paymentClosingDay,
+            paymentDay: t.paymentDay,
+            paymentMethod: t.paymentMethod,
+            contractPeriodType: t.contractPeriodType,
+            contractStartDate: t.contractStartDate.toISOString().slice(0, 10),
+            contractEndDate: t.contractEndDate ? t.contractEndDate.toISOString().slice(0, 10) : null,
+            extraItems: (t.extraItems as { label: string; value: string }[] | null) ?? [],
+            status: t.status,
+            contractedStaffNames: t.staffContracts.filter((sc) => sc.status !== "ENDED").map((sc) => sc.staff.name),
+          }))}
       />
     </main>
   );
