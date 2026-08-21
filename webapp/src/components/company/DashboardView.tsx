@@ -225,11 +225,10 @@ function TodoModal({
           担当者に対応してほしい内容を登録します。期日と宛先を指定してください。
         </p>
 
-        <h4 className="mb-2 text-xs font-semibold text-muted">内容</h4>
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-xs">
             <span>
-              タイトル<span className="text-red-600"> *</span>
+              内容<span className="text-red-600"> *</span>
             </span>
             <input
               type="text"
