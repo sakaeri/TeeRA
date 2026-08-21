@@ -526,14 +526,19 @@ function TodoSection({
           <div className="grid grid-cols-3 gap-4">
             {promoItems.map((p) => (
               <div key={p.id} className="flex flex-col gap-2">
-                {p.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.imageUrl} alt="" className="aspect-square w-full rounded-xl object-cover" />
-                ) : (
-                  <div className="flex aspect-square w-full items-center justify-center rounded-xl border-2 border-dashed border-border text-xs text-muted">
-                    画像なし
-                  </div>
-                )}
+                <div className="relative">
+                  {p.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.imageUrl} alt="" className="aspect-square w-full rounded-xl object-cover" />
+                  ) : (
+                    <div className="flex aspect-square w-full items-center justify-center rounded-xl border-2 border-dashed border-border text-xs text-muted">
+                      画像なし
+                    </div>
+                  )}
+                  <span className="absolute right-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-xs font-semibold text-primary shadow">
+                    残{p.stock}個
+                  </span>
+                </div>
                 <p className="text-sm font-medium">{p.name}</p>
                 <button
                   type="button"
