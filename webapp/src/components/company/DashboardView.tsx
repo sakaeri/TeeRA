@@ -221,7 +221,7 @@ export function DashboardView({
               onClick={() => (card.popup ? setOpenPopup(card.popup) : setTab(card.tab as DashboardTab))}
               className="rounded-2xl border border-border bg-white/60 p-5 text-left hover:border-primary"
             >
-              <p className="text-xs text-muted">{card.label}</p>
+              <p className="text-sm text-muted">{card.label}</p>
               <p className="font-serif-jp text-2xl font-bold text-primary">
                 {kpis[card.key]}
                 <span className="ml-1 text-xs text-accent">件 ▾</span>
@@ -233,7 +233,7 @@ export function DashboardView({
               href={card.href!}
               className="rounded-2xl border border-border bg-white/60 p-5 hover:border-primary"
             >
-              <p className="text-xs text-muted">{card.label}</p>
+              <p className="text-sm text-muted">{card.label}</p>
               <p className="font-serif-jp text-2xl font-bold text-primary">
                 {kpis[card.key]}
                 <span className="ml-1 text-xs text-accent">件 ▾</span>
