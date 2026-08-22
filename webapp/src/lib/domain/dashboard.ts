@@ -3,48 +3,62 @@ import { prisma } from "@/lib/prisma";
 import { listPendingReportsForCompany } from "@/lib/domain/workReports";
 import { listStaffWithSummary } from "@/lib/domain/roster";
 
-// KPI counts are computed live from current state rather than materialized
-// via a background job — the "未確定シフト" list, recruitment fill counts,
-// and pending queues are already the source of truth elsewhere in the app,
-// so re-deriving them here keeps the dashboard always consistent with them.
-export async function getKpis(companyId: string) {
-  const [shortageRecruitments, unconfirmedShiftCount, pendingReports, pendingContractStaff, promoItemCount, pendingShipmentCount] =
-    await Promise.all([
-      prisma.publicRecruitment.findMany({
-        where: { companyId, status: "PUBLISHED" },
-        include: { entries: true },
-      }),
-      prisma.shiftRequest.count({ where: { companyId, status: "PENDING" } }),
-      listPendingReportsForCompany(companyId),
-      listPendingContractStaff(companyId),
-      prisma.promoItem.count({ where: { companyId } }),
-      prisma.promoRedemption.count({
-        where: { status: "PENDING_SHIPMENT", promoItem: { companyId } },
-      }),
-    ]);
+// 仮アカウント（isProxy）は本人ログインができず自己サービスの同意フローに
+// 乗れない一時的なプレースホルダーなので、本アカウント連携されるまで
+// 契約書未確認からは除外する。
+export async function listPendingContractStaff(companyId: string) {
+  const staff = await listStaffWithSummary(companyId);
+  return staff
+    .filter((s) => s.contractStatus === "未送付" && !s.isProxy)
+    .map((s) => ({ userId: s.userId, name: s.name }));
+}
 
-  const shortageCount = shortageRecruitments.filter(
+// The dashboard needs the same underlying queues (shortage recruitments,
+// shift requests, pending reports, pending contracts) for several different
+// views (KPI counts, the auto-generated to-do rows, and each KPI card's own
+// popup list). Fetching them once here and deriving every view from the
+// same in-memory result — instead of each view independently re-querying —
+// is what keeps the dashboard's page load to a handful of round trips
+// instead of the same handful of queries repeated 3-4x over.
+export async function loadDashboardData(companyId: string) {
+  const [shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff] = await Promise.all([
+    prisma.publicRecruitment.findMany({
+      where: { companyId, status: "PUBLISHED" },
+      include: { entries: true },
+      orderBy: { date: "asc" },
+    }),
+    prisma.shiftRequest.findMany({ where: { companyId, status: "PENDING" }, include: { staff: true }, orderBy: { createdAt: "asc" } }),
+    listPendingReportsForCompany(companyId),
+    listPendingContractStaff(companyId),
+  ]);
+
+  return { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff };
+}
+
+export type DashboardData = Awaited<ReturnType<typeof loadDashboardData>>;
+type PendingShipment = { id: string; promoItem: { name: string }; staff: { name: string } };
+
+export function computeKpis(
+  data: DashboardData,
+  promoItemCount: number,
+  pendingShipmentCount: number,
+) {
+  const shortageCount = data.shortageRecruitments.filter(
     (r) => r.entries.filter((e) => e.status !== "REJECTED").length < r.maxEntries,
   ).length;
 
   return {
     shortageCount,
-    unconfirmedShiftCount,
-    pendingReportCount: pendingReports.length,
-    pendingContractCount: pendingContractStaff.length,
+    unconfirmedShiftCount: data.shiftRequests.length,
+    pendingReportCount: data.pendingReports.length,
+    pendingContractCount: data.pendingContractStaff.length,
     promoItemCount,
     pendingShipmentCount,
   };
 }
 
-export async function listShortageEntries(companyId: string) {
-  const recruitments = await prisma.publicRecruitment.findMany({
-    where: { companyId, status: "PUBLISHED" },
-    include: { entries: true },
-    orderBy: { date: "asc" },
-  });
-
-  return recruitments
+export function computeShortageEntries(data: DashboardData) {
+  return data.shortageRecruitments
     .map((r) => ({
       id: r.id,
       title: r.title,
@@ -57,14 +71,8 @@ export async function listShortageEntries(companyId: string) {
     .filter((r) => r.filled < r.maxEntries);
 }
 
-export async function listUnconfirmedShiftEntries(companyId: string) {
-  const requests = await prisma.shiftRequest.findMany({
-    where: { companyId, status: "PENDING" },
-    include: { staff: true },
-    orderBy: { createdAt: "asc" },
-  });
-
-  return requests.map((r) => ({
+export function computeUnconfirmedShiftEntries(data: DashboardData) {
+  return data.shiftRequests.map((r) => ({
     id: r.id,
     staffName: r.staff.name,
     desire: r.desire,
@@ -88,10 +96,8 @@ function formatJstTime(date: Date) {
   }).format(date);
 }
 
-export async function listPendingReportEntries(companyId: string) {
-  const reports = await listPendingReportsForCompany(companyId);
-
-  return reports.map((r) => ({
+export function computePendingReportEntries(data: DashboardData) {
+  return data.pendingReports.map((r) => ({
     id: r.id,
     staffName: r.staff.name,
     teamName: r.shift.team?.name ?? null,
@@ -107,16 +113,6 @@ export async function listPendingReportEntries(companyId: string) {
   }));
 }
 
-// 仮アカウント（isProxy）は本人ログインができず自己サービスの同意フローに
-// 乗れない一時的なプレースホルダーなので、本アカウント連携されるまで
-// 契約書未確認からは除外する。
-export async function listPendingContractStaff(companyId: string) {
-  const staff = await listStaffWithSummary(companyId);
-  return staff
-    .filter((s) => s.contractStatus === "未送付" && !s.isProxy)
-    .map((s) => ({ userId: s.userId, name: s.name }));
-}
-
 export type AutoTodoItem = {
   id: string;
   kind: "業務報告" | "欠員" | "シフト" | "契約書" | "販促品";
@@ -128,25 +124,12 @@ export type AutoTodoItem = {
 // Auto-generated to-do rows are derived live from the same queues shown
 // elsewhere (work-report approvals, shift requests, recruitment shortfall,
 // pending shipments) rather than materialized by a background job — see
-// getKpis for why. Contract items are staff with no live StaffContract yet
-// (see listPendingContractStaff) — the 契約を結ぶ flow is self-service and
-// immediate (see startStaffContract), so there is no separate 確認待ち state.
-export async function listAutoTodoItems(companyId: string): Promise<AutoTodoItem[]> {
-  const [shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, pendingShipments] =
-    await Promise.all([
-      prisma.publicRecruitment.findMany({
-        where: { companyId, status: "PUBLISHED" },
-        include: { entries: true },
-      }),
-      prisma.shiftRequest.findMany({ where: { companyId, status: "PENDING" }, include: { staff: true } }),
-      listPendingReportsForCompany(companyId),
-      listPendingContractStaff(companyId),
-      prisma.promoRedemption.findMany({
-        where: { status: "PENDING_SHIPMENT", promoItem: { companyId } },
-        include: { promoItem: true, staff: true },
-      }),
-    ]);
-
+// loadDashboardData for why they're fetched once and shared. Contract items
+// are staff with no live StaffContract yet (see listPendingContractStaff) —
+// the 契約を結ぶ flow is self-service and immediate (see startStaffContract),
+// so there is no separate 確認待ち state.
+export function computeAutoTodoItems(data: DashboardData, pendingShipments: PendingShipment[]): AutoTodoItem[] {
+  const { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff } = data;
   const items: AutoTodoItem[] = [];
 
   for (const r of shortageRecruitments) {

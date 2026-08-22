@@ -85,21 +85,27 @@ export async function submitWorkReport(params: {
   });
 }
 
+// Mirrors resolveApproverCompanyId's branching as a WHERE clause instead of
+// fetching every company's PENDING reports and resolving the approver one
+// shift-lookup at a time in JS (an unbounded cross-company scan plus an N+1
+// — this used to be the single most expensive part of a dashboard load,
+// worse the more it's called, and it's called from several dashboard views).
 export async function listPendingReportsForCompany(companyId: string) {
-  const reports = await prisma.workReport.findMany({
-    where: { approvalStatus: "PENDING" },
+  return prisma.workReport.findMany({
+    where: {
+      approvalStatus: "PENDING",
+      shift: {
+        OR: [
+          { source: "INHOUSE", companyId },
+          { source: "CLIENT", companyRelationshipId: null, companyId },
+          { source: "CLIENT", companyRelationship: { clientCompanyId: companyId } },
+          { source: "CLIENT", companyRelationship: { clientCompanyId: null, ownerCompanyId: companyId } },
+        ],
+      },
+    },
     include: { shift: { include: { companyRelationship: true, team: true } }, staff: true },
     orderBy: { createdAt: "asc" },
   });
-
-  const withApprover = await Promise.all(
-    reports.map(async (r) => ({
-      report: r,
-      approverCompanyId: await resolveApproverCompanyId(r.shiftId),
-    })),
-  );
-
-  return withApprover.filter((r) => r.approverCompanyId === companyId).map((r) => r.report);
 }
 
 export async function listOwnShiftsNeedingReport(staffUserId: string) {

@@ -1,12 +1,12 @@
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import {
-  getKpis,
+  loadDashboardData,
+  computeKpis,
+  computeAutoTodoItems,
+  computeShortageEntries,
+  computeUnconfirmedShiftEntries,
+  computePendingReportEntries,
   listManualTodos,
-  listAutoTodoItems,
-  listShortageEntries,
-  listUnconfirmedShiftEntries,
-  listPendingReportEntries,
-  listPendingContractStaff,
 } from "@/lib/domain/dashboard";
 import { listPromoItems, listRedemptionsForCompany } from "@/lib/domain/promo";
 import { listTemplates } from "@/lib/domain/contracts";
@@ -21,22 +21,16 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
   const reportId = typeof sp.reportId === "string" ? sp.reportId : undefined;
 
   const [
-    kpis,
-    autoTodos,
+    dashboardData,
     openTodos,
     resolvedTodos,
     admins,
     promoItems,
     redemptions,
-    shortageEntries,
-    unconfirmedShiftEntries,
-    pendingReportEntries,
-    pendingContractStaff,
     templates,
     company,
   ] = await Promise.all([
-    getKpis(membership.companyId),
-    listAutoTodoItems(membership.companyId),
+    loadDashboardData(membership.companyId),
     listManualTodos(membership.companyId, "OPEN"),
     listManualTodos(membership.companyId, "RESOLVED"),
     prisma.companyMembership.findMany({
@@ -46,15 +40,21 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
     }),
     listPromoItems(membership.companyId),
     listRedemptionsForCompany(membership.companyId),
-    listShortageEntries(membership.companyId),
-    listUnconfirmedShiftEntries(membership.companyId),
-    listPendingReportEntries(membership.companyId),
-    listPendingContractStaff(membership.companyId),
     listTemplates(membership.companyId),
     prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
   ]);
 
   const clients = company.agencyEnabled ? await listClients(membership.companyId) : [];
+
+  // derived from the redemptions/promoItems already fetched above instead of
+  // running their own separate COUNT/findMany queries for the same rows
+  const pendingShipments = redemptions.filter((r) => r.status === "PENDING_SHIPMENT");
+  const kpis = computeKpis(dashboardData, promoItems.length, pendingShipments.length);
+  const autoTodos = computeAutoTodoItems(dashboardData, pendingShipments);
+  const shortageEntries = computeShortageEntries(dashboardData);
+  const unconfirmedShiftEntries = computeUnconfirmedShiftEntries(dashboardData);
+  const pendingReportEntries = computePendingReportEntries(dashboardData);
+  const pendingContractStaff = dashboardData.pendingContractStaff;
 
   const currentUserName = admins.find((a) => a.userId === userId)?.user.name ?? "";
   const initialTab = open === "promoOrders" ? ("promoOrders" as const) : undefined;
