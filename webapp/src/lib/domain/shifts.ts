@@ -128,7 +128,7 @@ export async function listShiftsForMonth(params: {
       companyId: params.companyId,
       teamId: params.teamId,
       date: { gte: start, lt: end },
-      status: { not: "SUPERSEDED" },
+      status: { notIn: ["SUPERSEDED", "CANCELLED"] },
     },
     include: {
       staff: true,
@@ -151,7 +151,7 @@ export async function listStaffShiftsForMonth(params: {
     where: {
       staffUserId: params.staffUserId,
       date: { gte: start, lt: end },
-      status: { not: "SUPERSEDED" },
+      status: { notIn: ["SUPERSEDED", "CANCELLED"] },
     },
     include: { company: true },
     orderBy: [{ date: "asc" }, { startTime: "asc" }],

@@ -144,7 +144,7 @@ export async function getClientMonthDetail(params: {
         companyId: params.companyId,
         companyRelationshipId: params.companyRelationshipId,
         date: { gte: start, lt: end },
-        status: { not: "SUPERSEDED" },
+        status: { notIn: ["SUPERSEDED", "CANCELLED"] },
       },
       include: { workReport: true, staff: true },
       orderBy: { date: "asc" },

@@ -12,6 +12,7 @@ import {
   stopRecruitmentAction,
   deleteRecruitmentAction,
   assignStaffToRecruitmentAction,
+  cancelRecruitmentAssignmentAction,
 } from "@/app/company/calendar/actions";
 
 type ShiftRow = {
@@ -26,6 +27,7 @@ type ShiftRow = {
   clientName?: string;
   companyRelationshipId?: string | null;
   note?: string | null;
+  createdVia?: string;
   approvalStatus: string | null;
 };
 
@@ -573,6 +575,7 @@ function DayDetailModal({
                   ) : (
                     <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
                   )}
+                  {s.createdVia === "PUBLIC_RECRUIT_ENTRY" ? <UnassignButton shiftId={s.id} /> : null}
                 </li>
               ))}
             </ul>
@@ -616,6 +619,7 @@ function DayDetailModal({
                     ) : (
                       <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
                     )}
+                    {s.createdVia === "PUBLIC_RECRUIT_ENTRY" ? <UnassignButton shiftId={s.id} /> : null}
                   </li>
                 ))}
               </ul>
@@ -819,6 +823,46 @@ function RecruitmentAssignControls({
 
       {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
     </div>
+  );
+}
+
+function UnassignButton({ shiftId }: { shiftId: string }) {
+  const [confirming, setConfirming] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function cancel() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await cancelRecruitmentAssignmentAction(shiftId);
+      } catch {
+        setError("解除に失敗しました。");
+      }
+    });
+  }
+
+  if (confirming) {
+    return (
+      <span className="flex items-center gap-1 text-xs">
+        <span className="text-muted">外しますか？</span>
+        <button type="button" disabled={pending} onClick={cancel} className="font-semibold text-red-600 disabled:opacity-50">
+          確定
+        </button>
+        <button type="button" onClick={() => setConfirming(false)} className="text-muted">
+          やめる
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex flex-col items-end gap-0.5">
+      <button type="button" onClick={() => setConfirming(true)} className="text-xs text-muted underline hover:text-red-600">
+        アサインを外す
+      </button>
+      {error ? <span className="text-xs text-red-600">{error}</span> : null}
+    </span>
   );
 }
 

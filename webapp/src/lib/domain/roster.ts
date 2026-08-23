@@ -186,7 +186,7 @@ export async function getStaffMonthDetail(params: {
       companyId: params.companyId,
       staffUserId: params.userId,
       date: { gte: start, lt: end },
-      status: { not: "SUPERSEDED" },
+      status: { notIn: ["SUPERSEDED", "CANCELLED"] },
     },
     include: { workReport: true },
     orderBy: { date: "asc" },

@@ -50,6 +50,7 @@ async function regenerateLines(invoiceId: string) {
       companyRelationshipId: invoice.companyRelationshipId,
       source: "CLIENT",
       date: { gte: start, lt: end },
+      status: { notIn: ["SUPERSEDED", "CANCELLED"] },
     },
     include: { staff: true, workReport: true },
   });

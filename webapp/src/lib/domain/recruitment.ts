@@ -361,3 +361,37 @@ export async function applyToRecruitment(params: { recruitmentId: string; staffU
     return { entry, shift };
   });
 }
+
+// アサインを外す — undoes a recruitment fill (either self-applied or
+// admin-assigned): cancels the resulting shift and rejects the entry so the
+// slot opens back up (filled count drops, no Tee refund — the maxEntries
+// commitment is unchanged, only stopOrDeleteRecruitment/updateMaxEntries
+// touch locked Tee). Scoped to the company that owns the shift, i.e.
+// whichever company created it — matches the company-owns-its-own-calendar
+// permission model used everywhere else here.
+export async function cancelRecruitmentAssignment(params: { shiftId: string; actorCompanyId: string }) {
+  return prisma.$transaction(async (tx) => {
+    const shift = await tx.shift.findUniqueOrThrow({ where: { id: params.shiftId } });
+
+    if (shift.companyId !== params.actorCompanyId) {
+      throw new Error("forbidden");
+    }
+    if (shift.createdVia !== "PUBLIC_RECRUIT_ENTRY" || !shift.publicRecruitmentId) {
+      throw new Error("not_a_recruitment_assignment");
+    }
+    if (shift.status !== "CONFIRMED") {
+      throw new Error("shift_not_active");
+    }
+
+    await tx.shift.update({ where: { id: shift.id }, data: { status: "CANCELLED" } });
+
+    const entry = await tx.recruitmentEntry.findFirst({
+      where: { resultingShiftId: shift.id },
+    });
+    if (entry) {
+      await tx.recruitmentEntry.update({ where: { id: entry.id }, data: { status: "REJECTED" } });
+    }
+
+    return shift;
+  });
+}
