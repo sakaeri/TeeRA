@@ -238,7 +238,7 @@ export function CalendarView({
               key={i}
               type="button"
               onClick={() => setSelectedDate(c.dateStr)}
-              className={`relative min-h-28 rounded-xl p-2 align-top ${
+              className={`relative flex min-h-28 flex-col items-stretch justify-start rounded-xl p-2 text-left ${
                 isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "hover:bg-background"
               }`}
             >
