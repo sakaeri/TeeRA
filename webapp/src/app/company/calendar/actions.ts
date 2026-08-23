@@ -13,6 +13,7 @@ import {
   updateMaxEntries,
   stopOrDeleteRecruitment,
   affordableMaxEntries,
+  assignStaffToRecruitment,
 } from "@/lib/domain/recruitment";
 
 export async function createAssignedShiftAction(input: {
@@ -147,4 +148,17 @@ export async function deleteRecruitmentAction(recruitmentId: string) {
 
   await stopOrDeleteRecruitment({ recruitmentId, updatedByUserId: userId, delete: true });
   revalidatePath("/company/calendar");
+}
+
+export async function assignStaffToRecruitmentAction(input: { recruitmentId: string; staffUserId: string }) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManage(membership)) throw new Error("forbidden");
+
+  const result = await assignStaffToRecruitment({
+    recruitmentId: input.recruitmentId,
+    staffUserId: input.staffUserId,
+    assignerCompanyId: membership.companyId,
+  });
+  revalidatePath("/company/calendar");
+  return result;
 }

@@ -3,8 +3,8 @@ import { listOpenRecruitmentsForStaff } from "@/lib/domain/recruitment";
 import { RecruitmentListView } from "@/components/staff/RecruitmentListView";
 
 export default async function StaffRecruitmentsPage() {
-  const { userId } = await requireCompanyStaffRole();
-  const recruitments = await listOpenRecruitmentsForStaff();
+  const { userId, membership } = await requireCompanyStaffRole();
+  const recruitments = await listOpenRecruitmentsForStaff(membership.companyId);
 
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-10">

@@ -11,6 +11,7 @@ import {
   updateMaxEntriesAction,
   stopRecruitmentAction,
   deleteRecruitmentAction,
+  assignStaffToRecruitmentAction,
 } from "@/app/company/calendar/actions";
 
 type ShiftRow = {
@@ -61,6 +62,17 @@ type RecruitmentRow = {
   status: string;
 };
 
+type ClientRecruitmentRow = {
+  id: string;
+  clientCompanyName: string;
+  title: string;
+  date: string;
+  startTime: string | null;
+  endTime: string | null;
+  maxEntries: number;
+  filled: number;
+};
+
 type TagEntry =
   | { kind: "solid"; id: string; label: string; className: string }
   | { kind: "split"; id: string; left: { label: string; className: string }; right: { label: string; className: string } };
@@ -82,6 +94,7 @@ export function CalendarView({
   teams,
   shiftRequests,
   recruitments,
+  clientRecruitments,
   teeBalance,
   affordableMaxEntries,
   clients,
@@ -95,6 +108,7 @@ export function CalendarView({
   teams: Team[];
   shiftRequests: ShiftRequestRow[];
   recruitments: RecruitmentRow[];
+  clientRecruitments: ClientRecruitmentRow[];
   teeBalance: number;
   affordableMaxEntries: number;
   clients: { id: string; name: string }[];
@@ -342,6 +356,8 @@ export function CalendarView({
           dateStr={selectedDate}
           shifts={selectedShifts}
           recruitments={recruitments.filter((r) => r.date === selectedDate)}
+          clientOrders={clientRecruitments.filter((r) => r.date === selectedDate)}
+          staffOptions={staffOptions}
           onNavigate={setSelectedDate}
           onClose={() => setSelectedDate(null)}
           onAssign={(companyRelationshipId) => {
@@ -438,6 +454,8 @@ function DayDetailModal({
   dateStr,
   shifts,
   recruitments,
+  clientOrders,
+  staffOptions,
   onNavigate,
   onClose,
   onAssign,
@@ -445,6 +463,8 @@ function DayDetailModal({
   dateStr: string;
   shifts: ShiftRow[];
   recruitments: RecruitmentRow[];
+  clientOrders: ClientRecruitmentRow[];
+  staffOptions: StaffOption[];
   onNavigate: (dateStr: string) => void;
   onClose: () => void;
   onAssign: (companyRelationshipId?: string) => void;
@@ -506,7 +526,7 @@ function DayDetailModal({
           >
             スタッフシフト
           </button>
-          {clientShifts.length > 0 ? (
+          {clientShifts.length > 0 || clientOrders.length > 0 ? (
             <button
               type="button"
               onClick={() => {
@@ -565,7 +585,7 @@ function DayDetailModal({
             )}
           </div>
         ) : tab === "client" ? (
-          clientGroups.length === 0 ? (
+          clientGroups.length === 0 && clientOrders.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted">この日の依頼主オーダーはありません。</p>
           ) : selectedClientGroup ? (
             <div>
@@ -605,23 +625,40 @@ function DayDetailModal({
               </ul>
             </div>
           ) : (
-            <ul className="flex flex-col gap-1 text-sm">
-              {clientGroups.map((g) => (
-                <li key={g.key}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedClientKey(g.key)}
-                    className="flex w-full items-center justify-between border-b border-border/50 py-2.5 text-left hover:bg-background"
-                  >
-                    <span className="font-semibold">{g.clientName}</span>
-                    <span className="flex items-center gap-2 text-muted">
-                      {g.rows.length}名
-                      <span aria-hidden>›</span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <div>
+              {clientOrders.length > 0 ? (
+                <div className="mb-4">
+                  <p className="mb-2 text-xs font-semibold text-muted">オーダー（依頼主からの募集）</p>
+                  <ul className="flex flex-col gap-2 text-sm">
+                    {clientOrders.map((o) => (
+                      <ClientOrderRow key={o.id} order={o} staffOptions={staffOptions} />
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {clientGroups.length > 0 ? (
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-muted">アサイン済みスタッフ</p>
+                  <ul className="flex flex-col gap-1 text-sm">
+                    {clientGroups.map((g) => (
+                      <li key={g.key}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedClientKey(g.key)}
+                          className="flex w-full items-center justify-between border-b border-border/50 py-2.5 text-left hover:bg-background"
+                        >
+                          <span className="font-semibold">{g.clientName}</span>
+                          <span className="flex items-center gap-2 text-muted">
+                            {g.rows.length}名
+                            <span aria-hidden>›</span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
           )
         ) : (
           <ul className="flex flex-col gap-1 text-sm">
@@ -640,6 +677,68 @@ function DayDetailModal({
         )}
       </div>
     </div>
+  );
+}
+
+function ClientOrderRow({ order, staffOptions }: { order: ClientRecruitmentRow; staffOptions: StaffOption[] }) {
+  const [staffUserId, setStaffUserId] = useState(staffOptions[0]?.id ?? "");
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const remaining = Math.max(order.maxEntries - order.filled, 0);
+
+  function assign() {
+    if (!staffUserId) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await assignStaffToRecruitmentAction({ recruitmentId: order.id, staffUserId });
+      } catch {
+        setError("アサインに失敗しました。");
+      }
+    });
+  }
+
+  return (
+    <li className="rounded-lg border border-border p-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="font-semibold">{order.clientCompanyName}</p>
+          <p className="text-xs text-muted">
+            {order.title} ・ {order.startTime ?? "終日"}
+            {order.startTime ? `〜${order.endTime}` : ""}
+          </p>
+        </div>
+        <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+          {order.filled}/{order.maxEntries}名
+        </span>
+      </div>
+      {remaining > 0 ? (
+        <div className="mt-2 flex items-center gap-2">
+          <select
+            value={staffUserId}
+            onChange={(e) => setStaffUserId(e.target.value)}
+            className="flex-1 rounded-lg border border-border px-2 py-1.5 text-xs"
+          >
+            {staffOptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={pending || !staffUserId}
+            onClick={assign}
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+          >
+            アサイン
+          </button>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-muted">募集人数に達しています。</p>
+      )}
+      {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
+    </li>
   );
 }
 

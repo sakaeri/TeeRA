@@ -160,11 +160,118 @@ export async function listPublicRecruitments(params: { companyId: string; teamId
   });
 }
 
-export async function listOpenRecruitmentsForStaff() {
+// 依頼主名簿 (companies where companyId is the agencyCompanyId) — the set of
+// companies whose orders/recruitment postings this company is entitled to
+// see and assign its own staff into. The reverse direction (派遣会社名簿,
+// clientCompanyId = companyId) intentionally has no visibility into this
+// company's own postings.
+async function visibleClientCompanyIds(companyId: string) {
+  const rels = await prisma.companyRelationship.findMany({
+    where: { agencyCompanyId: companyId, clientCompanyId: { not: null }, status: "ACTIVE" },
+    select: { clientCompanyId: true },
+  });
+  return rels.map((r) => r.clientCompanyId).filter((id): id is string => id !== null);
+}
+
+// 依頼主オーダー: PUBLISHED recruitment postings from companies in this
+// company's 依頼主名簿 (i.e. companies this company dispatches staff to).
+export async function listClientRecruitments(companyId: string) {
+  const clientCompanyIds = await visibleClientCompanyIds(companyId);
+  if (clientCompanyIds.length === 0) return [];
+
   return prisma.publicRecruitment.findMany({
-    where: { status: "PUBLISHED" },
+    where: { companyId: { in: clientCompanyIds }, status: "PUBLISHED" },
     include: { entries: true, company: true },
     orderBy: { date: "asc" },
+  });
+}
+
+// A staff member sees their own company's postings plus postings from
+// companies in their employer's 依頼主名簿 (the client companies their
+// employer dispatches them to) — not the entire platform.
+export async function listOpenRecruitmentsForStaff(companyId: string) {
+  const clientCompanyIds = await visibleClientCompanyIds(companyId);
+  return prisma.publicRecruitment.findMany({
+    where: { status: "PUBLISHED", companyId: { in: [companyId, ...clientCompanyIds] } },
+    include: { entries: true, company: true },
+    orderBy: { date: "asc" },
+  });
+}
+
+// Admin-initiated assignment (as opposed to applyToRecruitment's staff
+// self-service) — lets a company assign one of its own staff into a
+// PUBLISHED recruitment, either its own or one posted by a company in its
+// 依頼主名簿. Cross-company assignment produces a CLIENT-source shift on the
+// assigning company's own calendar (billable, same as a manually assigned
+// client shift); same-company assignment produces an INHOUSE shift exactly
+// like a self-applied entry would.
+export async function assignStaffToRecruitment(params: {
+  recruitmentId: string;
+  staffUserId: string;
+  assignerCompanyId: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const recruitment = await tx.publicRecruitment.findUniqueOrThrow({ where: { id: params.recruitmentId } });
+    if (recruitment.status !== "PUBLISHED") {
+      throw new Error("recruitment_not_open");
+    }
+
+    const filledCount = await tx.recruitmentEntry.count({
+      where: { publicRecruitmentId: recruitment.id, status: { not: "REJECTED" } },
+    });
+    if (filledCount >= recruitment.maxEntries) {
+      throw new Error("recruitment_full");
+    }
+
+    const staffMembership = await tx.companyMembership.findUnique({
+      where: { userId_companyId: { userId: params.staffUserId, companyId: params.assignerCompanyId } },
+    });
+    if (!staffMembership) {
+      throw new Error("staff_not_in_company");
+    }
+
+    let companyRelationshipId: string | undefined;
+    const isOwnCompany = params.assignerCompanyId === recruitment.companyId;
+    if (!isOwnCompany) {
+      const rel = await tx.companyRelationship.findFirst({
+        where: { agencyCompanyId: params.assignerCompanyId, clientCompanyId: recruitment.companyId, status: "ACTIVE" },
+      });
+      if (!rel) throw new Error("forbidden");
+      companyRelationshipId = rel.id;
+    }
+
+    const entry = await tx.recruitmentEntry.create({
+      data: {
+        publicRecruitmentId: recruitment.id,
+        staffUserId: params.staffUserId,
+        status: "CONFIRMED",
+        confirmedAt: new Date(),
+      },
+    });
+
+    const shift = await tx.shift.create({
+      data: {
+        companyId: params.assignerCompanyId,
+        teamId: isOwnCompany ? recruitment.teamId : null,
+        staffUserId: params.staffUserId,
+        source: isOwnCompany ? "INHOUSE" : "CLIENT",
+        companyRelationshipId,
+        date: recruitment.date,
+        startTime: recruitment.startTime,
+        endTime: recruitment.endTime,
+        isAllDay: !recruitment.startTime,
+        isUndecided: false,
+        createdVia: "PUBLIC_RECRUIT_ENTRY",
+        publicRecruitmentId: recruitment.id,
+      },
+    });
+
+    await tx.recruitmentEntry.update({
+      where: { id: entry.id },
+      data: { resultingShiftId: shift.id },
+    });
+
+    return { entry, shift };
   });
 }
 

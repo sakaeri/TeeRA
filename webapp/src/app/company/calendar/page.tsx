@@ -1,6 +1,6 @@
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { listShiftsForMonth, listShiftRequests } from "@/lib/domain/shifts";
-import { listPublicRecruitments, affordableMaxEntries } from "@/lib/domain/recruitment";
+import { listPublicRecruitments, listClientRecruitments, affordableMaxEntries } from "@/lib/domain/recruitment";
 import { listStaff } from "@/lib/domain/roster";
 import { listTeams } from "@/lib/domain/teams";
 import { listClients } from "@/lib/domain/relationships";
@@ -20,12 +20,13 @@ export default async function CompanyCalendarPage({
   const month = Number(sp.m) || dateMonth || now.getUTCMonth() + 1;
   const teamId = typeof sp.team === "string" && sp.team ? sp.team : undefined;
 
-  const [shifts, staff, teams, shiftRequests, recruitments, company] = await Promise.all([
+  const [shifts, staff, teams, shiftRequests, recruitments, clientRecruitments, company] = await Promise.all([
     listShiftsForMonth({ companyId: membership.companyId, year, month, teamId }),
     listStaff(membership.companyId),
     listTeams(membership.companyId),
     listShiftRequests({ companyId: membership.companyId, status: "PENDING" }),
     listPublicRecruitments({ companyId: membership.companyId }),
+    listClientRecruitments(membership.companyId),
     prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
   ]);
 
@@ -70,6 +71,16 @@ export default async function CompanyCalendarPage({
           filled: r.entries.filter((e) => e.status !== "REJECTED").length,
           lockedTee: r.lockedTee,
           status: r.status,
+        }))}
+        clientRecruitments={clientRecruitments.map((r) => ({
+          id: r.id,
+          clientCompanyName: r.company.name,
+          title: r.title,
+          date: r.date.toISOString().slice(0, 10),
+          startTime: r.startTime,
+          endTime: r.endTime,
+          maxEntries: r.maxEntries,
+          filled: r.entries.filter((e) => e.status !== "REJECTED").length,
         }))}
         teeBalance={company.teeBalance}
         affordableMaxEntries={affordable}
