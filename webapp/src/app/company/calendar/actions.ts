@@ -150,15 +150,23 @@ export async function deleteRecruitmentAction(recruitmentId: string) {
   revalidatePath("/company/calendar");
 }
 
-export async function assignStaffToRecruitmentAction(input: { recruitmentId: string; staffUserId: string }) {
-  const { membership } = await requireCompanyAdminOrEditor();
+export async function assignStaffToRecruitmentAction(input: {
+  recruitmentId: string;
+  staffUserId: string;
+  overrideShiftId?: string;
+}) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
 
   const result = await assignStaffToRecruitment({
     recruitmentId: input.recruitmentId,
     staffUserId: input.staffUserId,
     assignerCompanyId: membership.companyId,
+    assignedByUserId: userId,
+    overrideShiftId: input.overrideShiftId,
   });
-  revalidatePath("/company/calendar");
+  if (result.status === "created") {
+    revalidatePath("/company/calendar");
+  }
   return result;
 }

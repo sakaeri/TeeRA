@@ -25,6 +25,7 @@ type ShiftRow = {
   source: string;
   clientName?: string;
   companyRelationshipId?: string | null;
+  note?: string | null;
   approvalStatus: string | null;
 };
 
@@ -557,7 +558,10 @@ function DayDetailModal({
             <ul className="flex flex-col gap-1 text-sm">
               {inhouseShifts.map((s) => (
                 <li key={s.id} className="flex items-center justify-between border-b border-border/50 py-2.5">
-                  <span className="font-semibold">{s.staffName}</span>
+                  <span>
+                    <span className="font-semibold">{s.staffName}</span>
+                    {s.note ? <span className="ml-1.5 text-xs text-muted">（{s.note}）</span> : null}
+                  </span>
                   <span className="text-muted">
                     {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
                   </span>
@@ -598,7 +602,10 @@ function DayDetailModal({
               <ul className="flex flex-col gap-1 text-sm">
                 {selectedClientGroup.rows.map((s) => (
                   <li key={s.id} className="flex items-center justify-between border-b border-border/50 py-2.5">
-                    <span className="font-semibold">{s.staffName}</span>
+                    <span>
+                      <span className="font-semibold">{s.staffName}</span>
+                      {s.note ? <span className="ml-1.5 text-xs text-muted">（{s.note}）</span> : null}
+                    </span>
                     <span className="text-muted">
                       {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
                     </span>
@@ -691,15 +698,25 @@ function RecruitmentAssignControls({
   staffOptions: StaffOption[];
 }) {
   const [staffUserId, setStaffUserId] = useState(staffOptions[0]?.id ?? "");
+  const [confirming, setConfirming] = useState(false);
+  const [conflicts, setConflicts] = useState<{ id: string; startTime: string | null; endTime: string | null }[] | null>(null);
+  const [overrideChecked, setOverrideChecked] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function assign() {
+  function assign(overrideShiftId?: string) {
     if (!staffUserId) return;
     setError(null);
     startTransition(async () => {
       try {
-        await assignStaffToRecruitmentAction({ recruitmentId, staffUserId });
+        const result = await assignStaffToRecruitmentAction({ recruitmentId, staffUserId, overrideShiftId });
+        if (result.status === "conflict") {
+          setConflicts(result.conflicts);
+        } else {
+          setConflicts(null);
+          setConfirming(false);
+          setOverrideChecked(false);
+        }
       } catch {
         setError("アサインに失敗しました。");
       }
@@ -710,12 +727,18 @@ function RecruitmentAssignControls({
     return <p className="mt-2 text-xs text-muted">募集人数に達しています。</p>;
   }
 
+  const staffName = staffOptions.find((s) => s.id === staffUserId)?.name ?? "";
+
   return (
     <div>
       <div className="mt-2 flex items-center gap-2">
         <select
           value={staffUserId}
-          onChange={(e) => setStaffUserId(e.target.value)}
+          onChange={(e) => {
+            setStaffUserId(e.target.value);
+            setConfirming(false);
+            setConflicts(null);
+          }}
           className="flex-1 rounded-lg border border-border px-2 py-1.5 text-xs"
         >
           {staffOptions.map((s) => (
@@ -724,15 +747,76 @@ function RecruitmentAssignControls({
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          disabled={pending || !staffUserId}
-          onClick={assign}
-          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
-        >
-          アサイン
-        </button>
+        {!confirming ? (
+          <button
+            type="button"
+            disabled={!staffUserId}
+            onClick={() => setConfirming(true)}
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+          >
+            アサイン
+          </button>
+        ) : null}
       </div>
+
+      {confirming && !conflicts ? (
+        <div className="mt-2 rounded-lg border border-border bg-background p-2 text-xs">
+          <p className="mb-2">{staffName}さんをこの枠にアサインします。よろしいですか？</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => assign()}
+              className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              確定
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="rounded-lg border border-border px-3 py-1 text-xs"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {conflicts ? (
+        <div className="mt-2 rounded-lg border border-red-300 bg-red-50 p-2 text-xs text-red-700">
+          <p className="mb-1 font-semibold">他のシフトと重複しています。</p>
+          <ul className="mb-2 list-disc pl-4">
+            {conflicts.map((c) => (
+              <li key={c.id}>{c.startTime ? `${c.startTime}〜${c.endTime}` : "終日/未定"}</li>
+            ))}
+          </ul>
+          <label className="mb-2 flex items-center gap-1">
+            <input type="checkbox" checked={overrideChecked} onChange={(e) => setOverrideChecked(e.target.checked)} />
+            スタッフ本人と確認済み
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={pending || !overrideChecked}
+              onClick={() => assign(conflicts[0].id)}
+              className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              重複を確認のうえアサインする
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setConflicts(null);
+                setConfirming(false);
+              }}
+              className="rounded-lg border border-border px-3 py-1 text-xs"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
     </div>
   );
