@@ -243,8 +243,14 @@ export function CalendarView({
               }`}
             >
               <span className={`block text-center text-xs font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
+              {inhouseShifts.length > 5 ? (
+                <span
+                  title={`他${inhouseShifts.length - 5}件`}
+                  className="absolute right-0 top-0 h-0 w-0 border-r-[14px] border-b-[14px] border-r-accent border-b-transparent"
+                />
+              ) : null}
               <div className="mt-1 flex flex-col gap-1">
-                {inhouseShifts.slice(0, 3).map((s) => (
+                {inhouseShifts.slice(0, 5).map((s) => (
                   <span
                     key={s.id}
                     className="truncate rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-medium text-emerald-900"
@@ -252,9 +258,6 @@ export function CalendarView({
                     {s.staffName}
                   </span>
                 ))}
-                {inhouseShifts.length > 3 ? (
-                  <span className="text-[10px] text-muted">他{inhouseShifts.length - 3}件</span>
-                ) : null}
                 {clientShifts.length > 0 ? (
                   <span className="truncate rounded-full bg-sky-100 px-2 py-1 text-[10px] font-medium text-sky-900">
                     オーダー{clientShifts.length}件
