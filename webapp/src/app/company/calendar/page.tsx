@@ -48,6 +48,7 @@ export default async function CompanyCalendarPage({
           isUndecided: s.isUndecided,
           source: s.source,
           clientName: s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? undefined,
+          companyRelationshipId: s.companyRelationshipId,
           approvalStatus: s.workReport?.approvalStatus ?? null,
         }))}
         staffOptions={staff.map((s) => ({ id: s.userId, name: s.name }))}

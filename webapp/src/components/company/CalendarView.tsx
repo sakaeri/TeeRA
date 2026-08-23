@@ -23,6 +23,7 @@ type ShiftRow = {
   isUndecided: boolean;
   source: string;
   clientName?: string;
+  companyRelationshipId?: string | null;
   approvalStatus: string | null;
 };
 
@@ -102,6 +103,7 @@ export function CalendarView({
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<string | null>(initialSelectedDate ?? null);
   const [showAssignForm, setShowAssignForm] = useState(false);
+  const [assignPreset, setAssignPreset] = useState<{ date: string; companyRelationshipId?: string } | null>(null);
   const [showRecruitForm, setShowRecruitForm] = useState(false);
   const [sharingImage, setSharingImage] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -342,11 +344,18 @@ export function CalendarView({
           recruitments={recruitments.filter((r) => r.date === selectedDate)}
           onNavigate={setSelectedDate}
           onClose={() => setSelectedDate(null)}
+          onAssign={(companyRelationshipId) => {
+            setAssignPreset({ date: selectedDate, companyRelationshipId });
+            setShowAssignForm(true);
+          }}
         />
       ) : null}
 
       <FabMenu
-        onCreateShift={() => setShowAssignForm(true)}
+        onCreateShift={() => {
+          setAssignPreset(null);
+          setShowAssignForm(true);
+        }}
         onCreateRecruitment={() => setShowRecruitForm(true)}
       />
 
@@ -355,8 +364,12 @@ export function CalendarView({
           staffOptions={staffOptions}
           teams={teams}
           clients={clients}
-          defaultDate={selectedDate ?? todayStr}
-          onClose={() => setShowAssignForm(false)}
+          defaultDate={assignPreset?.date ?? selectedDate ?? todayStr}
+          defaultCompanyRelationshipId={assignPreset?.companyRelationshipId}
+          onClose={() => {
+            setShowAssignForm(false);
+            setAssignPreset(null);
+          }}
         />
       ) : null}
 
@@ -427,28 +440,35 @@ function DayDetailModal({
   recruitments,
   onNavigate,
   onClose,
+  onAssign,
 }: {
   dateStr: string;
   shifts: ShiftRow[];
   recruitments: RecruitmentRow[];
   onNavigate: (dateStr: string) => void;
   onClose: () => void;
+  onAssign: (companyRelationshipId?: string) => void;
 }) {
   const [tab, setTab] = useState<"shifts" | "client" | "recruit">("shifts");
-  const [selectedClient, setSelectedClient] = useState<string | null>(null);
+  const [selectedClientKey, setSelectedClientKey] = useState<string | null>(null);
   const remaining = recruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
   const inhouseShifts = shifts.filter((s) => s.source !== "CLIENT");
   const clientShifts = shifts.filter((s) => s.source === "CLIENT");
 
   const clientGroups = useMemo(() => {
-    const map = new Map<string, ShiftRow[]>();
+    const map = new Map<string, { clientName: string; companyRelationshipId?: string; rows: ShiftRow[] }>();
     for (const s of clientShifts) {
-      const key = s.clientName ?? "依頼主未設定";
-      map.set(key, [...(map.get(key) ?? []), s]);
+      const key = s.companyRelationshipId ?? s.clientName ?? "依頼主未設定";
+      const existing = map.get(key);
+      if (existing) {
+        existing.rows.push(s);
+      } else {
+        map.set(key, { clientName: s.clientName ?? "依頼主未設定", companyRelationshipId: s.companyRelationshipId ?? undefined, rows: [s] });
+      }
     }
-    return Array.from(map.entries()).map(([clientName, rows]) => ({ clientName, rows }));
+    return Array.from(map.entries()).map(([key, g]) => ({ key, ...g }));
   }, [clientShifts]);
-  const selectedClientRows = selectedClient ? clientGroups.find((g) => g.clientName === selectedClient)?.rows ?? [] : [];
+  const selectedClientGroup = selectedClientKey ? clientGroups.find((g) => g.key === selectedClientKey) : undefined;
 
   const date = new Date(dateStr + "T00:00:00Z");
   const weekdayLabel = WEEKDAYS[date.getUTCDay()];
@@ -491,7 +511,7 @@ function DayDetailModal({
               type="button"
               onClick={() => {
                 setTab("client");
-                setSelectedClient(null);
+                setSelectedClientKey(null);
               }}
               className={`border-b-2 px-1 py-2 font-semibold ${tab === "client" ? "border-accent text-primary" : "border-transparent text-muted"}`}
             >
@@ -536,18 +556,27 @@ function DayDetailModal({
         ) : tab === "client" ? (
           clientGroups.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted">この日の依頼主オーダーはありません。</p>
-          ) : selectedClient ? (
+          ) : selectedClientGroup ? (
             <div>
               <button
                 type="button"
-                onClick={() => setSelectedClient(null)}
+                onClick={() => setSelectedClientKey(null)}
                 className="mb-2 flex items-center gap-1 text-sm text-muted hover:text-primary"
               >
                 ‹ 依頼主一覧に戻る
               </button>
-              <p className="mb-2 font-semibold">{selectedClient}</p>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="font-semibold">{selectedClientGroup.clientName}</p>
+                <button
+                  type="button"
+                  onClick={() => onAssign(selectedClientGroup.companyRelationshipId)}
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-background"
+                >
+                  ＋ スタッフを追加
+                </button>
+              </div>
               <ul className="flex flex-col gap-1 text-sm">
-                {selectedClientRows.map((s) => (
+                {selectedClientGroup.rows.map((s) => (
                   <li key={s.id} className="flex items-center justify-between border-b border-border/50 py-2.5">
                     <span className="font-semibold">{s.staffName}</span>
                     <span className="text-muted">
@@ -567,10 +596,10 @@ function DayDetailModal({
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
               {clientGroups.map((g) => (
-                <li key={g.clientName}>
+                <li key={g.key}>
                   <button
                     type="button"
-                    onClick={() => setSelectedClient(g.clientName)}
+                    onClick={() => setSelectedClientKey(g.key)}
                     className="flex w-full items-center justify-between border-b border-border/50 py-2.5 text-left hover:bg-background"
                   >
                     <span className="font-semibold">{g.clientName}</span>
@@ -624,17 +653,19 @@ function AssignShiftModal({
   teams,
   clients,
   defaultDate,
+  defaultCompanyRelationshipId,
   onClose,
 }: {
   staffOptions: StaffOption[];
   teams: Team[];
   clients: { id: string; name: string }[];
   defaultDate: string;
+  defaultCompanyRelationshipId?: string;
   onClose: () => void;
 }) {
   const [staffUserId, setStaffUserId] = useState(staffOptions[0]?.id ?? "");
   const [teamId, setTeamId] = useState("");
-  const [companyRelationshipId, setCompanyRelationshipId] = useState("");
+  const [companyRelationshipId, setCompanyRelationshipId] = useState(defaultCompanyRelationshipId ?? "");
   const [date, setDate] = useState(defaultDate);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("18:00");
