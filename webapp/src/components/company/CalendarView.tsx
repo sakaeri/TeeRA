@@ -434,8 +434,10 @@ function DayDetailModal({
   onNavigate: (dateStr: string) => void;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<"shifts" | "recruit">("shifts");
+  const [tab, setTab] = useState<"shifts" | "client" | "recruit">("shifts");
   const remaining = recruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
+  const inhouseShifts = shifts.filter((s) => s.source !== "CLIENT");
+  const clientShifts = shifts.filter((s) => s.source === "CLIENT");
 
   const date = new Date(dateStr + "T00:00:00Z");
   const weekdayLabel = WEEKDAYS[date.getUTCDay()];
@@ -473,6 +475,15 @@ function DayDetailModal({
           >
             スタッフシフト
           </button>
+          {clientShifts.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setTab("client")}
+              className={`border-b-2 px-1 py-2 font-semibold ${tab === "client" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+            >
+              依頼主オーダー
+            </button>
+          ) : null}
           {recruitments.length > 0 ? (
             <button
               type="button"
@@ -486,17 +497,40 @@ function DayDetailModal({
         </div>
 
         {tab === "shifts" ? (
-          shifts.length === 0 ? (
+          inhouseShifts.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted">この日のシフトはありません。</p>
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
-              {shifts.map((s) => (
+              {inhouseShifts.map((s) => (
                 <li key={s.id} className="flex items-center justify-between border-b border-border/50 py-2.5">
                   <span className="font-semibold">{s.staffName}</span>
                   <span className="text-muted">
                     {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
                   </span>
-                  <span className="text-muted">{s.clientName ?? "自社"}</span>
+                  <span className="text-muted">自社</span>
+                  {s.approvalStatus ? (
+                    <span className={`rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
+                      {APPROVAL_LABEL[s.approvalStatus] ?? s.approvalStatus}
+                    </span>
+                  ) : (
+                    <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )
+        ) : tab === "client" ? (
+          clientShifts.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted">この日の依頼主オーダーはありません。</p>
+          ) : (
+            <ul className="flex flex-col gap-1 text-sm">
+              {clientShifts.map((s) => (
+                <li key={s.id} className="flex items-center justify-between border-b border-border/50 py-2.5">
+                  <span className="font-semibold">{s.staffName}</span>
+                  <span className="text-muted">
+                    {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
+                  </span>
+                  <span className="text-muted">{s.clientName ?? "依頼主"}</span>
                   {s.approvalStatus ? (
                     <span className={`rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
                       {APPROVAL_LABEL[s.approvalStatus] ?? s.approvalStatus}
