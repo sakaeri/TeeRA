@@ -531,11 +531,21 @@ function DayDetailModal({
         </div>
 
         {tab === "shifts" ? (
-          inhouseShifts.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted">この日のシフトはありません。</p>
-          ) : (
-            <ul className="flex flex-col gap-1 text-sm">
-              {inhouseShifts.map((s) => (
+          <div>
+            <div className="mb-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => onAssign(undefined)}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-background"
+              >
+                ＋ スタッフを追加
+              </button>
+            </div>
+            {inhouseShifts.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted">この日のシフトはありません。</p>
+            ) : (
+              <ul className="flex flex-col gap-1 text-sm">
+                {inhouseShifts.map((s) => (
                 <li key={s.id} className="flex items-center justify-between border-b border-border/50 py-2.5">
                   <span className="font-semibold">{s.staffName}</span>
                   <span className="text-muted">
@@ -551,8 +561,9 @@ function DayDetailModal({
                   )}
                 </li>
               ))}
-            </ul>
-          )
+              </ul>
+            )}
+          </div>
         ) : tab === "client" ? (
           clientGroups.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted">この日の依頼主オーダーはありません。</p>
