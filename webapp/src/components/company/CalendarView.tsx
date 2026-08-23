@@ -190,7 +190,7 @@ export function CalendarView({
         </div>
       </div>
 
-      <div className="p-2">
+      <div className="rounded-2xl bg-white p-6">
       <div className="mb-4 flex items-center justify-center gap-4">
         <Link href={`?y=${prev.y}&m=${prev.m}${selectedTeamId ? `&team=${selectedTeamId}` : ""}`} className="text-lg text-muted">
           ‹
@@ -227,7 +227,7 @@ export function CalendarView({
               type="button"
               onClick={() => setSelectedDate(c.dateStr)}
               className={`relative min-h-28 rounded-xl p-2 text-left align-top ${
-                isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "hover:bg-white/50"
+                isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "hover:bg-background"
               }`}
             >
               <span className={`text-xs font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
