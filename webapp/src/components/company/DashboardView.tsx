@@ -594,7 +594,7 @@ function ShortagePopup({ entries, onClose }: { entries: ShortageEntry[]; onClose
   return (
     <PopupShell
       title="欠員シフト"
-      subtitle="担当スタッフが決まっていない募集中のシフトです。ここから直接割当できます"
+      subtitle="担当スタッフが決まっていない募集中のシフトです。カレンダーで確認して割り当ててください"
       onClose={onClose}
     >
       {entries.map((r) => (
