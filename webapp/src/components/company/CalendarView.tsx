@@ -60,6 +60,10 @@ type RecruitmentRow = {
   status: string;
 };
 
+type TagEntry =
+  | { kind: "solid"; id: string; label: string; className: string }
+  | { kind: "split"; id: string; left: { label: string; className: string }; right: { label: string; className: string } };
+
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
 function weekdayColor(dow: number) {
@@ -246,26 +250,38 @@ export function CalendarView({
           const isToday = c.dateStr === todayStr;
           const isSelected = c.dateStr === selectedDate;
 
-          // Cap the total number of tags shown (names + the aggregate tags)
-          // at 5 combined so the fixed-height cell never has to grow or
+          // 募集中/オーダー share one row (half each) when both exist on the
+          // same day, so they count as a single slot toward the 5-slot cap.
+          const recruitTag =
+            recruitingCount > 0 ? { label: `募集中${recruitingCount}件`, className: "bg-amber-100 text-amber-900" } : null;
+          const orderTag =
+            clientShifts.length > 0 ? { label: `オーダー${clientShifts.length}件`, className: "bg-sky-100 text-sky-900" } : null;
+          const recruitOrderTag: TagEntry | null =
+            recruitTag && orderTag
+              ? { kind: "split", id: "recruit-order", left: recruitTag, right: orderTag }
+              : recruitTag
+                ? { kind: "solid", id: "recruit", ...recruitTag }
+                : orderTag
+                  ? { kind: "solid", id: "client", ...orderTag }
+                  : null;
+
+          // Order: シフト未確定 -> 確定シフト -> 募集＆オーダー. Capped at 5
+          // slots combined so the fixed-height cell never has to grow or
           // clip mid-tag — any excess just flips on the dog-ear marker.
-          const tagEntries: { id: string; label: string; className: string }[] = [
-            ...inhouseShifts.map((s) => ({
-              id: s.id,
-              label: s.staffName,
-              className: "bg-emerald-100 text-emerald-900",
-            })),
+          const tagEntries: TagEntry[] = [
             ...dayShiftRequests.map((r) => ({
+              kind: "solid" as const,
               id: `req-${r.id}`,
               label: r.staffName,
               className: "bg-rose-100 text-rose-900",
             })),
-            ...(clientShifts.length > 0
-              ? [{ id: "client", label: `オーダー${clientShifts.length}件`, className: "bg-sky-100 text-sky-900" }]
-              : []),
-            ...(recruitingCount > 0
-              ? [{ id: "recruit", label: `募集中${recruitingCount}件`, className: "bg-amber-100 text-amber-900" }]
-              : []),
+            ...inhouseShifts.map((s) => ({
+              kind: "solid" as const,
+              id: s.id,
+              label: s.staffName,
+              className: "bg-emerald-100 text-emerald-900",
+            })),
+            ...(recruitOrderTag ? [recruitOrderTag] : []),
           ];
           const visibleTags = tagEntries.slice(0, 5);
           const hasOverflow = tagEntries.length > 5;
@@ -287,14 +303,29 @@ export function CalendarView({
                 />
               ) : null}
               <div className="mt-px flex flex-col gap-[2px]">
-                {visibleTags.map((tag) => (
-                  <span
-                    key={tag.id}
-                    className={`truncate rounded-full px-1.5 py-px text-[8px] font-medium leading-tight ${tag.className}`}
-                  >
-                    {tag.label}
-                  </span>
-                ))}
+                {visibleTags.map((tag) =>
+                  tag.kind === "split" ? (
+                    <div key={tag.id} className="flex gap-[2px]">
+                      <span
+                        className={`flex-1 truncate rounded-full px-1 py-px text-center text-[8px] font-medium leading-tight ${tag.left.className}`}
+                      >
+                        {tag.left.label}
+                      </span>
+                      <span
+                        className={`flex-1 truncate rounded-full px-1 py-px text-center text-[8px] font-medium leading-tight ${tag.right.className}`}
+                      >
+                        {tag.right.label}
+                      </span>
+                    </div>
+                  ) : (
+                    <span
+                      key={tag.id}
+                      className={`truncate rounded-full px-1.5 py-px text-[8px] font-medium leading-tight ${tag.className}`}
+                    >
+                      {tag.label}
+                    </span>
+                  ),
+                )}
               </div>
             </button>
           );
