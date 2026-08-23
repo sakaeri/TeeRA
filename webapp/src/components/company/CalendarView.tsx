@@ -190,8 +190,8 @@ export function CalendarView({
         </div>
       </div>
 
-      <div className="rounded-2xl bg-white p-6">
-      <div className="mb-4 flex items-center justify-center gap-2">
+      <div className="rounded-2xl bg-white p-4">
+      <div className="mb-2 flex items-center justify-center gap-2">
         <Link
           href={`?y=${prev.y}&m=${prev.m}${selectedTeamId ? `&team=${selectedTeamId}` : ""}`}
           aria-label="前の月"
@@ -215,15 +215,15 @@ export function CalendarView({
         </Link>
       </div>
 
-      <div ref={gridRef} className="grid grid-cols-7 gap-2">
+      <div ref={gridRef} className="grid grid-cols-7 gap-1">
         {WEEKDAYS.map((w, i) => (
-          <div key={w} className={`py-2 text-center text-xs font-semibold ${weekdayColor(i)}`}>
+          <div key={w} className={`py-1 text-center text-xs font-semibold ${weekdayColor(i)}`}>
             {w}
           </div>
         ))}
         {cells.map((c, i) => {
           if (!c.dateStr) {
-            return <div key={i} className="min-h-24" />;
+            return <div key={i} className="min-h-20" />;
           }
           const dow = new Date(c.dateStr + "T00:00:00Z").getUTCDay();
           const dayShifts = shiftsByDate.get(c.dateStr) ?? [];
@@ -238,7 +238,7 @@ export function CalendarView({
               key={i}
               type="button"
               onClick={() => setSelectedDate(c.dateStr)}
-              className={`relative flex min-h-28 flex-col items-stretch justify-start rounded-xl p-2 text-left ${
+              className={`relative flex min-h-20 flex-col items-stretch justify-start rounded-xl p-1.5 text-left ${
                 isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "hover:bg-background"
               }`}
             >
@@ -249,22 +249,22 @@ export function CalendarView({
                   className="absolute right-0 top-0 h-0 w-0 border-r-[14px] border-b-[14px] border-r-accent border-b-transparent"
                 />
               ) : null}
-              <div className="mt-1 flex flex-col gap-1">
+              <div className="mt-0.5 flex flex-col gap-0.5">
                 {inhouseShifts.slice(0, 5).map((s) => (
                   <span
                     key={s.id}
-                    className="truncate rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-medium text-emerald-900"
+                    className="truncate rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-900"
                   >
                     {s.staffName}
                   </span>
                 ))}
                 {clientShifts.length > 0 ? (
-                  <span className="truncate rounded-full bg-sky-100 px-2 py-1 text-[10px] font-medium text-sky-900">
+                  <span className="truncate rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-900">
                     オーダー{clientShifts.length}件
                   </span>
                 ) : null}
                 {recruitingCount > 0 ? (
-                  <span className="truncate rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-900">
+                  <span className="truncate rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-900">
                     募集中{recruitingCount}件
                   </span>
                 ) : null}
