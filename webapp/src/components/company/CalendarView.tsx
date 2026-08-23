@@ -551,21 +551,11 @@ function DayDetailModal({
         </div>
 
         {tab === "shifts" ? (
-          <div>
-            <div className="mb-2 flex justify-end">
-              <button
-                type="button"
-                onClick={() => onAssign(undefined)}
-                className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-background"
-              >
-                ＋ スタッフを追加
-              </button>
-            </div>
-            {inhouseShifts.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted">この日のシフトはありません。</p>
-            ) : (
-              <ul className="flex flex-col gap-1 text-sm">
-                {inhouseShifts.map((s) => (
+          inhouseShifts.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted">この日のシフトはありません。</p>
+          ) : (
+            <ul className="flex flex-col gap-1 text-sm">
+              {inhouseShifts.map((s) => (
                 <li key={s.id} className="flex items-center justify-between border-b border-border/50 py-2.5">
                   <span className="font-semibold">{s.staffName}</span>
                   <span className="text-muted">
@@ -581,9 +571,8 @@ function DayDetailModal({
                   )}
                 </li>
               ))}
-              </ul>
-            )}
-          </div>
+            </ul>
+          )
         ) : tab === "client" ? (
           clientGroups.length === 0 && clientOrders.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted">この日の依頼主オーダーはありません。</p>
@@ -661,16 +650,28 @@ function DayDetailModal({
             </div>
           )
         ) : (
-          <ul className="flex flex-col gap-1 text-sm">
+          <ul className="flex flex-col gap-2 text-sm">
             {recruitments.map((r) => (
-              <li key={r.id} className="flex items-center justify-between border-b border-border/50 py-2.5">
-                <span className="font-semibold">{r.title}</span>
-                <span className="text-muted">
-                  {r.startTime}〜{r.endTime}
-                </span>
-                <span className="rounded-md bg-amber-100 px-2 py-1 text-xs text-amber-800">
-                  残り{Math.max(r.maxEntries - r.filled, 0)}名
-                </span>
+              <li key={r.id} className="rounded-lg border border-border p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold">{r.title}</p>
+                    <p className="text-xs text-muted">
+                      {r.startTime ?? "終日"}
+                      {r.startTime ? `〜${r.endTime}` : ""}
+                    </p>
+                  </div>
+                  <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+                    {r.filled}/{r.maxEntries}名
+                  </span>
+                </div>
+                {r.status === "PUBLISHED" ? (
+                  <RecruitmentAssignControls
+                    recruitmentId={r.id}
+                    remaining={Math.max(r.maxEntries - r.filled, 0)}
+                    staffOptions={staffOptions}
+                  />
+                ) : null}
               </li>
             ))}
           </ul>
@@ -680,23 +681,65 @@ function DayDetailModal({
   );
 }
 
-function ClientOrderRow({ order, staffOptions }: { order: ClientRecruitmentRow; staffOptions: StaffOption[] }) {
+function RecruitmentAssignControls({
+  recruitmentId,
+  remaining,
+  staffOptions,
+}: {
+  recruitmentId: string;
+  remaining: number;
+  staffOptions: StaffOption[];
+}) {
   const [staffUserId, setStaffUserId] = useState(staffOptions[0]?.id ?? "");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const remaining = Math.max(order.maxEntries - order.filled, 0);
 
   function assign() {
     if (!staffUserId) return;
     setError(null);
     startTransition(async () => {
       try {
-        await assignStaffToRecruitmentAction({ recruitmentId: order.id, staffUserId });
+        await assignStaffToRecruitmentAction({ recruitmentId, staffUserId });
       } catch {
         setError("アサインに失敗しました。");
       }
     });
   }
+
+  if (remaining <= 0) {
+    return <p className="mt-2 text-xs text-muted">募集人数に達しています。</p>;
+  }
+
+  return (
+    <div>
+      <div className="mt-2 flex items-center gap-2">
+        <select
+          value={staffUserId}
+          onChange={(e) => setStaffUserId(e.target.value)}
+          className="flex-1 rounded-lg border border-border px-2 py-1.5 text-xs"
+        >
+          {staffOptions.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={pending || !staffUserId}
+          onClick={assign}
+          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+        >
+          アサイン
+        </button>
+      </div>
+      {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
+    </div>
+  );
+}
+
+function ClientOrderRow({ order, staffOptions }: { order: ClientRecruitmentRow; staffOptions: StaffOption[] }) {
+  const remaining = Math.max(order.maxEntries - order.filled, 0);
 
   return (
     <li className="rounded-lg border border-border p-3">
@@ -712,32 +755,7 @@ function ClientOrderRow({ order, staffOptions }: { order: ClientRecruitmentRow; 
           {order.filled}/{order.maxEntries}名
         </span>
       </div>
-      {remaining > 0 ? (
-        <div className="mt-2 flex items-center gap-2">
-          <select
-            value={staffUserId}
-            onChange={(e) => setStaffUserId(e.target.value)}
-            className="flex-1 rounded-lg border border-border px-2 py-1.5 text-xs"
-          >
-            {staffOptions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            disabled={pending || !staffUserId}
-            onClick={assign}
-            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
-          >
-            アサイン
-          </button>
-        </div>
-      ) : (
-        <p className="mt-2 text-xs text-muted">募集人数に達しています。</p>
-      )}
-      {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
+      <RecruitmentAssignControls recruitmentId={order.id} remaining={remaining} staffOptions={staffOptions} />
     </li>
   );
 }
