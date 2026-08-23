@@ -435,9 +435,20 @@ function DayDetailModal({
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"shifts" | "client" | "recruit">("shifts");
+  const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const remaining = recruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
   const inhouseShifts = shifts.filter((s) => s.source !== "CLIENT");
   const clientShifts = shifts.filter((s) => s.source === "CLIENT");
+
+  const clientGroups = useMemo(() => {
+    const map = new Map<string, ShiftRow[]>();
+    for (const s of clientShifts) {
+      const key = s.clientName ?? "依頼主未設定";
+      map.set(key, [...(map.get(key) ?? []), s]);
+    }
+    return Array.from(map.entries()).map(([clientName, rows]) => ({ clientName, rows }));
+  }, [clientShifts]);
+  const selectedClientRows = selectedClient ? clientGroups.find((g) => g.clientName === selectedClient)?.rows ?? [] : [];
 
   const date = new Date(dateStr + "T00:00:00Z");
   const weekdayLabel = WEEKDAYS[date.getUTCDay()];
@@ -478,7 +489,10 @@ function DayDetailModal({
           {clientShifts.length > 0 ? (
             <button
               type="button"
-              onClick={() => setTab("client")}
+              onClick={() => {
+                setTab("client");
+                setSelectedClient(null);
+              }}
               className={`border-b-2 px-1 py-2 font-semibold ${tab === "client" ? "border-accent text-primary" : "border-transparent text-muted"}`}
             >
               依頼主オーダー
@@ -520,24 +534,51 @@ function DayDetailModal({
             </ul>
           )
         ) : tab === "client" ? (
-          clientShifts.length === 0 ? (
+          clientGroups.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted">この日の依頼主オーダーはありません。</p>
+          ) : selectedClient ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => setSelectedClient(null)}
+                className="mb-2 flex items-center gap-1 text-sm text-muted hover:text-primary"
+              >
+                ‹ 依頼主一覧に戻る
+              </button>
+              <p className="mb-2 font-semibold">{selectedClient}</p>
+              <ul className="flex flex-col gap-1 text-sm">
+                {selectedClientRows.map((s) => (
+                  <li key={s.id} className="flex items-center justify-between border-b border-border/50 py-2.5">
+                    <span className="font-semibold">{s.staffName}</span>
+                    <span className="text-muted">
+                      {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
+                    </span>
+                    {s.approvalStatus ? (
+                      <span className={`rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
+                        {APPROVAL_LABEL[s.approvalStatus] ?? s.approvalStatus}
+                      </span>
+                    ) : (
+                      <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
-              {clientShifts.map((s) => (
-                <li key={s.id} className="flex items-center justify-between border-b border-border/50 py-2.5">
-                  <span className="font-semibold">{s.staffName}</span>
-                  <span className="text-muted">
-                    {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
-                  </span>
-                  <span className="text-muted">{s.clientName ?? "依頼主"}</span>
-                  {s.approvalStatus ? (
-                    <span className={`rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
-                      {APPROVAL_LABEL[s.approvalStatus] ?? s.approvalStatus}
+              {clientGroups.map((g) => (
+                <li key={g.clientName}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedClient(g.clientName)}
+                    className="flex w-full items-center justify-between border-b border-border/50 py-2.5 text-left hover:bg-background"
+                  >
+                    <span className="font-semibold">{g.clientName}</span>
+                    <span className="flex items-center gap-2 text-muted">
+                      {g.rows.length}名
+                      <span aria-hidden>›</span>
                     </span>
-                  ) : (
-                    <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
-                  )}
+                  </button>
                 </li>
               ))}
             </ul>
