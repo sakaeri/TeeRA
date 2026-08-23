@@ -175,7 +175,7 @@ export function CalendarView({
           <Link
             href={`/api/calendar/pdf?y=${year}&m=${month}`}
             target="_blank"
-            className="rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
           >
             📅 PDF出力
           </Link>
@@ -183,7 +183,7 @@ export function CalendarView({
             type="button"
             disabled={sharingImage}
             onClick={shareAsImage}
-            className="rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary disabled:opacity-60"
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:border-primary hover:text-primary disabled:opacity-60"
           >
             {sharingImage ? "画像を作成中…" : "🖼 画像でシフトを共有"}
           </button>
@@ -191,15 +191,27 @@ export function CalendarView({
       </div>
 
       <div className="rounded-2xl bg-white p-6">
-      <div className="mb-4 flex items-center justify-center gap-4">
-        <Link href={`?y=${prev.y}&m=${prev.m}${selectedTeamId ? `&team=${selectedTeamId}` : ""}`} className="text-lg text-muted">
-          ‹
+      <div className="mb-4 flex items-center justify-center gap-2">
+        <Link
+          href={`?y=${prev.y}&m=${prev.m}${selectedTeamId ? `&team=${selectedTeamId}` : ""}`}
+          aria-label="前の月"
+          className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
+        >
+          <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+            <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </Link>
         <div className="font-serif-jp text-lg font-bold">
           {year}年{month}月
         </div>
-        <Link href={`?y=${next.y}&m=${next.m}${selectedTeamId ? `&team=${selectedTeamId}` : ""}`} className="text-lg text-muted">
-          ›
+        <Link
+          href={`?y=${next.y}&m=${next.m}${selectedTeamId ? `&team=${selectedTeamId}` : ""}`}
+          aria-label="次の月"
+          className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
+        >
+          <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+            <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </Link>
       </div>
 
@@ -226,11 +238,11 @@ export function CalendarView({
               key={i}
               type="button"
               onClick={() => setSelectedDate(c.dateStr)}
-              className={`relative min-h-28 rounded-xl p-2 text-left align-top ${
+              className={`relative min-h-28 rounded-xl p-2 align-top ${
                 isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "hover:bg-background"
               }`}
             >
-              <span className={`text-xs font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
+              <span className={`block text-center text-xs font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
               <div className="mt-1 flex flex-col gap-1">
                 {inhouseShifts.slice(0, 3).map((s) => (
                   <span
