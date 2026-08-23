@@ -223,7 +223,7 @@ export function CalendarView({
         ))}
         {cells.map((c, i) => {
           if (!c.dateStr) {
-            return <div key={i} className="min-h-20" />;
+            return <div key={i} className="h-[100px]" />;
           }
           const dow = new Date(c.dateStr + "T00:00:00Z").getUTCDay();
           const dayShifts = shiftsByDate.get(c.dateStr) ?? [];
@@ -233,41 +233,51 @@ export function CalendarView({
           const recruitingCount = dayRecruitments.filter((r) => r.filled < r.maxEntries).length;
           const isToday = c.dateStr === todayStr;
           const isSelected = c.dateStr === selectedDate;
+
+          // Cap the total number of tags shown (names + the two aggregate
+          // tags) at 5 combined so the fixed-height cell never has to grow
+          // or clip mid-tag — any excess just flips on the dog-ear marker.
+          const tagEntries: { id: string; label: string; className: string }[] = [
+            ...inhouseShifts.map((s) => ({
+              id: s.id,
+              label: s.staffName,
+              className: "bg-emerald-100 text-emerald-900",
+            })),
+            ...(clientShifts.length > 0
+              ? [{ id: "client", label: `オーダー${clientShifts.length}件`, className: "bg-sky-100 text-sky-900" }]
+              : []),
+            ...(recruitingCount > 0
+              ? [{ id: "recruit", label: `募集中${recruitingCount}件`, className: "bg-amber-100 text-amber-900" }]
+              : []),
+          ];
+          const visibleTags = tagEntries.slice(0, 5);
+          const hasOverflow = tagEntries.length > 5;
+
           return (
             <button
               key={i}
               type="button"
               onClick={() => setSelectedDate(c.dateStr)}
-              className={`relative flex min-h-20 flex-col items-stretch justify-start rounded-xl p-1.5 text-left ${
+              className={`relative flex h-[100px] flex-col items-stretch justify-start overflow-hidden rounded-xl p-1.5 text-left ${
                 isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "hover:bg-background"
               }`}
             >
-              <span className={`block text-center text-xs font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
-              {inhouseShifts.length > 5 ? (
+              <span className={`block text-center text-[11px] font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
+              {hasOverflow ? (
                 <span
-                  title={`他${inhouseShifts.length - 5}件`}
+                  title={`他${tagEntries.length - 5}件`}
                   className="absolute right-0 top-0 h-0 w-0 border-r-[14px] border-b-[14px] border-r-accent border-b-transparent"
                 />
               ) : null}
-              <div className="mt-0.5 flex flex-col gap-0.5">
-                {inhouseShifts.slice(0, 5).map((s) => (
+              <div className="mt-px flex flex-col gap-[2px]">
+                {visibleTags.map((tag) => (
                   <span
-                    key={s.id}
-                    className="truncate rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-900"
+                    key={tag.id}
+                    className={`truncate rounded-full px-1.5 py-px text-[8px] font-medium leading-tight ${tag.className}`}
                   >
-                    {s.staffName}
+                    {tag.label}
                   </span>
                 ))}
-                {clientShifts.length > 0 ? (
-                  <span className="truncate rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-900">
-                    オーダー{clientShifts.length}件
-                  </span>
-                ) : null}
-                {recruitingCount > 0 ? (
-                  <span className="truncate rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-900">
-                    募集中{recruitingCount}件
-                  </span>
-                ) : null}
               </div>
             </button>
           );
