@@ -131,6 +131,17 @@ export function CalendarView({
     return map;
   }, [shifts]);
 
+  const shiftRequestsByDate = useMemo(() => {
+    const map = new Map<string, ShiftRequestRow[]>();
+    for (const r of shiftRequests) {
+      for (const d of r.dates) {
+        if (!map.has(d)) map.set(d, []);
+        map.get(d)!.push(r);
+      }
+    }
+    return map;
+  }, [shiftRequests]);
+
   const cells = useMemo(() => {
     const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
     const startDow = firstOfMonth.getUTCDay();
@@ -231,17 +242,23 @@ export function CalendarView({
           const clientShifts = dayShifts.filter((s) => s.source === "CLIENT");
           const dayRecruitments = recruitments.filter((r) => r.date === c.dateStr && r.status === "PUBLISHED");
           const recruitingCount = dayRecruitments.filter((r) => r.filled < r.maxEntries).length;
+          const dayShiftRequests = shiftRequestsByDate.get(c.dateStr) ?? [];
           const isToday = c.dateStr === todayStr;
           const isSelected = c.dateStr === selectedDate;
 
-          // Cap the total number of tags shown (names + the two aggregate
-          // tags) at 5 combined so the fixed-height cell never has to grow
-          // or clip mid-tag — any excess just flips on the dog-ear marker.
+          // Cap the total number of tags shown (names + the aggregate tags)
+          // at 5 combined so the fixed-height cell never has to grow or
+          // clip mid-tag — any excess just flips on the dog-ear marker.
           const tagEntries: { id: string; label: string; className: string }[] = [
             ...inhouseShifts.map((s) => ({
               id: s.id,
               label: s.staffName,
               className: "bg-emerald-100 text-emerald-900",
+            })),
+            ...dayShiftRequests.map((r) => ({
+              id: `req-${r.id}`,
+              label: r.staffName,
+              className: "bg-rose-100 text-rose-900",
             })),
             ...(clientShifts.length > 0
               ? [{ id: "client", label: `オーダー${clientShifts.length}件`, className: "bg-sky-100 text-sky-900" }]
