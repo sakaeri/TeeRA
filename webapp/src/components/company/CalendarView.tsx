@@ -177,7 +177,7 @@ export function CalendarView({
             target="_blank"
             className="rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
           >
-            PDF出力
+            📅 PDF出力
           </Link>
           <button
             type="button"
@@ -185,12 +185,12 @@ export function CalendarView({
             onClick={shareAsImage}
             className="rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary disabled:opacity-60"
           >
-            {sharingImage ? "画像を作成中…" : "画像でシフトを共有"}
+            {sharingImage ? "画像を作成中…" : "🖼 画像でシフトを共有"}
           </button>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-white/60 p-6">
+      <div className="p-2">
       <div className="mb-4 flex items-center justify-center gap-4">
         <Link href={`?y=${prev.y}&m=${prev.m}${selectedTeamId ? `&team=${selectedTeamId}` : ""}`} className="text-lg text-muted">
           ‹
@@ -203,18 +203,15 @@ export function CalendarView({
         </Link>
       </div>
 
-      <div ref={gridRef} className="grid grid-cols-7 overflow-hidden rounded-xl border border-border">
+      <div ref={gridRef} className="grid grid-cols-7 gap-2">
         {WEEKDAYS.map((w, i) => (
-          <div
-            key={w}
-            className={`border-b border-border bg-white/60 py-2 text-center text-xs font-semibold ${weekdayColor(i)}`}
-          >
+          <div key={w} className={`py-2 text-center text-xs font-semibold ${weekdayColor(i)}`}>
             {w}
           </div>
         ))}
         {cells.map((c, i) => {
           if (!c.dateStr) {
-            return <div key={i} className="min-h-24 border-b border-r border-border/50 bg-background" />;
+            return <div key={i} className="min-h-24" />;
           }
           const dow = new Date(c.dateStr + "T00:00:00Z").getUTCDay();
           const dayShifts = shiftsByDate.get(c.dateStr) ?? [];
@@ -229,16 +226,16 @@ export function CalendarView({
               key={i}
               type="button"
               onClick={() => setSelectedDate(c.dateStr)}
-              className={`relative min-h-28 border-b border-r border-border/50 p-2 text-left align-top ${
-                isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "bg-white/40 hover:bg-white/70"
+              className={`relative min-h-28 rounded-xl p-2 text-left align-top ${
+                isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "hover:bg-white/50"
               }`}
             >
               <span className={`text-xs font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
-              <div className="mt-1 flex flex-col gap-0.5">
+              <div className="mt-1 flex flex-col gap-1">
                 {inhouseShifts.slice(0, 3).map((s) => (
                   <span
                     key={s.id}
-                    className="truncate rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-900"
+                    className="truncate rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-medium text-emerald-900"
                   >
                     {s.staffName}
                   </span>
@@ -247,12 +244,12 @@ export function CalendarView({
                   <span className="text-[10px] text-muted">他{inhouseShifts.length - 3}件</span>
                 ) : null}
                 {clientShifts.length > 0 ? (
-                  <span className="truncate rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-900">
+                  <span className="truncate rounded-full bg-sky-100 px-2 py-1 text-[10px] font-medium text-sky-900">
                     オーダー{clientShifts.length}件
                   </span>
                 ) : null}
                 {recruitingCount > 0 ? (
-                  <span className="truncate rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900">
+                  <span className="truncate rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-900">
                     募集中{recruitingCount}件
                   </span>
                 ) : null}
