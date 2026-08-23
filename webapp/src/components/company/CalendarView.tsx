@@ -265,26 +265,28 @@ export function CalendarView({
                   ? { kind: "solid", id: "client", ...orderTag }
                   : null;
 
-          // Order: シフト未確定 -> 確定シフト -> 募集＆オーダー. Capped at 5
-          // slots combined so the fixed-height cell never has to grow or
-          // clip mid-tag — any excess just flips on the dog-ear marker.
+          // Fixed row budget per category instead of a shared pool: up to 3
+          // confirmed-shift names, then 1 row for the 未確定 count (not
+          // individual names), then 1 row for 募集＆オーダー — so no single
+          // category can crowd the others out of the cell.
+          const unconfirmedTag: TagEntry | null =
+            dayShiftRequests.length > 0
+              ? { kind: "solid", id: "unconfirmed", label: `未確定${dayShiftRequests.length}件`, className: "bg-rose-100 text-rose-900" }
+              : null;
+
+          const visibleConfirmed = inhouseShifts.slice(0, 3);
+          const hasOverflow = inhouseShifts.length > 3;
+
           const tagEntries: TagEntry[] = [
-            ...dayShiftRequests.map((r) => ({
-              kind: "solid" as const,
-              id: `req-${r.id}`,
-              label: r.staffName,
-              className: "bg-rose-100 text-rose-900",
-            })),
-            ...inhouseShifts.map((s) => ({
+            ...visibleConfirmed.map((s) => ({
               kind: "solid" as const,
               id: s.id,
               label: s.staffName,
               className: "bg-emerald-100 text-emerald-900",
             })),
+            ...(unconfirmedTag ? [unconfirmedTag] : []),
             ...(recruitOrderTag ? [recruitOrderTag] : []),
           ];
-          const visibleTags = tagEntries.slice(0, 5);
-          const hasOverflow = tagEntries.length > 5;
 
           return (
             <button
@@ -298,12 +300,12 @@ export function CalendarView({
               <span className={`block text-center text-[11px] font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
               {hasOverflow ? (
                 <span
-                  title={`他${tagEntries.length - 5}件`}
+                  title={`他${inhouseShifts.length - 3}件`}
                   className="absolute right-0 top-0 h-0 w-0 border-r-[14px] border-b-[14px] border-r-accent border-b-transparent"
                 />
               ) : null}
               <div className="mt-px flex flex-col gap-[2px]">
-                {visibleTags.map((tag) =>
+                {tagEntries.map((tag) =>
                   tag.kind === "split" ? (
                     <div key={tag.id} className="flex gap-[2px]">
                       <span
