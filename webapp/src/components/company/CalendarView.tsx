@@ -196,6 +196,21 @@ export function CalendarView({
 
   const selectedShifts = selectedDate ? shiftsByDate.get(selectedDate) ?? [] : [];
 
+  // 業務内容の入力候補 — 過去に使われたタイトルを直近順に重複なく並べる
+  // （recruitmentsはdate昇順で来るので反転するだけで近似的に「最近使った順」になる）。
+  const recentTitles = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (let i = recruitments.length - 1; i >= 0 && out.length < 8; i--) {
+      const t = recruitments[i].title.trim();
+      if (t && !seen.has(t)) {
+        seen.add(t);
+        out.push(t);
+      }
+    }
+    return out;
+  }, [recruitments]);
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -413,6 +428,7 @@ export function CalendarView({
         <RecruitmentFormModal
           teams={teams}
           defaultDate={selectedDate ?? todayStr}
+          recentTitles={recentTitles}
           onClose={() => setShowRecruitForm(false)}
         />
       ) : null}
@@ -1929,6 +1945,7 @@ function MiniCalendarMultiSelect({
   const [viewYear, setViewYear] = useState(initialYear);
   const [viewMonth, setViewMonth] = useState(initialMonth);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   const cells = useMemo(() => {
     const firstOfMonth = new Date(Date.UTC(viewYear, viewMonth - 1, 1));
@@ -1983,24 +2000,27 @@ function MiniCalendarMultiSelect({
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1">
-        {cells.map((c, i) =>
-          c.dateStr ? (
+        {cells.map((c, i) => {
+          if (!c.dateStr) return <span key={i} />;
+          const isPast = c.dateStr < todayStr;
+          return (
             <button
               key={c.dateStr}
               type="button"
+              disabled={isPast}
               onClick={() => onToggle(c.dateStr!)}
               className={`rounded-lg py-1.5 text-xs ${
-                selectedSet.has(c.dateStr)
-                  ? "bg-primary font-semibold text-primary-foreground"
-                  : "text-foreground hover:bg-background"
+                isPast
+                  ? "cursor-not-allowed text-muted/50"
+                  : selectedSet.has(c.dateStr)
+                    ? "bg-primary font-semibold text-primary-foreground"
+                    : "text-foreground hover:bg-background"
               }`}
             >
               {c.day}
             </button>
-          ) : (
-            <span key={i} />
-          ),
-        )}
+          );
+        })}
       </div>
     </div>
   );
@@ -2009,10 +2029,12 @@ function MiniCalendarMultiSelect({
 function RecruitmentFormModal({
   teams,
   defaultDate,
+  recentTitles,
   onClose,
 }: {
   teams: Team[];
   defaultDate: string;
+  recentTitles: string[];
   onClose: () => void;
 }) {
   const [title, setTitle] = useState("");
@@ -2078,11 +2100,17 @@ function RecruitmentFormModal({
         <Field label="業務内容">
           <input
             type="text"
+            list="job-title-suggestions"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="例：倉庫での軽作業"
             className="w-full rounded-lg border border-border px-3 py-2 text-sm"
           />
+          <datalist id="job-title-suggestions">
+            {recentTitles.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
         </Field>
 
         <Field label="募集人数">
@@ -2120,9 +2148,10 @@ function RecruitmentFormModal({
           </div>
         ) : null}
 
-        <Field label="日付を選択（複数選択可）">
+        <div className="flex flex-1 flex-col gap-1 text-xs text-foreground/80">
+          <span>日付を選択（複数選択可）</span>
           <MiniCalendarMultiSelect selected={dates} onToggle={toggleDate} initialDate={defaultDate} />
-        </Field>
+        </div>
         {dates.length === 0 ? (
           <p className="text-xs text-red-600">少なくとも1つ日付を選択してください。</p>
         ) : dates.length > 1 ? (
