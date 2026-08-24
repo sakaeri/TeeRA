@@ -132,7 +132,11 @@ try {
   const editModal = admin.locator(".fixed.inset-0.z-20").nth(1);
   await editModal.getByRole("button", { name: "公開募集に切り替える" }).click();
   await editModal.locator('input[type="number"]').last().fill("1200");
-  await editModal.getByRole("button", { name: "切り替える" }).click();
+  const confirmBoxes = editModal.locator('input[type="checkbox"]');
+  await confirmBoxes.nth(0).check();
+  await confirmBoxes.nth(1).check();
+  await confirmBoxes.nth(2).check();
+  await editModal.getByRole("button", { name: "公開募集を開始する" }).click();
   await admin.waitForTimeout(700);
 
   const afterSwitch = psql(`select visibility, "lockedTee" from "PublicRecruitment" where "companyId"='${companyId}' and title='${recruitmentTitle}';`);

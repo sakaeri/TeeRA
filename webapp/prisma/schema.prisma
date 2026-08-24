@@ -394,6 +394,7 @@ model PublicRecruitment {
   hourlyWage             Int? // PUBLIC化で必須。wageTypeがDAILYの場合は日給の額
   wageType               WageType? // PUBLIC化で設定。ORDER中はnull（自社/配属スタッフは既存契約の賃金に従うため募集側では持たない）
   applicationConditions  String? // 応募条件（PUBLIC限定）
+  attire                 String? // 服装（PUBLIC限定）
   belongings             String? // 持ち物（PUBLIC限定）
   meetingPlace           String? // 集合場所（PUBLIC限定）
   maxEntries             Int

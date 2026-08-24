@@ -58,6 +58,7 @@ export async function openRecruitmentToPublic(params: {
   hourlyWage: number;
   wageType: WageType;
   applicationConditions?: string;
+  attire?: string;
   belongings?: string;
   meetingPlace?: string;
   updatedByUserId: string;
@@ -97,11 +98,44 @@ export async function openRecruitmentToPublic(params: {
         hourlyWage: params.hourlyWage,
         wageType: params.wageType,
         applicationConditions: params.applicationConditions,
+        attire: params.attire,
         belongings: params.belongings,
         meetingPlace: params.meetingPlace,
         lockedTee: recruitment.lockedTee + lockedTee,
       },
     });
+  });
+}
+
+// 公開募集の内容だけ先に用意しておく（visibility=ORDERのまま、Teeも動かさ
+// ない）。まだ公開する準備ができていない段階で、時給や応募条件などを下書き
+// 保存しておき、あとで実際に開始するときはopenRecruitmentToPublicを呼ぶ。
+// PUBLIC化した後は編集不可（開始前に確定させる運用）なのでORDERの間しか
+// 呼べない。
+export async function saveRecruitmentPublicDraft(params: {
+  recruitmentId: string;
+  hourlyWage?: number;
+  wageType?: WageType;
+  applicationConditions?: string;
+  attire?: string;
+  belongings?: string;
+  meetingPlace?: string;
+}) {
+  const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: params.recruitmentId } });
+  if (recruitment.visibility === "PUBLIC") {
+    throw new Error("already_public");
+  }
+
+  return prisma.publicRecruitment.update({
+    where: { id: recruitment.id },
+    data: {
+      hourlyWage: params.hourlyWage,
+      wageType: params.wageType,
+      applicationConditions: params.applicationConditions,
+      attire: params.attire,
+      belongings: params.belongings,
+      meetingPlace: params.meetingPlace,
+    },
   });
 }
 

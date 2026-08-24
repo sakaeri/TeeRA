@@ -96,6 +96,7 @@ export default async function CompanyCalendarPage({
           hourlyWage: r.hourlyWage,
           wageType: r.wageType,
           applicationConditions: r.applicationConditions,
+          attire: r.attire,
           belongings: r.belongings,
           meetingPlace: r.meetingPlace,
         }))}

@@ -17,6 +17,7 @@ import {
   affordableMaxEntries,
   assignStaffToRecruitment,
   openRecruitmentToPublic,
+  saveRecruitmentPublicDraft,
 } from "@/lib/domain/recruitment";
 import type { WageType } from "@/generated/prisma/enums";
 
@@ -126,6 +127,7 @@ export async function openRecruitmentToPublicAction(input: {
   hourlyWage: number;
   wageType: WageType;
   applicationConditions?: string;
+  attire?: string;
   belongings?: string;
   meetingPlace?: string;
 }) {
@@ -142,10 +144,29 @@ export async function openRecruitmentToPublicAction(input: {
     hourlyWage: input.hourlyWage,
     wageType: input.wageType,
     applicationConditions: input.applicationConditions,
+    attire: input.attire,
     belongings: input.belongings,
     meetingPlace: input.meetingPlace,
     updatedByUserId: userId,
   });
+  revalidatePath("/company/calendar");
+}
+
+// 公開募集の内容だけ先に下書き保存する（visibility=ORDERのまま、Teeも動かさ
+// ない）。管理者権限のチェックだけ行い、あとは中身をそのまま保存する。
+export async function saveRecruitmentPublicDraftAction(input: {
+  recruitmentId: string;
+  hourlyWage?: number;
+  wageType?: WageType;
+  applicationConditions?: string;
+  attire?: string;
+  belongings?: string;
+  meetingPlace?: string;
+}) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManage(membership)) throw new Error("forbidden");
+
+  await saveRecruitmentPublicDraft(input);
   revalidatePath("/company/calendar");
 }
 

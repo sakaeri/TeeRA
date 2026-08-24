@@ -11,6 +11,7 @@ import {
   updateMaxEntriesAction,
   deleteRecruitmentAction,
   openRecruitmentToPublicAction,
+  saveRecruitmentPublicDraftAction,
   assignStaffToRecruitmentAction,
   cancelShiftAction,
 } from "@/app/company/calendar/actions";
@@ -70,6 +71,7 @@ type RecruitmentRow = {
   hourlyWage: number | null;
   wageType: string | null;
   applicationConditions: string | null;
+  attire: string | null;
   belongings: string | null;
   meetingPlace: string | null;
 };
@@ -768,14 +770,29 @@ function OrderEditModal({
   const [error, setError] = useState<string | null>(null);
   const [showPublicForm, setShowPublicForm] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [wageAmount, setWageAmount] = useState("");
-  const [wageType, setWageType] = useState<"HOURLY" | "DAILY">("HOURLY");
-  const [applicationConditions, setApplicationConditions] = useState("");
-  const [belongings, setBelongings] = useState("");
-  const [meetingPlace, setMeetingPlace] = useState("");
+  const [wageAmount, setWageAmount] = useState(recruitment.hourlyWage ? String(recruitment.hourlyWage) : "");
+  const [wageType, setWageType] = useState<"HOURLY" | "DAILY">((recruitment.wageType as "HOURLY" | "DAILY") || "HOURLY");
+  const [applicationConditions, setApplicationConditions] = useState(recruitment.applicationConditions ?? "");
+  const [attire, setAttire] = useState(recruitment.attire ?? "");
+  const [belongings, setBelongings] = useState(recruitment.belongings ?? "");
+  const [meetingPlace, setMeetingPlace] = useState(recruitment.meetingPlace ?? "");
+  const [openFields, setOpenFields] = useState<Set<string>>(
+    new Set(
+      [
+        recruitment.applicationConditions ? "conditions" : null,
+        recruitment.attire ? "attire" : null,
+        recruitment.belongings ? "belongings" : null,
+        recruitment.meetingPlace ? "meetingPlace" : null,
+      ].filter((v): v is string => v !== null),
+    ),
+  );
+  const [agreedScope, setAgreedScope] = useState(false);
+  const [agreedAccuracy, setAgreedAccuracy] = useState(false);
+  const [agreedLiability, setAgreedLiability] = useState(false);
 
   const remaining = Math.max(recruitment.maxEntries - recruitment.filled, 0);
   const canManage = recruitment.status === "PUBLISHED" && !isPastDay;
+  const allAgreed = agreedScope && agreedAccuracy && agreedLiability;
 
   function saveMaxEntries() {
     setError(null);
@@ -810,12 +827,33 @@ function OrderEditModal({
           hourlyWage: Number(wageAmount),
           wageType,
           applicationConditions: applicationConditions || undefined,
+          attire: attire || undefined,
           belongings: belongings || undefined,
           meetingPlace: meetingPlace || undefined,
         });
         onClose();
       } catch {
-        setError("公開募集への切り替えに失敗しました（残高不足の可能性があります）。");
+        setError("公開募集の開始に失敗しました（残高不足の可能性があります）。");
+      }
+    });
+  }
+
+  function saveDraft() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await saveRecruitmentPublicDraftAction({
+          recruitmentId: recruitment.id,
+          hourlyWage: wageAmount ? Number(wageAmount) : undefined,
+          wageType,
+          applicationConditions: applicationConditions || undefined,
+          attire: attire || undefined,
+          belongings: belongings || undefined,
+          meetingPlace: meetingPlace || undefined,
+        });
+        onClose();
+      } catch {
+        setError("保存できませんでした。");
       }
     });
   }
@@ -846,6 +884,7 @@ function OrderEditModal({
               {recruitment.wageType === "DAILY" ? "日給" : "時給"} {recruitment.hourlyWage}円
             </p>
             {recruitment.applicationConditions ? <p className="mt-1">応募条件：{recruitment.applicationConditions}</p> : null}
+            {recruitment.attire ? <p className="mt-1">服装：{recruitment.attire}</p> : null}
             {recruitment.belongings ? <p className="mt-1">持ち物：{recruitment.belongings}</p> : null}
             {recruitment.meetingPlace ? <p className="mt-1">集合場所：{recruitment.meetingPlace}</p> : null}
           </div>
@@ -881,30 +920,57 @@ function OrderEditModal({
             <p className="text-xs text-muted">過去の日付のため変更できません。</p>
           ) : null
         ) : showPublicForm ? (
-          <div className="rounded-lg border border-accent/40 bg-accent/5 p-3">
-            <p className="mb-2 text-xs font-semibold text-primary">公開募集に切り替える</p>
-            <div className="flex flex-col gap-2">
+          <div className="rounded-lg border border-accent/40 bg-accent/5 p-4">
+            <p className="font-serif-jp text-base font-bold text-primary">公開募集の設定</p>
+            <p className="mb-3 text-xs text-muted">所属登録していないTeeRA利用者へも募集を公開します</p>
+
+            <div className="mb-3 rounded-lg border border-border bg-white p-3">
+              <p className="mb-1 text-[10px] font-semibold text-muted">公開する募集</p>
+              <p className="text-sm font-semibold">
+                {recruitment.date} {recruitment.startTime ?? "終日"}
+                {recruitment.startTime ? `〜${recruitment.endTime}` : ""}
+              </p>
+              <p className="text-sm">{recruitment.title}</p>
+            </div>
+
+            <div className="mb-3 flex items-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-primary-foreground">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-[11px] font-bold text-primary">
+                Tee
+              </span>
+              <p className="text-xs">
+                公開募集は課金制です。<span className="font-semibold">1名10Tee</span>がかかります
+              </p>
+            </div>
+
+            <Field label="時給／日給" className="mb-2">
               <div className="flex gap-2">
-                <Field label="時給／日給" className="flex-1">
-                  <input
-                    type="number"
-                    value={wageAmount}
-                    onChange={(e) => setWageAmount(e.target.value)}
-                    className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-                  />
-                </Field>
-                <Field label="単位">
-                  <select
-                    value={wageType}
-                    onChange={(e) => setWageType(e.target.value as "HOURLY" | "DAILY")}
-                    className="rounded-lg border border-border px-3 py-2 text-sm"
-                  >
-                    <option value="HOURLY">時給</option>
-                    <option value="DAILY">日給</option>
-                  </select>
-                </Field>
+                <input
+                  type="number"
+                  value={wageAmount}
+                  onChange={(e) => setWageAmount(e.target.value)}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                />
+                <select
+                  value={wageType}
+                  onChange={(e) => setWageType(e.target.value as "HOURLY" | "DAILY")}
+                  className="rounded-lg border border-border px-3 py-2 text-sm"
+                >
+                  <option value="HOURLY">時給</option>
+                  <option value="DAILY">日給</option>
+                </select>
               </div>
-              <Field label="応募条件（任意）">
+            </Field>
+
+            {!openFields.has("conditions") ? (
+              <button
+                type="button"
+                onClick={() => setOpenFields((prev) => new Set(prev).add("conditions"))}
+                className="mb-1.5 mr-1.5 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-background"
+              >
+                ＋ 応募条件
+              </button>
+            ) : (
+              <Field label="応募条件（任意）" className="mb-2">
                 <textarea
                   value={applicationConditions}
                   onChange={(e) => setApplicationConditions(e.target.value)}
@@ -912,7 +978,35 @@ function OrderEditModal({
                   className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                 />
               </Field>
-              <Field label="持ち物（任意）">
+            )}
+            {!openFields.has("attire") ? (
+              <button
+                type="button"
+                onClick={() => setOpenFields((prev) => new Set(prev).add("attire"))}
+                className="mb-1.5 mr-1.5 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-background"
+              >
+                ＋ 服装
+              </button>
+            ) : (
+              <Field label="服装（任意）" className="mb-2">
+                <input
+                  type="text"
+                  value={attire}
+                  onChange={(e) => setAttire(e.target.value)}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                />
+              </Field>
+            )}
+            {!openFields.has("belongings") ? (
+              <button
+                type="button"
+                onClick={() => setOpenFields((prev) => new Set(prev).add("belongings"))}
+                className="mb-1.5 mr-1.5 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-background"
+              >
+                ＋ 持ち物
+              </button>
+            ) : (
+              <Field label="持ち物（任意）" className="mb-2">
                 <textarea
                   value={belongings}
                   onChange={(e) => setBelongings(e.target.value)}
@@ -920,7 +1014,17 @@ function OrderEditModal({
                   className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                 />
               </Field>
-              <Field label="集合場所（任意）">
+            )}
+            {!openFields.has("meetingPlace") ? (
+              <button
+                type="button"
+                onClick={() => setOpenFields((prev) => new Set(prev).add("meetingPlace"))}
+                className="mb-3 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-background"
+              >
+                ＋ 集合場所
+              </button>
+            ) : (
+              <Field label="集合場所（任意）" className="mb-3">
                 <input
                   type="text"
                   value={meetingPlace}
@@ -928,33 +1032,78 @@ function OrderEditModal({
                   className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                 />
               </Field>
-              <p className="text-xs text-muted">
-                残り{remaining}名 × 10 Tee = {remaining * 10} Tee がロックされます（残高で賄える上限: {affordableMaxEntries}名）。
-              </p>
-              {remaining > affordableMaxEntries ? (
-                <p className="text-xs text-red-600">Tee残高が不足しているため切り替えられません。</p>
-              ) : null}
-              <p className="text-xs font-semibold text-amber-700">
-                ⚠ 切り替え後は時給・応募条件・持ち物・集合場所を変更できません。内容をよく確認してください。
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowPublicForm(false)}
-                  className="flex-1 rounded-lg border border-border px-4 py-2 text-sm"
-                >
-                  キャンセル
-                </button>
-                <button
-                  type="button"
-                  disabled={pending || !wageAmount || remaining > affordableMaxEntries}
-                  onClick={switchToPublic}
-                  className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-                >
-                  切り替える
-                </button>
-              </div>
+            )}
+
+            <p className="mb-2 text-xs text-muted">
+              残り{remaining}名 × 10 Tee = {remaining * 10} Tee がロックされます（残高で賄える上限: {affordableMaxEntries}名）。
+            </p>
+            {remaining > affordableMaxEntries ? (
+              <p className="mb-2 text-xs text-red-600">Tee残高が不足しているため開始できません。</p>
+            ) : null}
+
+            <p className="mb-2 text-xs font-semibold text-foreground">公開前の確認事項</p>
+            <div className="mb-3 flex flex-col gap-2">
+              <label className="flex items-start gap-2 rounded-lg border border-border bg-white p-3">
+                <input
+                  type="checkbox"
+                  checked={agreedScope}
+                  onChange={(e) => setAgreedScope(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span className="text-xs">
+                  <span className="mb-1 block font-semibold">公開範囲について</span>
+                  この募集は、貴社に所属登録していないTeeRA利用者に対しても広く公開されます。公開後は掲載内容が不特定多数の利用者の目に触れることを前提とし、業務内容・場所・時間などの記載に誤りや誤解を招く表現がないことを十分に確認したうえで公開するものとします。
+                </span>
+              </label>
+              <label className="flex items-start gap-2 rounded-lg border border-border bg-white p-3">
+                <input
+                  type="checkbox"
+                  checked={agreedAccuracy}
+                  onChange={(e) => setAgreedAccuracy(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span className="text-xs">
+                  <span className="mb-1 block font-semibold">掲載条件の正確性について</span>
+                  掲載する募集内容（業務内容・勤務時間・報酬など）は、応募者との間で成立する労働条件の基礎となります。記載した報酬・時給・交通費等の条件について、実際の支払条件と齟齬がないこと、法令上求められる条件（最低賃金など）を満たしていることを貴社の責任において確認し、公開後の一方的な不利益変更は行わないものとします。
+                </span>
+              </label>
+              <label className="flex items-start gap-2 rounded-lg border border-border bg-white p-3">
+                <input
+                  type="checkbox"
+                  checked={agreedLiability}
+                  onChange={(e) => setAgreedLiability(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span className="text-xs">
+                  <span className="mb-1 block font-semibold">TeeRAの責任範囲について</span>
+                  TeeRAは募集内容の掲載の場を提供するにとどまり、応募者の適性・信頼性の保証、および貴社と応募者との間で締結される業務条件・労働条件についての当事者にはなりません。応募者が募集内容と合致しなかった場合の対応、報酬・給与の支払いおよびそれに関するトラブルについて、TeeRAは一切の責任を負わないことに同意します。
+                </span>
+              </label>
             </div>
+
+            <button
+              type="button"
+              disabled={pending || !wageAmount || remaining > affordableMaxEntries || !allAgreed}
+              onClick={switchToPublic}
+              className="mb-2 w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              公開募集を開始する
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={saveDraft}
+              className="mb-2 w-full rounded-lg border border-border px-4 py-2.5 text-sm font-semibold hover:bg-background disabled:opacity-50"
+            >
+              内容だけ保存する（まだ公開しない）
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowPublicForm(false)}
+              className="w-full text-center text-xs text-muted hover:text-primary"
+            >
+              キャンセル
+            </button>
           </div>
         ) : (
           <div className="flex flex-col gap-2 border-t border-border pt-3">
@@ -1560,7 +1709,7 @@ function ClientOrderRow({
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-lg">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">{title}</h3>
           <button type="button" onClick={onClose} className="text-muted">
