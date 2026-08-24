@@ -1018,9 +1018,9 @@ function OrderEditModal({
               type="button"
               disabled={pending}
               onClick={() => setConfirmingDelete(true)}
-              className="flex items-center justify-center gap-1.5 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+              className="text-center text-sm text-red-600 hover:text-red-700 disabled:opacity-50"
             >
-              削除する
+              この募集を削除する
             </button>
           </div>
         )}
