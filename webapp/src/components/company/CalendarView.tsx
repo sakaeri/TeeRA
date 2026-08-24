@@ -934,6 +934,9 @@ function OrderEditModal({
               {remaining > affordableMaxEntries ? (
                 <p className="text-xs text-red-600">Tee残高が不足しているため切り替えられません。</p>
               ) : null}
+              <p className="text-xs font-semibold text-amber-700">
+                ⚠ 切り替え後は時給・応募条件・持ち物・集合場所を変更できません。内容をよく確認してください。
+              </p>
               <div className="flex gap-2">
                 <button
                   type="button"
