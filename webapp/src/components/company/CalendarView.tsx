@@ -481,6 +481,7 @@ function DayDetailModal({
   const remaining = recruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
   const inhouseShifts = shifts.filter((s) => s.source !== "CLIENT");
   const clientShifts = shifts.filter((s) => s.source === "CLIENT");
+  const hasUnreported = inhouseShifts.some((s) => !s.approvalStatus);
 
   const clientGroups = useMemo(() => {
     const map = new Map<string, { clientName: string; companyRelationshipId?: string; rows: ShiftRow[] }>();
@@ -511,13 +512,27 @@ function DayDetailModal({
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 p-4">
       <div className="max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg">
         <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={() => shift(-1)} className="text-muted">
-              ‹
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => shift(-1)}
+              aria-label="前の日"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-background hover:text-primary"
+            >
+              <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+                <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
             <span className="font-serif-jp text-lg font-bold">{dateLabel}</span>
-            <button type="button" onClick={() => shift(1)} className="text-muted">
-              ›
+            <button
+              type="button"
+              onClick={() => shift(1)}
+              aria-label="次の日"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-background hover:text-primary"
+            >
+              <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+                <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
           </div>
           <button type="button" onClick={onClose} className="text-muted">
@@ -529,9 +544,12 @@ function DayDetailModal({
           <button
             type="button"
             onClick={() => setTab("shifts")}
-            className={`border-b-2 px-1 py-2 font-semibold ${tab === "shifts" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+            className={`relative border-b-2 px-1 py-2 font-semibold ${tab === "shifts" ? "border-accent text-primary" : "border-transparent text-muted"}`}
           >
             スタッフシフト
+            {hasUnreported ? (
+              <span className="absolute -right-1.5 -top-0.5 h-2 w-2 rounded-full bg-red-500" aria-label="未報告あり" />
+            ) : null}
           </button>
           {clientShifts.length > 0 || clientOrders.length > 0 ? (
             <button
@@ -552,7 +570,9 @@ function DayDetailModal({
               className={`flex items-center gap-2 border-b-2 px-1 py-2 font-semibold ${tab === "recruit" ? "border-accent text-primary" : "border-transparent text-muted"}`}
             >
               募集一覧
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">残り{remaining}名</span>
+              {!isPastDay && remaining > 0 ? (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">残り{remaining}名</span>
+              ) : null}
             </button>
           ) : null}
         </div>
@@ -563,21 +583,24 @@ function DayDetailModal({
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
               {inhouseShifts.map((s) => (
-                <li key={s.id} className="flex items-center justify-between border-b border-border/50 py-2.5">
-                  <span>
+                <li
+                  key={s.id}
+                  className="grid grid-cols-[1fr_120px_70px_80px_auto] items-center gap-2 border-b border-border/50 py-2.5"
+                >
+                  <span className="truncate">
                     <span className="font-semibold">{s.staffName}</span>
                     {s.note ? <span className="ml-1.5 text-xs text-muted">（{s.note}）</span> : null}
                   </span>
                   <span className="text-muted">
                     {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
                   </span>
-                  <span className="text-muted">自社</span>
+                  <span className="truncate text-muted">自社</span>
                   {s.approvalStatus ? (
-                    <span className={`rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
+                    <span className={`w-fit rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
                       {APPROVAL_LABEL[s.approvalStatus] ?? s.approvalStatus}
                     </span>
                   ) : (
-                    <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
+                    <span className="w-fit rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
                   )}
                   {isPastDay ? null : <CancelShiftButton shiftId={s.id} staffName={s.staffName} />}
                 </li>
@@ -610,8 +633,11 @@ function DayDetailModal({
               </div>
               <ul className="flex flex-col gap-1 text-sm">
                 {selectedClientGroup.rows.map((s) => (
-                  <li key={s.id} className="flex items-center justify-between border-b border-border/50 py-2.5">
-                    <span>
+                  <li
+                    key={s.id}
+                    className="grid grid-cols-[1fr_120px_80px_auto] items-center gap-2 border-b border-border/50 py-2.5"
+                  >
+                    <span className="truncate">
                       <span className="font-semibold">{s.staffName}</span>
                       {s.note ? <span className="ml-1.5 text-xs text-muted">（{s.note}）</span> : null}
                     </span>
@@ -619,11 +645,11 @@ function DayDetailModal({
                       {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
                     </span>
                     {s.approvalStatus ? (
-                      <span className={`rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
+                      <span className={`w-fit rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
                         {APPROVAL_LABEL[s.approvalStatus] ?? s.approvalStatus}
                       </span>
                     ) : (
-                      <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
+                      <span className="w-fit rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
                     )}
                     {!isPastDay && s.createdVia === "PUBLIC_RECRUIT_ENTRY" ? <CancelShiftButton shiftId={s.id} staffName={s.staffName} /> : null}
                   </li>
