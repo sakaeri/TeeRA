@@ -724,7 +724,7 @@ function DayDetailModal({
                     </span>
                   </div>
                   {assignedNames.length > 0 ? (
-                    <p className="mt-1.5 text-xs text-muted">アサイン済み：{assignedNames.join("、")}</p>
+                    <p className="mt-1.5 text-xs text-muted">確定スタッフ：{assignedNames.join("、")}</p>
                   ) : null}
                   {r.status === "PUBLISHED" && !isPastDay ? (
                     <RecruitmentAssignControls
