@@ -481,7 +481,7 @@ function DayDetailModal({
   const remaining = recruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
   const inhouseShifts = shifts.filter((s) => s.source !== "CLIENT");
   const clientShifts = shifts.filter((s) => s.source === "CLIENT");
-  const hasUnreported = inhouseShifts.some((s) => !s.approvalStatus);
+  const hasUnreported = shifts.some((s) => !s.approvalStatus);
 
   const clientGroups = useMemo(() => {
     const map = new Map<string, { clientName: string; companyRelationshipId?: string; rows: ShiftRow[] }>();
@@ -578,33 +578,45 @@ function DayDetailModal({
         </div>
 
         {tab === "shifts" ? (
-          inhouseShifts.length === 0 ? (
+          shifts.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted">この日のシフトはありません。</p>
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
-              {inhouseShifts.map((s) => (
-                <li
-                  key={s.id}
-                  className="grid grid-cols-[1fr_120px_70px_80px_auto] items-center gap-2 border-b border-border/50 py-2.5"
-                >
-                  <span className="truncate">
-                    <span className="font-semibold">{s.staffName}</span>
-                    {s.note ? <span className="ml-1.5 text-xs text-muted">（{s.note}）</span> : null}
-                  </span>
-                  <span className="text-muted">
-                    {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
-                  </span>
-                  <span className="truncate text-muted">自社</span>
-                  {s.approvalStatus ? (
-                    <span className={`w-fit rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
-                      {APPROVAL_LABEL[s.approvalStatus] ?? s.approvalStatus}
+              {shifts.map((s) => {
+                const workplaceLabel = s.source === "CLIENT" ? (s.clientName ?? "依頼主") : "自社";
+                return (
+                  <li
+                    key={s.id}
+                    className="grid grid-cols-[1fr_120px_80px_auto] items-center gap-2 border-b border-border/50 py-2.5"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">{s.staffName}</span>
+                      <span className="flex items-center gap-1.5 text-xs text-muted">
+                        <span
+                          title={workplaceLabel}
+                          className={`max-w-[220px] truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                            s.source === "CLIENT" ? "bg-sky-100 text-sky-800" : "bg-emerald-100 text-emerald-800"
+                          }`}
+                        >
+                          {workplaceLabel}
+                        </span>
+                        {s.note ? <span className="truncate">（{s.note}）</span> : null}
+                      </span>
                     </span>
-                  ) : (
-                    <span className="w-fit rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
-                  )}
-                  {isPastDay ? null : <CancelShiftButton shiftId={s.id} staffName={s.staffName} />}
-                </li>
-              ))}
+                    <span className="text-muted">
+                      {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
+                    </span>
+                    {s.approvalStatus ? (
+                      <span className={`w-fit rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
+                        {APPROVAL_LABEL[s.approvalStatus] ?? s.approvalStatus}
+                      </span>
+                    ) : (
+                      <span className="w-fit rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
+                    )}
+                    {isPastDay ? null : <CancelShiftButton shiftId={s.id} staffName={s.staffName} />}
+                  </li>
+                );
+              })}
             </ul>
           )
         ) : tab === "client" ? (
