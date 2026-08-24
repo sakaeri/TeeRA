@@ -9,7 +9,6 @@ import {
   dismissShiftRequestAction,
   createPublicRecruitmentAction,
   updateMaxEntriesAction,
-  stopRecruitmentAction,
   deleteRecruitmentAction,
   openRecruitmentToPublicAction,
   assignStaffToRecruitmentAction,
@@ -818,6 +817,7 @@ function OrderEditModal({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showPublicForm, setShowPublicForm] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [wageAmount, setWageAmount] = useState("");
   const [wageType, setWageType] = useState<"HOURLY" | "DAILY">("HOURLY");
   const [applicationConditions, setApplicationConditions] = useState("");
@@ -838,14 +838,15 @@ function OrderEditModal({
     });
   }
 
-  function stop() {
-    startTransition(() => stopRecruitmentAction(recruitment.id));
-  }
-
   function remove() {
+    setError(null);
     startTransition(async () => {
-      await deleteRecruitmentAction(recruitment.id);
-      onClose();
+      try {
+        await deleteRecruitmentAction(recruitment.id);
+        onClose();
+      } catch {
+        setError("削除できませんでした。");
+      }
     });
   }
 
@@ -1003,21 +1004,55 @@ function OrderEditModal({
             </div>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-3 text-xs">
+          <div className="flex flex-col gap-2 border-t border-border pt-3">
             {recruitment.visibility === "ORDER" ? (
-              <button type="button" onClick={() => setShowPublicForm(true)} className="text-primary underline">
-                公開募集に切り替える
+              <button
+                type="button"
+                onClick={() => setShowPublicForm(true)}
+                className="flex items-center justify-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-100"
+              >
+                📣 公開募集に切り替える
               </button>
             ) : null}
-            <button type="button" disabled={pending} onClick={stop} className="text-muted underline">
-              停止する
-            </button>
-            <button type="button" disabled={pending} onClick={remove} className="text-red-600 underline">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setConfirmingDelete(true)}
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
               削除する
             </button>
           </div>
         )}
       </div>
+
+      {confirmingDelete ? (
+        <Modal title="オーダーを削除しますか？" onClose={() => setConfirmingDelete(false)}>
+          <p className="mb-4 text-sm text-muted">
+            {recruitment.filled > 0
+              ? `${recruitment.filled}名エントリーしています。削除するとエントリーもすべて取り消しになります。`
+              : "この操作は元に戻せません。"}
+          </p>
+          {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(false)}
+              className="rounded-lg border border-border px-4 py-2 text-sm"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={remove}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              削除する
+            </button>
+          </div>
+        </Modal>
+      ) : null}
     </Modal>
   );
 }

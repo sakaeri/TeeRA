@@ -13,7 +13,7 @@ import {
 import {
   createPublicRecruitment,
   updateMaxEntries,
-  stopOrDeleteRecruitment,
+  deleteRecruitment,
   affordableMaxEntries,
   assignStaffToRecruitment,
   openRecruitmentToPublic,
@@ -167,19 +167,11 @@ export async function updateMaxEntriesAction(recruitmentId: string, newMaxEntrie
   revalidatePath("/company/calendar");
 }
 
-export async function stopRecruitmentAction(recruitmentId: string) {
-  const { userId, membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
-
-  await stopOrDeleteRecruitment({ recruitmentId, updatedByUserId: userId, delete: false });
-  revalidatePath("/company/calendar");
-}
-
 export async function deleteRecruitmentAction(recruitmentId: string) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
 
-  await stopOrDeleteRecruitment({ recruitmentId, updatedByUserId: userId, delete: true });
+  await deleteRecruitment({ recruitmentId, updatedByUserId: userId });
   revalidatePath("/company/calendar");
 }
 

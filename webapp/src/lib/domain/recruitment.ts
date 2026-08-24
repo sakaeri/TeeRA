@@ -169,13 +169,15 @@ export async function updateMaxEntries(params: {
   });
 }
 
-// 停止・削除: refund the unused locked portion (上限 - 応募済み人数) × cost.
-// オーダー(visibility=ORDER)はロックが無いので返金も発生しない。
-export async function stopOrDeleteRecruitment(params: {
-  recruitmentId: string;
-  updatedByUserId: string;
-  delete: boolean;
-}) {
+// 削除: 間違えた/重複した募集を消す操作。停止(一時中断からの再開)は使い道が
+// ないため廃止 — 人数を絞りたいだけなら人数上限を減らせば足りる。
+// 既にエントリー済みの人がいれば、そのRecruitmentEntryとresultingShiftも
+// まとめて取り消す — 募集を消したのにシフトだけ生き残る状態を防ぐ(呼び出し
+// 側で「◯名エントリーしています」の確認を必ず挟む)。確定分も含めて全員の
+// 枠が無効になるので、現在ロック中のTee(recruitment.lockedTee)は全額返金
+// する(「未使用分だけ」ではない — 確定していた枠も削除で無効になるため)。
+// オーダーはそもそもロックが無いので返金も発生しない。
+export async function deleteRecruitment(params: { recruitmentId: string; updatedByUserId: string }) {
   return prisma.$transaction(async (tx) => {
     const recruitment = await tx.publicRecruitment.findUniqueOrThrow({
       where: { id: params.recruitmentId },
@@ -184,23 +186,31 @@ export async function stopOrDeleteRecruitment(params: {
       throw new Error("recruitment_in_past");
     }
 
+    const activeEntries = await tx.recruitmentEntry.findMany({
+      where: { publicRecruitmentId: recruitment.id, status: { not: "REJECTED" } },
+    });
+    for (const entry of activeEntries) {
+      if (entry.resultingShiftId) {
+        await tx.shift.updateMany({
+          where: { id: entry.resultingShiftId, status: "CONFIRMED" },
+          data: { status: "CANCELLED" },
+        });
+      }
+      await tx.recruitmentEntry.update({ where: { id: entry.id }, data: { status: "REJECTED" } });
+    }
+
     if (recruitment.visibility === "ORDER") {
       return tx.publicRecruitment.update({
         where: { id: recruitment.id },
-        data: { status: params.delete ? "DELETED" : "STOPPED" },
+        data: { status: "DELETED" },
       });
     }
 
-    const filledCount = await tx.recruitmentEntry.count({
-      where: { publicRecruitmentId: recruitment.id, status: { not: "REJECTED" } },
-    });
-    const unusedTee = (recruitment.maxEntries - filledCount) * recruitment.perEntryTeeCost;
-
-    if (unusedTee > 0) {
+    if (recruitment.lockedTee > 0) {
       await postLedgerEntry(tx, {
         companyId: recruitment.companyId,
         type: "UNLOCK_REFUND_RECRUITMENT",
-        amount: unusedTee,
+        amount: recruitment.lockedTee,
         publicRecruitmentId: recruitment.id,
         createdByUserId: params.updatedByUserId,
       });
@@ -208,10 +218,7 @@ export async function stopOrDeleteRecruitment(params: {
 
     return tx.publicRecruitment.update({
       where: { id: recruitment.id },
-      data: {
-        status: params.delete ? "DELETED" : "STOPPED",
-        lockedTee: unusedTee > 0 ? recruitment.lockedTee - unusedTee : recruitment.lockedTee,
-      },
+      data: { status: "DELETED", lockedTee: 0 },
     });
   });
 }
