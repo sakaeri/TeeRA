@@ -708,7 +708,7 @@ function DayDetailModal({
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
             {recruitments.map((r) => {
-              const assignedNames = shifts.filter((s) => s.publicRecruitmentId === r.id).map((s) => s.staffName);
+              const assignedShifts = shifts.filter((s) => s.publicRecruitmentId === r.id);
               return (
                 <li key={r.id} className="rounded-lg border border-border p-3">
                   <div className="flex items-center justify-between">
@@ -723,8 +723,19 @@ function DayDetailModal({
                       {r.filled}/{r.maxEntries}名
                     </span>
                   </div>
-                  {assignedNames.length > 0 ? (
-                    <p className="mt-1.5 text-xs text-muted">確定スタッフ：{assignedNames.join("、")}</p>
+                  {assignedShifts.length > 0 ? (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                      <span>確定スタッフ：</span>
+                      {assignedShifts.map((s) => (
+                        <span
+                          key={s.id}
+                          className="inline-flex items-center gap-0.5 rounded-full bg-background px-1.5 py-0.5"
+                        >
+                          {s.staffName}
+                          {!isPastDay ? <CancelShiftButton shiftId={s.id} staffName={s.staffName} /> : null}
+                        </span>
+                      ))}
+                    </div>
                   ) : null}
                   {r.status === "PUBLISHED" && !isPastDay ? (
                     <RecruitmentAssignControls
