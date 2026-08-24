@@ -284,17 +284,20 @@ export function CalendarView({
                   ? { kind: "solid", id: "client", ...orderTag }
                   : null;
 
-          // Fixed row budget per category instead of a shared pool: up to 3
-          // confirmed-shift names, then 1 row for the 未確定 count (not
-          // individual names), then 1 row for 募集＆オーダー — so no single
-          // category can crowd the others out of the cell.
+          // Fixed row budget of 5 total: 未確定 (1 row, count only) and
+          // 募集＆オーダー (1 row) each reserve their slot only when there's
+          // something to show that day — confirmed-shift names get whatever's
+          // left, so a day with no unconfirmed/recruit&order activity can
+          // show up to 5 names instead of being capped at 3 regardless.
           const unconfirmedTag: TagEntry | null =
             dayShiftRequests.length > 0
               ? { kind: "solid", id: "unconfirmed", label: `未確定${dayShiftRequests.length}件`, className: "bg-rose-100 text-rose-900" }
               : null;
 
-          const visibleConfirmed = inhouseShifts.slice(0, 3);
-          const hasOverflow = inhouseShifts.length > 3;
+          const reservedRows = (unconfirmedTag ? 1 : 0) + (recruitOrderTag ? 1 : 0);
+          const confirmedSlotBudget = 5 - reservedRows;
+          const visibleConfirmed = inhouseShifts.slice(0, confirmedSlotBudget);
+          const hasOverflow = inhouseShifts.length > confirmedSlotBudget;
 
           const tagEntries: TagEntry[] = [
             ...visibleConfirmed.map((s) => ({
@@ -319,7 +322,7 @@ export function CalendarView({
               <span className={`block text-center text-[11px] font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
               {hasOverflow ? (
                 <span
-                  title={`他${inhouseShifts.length - 3}件`}
+                  title={`他${inhouseShifts.length - confirmedSlotBudget}件`}
                   className="absolute right-0 top-0 h-0 w-0 border-r-[14px] border-b-[14px] border-r-accent border-b-transparent"
                 />
               ) : null}
