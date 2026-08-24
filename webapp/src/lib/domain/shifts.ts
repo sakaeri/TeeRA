@@ -238,3 +238,43 @@ export async function dismissShiftRequest(shiftRequestId: string) {
     data: { status: "DISMISSED" },
   });
 }
+
+// 解除 — cancel any CONFIRMED shift the caller's company owns, not just
+// recruitment-originated ones. A client cancelling on short notice is
+// exactly the case that needs this: the admin cancels the existing shift
+// and re-assigns someone else, so this reopens whatever produced the shift
+// rather than leaving it stranded — a PublicRecruitment entry (filled count
+// drops so the slot can be refilled) or a matched ShiftRequest (goes back to
+// PENDING so it can be rematched). No Tee refund logic here; only
+// stopOrDeleteRecruitment/updateMaxEntries touch locked Tee.
+export async function cancelShift(params: { shiftId: string; actorCompanyId: string }) {
+  return prisma.$transaction(async (tx) => {
+    const shift = await tx.shift.findUniqueOrThrow({ where: { id: params.shiftId } });
+
+    if (shift.companyId !== params.actorCompanyId) {
+      throw new Error("forbidden");
+    }
+    if (shift.status !== "CONFIRMED") {
+      throw new Error("shift_not_active");
+    }
+
+    await tx.shift.update({ where: { id: shift.id }, data: { status: "CANCELLED" } });
+
+    if (shift.publicRecruitmentId) {
+      const entry = await tx.recruitmentEntry.findFirst({ where: { resultingShiftId: shift.id } });
+      if (entry) {
+        await tx.recruitmentEntry.update({ where: { id: entry.id }, data: { status: "REJECTED" } });
+      }
+    }
+
+    const matchedRequest = await tx.shiftRequest.findFirst({ where: { matchedShiftId: shift.id } });
+    if (matchedRequest) {
+      await tx.shiftRequest.update({
+        where: { id: matchedRequest.id },
+        data: { status: "PENDING", matchedShiftId: null },
+      });
+    }
+
+    return shift;
+  });
+}

@@ -7,6 +7,7 @@ import {
   createAssignedShift,
   matchShiftRequestToShift,
   dismissShiftRequest,
+  cancelShift,
 } from "@/lib/domain/shifts";
 import {
   createPublicRecruitment,
@@ -14,7 +15,6 @@ import {
   stopOrDeleteRecruitment,
   affordableMaxEntries,
   assignStaffToRecruitment,
-  cancelRecruitmentAssignment,
 } from "@/lib/domain/recruitment";
 
 export async function createAssignedShiftAction(input: {
@@ -172,10 +172,10 @@ export async function assignStaffToRecruitmentAction(input: {
   return result;
 }
 
-export async function cancelRecruitmentAssignmentAction(shiftId: string) {
+export async function cancelShiftAction(shiftId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
 
-  await cancelRecruitmentAssignment({ shiftId, actorCompanyId: membership.companyId });
+  await cancelShift({ shiftId, actorCompanyId: membership.companyId });
   revalidatePath("/company/calendar");
 }
