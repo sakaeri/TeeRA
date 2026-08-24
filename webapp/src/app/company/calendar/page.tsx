@@ -1,6 +1,11 @@
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { listShiftsForMonth, listShiftRequests } from "@/lib/domain/shifts";
-import { listPublicRecruitments, listClientRecruitments, affordableMaxEntries } from "@/lib/domain/recruitment";
+import {
+  listPublicRecruitments,
+  listClientRecruitments,
+  affordableMaxEntries,
+  resolveStaffOrigins,
+} from "@/lib/domain/recruitment";
 import { listStaff } from "@/lib/domain/roster";
 import { listTeams } from "@/lib/domain/teams";
 import { listClients } from "@/lib/domain/relationships";
@@ -33,6 +38,17 @@ export default async function CompanyCalendarPage({
   const affordable = await affordableMaxEntries(membership.companyId);
   const clients = company.agencyEnabled ? await listClients(membership.companyId) : [];
 
+  // source=INHOUSEのシフトに立っているスタッフが、自社の名簿メンバーなのか
+  // 配属記録のある派遣スタッフなのか公開募集経由なのかをまとめて解決する。
+  const inhouseStaffIds = shifts.filter((s) => s.source !== "CLIENT").map((s) => s.staffUserId);
+  const staffOrigins = await resolveStaffOrigins({ companyId: membership.companyId, staffUserIds: inhouseStaffIds });
+  const originLabel = (origin: ReturnType<typeof staffOrigins.get>) => {
+    if (!origin) return undefined;
+    if (origin.kind === "SELF") return "自社";
+    if (origin.kind === "PLACEMENT") return `配属：${origin.agencyCompanyName}`;
+    return "公開募集";
+  };
+
   return (
     <main className="mx-auto w-full max-w-6xl px-8 py-10">
       <CalendarView
@@ -53,6 +69,7 @@ export default async function CompanyCalendarPage({
           note: s.note,
           createdVia: s.createdVia,
           publicRecruitmentId: s.publicRecruitmentId,
+          originLabel: s.source === "CLIENT" ? undefined : originLabel(staffOrigins.get(s.staffUserId)),
           approvalStatus: s.workReport?.approvalStatus ?? null,
         }))}
         staffOptions={staff.map((s) => ({ id: s.userId, name: s.name }))}
@@ -74,6 +91,12 @@ export default async function CompanyCalendarPage({
           filled: r.entries.filter((e) => e.status !== "REJECTED").length,
           lockedTee: r.lockedTee,
           status: r.status,
+          visibility: r.visibility,
+          hourlyWage: r.hourlyWage,
+          wageType: r.wageType,
+          applicationConditions: r.applicationConditions,
+          belongings: r.belongings,
+          meetingPlace: r.meetingPlace,
         }))}
         clientRecruitments={clientRecruitments.map((r) => ({
           id: r.id,

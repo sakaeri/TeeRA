@@ -61,26 +61,34 @@ try {
   await staff.click("text=参加する");
   await staff.waitForURL("http://localhost:3000/staff");
 
-  // create a public recruitment with maxEntries=3 (30 Tee) out of 100 balance
+  const today = new Date().toISOString().slice(0, 10);
+
+  // create an order (自社/配属スタッフ限定, free) with maxEntries=3 — no Tee
+  // should move until it's later switched to 公開募集.
   await admin.goto("http://localhost:3000/company/calendar");
   await admin.locator("button", { hasText: "＋" }).last().click();
   await admin.getByText("オーダー募集").click();
   await admin.waitForSelector('input[type="date"]');
   const bodyBeforeFill = await admin.textContent("body");
-  log("affordable cap shown as 10 (100 Tee / 10)", bodyBeforeFill.includes("残高で賄える上限: 10名"));
+  log("order creation form has no 時給/Tee-cap fields", !bodyBeforeFill.includes("時給") && !bodyBeforeFill.includes("残高で賄える"));
 
   const recruitmentTitle = `キッチンスタッフ募集${Date.now()}`;
   const titleInput = admin.locator("label:has-text('タイトル') input");
   await titleInput.fill(recruitmentTitle);
   const maxEntriesInput = admin.locator("label:has-text('募集人数の上限') input");
   await maxEntriesInput.fill("3");
-  await admin.getByRole("button", { name: "公開する" }).click();
+  await admin.getByRole("button", { name: "掲載する" }).click();
   await admin.waitForTimeout(800);
 
   const balanceAfterCreate = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
-  log("balance locked 30 Tee (100 -> 70)", balanceAfterCreate === 70);
+  log("order creation does not touch Tee balance (100 -> 100)", balanceAfterCreate === 100);
 
-  let calBody = await admin.textContent("body");
+  // the old bottom-of-calendar 公開募集一覧 panel is gone — remaining-slot
+  // count now shows as a pill on the オーダー tab inside the day-detail
+  // modal, so open it via the date query param to check.
+  await admin.goto(`http://localhost:3000/company/calendar?date=${today}`);
+  await admin.waitForTimeout(600);
+  let calBody = await admin.locator(".fixed.inset-0.z-20").first().innerText();
   log("recruitment listed with 残り3名", calBody.includes("残り3名"));
 
   // staff applies
@@ -95,10 +103,11 @@ try {
   log("staff shows applied", staffBody.includes("応募済み"));
 
   const balanceAfterApply = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
-  log("balance unchanged on apply (already locked)", balanceAfterApply === 70);
+  log("balance unchanged on apply (order entries stay free)", balanceAfterApply === 100);
 
   await admin.reload();
-  calBody = await admin.textContent("body");
+  await admin.waitForTimeout(600);
+  calBody = await admin.locator(".fixed.inset-0.z-20").first().innerText();
   log("admin sees 残り2名 after one application", calBody.includes("残り2名"));
 
   const shiftCount = Number(
@@ -107,6 +116,29 @@ try {
     ),
   );
   log("a Shift row was created for the applicant", shiftCount === 1);
+
+  // switch the order to 公開募集 (billing only starts here now) — 2 of 3
+  // slots remain unfilled, so 2 × 10 Tee should get locked.
+  await admin.goto(`http://localhost:3000/company/calendar?date=${today}`);
+  await admin.waitForTimeout(600);
+  await admin
+    .locator(".fixed.inset-0.z-20")
+    .first()
+    .getByRole("button", { name: /^オーダー/ })
+    .click();
+  await admin.waitForTimeout(300);
+  await admin.locator(".fixed.inset-0.z-20").first().getByRole("button", { name: "編集" }).click();
+  await admin.waitForTimeout(300);
+  const editModal = admin.locator(".fixed.inset-0.z-20").nth(1);
+  await editModal.getByRole("button", { name: "公開募集に切り替える" }).click();
+  await editModal.locator('input[type="number"]').last().fill("1200");
+  await editModal.getByRole("button", { name: "切り替える" }).click();
+  await admin.waitForTimeout(700);
+
+  const afterSwitch = psql(`select visibility, "lockedTee" from "PublicRecruitment" where "companyId"='${companyId}' and title='${recruitmentTitle}';`);
+  log("switching to 公開募集 locks Tee only for the remaining 2 slots", afterSwitch === "PUBLIC|20");
+  const balanceAfterSwitch = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
+  log("balance debited by exactly the newly-locked amount (100 -> 80)", balanceAfterSwitch === 80);
 
   console.log(process.exitCode ? "RECRUITMENT SMOKE TEST HAD FAILURES" : "RECRUITMENT SMOKE TEST PASSED");
 } catch (err) {

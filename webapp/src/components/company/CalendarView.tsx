@@ -11,6 +11,7 @@ import {
   updateMaxEntriesAction,
   stopRecruitmentAction,
   deleteRecruitmentAction,
+  openRecruitmentToPublicAction,
   assignStaffToRecruitmentAction,
   cancelShiftAction,
 } from "@/app/company/calendar/actions";
@@ -29,6 +30,7 @@ type ShiftRow = {
   note?: string | null;
   createdVia?: string;
   publicRecruitmentId?: string | null;
+  originLabel?: string; // source=INHOUSEのみ意味を持つ: 自社／配属：◯◯／公開募集
   approvalStatus: string | null;
 };
 
@@ -64,6 +66,12 @@ type RecruitmentRow = {
   filled: number;
   lockedTee: number;
   status: string;
+  visibility: string; // "ORDER" | "PUBLIC"
+  hourlyWage: number | null;
+  wageType: string | null;
+  applicationConditions: string | null;
+  belongings: string | null;
+  meetingPlace: string | null;
 };
 
 type ClientRecruitmentRow = {
@@ -365,6 +373,7 @@ export function CalendarView({
           recruitments={recruitments.filter((r) => r.date === selectedDate)}
           clientOrders={clientRecruitments.filter((r) => r.date === selectedDate)}
           staffOptions={staffOptions}
+          affordableMaxEntries={affordableMaxEntries}
           onNavigate={setSelectedDate}
           onClose={() => setSelectedDate(null)}
           onAssign={(companyRelationshipId) => {
@@ -400,13 +409,11 @@ export function CalendarView({
         <RecruitmentFormModal
           teams={teams}
           defaultDate={selectedDate ?? todayStr}
-          affordableMaxEntries={affordableMaxEntries}
           onClose={() => setShowRecruitForm(false)}
         />
       ) : null}
 
       <ShiftRequestsSection requests={shiftRequests} teams={teams} />
-      <RecruitmentsSection recruitments={recruitments} affordableMaxEntries={affordableMaxEntries} />
     </div>
   );
 }
@@ -463,6 +470,7 @@ function DayDetailModal({
   recruitments,
   clientOrders,
   staffOptions,
+  affordableMaxEntries,
   onNavigate,
   onClose,
   onAssign,
@@ -472,15 +480,16 @@ function DayDetailModal({
   recruitments: RecruitmentRow[];
   clientOrders: ClientRecruitmentRow[];
   staffOptions: StaffOption[];
+  affordableMaxEntries: number;
   onNavigate: (dateStr: string) => void;
   onClose: () => void;
   onAssign: (companyRelationshipId?: string) => void;
 }) {
   const [tab, setTab] = useState<"shifts" | "client" | "recruit">("shifts");
   const [selectedClientKey, setSelectedClientKey] = useState<string | null>(null);
+  const [editingRecruitmentId, setEditingRecruitmentId] = useState<string | null>(null);
   const isPastDay = dateStr < new Date().toISOString().slice(0, 10);
   const remaining = recruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
-  const inhouseShifts = shifts.filter((s) => s.source !== "CLIENT");
   const clientShifts = shifts.filter((s) => s.source === "CLIENT");
   const hasUnreported = shifts.some((s) => !s.approvalStatus);
 
@@ -570,7 +579,7 @@ function DayDetailModal({
               onClick={() => setTab("recruit")}
               className={`flex items-center gap-2 border-b-2 px-1 py-2 font-semibold ${tab === "recruit" ? "border-accent text-primary" : "border-transparent text-muted"}`}
             >
-              募集一覧
+              オーダー
               {!isPastDay && remaining > 0 ? (
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">残り{remaining}名</span>
               ) : null}
@@ -584,7 +593,7 @@ function DayDetailModal({
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
               {shifts.map((s) => {
-                const workplaceLabel = s.source === "CLIENT" ? (s.clientName ?? "依頼主") : "自社";
+                const workplaceLabel = s.source === "CLIENT" ? (s.clientName ?? "依頼主") : (s.originLabel ?? "自社");
                 return (
                   <li
                     key={s.id}
@@ -711,17 +720,35 @@ function DayDetailModal({
               const assignedShifts = shifts.filter((s) => s.publicRecruitmentId === r.id);
               return (
                 <li key={r.id} className="rounded-lg border border-border p-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="font-semibold">{r.title}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-semibold">{r.title}</p>
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                            r.visibility === "PUBLIC" ? "bg-sky-100 text-sky-800" : "bg-emerald-100 text-emerald-800"
+                          }`}
+                        >
+                          {r.visibility === "PUBLIC" ? "公開募集" : "オーダー"}
+                        </span>
+                      </div>
                       <p className="text-xs text-muted">
                         {r.startTime ?? "終日"}
                         {r.startTime ? `〜${r.endTime}` : ""}
                       </p>
                     </div>
-                    <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
-                      {r.filled}/{r.maxEntries}名
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+                        {r.filled}/{r.maxEntries}名
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setEditingRecruitmentId(r.id)}
+                        className="rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-background"
+                      >
+                        編集
+                      </button>
+                    </div>
                   </div>
                   {assignedShifts.length > 0 ? (
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
@@ -729,9 +756,10 @@ function DayDetailModal({
                       {assignedShifts.map((s) => (
                         <span
                           key={s.id}
-                          className="inline-flex items-center gap-0.5 rounded-full bg-background px-1.5 py-0.5"
+                          className="inline-flex items-center gap-1 rounded-full bg-background px-1.5 py-0.5"
                         >
                           {s.staffName}
+                          <span className="text-[10px] text-muted/80">（{s.originLabel ?? "自社"}）</span>
                           {!isPastDay ? <CancelShiftButton shiftId={s.id} staffName={s.staffName} /> : null}
                         </span>
                       ))}
@@ -752,7 +780,245 @@ function DayDetailModal({
           </ul>
         )}
       </div>
+
+      {editingRecruitmentId ? (
+        <OrderEditModal
+          recruitment={recruitments.find((r) => r.id === editingRecruitmentId)!}
+          affordableMaxEntries={affordableMaxEntries}
+          isPastDay={isPastDay}
+          onClose={() => setEditingRecruitmentId(null)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+const RECRUITMENT_STATUS_LABEL: Record<string, string> = {
+  PUBLISHED: "掲載中",
+  DRAFT: "下書き",
+  STOPPED: "停止中",
+  DELETED: "削除済み",
+};
+
+// オーダー/公開募集カードの編集用ポップアップ。内容編集・削除・停止・
+// 公開募集への切り替えをここに集約する（以前はカレンダー下部に別パネルが
+// あり、人数上限の変更もブラウザのprompt()頼みだった）。
+function OrderEditModal({
+  recruitment,
+  affordableMaxEntries,
+  isPastDay,
+  onClose,
+}: {
+  recruitment: RecruitmentRow;
+  affordableMaxEntries: number;
+  isPastDay: boolean;
+  onClose: () => void;
+}) {
+  const [maxEntries, setMaxEntries] = useState(recruitment.maxEntries);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [showPublicForm, setShowPublicForm] = useState(false);
+  const [wageAmount, setWageAmount] = useState("");
+  const [wageType, setWageType] = useState<"HOURLY" | "DAILY">("HOURLY");
+  const [applicationConditions, setApplicationConditions] = useState("");
+  const [belongings, setBelongings] = useState("");
+  const [meetingPlace, setMeetingPlace] = useState("");
+
+  const remaining = Math.max(recruitment.maxEntries - recruitment.filled, 0);
+  const canManage = recruitment.status === "PUBLISHED" && !isPastDay;
+
+  function saveMaxEntries() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await updateMaxEntriesAction(recruitment.id, maxEntries);
+      } catch {
+        setError("変更できませんでした。");
+      }
+    });
+  }
+
+  function stop() {
+    startTransition(() => stopRecruitmentAction(recruitment.id));
+  }
+
+  function remove() {
+    startTransition(async () => {
+      await deleteRecruitmentAction(recruitment.id);
+      onClose();
+    });
+  }
+
+  function switchToPublic() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await openRecruitmentToPublicAction({
+          recruitmentId: recruitment.id,
+          remaining,
+          hourlyWage: Number(wageAmount),
+          wageType,
+          applicationConditions: applicationConditions || undefined,
+          belongings: belongings || undefined,
+          meetingPlace: meetingPlace || undefined,
+        });
+        onClose();
+      } catch {
+        setError("公開募集への切り替えに失敗しました（残高不足の可能性があります）。");
+      }
+    });
+  }
+
+  return (
+    <Modal title={recruitment.title} onClose={onClose}>
+      <div className="flex flex-col gap-3 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+            {RECRUITMENT_STATUS_LABEL[recruitment.status] ?? recruitment.status}
+          </span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+              recruitment.visibility === "PUBLIC" ? "bg-sky-100 text-sky-800" : "bg-emerald-100 text-emerald-800"
+            }`}
+          >
+            {recruitment.visibility === "PUBLIC" ? "公開募集" : "オーダー"}
+          </span>
+        </div>
+        <p className="text-xs text-muted">
+          {recruitment.date} {recruitment.startTime ?? "終日"}
+          {recruitment.startTime ? `〜${recruitment.endTime}` : ""}
+        </p>
+
+        {recruitment.visibility === "PUBLIC" ? (
+          <div className="rounded-lg border border-border bg-background p-3 text-xs text-muted">
+            <p>
+              {recruitment.wageType === "DAILY" ? "日給" : "時給"} {recruitment.hourlyWage}円
+            </p>
+            {recruitment.applicationConditions ? <p className="mt-1">応募条件：{recruitment.applicationConditions}</p> : null}
+            {recruitment.belongings ? <p className="mt-1">持ち物：{recruitment.belongings}</p> : null}
+            {recruitment.meetingPlace ? <p className="mt-1">集合場所：{recruitment.meetingPlace}</p> : null}
+          </div>
+        ) : null}
+
+        <Field label="募集人数の上限">
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min={recruitment.filled}
+              value={maxEntries}
+              disabled={!canManage}
+              onChange={(e) => setMaxEntries(Number(e.target.value))}
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm disabled:bg-gray-50"
+            />
+            {canManage ? (
+              <button
+                type="button"
+                disabled={pending || maxEntries === recruitment.maxEntries}
+                onClick={saveMaxEntries}
+                className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-background disabled:opacity-50"
+              >
+                変更する
+              </button>
+            ) : null}
+          </div>
+        </Field>
+
+        {error ? <p className="text-xs text-red-600">{error}</p> : null}
+
+        {!canManage ? (
+          recruitment.status === "PUBLISHED" ? (
+            <p className="text-xs text-muted">過去の日付のため変更できません。</p>
+          ) : null
+        ) : showPublicForm ? (
+          <div className="rounded-lg border border-accent/40 bg-accent/5 p-3">
+            <p className="mb-2 text-xs font-semibold text-primary">公開募集に切り替える</p>
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <Field label="時給／日給" className="flex-1">
+                  <input
+                    type="number"
+                    value={wageAmount}
+                    onChange={(e) => setWageAmount(e.target.value)}
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                  />
+                </Field>
+                <Field label="単位">
+                  <select
+                    value={wageType}
+                    onChange={(e) => setWageType(e.target.value as "HOURLY" | "DAILY")}
+                    className="rounded-lg border border-border px-3 py-2 text-sm"
+                  >
+                    <option value="HOURLY">時給</option>
+                    <option value="DAILY">日給</option>
+                  </select>
+                </Field>
+              </div>
+              <Field label="応募条件（任意）">
+                <textarea
+                  value={applicationConditions}
+                  onChange={(e) => setApplicationConditions(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                />
+              </Field>
+              <Field label="持ち物（任意）">
+                <textarea
+                  value={belongings}
+                  onChange={(e) => setBelongings(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                />
+              </Field>
+              <Field label="集合場所（任意）">
+                <input
+                  type="text"
+                  value={meetingPlace}
+                  onChange={(e) => setMeetingPlace(e.target.value)}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                />
+              </Field>
+              <p className="text-xs text-muted">
+                残り{remaining}名 × 10 Tee = {remaining * 10} Tee がロックされます（残高で賄える上限: {affordableMaxEntries}名）。
+              </p>
+              {remaining > affordableMaxEntries ? (
+                <p className="text-xs text-red-600">Tee残高が不足しているため切り替えられません。</p>
+              ) : null}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPublicForm(false)}
+                  className="flex-1 rounded-lg border border-border px-4 py-2 text-sm"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  disabled={pending || !wageAmount || remaining > affordableMaxEntries}
+                  onClick={switchToPublic}
+                  className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+                >
+                  切り替える
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-3 text-xs">
+            {recruitment.visibility === "ORDER" ? (
+              <button type="button" onClick={() => setShowPublicForm(true)} className="text-primary underline">
+                公開募集に切り替える
+              </button>
+            ) : null}
+            <button type="button" disabled={pending} onClick={stop} className="text-muted underline">
+              停止する
+            </button>
+            <button type="button" disabled={pending} onClick={remove} className="text-red-600 underline">
+              削除する
+            </button>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -1185,15 +1451,16 @@ function AssignShiftModal({
   );
 }
 
+// オーダーの新規作成 — 自社スタッフ・配属済み派遣スタッフだけが対象の、無料
+// の募集。時給等の公開募集専用項目はここでは入力させない（公開募集への
+// 切り替え時に別途入力する）。
 function RecruitmentFormModal({
   teams,
   defaultDate,
-  affordableMaxEntries,
   onClose,
 }: {
   teams: Team[];
   defaultDate: string;
-  affordableMaxEntries: number;
   onClose: () => void;
 }) {
   const [title, setTitle] = useState("");
@@ -1201,12 +1468,9 @@ function RecruitmentFormModal({
   const [date, setDate] = useState(defaultDate);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("18:00");
-  const [hourlyWage, setHourlyWage] = useState("");
-  const [maxEntries, setMaxEntries] = useState(Math.min(1, affordableMaxEntries));
+  const [maxEntries, setMaxEntries] = useState(1);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-
-  const cappedMax = Math.min(maxEntries, affordableMaxEntries);
 
   function submit(publish: boolean) {
     setError(null);
@@ -1218,19 +1482,18 @@ function RecruitmentFormModal({
           date,
           startTime,
           endTime,
-          hourlyWage: hourlyWage ? Number(hourlyWage) : undefined,
-          maxEntries: cappedMax,
+          maxEntries,
           publish,
         });
         onClose();
       } catch {
-        setError("残高が不足しているため作成できません。");
+        setError("作成できませんでした。");
       }
     });
   }
 
   return (
-    <Modal title="公開募集を作成" onClose={onClose}>
+    <Modal title="オーダーを作成" onClose={onClose}>
       <div className="flex flex-col gap-3">
         <Field label="タイトル">
           <input
@@ -1282,51 +1545,39 @@ function RecruitmentFormModal({
             />
           </Field>
         </div>
-        <Field label="時給（任意）">
-          <input
-            type="number"
-            value={hourlyWage}
-            onChange={(e) => setHourlyWage(e.target.value)}
-            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-          />
-        </Field>
-        <Field label={`募集人数の上限（残高で賄える上限: ${affordableMaxEntries}名）`}>
+        <Field label="募集人数の上限">
           <input
             type="number"
             min={1}
-            max={affordableMaxEntries}
             value={maxEntries}
             onChange={(e) => setMaxEntries(Number(e.target.value))}
             className="w-full rounded-lg border border-border px-3 py-2 text-sm"
           />
         </Field>
-        <p className="text-xs text-muted">10 Tee × {cappedMax}名 = {cappedMax * 10} Tee がロックされます。</p>
+        <p className="text-xs text-muted">
+          自社スタッフ・配属済みの派遣スタッフのみが対象のオーダーとして作成されます（無料）。応募が足りない場合は、あとから公開募集への切り替えができます。
+        </p>
 
         {error ? <p className="text-xs text-red-600">{error}</p> : null}
 
         <div className="flex gap-2">
           <button
             type="button"
-            disabled={pending || !title || affordableMaxEntries < 1}
+            disabled={pending || !title}
             onClick={() => submit(true)}
             className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
-            公開する
+            掲載する
           </button>
           <button
             type="button"
-            disabled={pending || !title || affordableMaxEntries < 1}
+            disabled={pending || !title}
             onClick={() => submit(false)}
             className="flex-1 rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
           >
             下書き保存
           </button>
         </div>
-        {affordableMaxEntries < 1 ? (
-          <p className="text-xs text-red-600">
-            Tee残高が不足しているため公開募集を開始できません。
-          </p>
-        ) : null}
       </div>
     </Modal>
   );
@@ -1429,78 +1680,6 @@ function ShiftRequestsSection({ requests, teams }: { requests: ShiftRequestRow[]
           ))}
         </ul>
       )}
-    </div>
-  );
-}
-
-function RecruitmentsSection({
-  recruitments,
-  affordableMaxEntries,
-}: {
-  recruitments: RecruitmentRow[];
-  affordableMaxEntries: number;
-}) {
-  const [pending, startTransition] = useTransition();
-  const todayStr = new Date().toISOString().slice(0, 10);
-
-  return (
-    <div className="mt-8 rounded-xl border border-border bg-white/60 p-5">
-      <h3 className="mb-3 font-semibold">公開募集一覧</h3>
-      {recruitments.length === 0 ? (
-        <p className="text-sm text-muted">公開募集はありません。</p>
-      ) : (
-        <ul className="flex flex-col gap-3 text-sm">
-          {recruitments.map((r) => (
-            <li key={r.id} className="rounded-lg border border-border/60 p-3">
-              <div className="mb-1 flex items-center justify-between">
-                <span className="font-medium">{r.title}</span>
-                <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">
-                  {r.status === "PUBLISHED" ? "公開中" : r.status === "DRAFT" ? "下書き" : "停止中"}
-                </span>
-              </div>
-              <p className="text-xs text-muted">
-                {r.date} {r.startTime}〜{r.endTime} ／ 残り{Math.max(r.maxEntries - r.filled, 0)}名
-                （上限{r.maxEntries}名・ロック中 {r.lockedTee} Tee）
-              </p>
-              {r.status === "PUBLISHED" && r.date < todayStr ? (
-                <p className="mt-2 text-xs text-muted">過去の日付のため変更できません。</p>
-              ) : r.status === "PUBLISHED" ? (
-                <div className="mt-2 flex gap-3 text-xs">
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => {
-                      const next = window.prompt("新しい人数上限", String(r.maxEntries));
-                      if (!next) return;
-                      startTransition(() => updateMaxEntriesAction(r.id, Number(next)));
-                    }}
-                    className="text-primary underline"
-                  >
-                    人数上限を変更
-                  </button>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => startTransition(() => stopRecruitmentAction(r.id))}
-                    className="text-muted underline"
-                  >
-                    停止する
-                  </button>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => startTransition(() => deleteRecruitmentAction(r.id))}
-                    className="text-red-600 underline"
-                  >
-                    削除する
-                  </button>
-                </div>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="mt-3 text-xs text-muted">残高で賄える人数上限: {affordableMaxEntries}名</p>
     </div>
   );
 }

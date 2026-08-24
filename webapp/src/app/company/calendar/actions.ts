@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManage } from "@/lib/auth/permissions";
+import { prisma } from "@/lib/prisma";
 import {
   createAssignedShift,
   matchShiftRequestToShift,
@@ -15,7 +16,9 @@ import {
   stopOrDeleteRecruitment,
   affordableMaxEntries,
   assignStaffToRecruitment,
+  openRecruitmentToPublic,
 } from "@/lib/domain/recruitment";
+import type { WageType } from "@/generated/prisma/enums";
 
 export async function createAssignedShiftAction(input: {
   teamId?: string;
@@ -87,6 +90,8 @@ export async function dismissShiftRequestAction(shiftRequestId: string) {
   revalidatePath("/company/calendar");
 }
 
+// オーダーとして作成する — 無料なのでTee残高のチェックは不要（公開募集への
+// 切り替え時にopenRecruitmentToPublicAction側でチェックする）。
 export async function createPublicRecruitmentAction(input: {
   teamId?: string;
   title: string;
@@ -94,17 +99,11 @@ export async function createPublicRecruitmentAction(input: {
   date: string;
   startTime?: string;
   endTime?: string;
-  hourlyWage?: number;
   maxEntries: number;
   publish: boolean;
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership, input.teamId)) throw new Error("forbidden");
-
-  const affordable = await affordableMaxEntries(membership.companyId);
-  if (input.maxEntries > affordable) {
-    throw new Error("insufficient_tee_balance");
-  }
 
   await createPublicRecruitment({
     companyId: membership.companyId,
@@ -114,10 +113,38 @@ export async function createPublicRecruitmentAction(input: {
     date: new Date(`${input.date}T00:00:00.000Z`),
     startTime: input.startTime,
     endTime: input.endTime,
-    hourlyWage: input.hourlyWage,
     maxEntries: input.maxEntries,
     createdByUserId: userId,
     publish: input.publish,
+  });
+  revalidatePath("/company/calendar");
+}
+
+export async function openRecruitmentToPublicAction(input: {
+  recruitmentId: string;
+  remaining: number;
+  hourlyWage: number;
+  wageType: WageType;
+  applicationConditions?: string;
+  belongings?: string;
+  meetingPlace?: string;
+}) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  if (!canManage(membership)) throw new Error("forbidden");
+
+  const affordable = await affordableMaxEntries(membership.companyId);
+  if (input.remaining > affordable) {
+    throw new Error("insufficient_tee_balance");
+  }
+
+  await openRecruitmentToPublic({
+    recruitmentId: input.recruitmentId,
+    hourlyWage: input.hourlyWage,
+    wageType: input.wageType,
+    applicationConditions: input.applicationConditions,
+    belongings: input.belongings,
+    meetingPlace: input.meetingPlace,
+    updatedByUserId: userId,
   });
   revalidatePath("/company/calendar");
 }
@@ -126,9 +153,14 @@ export async function updateMaxEntriesAction(recruitmentId: string, newMaxEntrie
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
 
-  const affordable = await affordableMaxEntries(membership.companyId);
-  if (newMaxEntries > affordable) {
-    throw new Error("insufficient_tee_balance");
+  // オーダー(visibility=ORDER)は無課金なのでTee残高の上限チェックは不要
+  // （公開募集化済みのものだけ、上限を上げる分のTeeが払えるか確認する）。
+  const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: recruitmentId } });
+  if (recruitment.visibility === "PUBLIC") {
+    const affordable = await affordableMaxEntries(membership.companyId);
+    if (newMaxEntries > affordable) {
+      throw new Error("insufficient_tee_balance");
+    }
   }
 
   await updateMaxEntries({ recruitmentId, newMaxEntries, updatedByUserId: userId });

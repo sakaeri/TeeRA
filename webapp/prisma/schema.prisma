@@ -41,6 +41,7 @@ model User {
   shiftsAsStaff              Shift[]                  @relation("ShiftStaff")
   shiftRequests              ShiftRequest[]
   recruitmentEntries         RecruitmentEntry[]
+  staffPlacements            StaffPlacement[]
   staffContracts             StaffContract[]
   pointsLedgerEntries        StaffPointsLedgerEntry[]
   promoRedemptions           PromoRedemption[]
@@ -175,10 +176,29 @@ model CompanyRelationship {
   shifts            Shift[]
   invoices          Invoice[]
   inviteTokens      InviteToken[]
+  staffPlacements   StaffPlacement[]
 
   @@index([ownerCompanyId])
   @@index([agencyCompanyId])
   @@index([clientCompanyId])
+}
+
+// 配属記録 — 契約(StaffContract)とは無関係の軽量な事実の記録。「このスタッフは
+// この派遣関係(CompanyRelationship)に配属済み」というだけを表す。契約は
+// あくまで任意の雇用条件書面であり、配属＝就業可否のゲートには使わない。
+// 管理者がオーダーへ自由にアサインした時点で自動生成され、以降そのスタッフは
+// 同じ配属先のオーダーへ自分でエントリーできるようになる。
+model StaffPlacement {
+  id                    String   @id @default(cuid())
+  staffUserId           String
+  companyRelationshipId String
+  createdAt             DateTime @default(now())
+
+  staff               User                @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+  companyRelationship CompanyRelationship @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
+
+  @@unique([staffUserId, companyRelationshipId])
+  @@index([companyRelationshipId])
 }
 
 enum WageType {
@@ -350,26 +370,41 @@ enum RecruitmentStatus {
   DELETED
 }
 
-// 公開募集: billing locks capacity × perEntryTeeCost at the moment maxEntries
-// is set (開発指示書 §2.1) — NOT per-entry billing (that model was superseded,
-// see CLAUDE.md's stale "実装済み" note vs. the final chat30 design).
+// 誰に見えるか: ORDER = 自社スタッフ＋配属済み派遣スタッフのみ（無料）。
+// PUBLIC = TeeRA登録の全スタッフに公開（有料、掲載時にTeeをロック）。ORDERで
+// 応募が足りない場合のみ、後からPUBLICへ切り替えられる（片道、戻せない）。
+enum RecruitmentVisibility {
+  ORDER
+  PUBLIC
+}
+
+// 公開募集(visibility=PUBLIC)化した時点で billing locks capacity ×
+// perEntryTeeCost（開発指示書 §2.1）— NOT per-entry billing (that model was
+// superseded, see CLAUDE.md's stale "実装済み" note vs. the final chat30
+// design). ORDER状態では課金しない。
 model PublicRecruitment {
-  id              String            @id @default(cuid())
-  companyId       String
-  teamId          String?
-  title           String
-  jobDescription  String?
-  date            DateTime          @db.Date
-  startTime       String?
-  endTime         String?
-  hourlyWage      Int?
-  maxEntries      Int
-  perEntryTeeCost Int               @default(10)
-  lockedTee       Int // maxEntries * perEntryTeeCost currently locked from company balance
-  status          RecruitmentStatus @default(DRAFT)
-  publishedAt     DateTime?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id                     String                @id @default(cuid())
+  companyId              String
+  teamId                 String?
+  title                  String
+  jobDescription         String?
+  date                   DateTime              @db.Date
+  startTime              String?
+  endTime                String?
+  hourlyWage             Int? // PUBLIC化で必須。wageTypeがDAILYの場合は日給の額
+  wageType               WageType? // PUBLIC化で設定。ORDER中はnull（自社/配属スタッフは既存契約の賃金に従うため募集側では持たない）
+  applicationConditions  String? // 応募条件（PUBLIC限定）
+  belongings             String? // 持ち物（PUBLIC限定）
+  meetingPlace           String? // 集合場所（PUBLIC限定）
+  maxEntries             Int
+  perEntryTeeCost        Int                   @default(10)
+  lockedTee              Int // maxEntries * perEntryTeeCost currently locked from company balance (PUBLIC化以降のみ非ゼロ)
+  status                 RecruitmentStatus     @default(DRAFT)
+  visibility             RecruitmentVisibility @default(ORDER)
+  publishedAt            DateTime?
+  publicOpenedAt         DateTime? // ORDER -> PUBLICへ切り替えた日時
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
 
   company          Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   team             Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)

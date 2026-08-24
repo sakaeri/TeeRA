@@ -2,18 +2,23 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
 import { findConflictingShifts, isPastDate } from "@/lib/domain/shifts";
+import type { WageType } from "@/generated/prisma/enums";
 
 const PER_ENTRY_TEE_COST = 10;
 
-// 公開募集 billing: capacity × perEntryTeeCost is locked from the company's
-// balance at the moment maxEntries is set — NOT charged per entry (that
-// model was superseded mid-design; 開発指示書 §2.1 and the final prototype
-// code are authoritative here, not CLAUDE.md's stale "実装済み" note).
+// 公開募集(visibility=PUBLIC)化した時点で capacity × perEntryTeeCost が
+// company残高からロックされる — NOT charged per entry (that model was
+// superseded mid-design; 開発指示書 §2.1 and the final prototype code are
+// authoritative here, not CLAUDE.md's stale "実装済み" note). オーダー
+// (visibility=ORDER) の間は無課金 — 掲載も人数変更も停止/削除もTeeを動かさない。
 export async function affordableMaxEntries(companyId: string) {
   const company = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
   return Math.floor(company.teeBalance / PER_ENTRY_TEE_COST);
 }
 
+// 常にオーダー(visibility=ORDER)として作成する — 時給等の公開募集専用項目は
+// 一切受け取らない。自社スタッフ・配属済み派遣スタッフの賃金は既存の契約/
+// 賃金テーブル側で決まるため、募集側では持たない。
 export async function createPublicRecruitment(params: {
   companyId: string;
   teamId?: string;
@@ -22,41 +27,81 @@ export async function createPublicRecruitment(params: {
   date: Date;
   startTime?: string;
   endTime?: string;
-  hourlyWage?: number;
   maxEntries: number;
   createdByUserId: string;
   publish: boolean;
 }) {
-  const lockedTee = params.maxEntries * PER_ENTRY_TEE_COST;
+  return prisma.publicRecruitment.create({
+    data: {
+      companyId: params.companyId,
+      teamId: params.teamId,
+      title: params.title,
+      jobDescription: params.jobDescription,
+      date: params.date,
+      startTime: params.startTime,
+      endTime: params.endTime,
+      maxEntries: params.maxEntries,
+      perEntryTeeCost: PER_ENTRY_TEE_COST,
+      lockedTee: 0,
+      status: params.publish ? "PUBLISHED" : "DRAFT",
+      visibility: "ORDER",
+      publishedAt: params.publish ? new Date() : undefined,
+    },
+  });
+}
 
+// オーダーのままでは応募が足りない場合の、片道の切り替え操作。この時点で
+// 初めて時給/日給・応募条件・持ち物・集合場所を確定し、残り枠(上限−確定済み
+// 人数)分のTeeをロックする（開発指示書 §2.1 と同じ考え方）。
+export async function openRecruitmentToPublic(params: {
+  recruitmentId: string;
+  hourlyWage: number;
+  wageType: WageType;
+  applicationConditions?: string;
+  belongings?: string;
+  meetingPlace?: string;
+  updatedByUserId: string;
+}) {
   return prisma.$transaction(async (tx) => {
-    const recruitment = await tx.publicRecruitment.create({
+    const recruitment = await tx.publicRecruitment.findUniqueOrThrow({ where: { id: params.recruitmentId } });
+    if (recruitment.visibility === "PUBLIC") {
+      throw new Error("already_public");
+    }
+    if (recruitment.status !== "PUBLISHED") {
+      throw new Error("recruitment_not_open");
+    }
+    if (isPastDate(recruitment.date)) {
+      throw new Error("recruitment_in_past");
+    }
+
+    const filledCount = await tx.recruitmentEntry.count({
+      where: { publicRecruitmentId: recruitment.id, status: { not: "REJECTED" } },
+    });
+    const lockedTee = Math.max(recruitment.maxEntries - filledCount, 0) * recruitment.perEntryTeeCost;
+
+    if (lockedTee > 0) {
+      await postLedgerEntry(tx, {
+        companyId: recruitment.companyId,
+        type: "LOCK_RECRUITMENT",
+        amount: -lockedTee,
+        publicRecruitmentId: recruitment.id,
+        createdByUserId: params.updatedByUserId,
+      });
+    }
+
+    return tx.publicRecruitment.update({
+      where: { id: recruitment.id },
       data: {
-        companyId: params.companyId,
-        teamId: params.teamId,
-        title: params.title,
-        jobDescription: params.jobDescription,
-        date: params.date,
-        startTime: params.startTime,
-        endTime: params.endTime,
+        visibility: "PUBLIC",
+        publicOpenedAt: new Date(),
         hourlyWage: params.hourlyWage,
-        maxEntries: params.maxEntries,
-        perEntryTeeCost: PER_ENTRY_TEE_COST,
-        lockedTee,
-        status: params.publish ? "PUBLISHED" : "DRAFT",
-        publishedAt: params.publish ? new Date() : undefined,
+        wageType: params.wageType,
+        applicationConditions: params.applicationConditions,
+        belongings: params.belongings,
+        meetingPlace: params.meetingPlace,
+        lockedTee: recruitment.lockedTee + lockedTee,
       },
     });
-
-    await postLedgerEntry(tx, {
-      companyId: params.companyId,
-      type: "LOCK_RECRUITMENT",
-      amount: -lockedTee,
-      publicRecruitmentId: recruitment.id,
-      createdByUserId: params.createdByUserId,
-    });
-
-    return recruitment;
   });
 }
 
@@ -69,7 +114,8 @@ export async function publishRecruitment(recruitmentId: string) {
 
 // Changing 人数上限 on an existing listing: lock the increment, or refund the
 // unused portion of a decrement. Editing existing content otherwise never
-// re-charges (開発指示書 §2.1).
+// re-charges (開発指示書 §2.1). オーダー(visibility=ORDER)はそもそも無課金
+// なので、Teeの授受はvisibility=PUBLICのときだけ発生する。
 export async function updateMaxEntries(params: {
   recruitmentId: string;
   newMaxEntries: number;
@@ -86,8 +132,15 @@ export async function updateMaxEntries(params: {
     const filledCount = await tx.recruitmentEntry.count({
       where: { publicRecruitmentId: recruitment.id, status: { not: "REJECTED" } },
     });
-
     const newMaxEntries = Math.max(params.newMaxEntries, filledCount);
+
+    if (recruitment.visibility === "ORDER") {
+      return tx.publicRecruitment.update({
+        where: { id: recruitment.id },
+        data: { maxEntries: newMaxEntries },
+      });
+    }
+
     const newLockedTee = newMaxEntries * recruitment.perEntryTeeCost;
     const delta = newLockedTee - recruitment.lockedTee; // positive = need to lock more
 
@@ -117,6 +170,7 @@ export async function updateMaxEntries(params: {
 }
 
 // 停止・削除: refund the unused locked portion (上限 - 応募済み人数) × cost.
+// オーダー(visibility=ORDER)はロックが無いので返金も発生しない。
 export async function stopOrDeleteRecruitment(params: {
   recruitmentId: string;
   updatedByUserId: string;
@@ -128,6 +182,13 @@ export async function stopOrDeleteRecruitment(params: {
     });
     if (isPastDate(recruitment.date)) {
       throw new Error("recruitment_in_past");
+    }
+
+    if (recruitment.visibility === "ORDER") {
+      return tx.publicRecruitment.update({
+        where: { id: recruitment.id },
+        data: { status: params.delete ? "DELETED" : "STOPPED" },
+      });
     }
 
     const filledCount = await tx.recruitmentEntry.count({
@@ -193,16 +254,61 @@ export async function listClientRecruitments(companyId: string) {
   });
 }
 
-// A staff member sees their own company's postings plus postings from
-// companies in their employer's 依頼主名簿 (the client companies their
-// employer dispatches them to) — not the entire platform.
-export async function listOpenRecruitmentsForStaff(companyId: string) {
-  const clientCompanyIds = await visibleClientCompanyIds(companyId);
+// 配属記録 — このスタッフが、この会社(clientCompanyId)への配属記録を
+// 持っている派遣関係のclientCompanyId一覧（companyIdはそのスタッフの
+// 所属会社＝派遣元）。
+async function placedClientCompanyIds(companyId: string, staffUserId: string) {
+  const placements = await prisma.staffPlacement.findMany({
+    where: {
+      staffUserId,
+      companyRelationship: { agencyCompanyId: companyId, status: "ACTIVE" },
+    },
+    select: { companyRelationship: { select: { clientCompanyId: true } } },
+  });
+  return placements.map((p) => p.companyRelationship.clientCompanyId).filter((id): id is string => id !== null);
+}
+
+// スタッフに見える募集: ①自社の投稿（visibilityを問わず常に見える）、
+// ②依頼主名簿にある派遣先のうち、自分が配属記録を持つ会社のオーダー、
+// ③visibility=PUBLICの募集（TeeRA全体に公開されるため会社の関係を問わない）。
+export async function listOpenRecruitmentsForStaff(params: { companyId: string; staffUserId: string }) {
+  const clientCompanyIds = await placedClientCompanyIds(params.companyId, params.staffUserId);
+
   return prisma.publicRecruitment.findMany({
-    where: { status: "PUBLISHED", companyId: { in: [companyId, ...clientCompanyIds] } },
+    where: {
+      status: "PUBLISHED",
+      OR: [
+        { companyId: params.companyId },
+        { companyId: { in: clientCompanyIds }, visibility: "ORDER" },
+        { visibility: "PUBLIC" },
+      ],
+    },
     include: { entries: true, company: true },
     orderBy: { date: "asc" },
   });
+}
+
+// スタッフの応募/管理者アサインの対象になれるか: 自社所属、配属記録あり、
+// または募集自体がvisibility=PUBLIC（誰でも応募可）のいずれか。
+async function isStaffEligibleForRecruitment(params: {
+  recruitmentCompanyId: string;
+  recruitmentVisibility: "ORDER" | "PUBLIC";
+  staffUserId: string;
+}) {
+  if (params.recruitmentVisibility === "PUBLIC") return true;
+
+  const ownMembership = await prisma.companyMembership.findUnique({
+    where: { userId_companyId: { userId: params.staffUserId, companyId: params.recruitmentCompanyId } },
+  });
+  if (ownMembership) return true;
+
+  const placement = await prisma.staffPlacement.findFirst({
+    where: {
+      staffUserId: params.staffUserId,
+      companyRelationship: { clientCompanyId: params.recruitmentCompanyId, status: "ACTIVE" },
+    },
+  });
+  return !!placement;
 }
 
 // Admin-initiated assignment (as opposed to applyToRecruitment's staff
@@ -215,6 +321,10 @@ export async function listOpenRecruitmentsForStaff(companyId: string) {
 // overlap conflict check as a manual シフトを作成 assign — an admin picking a
 // shift FOR someone else needs the same double-booking guard, and a
 // two-phase confirm (conflicts -> explicit overrideShiftId) as the caller.
+// No 配属 eligibility gate here (unlike applyToRecruitment) — an admin can
+// freely assign any of their own staff regardless of visibility/配属状態;
+// a cross-company assign auto-registers a 配属記録 so that staff can
+// self-apply to this client's future オーダー without the admin's help.
 export async function assignStaffToRecruitment(params: {
   recruitmentId: string;
   staffUserId: string;
@@ -312,6 +422,14 @@ export async function assignStaffToRecruitment(params: {
       data: { resultingShiftId: shift.id },
     });
 
+    if (companyRelationshipId) {
+      await tx.staffPlacement.upsert({
+        where: { staffUserId_companyRelationshipId: { staffUserId: params.staffUserId, companyRelationshipId } },
+        create: { staffUserId: params.staffUserId, companyRelationshipId },
+        update: {},
+      });
+    }
+
     for (const overriddenId of params.overrideShiftIds ?? []) {
       await tx.shift.update({
         where: { id: overriddenId },
@@ -332,7 +450,9 @@ export async function assignStaffToRecruitment(params: {
 
 // スタッフの応募 — no billing event (capacity was already locked at listing
 // time) and, per the design's known/accepted gap, no overlap conflict check
-// against the staff member's other confirmed shifts (chat27/31).
+// against the staff member's other confirmed shifts (chat27/31). visibility
+// =ORDERの募集は、自社所属か配属記録を持つスタッフのみ応募できる（listで
+// 見えていても、URL直叩き等でのすり抜けをサーバー側でも防ぐ）。
 export async function applyToRecruitment(params: { recruitmentId: string; staffUserId: string }) {
   return prisma.$transaction(async (tx) => {
     const recruitment = await tx.publicRecruitment.findUniqueOrThrow({
@@ -343,6 +463,14 @@ export async function applyToRecruitment(params: { recruitmentId: string; staffU
     }
     if (isPastDate(recruitment.date)) {
       throw new Error("recruitment_in_past");
+    }
+    const eligible = await isStaffEligibleForRecruitment({
+      recruitmentCompanyId: recruitment.companyId,
+      recruitmentVisibility: recruitment.visibility,
+      staffUserId: params.staffUserId,
+    });
+    if (!eligible) {
+      throw new Error("not_eligible");
     }
 
     // Row-lock the recruitment so two staff applying at the same instant
@@ -390,5 +518,50 @@ export async function applyToRecruitment(params: { recruitmentId: string; staffU
 
     return { entry, shift };
   });
+}
+
+export type StaffOrigin = { kind: "SELF" } | { kind: "PLACEMENT"; agencyCompanyName: string } | { kind: "PUBLIC" };
+
+// source=INHOUSE のシフト（＝この会社自身のカレンダー上の勤務）に立っている
+// staffUserIdが、実際には自社の名簿メンバーなのか、配属記録のある他社（派遣
+// 会社）のスタッフなのか、それ以外（公開募集で見ず知らずの人が応募してきた）
+// なのかを判定する。source=CLIENT（自社スタッフを他社へ派遣した側）には
+// 使わない — そちらは既存のclientName表示で足りる。
+export async function resolveStaffOrigins(params: {
+  companyId: string;
+  staffUserIds: string[];
+}): Promise<Map<string, StaffOrigin>> {
+  const uniqueIds = [...new Set(params.staffUserIds)];
+  const result = new Map<string, StaffOrigin>();
+  if (uniqueIds.length === 0) return result;
+
+  const memberships = await prisma.companyMembership.findMany({
+    where: { companyId: params.companyId, userId: { in: uniqueIds } },
+    select: { userId: true },
+  });
+  const memberIds = new Set(memberships.map((m) => m.userId));
+
+  const remainingIds = uniqueIds.filter((id) => !memberIds.has(id));
+  const placements = remainingIds.length
+    ? await prisma.staffPlacement.findMany({
+        where: {
+          staffUserId: { in: remainingIds },
+          companyRelationship: { clientCompanyId: params.companyId, status: "ACTIVE" },
+        },
+        select: { staffUserId: true, companyRelationship: { select: { agencyCompany: { select: { name: true } } } } },
+      })
+    : [];
+  const placementNames = new Map(placements.map((p) => [p.staffUserId, p.companyRelationship.agencyCompany?.name]));
+
+  for (const id of uniqueIds) {
+    if (memberIds.has(id)) {
+      result.set(id, { kind: "SELF" });
+    } else if (placementNames.has(id)) {
+      result.set(id, { kind: "PLACEMENT", agencyCompanyName: placementNames.get(id) ?? "配属先" });
+    } else {
+      result.set(id, { kind: "PUBLIC" });
+    }
+  }
+  return result;
 }
 

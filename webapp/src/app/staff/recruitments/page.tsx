@@ -4,7 +4,7 @@ import { RecruitmentListView } from "@/components/staff/RecruitmentListView";
 
 export default async function StaffRecruitmentsPage() {
   const { userId, membership } = await requireCompanyStaffRole();
-  const recruitments = await listOpenRecruitmentsForStaff(membership.companyId);
+  const recruitments = await listOpenRecruitmentsForStaff({ companyId: membership.companyId, staffUserId: userId });
 
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-10">
