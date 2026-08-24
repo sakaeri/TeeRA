@@ -73,9 +73,9 @@ try {
   log("order creation form has no 時給/Tee-cap fields", !bodyBeforeFill.includes("時給") && !bodyBeforeFill.includes("残高で賄える"));
 
   const recruitmentTitle = `キッチンスタッフ募集${Date.now()}`;
-  const titleInput = admin.locator("label:has-text('タイトル') input");
+  const titleInput = admin.locator('input[type="text"]').first();
   await titleInput.fill(recruitmentTitle);
-  const maxEntriesInput = admin.locator("label:has-text('募集人数の上限') input");
+  const maxEntriesInput = admin.locator("label:has-text('募集人数') input").first();
   await maxEntriesInput.fill("3");
   await admin.getByRole("button", { name: "掲載する" }).click();
   await admin.waitForTimeout(800);

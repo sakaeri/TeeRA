@@ -97,9 +97,11 @@ export async function createPublicRecruitmentAction(input: {
   teamId?: string;
   title: string;
   jobDescription?: string;
-  date: string;
+  note?: string;
+  dates: string[];
   startTime?: string;
   endTime?: string;
+  isUndecided: boolean;
   maxEntries: number;
   publish: boolean;
 }) {
@@ -111,9 +113,11 @@ export async function createPublicRecruitmentAction(input: {
     teamId: input.teamId,
     title: input.title,
     jobDescription: input.jobDescription,
-    date: new Date(`${input.date}T00:00:00.000Z`),
+    note: input.note,
+    dates: input.dates.map((d) => new Date(`${d}T00:00:00.000Z`)),
     startTime: input.startTime,
     endTime: input.endTime,
+    isUndecided: input.isUndecided,
     maxEntries: input.maxEntries,
     createdByUserId: userId,
     publish: input.publish,

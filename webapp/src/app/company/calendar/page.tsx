@@ -85,9 +85,11 @@ export default async function CompanyCalendarPage({
         recruitments={recruitments.map((r) => ({
           id: r.id,
           title: r.title,
+          note: r.note,
           date: r.date.toISOString().slice(0, 10),
           startTime: r.startTime,
           endTime: r.endTime,
+          isUndecided: r.isUndecided,
           maxEntries: r.maxEntries,
           filled: r.entries.filter((e) => e.status !== "REJECTED").length,
           lockedTee: r.lockedTee,

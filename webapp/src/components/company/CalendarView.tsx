@@ -60,9 +60,11 @@ type ShiftRequestRow = {
 type RecruitmentRow = {
   id: string;
   title: string;
+  note: string | null;
   date: string;
   startTime: string | null;
   endTime: string | null;
+  isUndecided: boolean;
   maxEntries: number;
   filled: number;
   lockedTee: number;
@@ -411,6 +413,7 @@ export function CalendarView({
         <RecruitmentFormModal
           teams={teams}
           defaultDate={selectedDate ?? todayStr}
+          affordableMaxEntries={affordableMaxEntries}
           onClose={() => setShowRecruitForm(false)}
         />
       ) : null}
@@ -874,9 +877,10 @@ function OrderEditModal({
           </span>
         </div>
         <p className="text-xs text-muted">
-          {recruitment.date} {recruitment.startTime ?? "終日"}
+          {recruitment.date} {recruitment.startTime ?? (recruitment.isUndecided ? "未定" : "終日")}
           {recruitment.startTime ? `〜${recruitment.endTime}` : ""}
         </p>
+        {recruitment.note ? <p className="text-xs text-muted">備考：{recruitment.note}</p> : null}
 
         {recruitment.visibility === "PUBLIC" ? (
           <div className="rounded-lg border border-border bg-background p-3 text-xs text-muted">
@@ -1189,9 +1193,10 @@ function OrderCard({
             ) : null}
           </div>
           <p className="text-xs text-muted">
-            {r.startTime ?? "終日"}
+            {r.startTime ?? (r.isUndecided ? "未定" : "終日")}
             {r.startTime ? `〜${r.endTime}` : ""}
           </p>
+          {r.note ? <p className="text-xs text-muted">備考：{r.note}</p> : null}
         </div>
         <div className="flex items-center gap-2">
           <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
@@ -1913,20 +1918,36 @@ function AssignShiftModal({
 function RecruitmentFormModal({
   teams,
   defaultDate,
+  affordableMaxEntries,
   onClose,
 }: {
   teams: Team[];
   defaultDate: string;
+  affordableMaxEntries: number;
   onClose: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [teamId, setTeamId] = useState("");
-  const [date, setDate] = useState(defaultDate);
+  const [dateInput, setDateInput] = useState(defaultDate);
+  const [dates, setDates] = useState<string[]>([defaultDate]);
+  const [isUndecided, setIsUndecided] = useState(false);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("18:00");
   const [maxEntries, setMaxEntries] = useState(1);
+  const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  function addDate() {
+    if (dateInput && !dates.includes(dateInput)) {
+      setDates([...dates, dateInput].sort());
+      setDateInput("");
+    }
+  }
+
+  function removeDate(d: string) {
+    setDates(dates.filter((x) => x !== d));
+  }
 
   function submit(publish: boolean) {
     setError(null);
@@ -1935,9 +1956,11 @@ function RecruitmentFormModal({
         await createPublicRecruitmentAction({
           teamId: teamId || undefined,
           title,
-          date,
-          startTime,
-          endTime,
+          note: note || undefined,
+          dates,
+          startTime: isUndecided ? undefined : startTime,
+          endTime: isUndecided ? undefined : endTime,
+          isUndecided,
           maxEntries,
           publish,
         });
@@ -1949,18 +1972,12 @@ function RecruitmentFormModal({
   }
 
   return (
-    <Modal title="オーダーを作成" onClose={onClose}>
+    <Modal title="オーダー募集を作成" onClose={onClose}>
       <div className="flex flex-col gap-3">
-        <Field label="タイトル">
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-          />
-        </Field>
+        <p className="-mt-2 text-xs text-muted">自社での勤務を募集します</p>
+
         {teams.length > 0 ? (
-          <Field label="チーム（任意）">
+          <Field label="担当チーム（任意）">
             <select
               value={teamId}
               onChange={(e) => setTeamId(e.target.value)}
@@ -1975,33 +1992,18 @@ function RecruitmentFormModal({
             </select>
           </Field>
         ) : null}
-        <Field label="日付">
+
+        <Field label="業務内容">
           <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="例：倉庫での軽作業"
             className="w-full rounded-lg border border-border px-3 py-2 text-sm"
           />
         </Field>
-        <div className="flex gap-2">
-          <Field label="開始">
-            <input
-              type="time"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-            />
-          </Field>
-          <Field label="終了">
-            <input
-              type="time"
-              value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
-              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-            />
-          </Field>
-        </div>
-        <Field label="募集人数の上限">
+
+        <Field label="募集人数">
           <input
             type="number"
             min={1}
@@ -2010,6 +2012,83 @@ function RecruitmentFormModal({
             className="w-full rounded-lg border border-border px-3 py-2 text-sm"
           />
         </Field>
+        <p className="-mt-2 text-xs text-muted">
+          公開募集にする場合、現在の残高では最大{affordableMaxEntries}名まで（1名10Tee）
+        </p>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={isUndecided} onChange={(e) => setIsUndecided(e.target.checked)} />
+          未定
+        </label>
+        {!isUndecided ? (
+          <div className="flex gap-2">
+            <Field label="開始時刻">
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+              />
+            </Field>
+            <Field label="終了時刻">
+              <input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+              />
+            </Field>
+          </div>
+        ) : null}
+
+        <Field label="日付を選択（複数選択可）">
+          <div className="flex gap-2">
+            <input
+              type="date"
+              value={dateInput}
+              onChange={(e) => setDateInput(e.target.value)}
+              className="flex-1 rounded-lg border border-border px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={addDate}
+              className="rounded-lg border border-primary px-3 py-2 text-sm text-primary"
+            >
+              追加
+            </button>
+          </div>
+        </Field>
+        {dates.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {dates.map((d) => (
+              <span
+                key={d}
+                className="flex items-center gap-1 rounded-full bg-accent/20 px-3 py-1 text-xs text-accent"
+              >
+                {d}
+                <button type="button" onClick={() => removeDate(d)} aria-label={`${d}を削除`}>
+                  ✕
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-red-600">少なくとも1つ日付を選択してください。</p>
+        )}
+        {dates.length > 1 ? (
+          <p className="text-xs text-muted">選んだ{dates.length}日分、同じ内容のオーダーがそれぞれ独立して作成されます。</p>
+        ) : null}
+
+        <Field label="備考（任意）">
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="集合場所・服装・持ち物など"
+            rows={3}
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+          />
+        </Field>
+
         <p className="text-xs text-muted">
           自社スタッフ・配属済みの派遣スタッフのみが対象のオーダーとして作成されます（無料）。応募が足りない場合は、あとから公開募集への切り替えができます。
         </p>
@@ -2019,7 +2098,7 @@ function RecruitmentFormModal({
         <div className="flex gap-2">
           <button
             type="button"
-            disabled={pending || !title}
+            disabled={pending || !title || dates.length === 0}
             onClick={() => submit(true)}
             className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
@@ -2027,7 +2106,7 @@ function RecruitmentFormModal({
           </button>
           <button
             type="button"
-            disabled={pending || !title}
+            disabled={pending || !title || dates.length === 0}
             onClick={() => submit(false)}
             className="flex-1 rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
           >

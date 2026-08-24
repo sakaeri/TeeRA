@@ -18,36 +18,46 @@ export async function affordableMaxEntries(companyId: string) {
 
 // 常にオーダー(visibility=ORDER)として作成する — 時給等の公開募集専用項目は
 // 一切受け取らない。自社スタッフ・配属済み派遣スタッフの賃金は既存の契約/
-// 賃金テーブル側で決まるため、募集側では持たない。
+// 賃金テーブル側で決まるため、募集側では持たない。dates.length > 1のときは
+// 同じ内容のオーダーを日付の数だけ独立して作成する（確定人数・削除・公開
+// 切り替えはそれぞれ完全に別）。
 export async function createPublicRecruitment(params: {
   companyId: string;
   teamId?: string;
   title: string;
   jobDescription?: string;
-  date: Date;
+  note?: string;
+  dates: Date[];
   startTime?: string;
   endTime?: string;
+  isUndecided: boolean;
   maxEntries: number;
   createdByUserId: string;
   publish: boolean;
 }) {
-  return prisma.publicRecruitment.create({
-    data: {
-      companyId: params.companyId,
-      teamId: params.teamId,
-      title: params.title,
-      jobDescription: params.jobDescription,
-      date: params.date,
-      startTime: params.startTime,
-      endTime: params.endTime,
-      maxEntries: params.maxEntries,
-      perEntryTeeCost: PER_ENTRY_TEE_COST,
-      lockedTee: 0,
-      status: params.publish ? "PUBLISHED" : "DRAFT",
-      visibility: "ORDER",
-      publishedAt: params.publish ? new Date() : undefined,
-    },
-  });
+  return prisma.$transaction(
+    params.dates.map((date) =>
+      prisma.publicRecruitment.create({
+        data: {
+          companyId: params.companyId,
+          teamId: params.teamId,
+          title: params.title,
+          jobDescription: params.jobDescription,
+          note: params.note,
+          date,
+          startTime: params.isUndecided ? undefined : params.startTime,
+          endTime: params.isUndecided ? undefined : params.endTime,
+          isUndecided: params.isUndecided,
+          maxEntries: params.maxEntries,
+          perEntryTeeCost: PER_ENTRY_TEE_COST,
+          lockedTee: 0,
+          status: params.publish ? "PUBLISHED" : "DRAFT",
+          visibility: "ORDER",
+          publishedAt: params.publish ? new Date() : undefined,
+        },
+      }),
+    ),
+  );
 }
 
 // オーダーのままでは応募が足りない場合の、片道の切り替え操作。この時点で
