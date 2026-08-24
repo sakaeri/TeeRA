@@ -68,7 +68,7 @@ try {
   await admin.goto("http://localhost:3000/company/calendar");
   await admin.locator("button", { hasText: "＋" }).last().click();
   await admin.getByText("オーダー募集").click();
-  await admin.waitForSelector('input[type="date"]');
+  await admin.waitForSelector("text=オーダー募集を作成");
   const bodyBeforeFill = await admin.textContent("body");
   log("order creation form has no 時給/Tee-cap fields", !bodyBeforeFill.includes("時給") && !bodyBeforeFill.includes("残高で賄える"));
 

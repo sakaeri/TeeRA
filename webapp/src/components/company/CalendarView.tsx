@@ -413,7 +413,6 @@ export function CalendarView({
         <RecruitmentFormModal
           teams={teams}
           defaultDate={selectedDate ?? todayStr}
-          affordableMaxEntries={affordableMaxEntries}
           onClose={() => setShowRecruitForm(false)}
         />
       ) : null}
@@ -1915,20 +1914,109 @@ function AssignShiftModal({
 // オーダーの新規作成 — 自社スタッフ・配属済み派遣スタッフだけが対象の、無料
 // の募集。時給等の公開募集専用項目はここでは入力させない（公開募集への
 // 切り替え時に別途入力する）。
+// 月表示のミニカレンダーで複数日をトグル選択する。「日付を追加」の
+// 1件ずつ入力より、カレンダー上で直接クリックできた方が速い。
+function MiniCalendarMultiSelect({
+  selected,
+  onToggle,
+  initialDate,
+}: {
+  selected: string[];
+  onToggle: (dateStr: string) => void;
+  initialDate: string;
+}) {
+  const [initialYear, initialMonth] = initialDate.split("-").map(Number);
+  const [viewYear, setViewYear] = useState(initialYear);
+  const [viewMonth, setViewMonth] = useState(initialMonth);
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const cells = useMemo(() => {
+    const firstOfMonth = new Date(Date.UTC(viewYear, viewMonth - 1, 1));
+    const startDow = firstOfMonth.getUTCDay();
+    const daysInMonth = new Date(Date.UTC(viewYear, viewMonth, 0)).getUTCDate();
+    const out: { dateStr: string | null; day: number | null }[] = [];
+    for (let i = 0; i < startDow; i++) out.push({ dateStr: null, day: null });
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${viewYear}-${String(viewMonth).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      out.push({ dateStr, day: d });
+    }
+    return out;
+  }, [viewYear, viewMonth]);
+
+  function prevMonth() {
+    if (viewMonth === 1) {
+      setViewYear(viewYear - 1);
+      setViewMonth(12);
+    } else {
+      setViewMonth(viewMonth - 1);
+    }
+  }
+  function nextMonth() {
+    if (viewMonth === 12) {
+      setViewYear(viewYear + 1);
+      setViewMonth(1);
+    } else {
+      setViewMonth(viewMonth + 1);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-border p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <button type="button" onClick={prevMonth} aria-label="前の月" className="p-1 text-muted hover:text-primary">
+          <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+            <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        <span className="text-sm font-semibold">
+          {viewYear}年{viewMonth}月
+        </span>
+        <button type="button" onClick={nextMonth} aria-label="次の月" className="p-1 text-muted hover:text-primary">
+          <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+            <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+      <div className="mb-1 grid grid-cols-7 text-center text-[11px] text-muted">
+        {WEEKDAYS.map((w) => (
+          <span key={w}>{w}</span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((c, i) =>
+          c.dateStr ? (
+            <button
+              key={c.dateStr}
+              type="button"
+              onClick={() => onToggle(c.dateStr!)}
+              className={`rounded-lg py-1.5 text-xs ${
+                selectedSet.has(c.dateStr)
+                  ? "bg-primary font-semibold text-primary-foreground"
+                  : "text-foreground hover:bg-background"
+              }`}
+            >
+              {c.day}
+            </button>
+          ) : (
+            <span key={i} />
+          ),
+        )}
+      </div>
+    </div>
+  );
+}
+
 function RecruitmentFormModal({
   teams,
   defaultDate,
-  affordableMaxEntries,
   onClose,
 }: {
   teams: Team[];
   defaultDate: string;
-  affordableMaxEntries: number;
   onClose: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [teamId, setTeamId] = useState("");
-  const [dateInput, setDateInput] = useState(defaultDate);
   const [dates, setDates] = useState<string[]>([defaultDate]);
   const [isUndecided, setIsUndecided] = useState(false);
   const [startTime, setStartTime] = useState("09:00");
@@ -1937,16 +2025,10 @@ function RecruitmentFormModal({
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const teamRequired = teams.length > 0;
 
-  function addDate() {
-    if (dateInput && !dates.includes(dateInput)) {
-      setDates([...dates, dateInput].sort());
-      setDateInput("");
-    }
-  }
-
-  function removeDate(d: string) {
-    setDates(dates.filter((x) => x !== d));
+  function toggleDate(d: string) {
+    setDates((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
   }
 
   function submit(publish: boolean) {
@@ -1976,14 +2058,14 @@ function RecruitmentFormModal({
       <div className="flex flex-col gap-3">
         <p className="-mt-2 text-xs text-muted">自社での勤務を募集します</p>
 
-        {teams.length > 0 ? (
-          <Field label="担当チーム（任意）">
+        {teamRequired ? (
+          <Field label="担当チーム">
             <select
               value={teamId}
               onChange={(e) => setTeamId(e.target.value)}
               className="w-full rounded-lg border border-border px-3 py-2 text-sm"
             >
-              <option value="">なし</option>
+              <option value="">チームを選択</option>
               {teams.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
@@ -2012,13 +2094,10 @@ function RecruitmentFormModal({
             className="w-full rounded-lg border border-border px-3 py-2 text-sm"
           />
         </Field>
-        <p className="-mt-2 text-xs text-muted">
-          公開募集にする場合、現在の残高では最大{affordableMaxEntries}名まで（1名10Tee）
-        </p>
 
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={isUndecided} onChange={(e) => setIsUndecided(e.target.checked)} />
-          未定
+          時間未定
         </label>
         {!isUndecided ? (
           <div className="flex gap-2">
@@ -2042,40 +2121,11 @@ function RecruitmentFormModal({
         ) : null}
 
         <Field label="日付を選択（複数選択可）">
-          <div className="flex gap-2">
-            <input
-              type="date"
-              value={dateInput}
-              onChange={(e) => setDateInput(e.target.value)}
-              className="flex-1 rounded-lg border border-border px-3 py-2 text-sm"
-            />
-            <button
-              type="button"
-              onClick={addDate}
-              className="rounded-lg border border-primary px-3 py-2 text-sm text-primary"
-            >
-              追加
-            </button>
-          </div>
+          <MiniCalendarMultiSelect selected={dates} onToggle={toggleDate} initialDate={defaultDate} />
         </Field>
-        {dates.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {dates.map((d) => (
-              <span
-                key={d}
-                className="flex items-center gap-1 rounded-full bg-accent/20 px-3 py-1 text-xs text-accent"
-              >
-                {d}
-                <button type="button" onClick={() => removeDate(d)} aria-label={`${d}を削除`}>
-                  ✕
-                </button>
-              </span>
-            ))}
-          </div>
-        ) : (
+        {dates.length === 0 ? (
           <p className="text-xs text-red-600">少なくとも1つ日付を選択してください。</p>
-        )}
-        {dates.length > 1 ? (
+        ) : dates.length > 1 ? (
           <p className="text-xs text-muted">選んだ{dates.length}日分、同じ内容のオーダーがそれぞれ独立して作成されます。</p>
         ) : null}
 
@@ -2098,7 +2148,7 @@ function RecruitmentFormModal({
         <div className="flex gap-2">
           <button
             type="button"
-            disabled={pending || !title || dates.length === 0}
+            disabled={pending || !title || dates.length === 0 || (teamRequired && !teamId)}
             onClick={() => submit(true)}
             className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
@@ -2106,7 +2156,7 @@ function RecruitmentFormModal({
           </button>
           <button
             type="button"
-            disabled={pending || !title || dates.length === 0}
+            disabled={pending || !title || dates.length === 0 || (teamRequired && !teamId)}
             onClick={() => submit(false)}
             className="flex-1 rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
           >
