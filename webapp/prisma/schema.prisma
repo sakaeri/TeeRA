@@ -285,8 +285,8 @@ model Shift {
   publicRecruitment   PublicRecruitment?   @relation(fields: [publicRecruitmentId], references: [id], onDelete: SetNull)
 
   workReport      WorkReport?
-  supersededBy    ConflictOverride? @relation("OverriddenShift")
-  supersedes      ConflictOverride? @relation("NewShift")
+  supersededBy    ConflictOverride?  @relation("OverriddenShift")
+  supersedes      ConflictOverride[] @relation("NewShift")
   salarySlipLines SalarySlipLine[]
   invoiceLines    InvoiceLine[]
 
@@ -298,7 +298,7 @@ model Shift {
 // override when a company knowingly assigns over an existing shift/leave.
 model ConflictOverride {
   id                String   @id @default(cuid())
-  newShiftId        String   @unique
+  newShiftId        String // not unique: one new shift can override several conflicting shifts
   overriddenShiftId String   @unique
   confirmedByUserId String
   confirmedAt       DateTime @default(now())
@@ -306,6 +306,8 @@ model ConflictOverride {
   newShift        Shift @relation("NewShift", fields: [newShiftId], references: [id], onDelete: Cascade)
   overriddenShift Shift @relation("OverriddenShift", fields: [overriddenShiftId], references: [id], onDelete: Cascade)
   confirmedBy     User  @relation(fields: [confirmedByUserId], references: [id])
+
+  @@index([newShiftId])
 }
 
 enum ShiftRequestDesire {

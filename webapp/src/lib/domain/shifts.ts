@@ -6,6 +6,16 @@ function timeToMinutes(t: string) {
   return h * 60 + m;
 }
 
+// 過去のエントリーや募集情報は一切変更なし — once a date has passed, the shift/
+// recruitment/entry record is locked: no cancel, no edit, no fill. "Today" is
+// still mutable. Dates are stored as @db.Date (UTC midnight), so compare
+// against today's own UTC midnight.
+export function isPastDate(date: Date) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const today = new Date(`${todayStr}T00:00:00.000Z`);
+  return date.getTime() < today.getTime();
+}
+
 // Two shifts overlap only when their time ranges actually intersect — a shift
 // ending at 03:00 followed by one starting at 03:00 is adjacent, not
 // overlapping (explicitly confirmed in design chat17). All-day/undecided
@@ -60,7 +70,7 @@ export async function createAssignedShift(params: {
   isUndecided: boolean;
   note?: string;
   confirmedByUserId: string;
-  overrideShiftId?: string; // set when the caller has already confirmed the override with staff
+  overrideShiftIds?: string[]; // set when the caller has already confirmed the override(s) with staff — one entry per conflicting shift being superseded
   companyRelationshipId?: string; // set for 取引先オーダー (source becomes CLIENT, billable on that client's invoice)
 }) {
   const conflicts = await findConflictingShifts({
@@ -72,7 +82,7 @@ export async function createAssignedShift(params: {
     isUndecided: params.isUndecided,
   });
 
-  if (conflicts.length > 0 && !params.overrideShiftId) {
+  if (conflicts.length > 0 && !params.overrideShiftIds?.length) {
     return { status: "conflict" as const, conflicts };
   }
 
@@ -94,15 +104,15 @@ export async function createAssignedShift(params: {
       },
     });
 
-    if (params.overrideShiftId) {
+    for (const overriddenId of params.overrideShiftIds ?? []) {
       await tx.shift.update({
-        where: { id: params.overrideShiftId },
+        where: { id: overriddenId },
         data: { status: "SUPERSEDED" },
       });
       await tx.conflictOverride.create({
         data: {
           newShiftId: created.id,
-          overriddenShiftId: params.overrideShiftId,
+          overriddenShiftId: overriddenId,
           confirmedByUserId: params.confirmedByUserId,
         },
       });
@@ -256,6 +266,9 @@ export async function cancelShift(params: { shiftId: string; actorCompanyId: str
     }
     if (shift.status !== "CONFIRMED") {
       throw new Error("shift_not_active");
+    }
+    if (isPastDate(shift.date)) {
+      throw new Error("shift_in_past");
     }
 
     await tx.shift.update({ where: { id: shift.id }, data: { status: "CANCELLED" } });

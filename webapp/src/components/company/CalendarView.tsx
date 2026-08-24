@@ -474,6 +474,7 @@ function DayDetailModal({
 }) {
   const [tab, setTab] = useState<"shifts" | "client" | "recruit">("shifts");
   const [selectedClientKey, setSelectedClientKey] = useState<string | null>(null);
+  const isPastDay = dateStr < new Date().toISOString().slice(0, 10);
   const remaining = recruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
   const inhouseShifts = shifts.filter((s) => s.source !== "CLIENT");
   const clientShifts = shifts.filter((s) => s.source === "CLIENT");
@@ -575,7 +576,7 @@ function DayDetailModal({
                   ) : (
                     <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
                   )}
-                  <CancelShiftButton shiftId={s.id} staffName={s.staffName} />
+                  {isPastDay ? null : <CancelShiftButton shiftId={s.id} staffName={s.staffName} />}
                 </li>
               ))}
             </ul>
@@ -594,13 +595,15 @@ function DayDetailModal({
               </button>
               <div className="mb-2 flex items-center justify-between">
                 <p className="font-semibold">{selectedClientGroup.clientName}</p>
-                <button
-                  type="button"
-                  onClick={() => onAssign(selectedClientGroup.companyRelationshipId)}
-                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-background"
-                >
-                  ＋ スタッフを追加
-                </button>
+                {isPastDay ? null : (
+                  <button
+                    type="button"
+                    onClick={() => onAssign(selectedClientGroup.companyRelationshipId)}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-background"
+                  >
+                    ＋ スタッフを追加
+                  </button>
+                )}
               </div>
               <ul className="flex flex-col gap-1 text-sm">
                 {selectedClientGroup.rows.map((s) => (
@@ -619,7 +622,7 @@ function DayDetailModal({
                     ) : (
                       <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
                     )}
-                    {s.createdVia === "PUBLIC_RECRUIT_ENTRY" ? <CancelShiftButton shiftId={s.id} staffName={s.staffName} /> : null}
+                    {!isPastDay && s.createdVia === "PUBLIC_RECRUIT_ENTRY" ? <CancelShiftButton shiftId={s.id} staffName={s.staffName} /> : null}
                   </li>
                 ))}
               </ul>
@@ -631,7 +634,7 @@ function DayDetailModal({
                   <p className="mb-2 text-xs font-semibold text-muted">オーダー（依頼主からの募集）</p>
                   <ul className="flex flex-col gap-2 text-sm">
                     {clientOrders.map((o) => (
-                      <ClientOrderRow key={o.id} order={o} staffOptions={staffOptions} />
+                      <ClientOrderRow key={o.id} order={o} staffOptions={staffOptions} disabled={isPastDay} />
                     ))}
                   </ul>
                 </div>
@@ -676,12 +679,14 @@ function DayDetailModal({
                     {r.filled}/{r.maxEntries}名
                   </span>
                 </div>
-                {r.status === "PUBLISHED" ? (
+                {r.status === "PUBLISHED" && !isPastDay ? (
                   <RecruitmentAssignControls
                     recruitmentId={r.id}
                     remaining={Math.max(r.maxEntries - r.filled, 0)}
                     staffOptions={staffOptions}
                   />
+                ) : r.status === "PUBLISHED" ? (
+                  <p className="mt-2 text-xs text-muted">過去の日付のため変更できません。</p>
                 ) : null}
               </li>
             ))}
@@ -708,12 +713,12 @@ function RecruitmentAssignControls({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function assign(overrideShiftId?: string) {
+  function assign(overrideShiftIds?: string[]) {
     if (!staffUserId) return;
     setError(null);
     startTransition(async () => {
       try {
-        const result = await assignStaffToRecruitmentAction({ recruitmentId, staffUserId, overrideShiftId });
+        const result = await assignStaffToRecruitmentAction({ recruitmentId, staffUserId, overrideShiftIds });
         if (result.status === "conflict") {
           setConflicts(result.conflicts);
         } else {
@@ -802,7 +807,7 @@ function RecruitmentAssignControls({
             <button
               type="button"
               disabled={pending || !overrideChecked}
-              onClick={() => assign(conflicts[0].id)}
+              onClick={() => assign(conflicts.map((c) => c.id))}
               className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground disabled:opacity-50"
             >
               重複を確認のうえアサインする
@@ -879,7 +884,15 @@ function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName:
   );
 }
 
-function ClientOrderRow({ order, staffOptions }: { order: ClientRecruitmentRow; staffOptions: StaffOption[] }) {
+function ClientOrderRow({
+  order,
+  staffOptions,
+  disabled,
+}: {
+  order: ClientRecruitmentRow;
+  staffOptions: StaffOption[];
+  disabled?: boolean;
+}) {
   const remaining = Math.max(order.maxEntries - order.filled, 0);
 
   return (
@@ -896,7 +909,11 @@ function ClientOrderRow({ order, staffOptions }: { order: ClientRecruitmentRow; 
           {order.filled}/{order.maxEntries}名
         </span>
       </div>
-      <RecruitmentAssignControls recruitmentId={order.id} remaining={remaining} staffOptions={staffOptions} />
+      {disabled ? (
+        <p className="mt-2 text-xs text-muted">過去の日付のため変更できません。</p>
+      ) : (
+        <RecruitmentAssignControls recruitmentId={order.id} remaining={remaining} staffOptions={staffOptions} />
+      )}
     </li>
   );
 }
@@ -946,7 +963,7 @@ function AssignShiftModal({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function submit(overrideShiftId?: string) {
+  function submit(overrideShiftIds?: string[]) {
     setError(null);
     startTransition(async () => {
       try {
@@ -959,7 +976,7 @@ function AssignShiftModal({
           isAllDay,
           isUndecided,
           note: note || undefined,
-          overrideShiftId,
+          overrideShiftIds,
           companyRelationshipId: companyRelationshipId || undefined,
         });
         if (result.status === "conflict") {
@@ -1092,7 +1109,7 @@ function AssignShiftModal({
         <button
           type="button"
           disabled={pending || !staffUserId || (conflicts !== null && !overrideChecked)}
-          onClick={() => submit(conflicts && overrideChecked ? conflicts[0].id : undefined)}
+          onClick={() => submit(conflicts && overrideChecked ? conflicts.map((c) => c.id) : undefined)}
           className="col-span-2 mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
           {conflicts ? "重複を確認のうえ作成する" : "作成する"}
@@ -1358,6 +1375,7 @@ function RecruitmentsSection({
   affordableMaxEntries: number;
 }) {
   const [pending, startTransition] = useTransition();
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="mt-8 rounded-xl border border-border bg-white/60 p-5">
@@ -1378,7 +1396,9 @@ function RecruitmentsSection({
                 {r.date} {r.startTime}〜{r.endTime} ／ 残り{Math.max(r.maxEntries - r.filled, 0)}名
                 （上限{r.maxEntries}名・ロック中 {r.lockedTee} Tee）
               </p>
-              {r.status === "PUBLISHED" ? (
+              {r.status === "PUBLISHED" && r.date < todayStr ? (
+                <p className="mt-2 text-xs text-muted">過去の日付のため変更できません。</p>
+              ) : r.status === "PUBLISHED" ? (
                 <div className="mt-2 flex gap-3 text-xs">
                   <button
                     type="button"

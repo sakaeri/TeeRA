@@ -26,7 +26,7 @@ export async function createAssignedShiftAction(input: {
   isAllDay: boolean;
   isUndecided: boolean;
   note?: string;
-  overrideShiftId?: string;
+  overrideShiftIds?: string[];
   companyRelationshipId?: string;
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
@@ -44,7 +44,7 @@ export async function createAssignedShiftAction(input: {
     companyRelationshipId: input.companyRelationshipId,
     note: input.note,
     confirmedByUserId: userId,
-    overrideShiftId: input.overrideShiftId,
+    overrideShiftIds: input.overrideShiftIds,
   });
 
   if (result.status === "created") {
@@ -154,7 +154,7 @@ export async function deleteRecruitmentAction(recruitmentId: string) {
 export async function assignStaffToRecruitmentAction(input: {
   recruitmentId: string;
   staffUserId: string;
-  overrideShiftId?: string;
+  overrideShiftIds?: string[];
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
@@ -164,7 +164,7 @@ export async function assignStaffToRecruitmentAction(input: {
     staffUserId: input.staffUserId,
     assignerCompanyId: membership.companyId,
     assignedByUserId: userId,
-    overrideShiftId: input.overrideShiftId,
+    overrideShiftIds: input.overrideShiftIds,
   });
   if (result.status === "created") {
     revalidatePath("/company/calendar");

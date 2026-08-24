@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
-import { findConflictingShifts } from "@/lib/domain/shifts";
+import { findConflictingShifts, isPastDate } from "@/lib/domain/shifts";
 
 const PER_ENTRY_TEE_COST = 10;
 
@@ -79,6 +79,9 @@ export async function updateMaxEntries(params: {
     const recruitment = await tx.publicRecruitment.findUniqueOrThrow({
       where: { id: params.recruitmentId },
     });
+    if (isPastDate(recruitment.date)) {
+      throw new Error("recruitment_in_past");
+    }
 
     const filledCount = await tx.recruitmentEntry.count({
       where: { publicRecruitmentId: recruitment.id, status: { not: "REJECTED" } },
@@ -123,6 +126,9 @@ export async function stopOrDeleteRecruitment(params: {
     const recruitment = await tx.publicRecruitment.findUniqueOrThrow({
       where: { id: params.recruitmentId },
     });
+    if (isPastDate(recruitment.date)) {
+      throw new Error("recruitment_in_past");
+    }
 
     const filledCount = await tx.recruitmentEntry.count({
       where: { publicRecruitmentId: recruitment.id, status: { not: "REJECTED" } },
@@ -214,11 +220,14 @@ export async function assignStaffToRecruitment(params: {
   staffUserId: string;
   assignerCompanyId: string;
   assignedByUserId: string;
-  overrideShiftId?: string;
+  overrideShiftIds?: string[];
 }) {
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: params.recruitmentId } });
   if (recruitment.status !== "PUBLISHED") {
     throw new Error("recruitment_not_open");
+  }
+  if (isPastDate(recruitment.date)) {
+    throw new Error("recruitment_in_past");
   }
 
   const filledCount = await prisma.recruitmentEntry.count({
@@ -253,11 +262,24 @@ export async function assignStaffToRecruitment(params: {
     isAllDay: !recruitment.startTime,
     isUndecided: false,
   });
-  if (conflicts.length > 0 && !params.overrideShiftId) {
+  if (conflicts.length > 0 && !params.overrideShiftIds?.length) {
     return { status: "conflict" as const, conflicts };
   }
 
   return prisma.$transaction(async (tx) => {
+    // Row-lock the recruitment so two concurrent fills of the same slot
+    // serialize instead of both reading a stale filledCount and overbooking
+    // it — the second transaction blocks here until the first commits, then
+    // re-reads the count fresh (booking-site "lock the slot" behavior).
+    await tx.$queryRaw`SELECT id FROM "PublicRecruitment" WHERE id = ${recruitment.id} FOR UPDATE`;
+
+    const freshFilledCount = await tx.recruitmentEntry.count({
+      where: { publicRecruitmentId: recruitment.id, status: { not: "REJECTED" } },
+    });
+    if (freshFilledCount >= recruitment.maxEntries) {
+      throw new Error("recruitment_full");
+    }
+
     const entry = await tx.recruitmentEntry.create({
       data: {
         publicRecruitmentId: recruitment.id,
@@ -290,15 +312,15 @@ export async function assignStaffToRecruitment(params: {
       data: { resultingShiftId: shift.id },
     });
 
-    if (params.overrideShiftId) {
+    for (const overriddenId of params.overrideShiftIds ?? []) {
       await tx.shift.update({
-        where: { id: params.overrideShiftId },
+        where: { id: overriddenId },
         data: { status: "SUPERSEDED" },
       });
       await tx.conflictOverride.create({
         data: {
           newShiftId: shift.id,
-          overriddenShiftId: params.overrideShiftId,
+          overriddenShiftId: overriddenId,
           confirmedByUserId: params.assignedByUserId,
         },
       });
@@ -319,6 +341,14 @@ export async function applyToRecruitment(params: { recruitmentId: string; staffU
     if (recruitment.status !== "PUBLISHED") {
       throw new Error("recruitment_not_open");
     }
+    if (isPastDate(recruitment.date)) {
+      throw new Error("recruitment_in_past");
+    }
+
+    // Row-lock the recruitment so two staff applying at the same instant
+    // serialize instead of both reading a stale filledCount and overbooking
+    // the slot — see assignStaffToRecruitment for the same pattern.
+    await tx.$queryRaw`SELECT id FROM "PublicRecruitment" WHERE id = ${recruitment.id} FOR UPDATE`;
 
     const filledCount = await tx.recruitmentEntry.count({
       where: { publicRecruitmentId: recruitment.id, status: { not: "REJECTED" } },
