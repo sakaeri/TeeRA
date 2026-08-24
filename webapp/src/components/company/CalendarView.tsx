@@ -28,6 +28,7 @@ type ShiftRow = {
   companyRelationshipId?: string | null;
   note?: string | null;
   createdVia?: string;
+  publicRecruitmentId?: string | null;
   approvalStatus: string | null;
 };
 
@@ -706,31 +707,37 @@ function DayDetailModal({
           )
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
-            {recruitments.map((r) => (
-              <li key={r.id} className="rounded-lg border border-border p-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold">{r.title}</p>
-                    <p className="text-xs text-muted">
-                      {r.startTime ?? "終日"}
-                      {r.startTime ? `〜${r.endTime}` : ""}
-                    </p>
+            {recruitments.map((r) => {
+              const assignedNames = shifts.filter((s) => s.publicRecruitmentId === r.id).map((s) => s.staffName);
+              return (
+                <li key={r.id} className="rounded-lg border border-border p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold">{r.title}</p>
+                      <p className="text-xs text-muted">
+                        {r.startTime ?? "終日"}
+                        {r.startTime ? `〜${r.endTime}` : ""}
+                      </p>
+                    </div>
+                    <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+                      {r.filled}/{r.maxEntries}名
+                    </span>
                   </div>
-                  <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
-                    {r.filled}/{r.maxEntries}名
-                  </span>
-                </div>
-                {r.status === "PUBLISHED" && !isPastDay ? (
-                  <RecruitmentAssignControls
-                    recruitmentId={r.id}
-                    remaining={Math.max(r.maxEntries - r.filled, 0)}
-                    staffOptions={staffOptions}
-                  />
-                ) : r.status === "PUBLISHED" ? (
-                  <p className="mt-2 text-xs text-muted">過去の日付のため変更できません。</p>
-                ) : null}
-              </li>
-            ))}
+                  {assignedNames.length > 0 ? (
+                    <p className="mt-1.5 text-xs text-muted">アサイン済み：{assignedNames.join("、")}</p>
+                  ) : null}
+                  {r.status === "PUBLISHED" && !isPastDay ? (
+                    <RecruitmentAssignControls
+                      recruitmentId={r.id}
+                      remaining={Math.max(r.maxEntries - r.filled, 0)}
+                      staffOptions={staffOptions}
+                    />
+                  ) : r.status === "PUBLISHED" ? (
+                    <p className="mt-2 text-xs text-muted">過去の日付のため変更できません。</p>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
