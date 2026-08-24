@@ -78,6 +78,9 @@ try {
   const maxEntriesInput = admin.locator("label:has-text('募集人数') input").first();
   await maxEntriesInput.fill("3");
   await admin.getByRole("button", { name: "掲載する" }).click();
+  await admin.waitForTimeout(300);
+  log("clicking 掲載する shows a confirmation step before creating", (await admin.textContent("body")).includes("内容を確認してください"));
+  await admin.getByRole("button", { name: /件のオーダー募集を作成/ }).click();
   await admin.waitForTimeout(800);
 
   const balanceAfterCreate = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));

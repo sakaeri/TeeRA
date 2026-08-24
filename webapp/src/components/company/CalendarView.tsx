@@ -2047,6 +2047,7 @@ function RecruitmentFormModal({
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<"form" | "confirm">("form");
   const teamRequired = teams.length > 0;
 
   function toggleDate(d: string) {
@@ -2073,6 +2074,73 @@ function RecruitmentFormModal({
         setError("作成できませんでした。");
       }
     });
+  }
+
+  const teamName = teams.find((t) => t.id === teamId)?.name;
+  const dateLabels = dates.map((d) => {
+    const dt = new Date(d + "T00:00:00Z");
+    return `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
+  });
+
+  if (step === "confirm") {
+    return (
+      <Modal title="オーダー募集を作成" onClose={onClose}>
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={() => setStep("form")}
+            className="-mt-1 self-start text-xs text-muted hover:text-primary"
+          >
+            ＜ 戻る
+          </button>
+          <h3 className="font-serif-jp text-lg font-semibold">内容を確認してください</h3>
+
+          <dl className="divide-y divide-border rounded-xl border border-border bg-background/40 text-sm">
+            <div className="flex items-center justify-between px-4 py-3">
+              <dt className="text-muted">業務内容</dt>
+              <dd className="font-medium">{title}</dd>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3">
+              <dt className="text-muted">チーム</dt>
+              <dd className="font-medium">{teamName ?? "未選択"}</dd>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3">
+              <dt className="text-muted">募集人数</dt>
+              <dd className="font-medium">{maxEntries}名</dd>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3">
+              <dt className="text-muted">時間</dt>
+              <dd className="font-medium">{isUndecided ? "未定" : `${startTime}〜${endTime}`}</dd>
+            </div>
+            <div className="px-4 py-3">
+              <dt className="mb-1 text-muted">日付（{dates.length}件）</dt>
+              <dd className="flex flex-col gap-0.5 font-medium">
+                {dateLabels.map((label) => (
+                  <span key={label}>{label}</span>
+                ))}
+              </dd>
+            </div>
+            {note ? (
+              <div className="px-4 py-3">
+                <dt className="mb-1 text-muted">備考</dt>
+                <dd className="font-medium whitespace-pre-wrap">{note}</dd>
+              </div>
+            ) : null}
+          </dl>
+
+          {error ? <p className="text-xs text-red-600">{error}</p> : null}
+
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => submit(true)}
+            className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            {pending ? "作成中…" : `${dates.length}件のオーダー募集を作成`}
+          </button>
+        </div>
+      </Modal>
+    );
   }
 
   return (
@@ -2178,7 +2246,7 @@ function RecruitmentFormModal({
           <button
             type="button"
             disabled={pending || !title || dates.length === 0 || (teamRequired && !teamId)}
-            onClick={() => submit(true)}
+            onClick={() => setStep("confirm")}
             className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
             掲載する
