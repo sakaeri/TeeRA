@@ -18,6 +18,7 @@ import {
 type ShiftRow = {
   id: string;
   date: string;
+  staffUserId: string;
   staffName: string;
   startTime: string | null;
   endTime: string | null;
@@ -715,67 +716,16 @@ function DayDetailModal({
           )
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
-            {recruitments.map((r) => {
-              const assignedShifts = shifts.filter((s) => s.publicRecruitmentId === r.id);
-              return (
-                <li key={r.id} className="rounded-lg border border-border p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <p className="font-semibold">{r.title}</p>
-                        <span
-                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                            r.visibility === "PUBLIC" ? "bg-sky-100 text-sky-800" : "bg-emerald-100 text-emerald-800"
-                          }`}
-                        >
-                          {r.visibility === "PUBLIC" ? "公開募集" : "オーダー"}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted">
-                        {r.startTime ?? "終日"}
-                        {r.startTime ? `〜${r.endTime}` : ""}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
-                        {r.filled}/{r.maxEntries}名
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setEditingRecruitmentId(r.id)}
-                        className="rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-background"
-                      >
-                        編集
-                      </button>
-                    </div>
-                  </div>
-                  {assignedShifts.length > 0 ? (
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-                      <span>確定スタッフ：</span>
-                      {assignedShifts.map((s) => (
-                        <span
-                          key={s.id}
-                          className="inline-flex items-center gap-1 rounded-full bg-background px-1.5 py-0.5"
-                        >
-                          {s.staffName}
-                          <span className="text-[10px] text-muted/80">（{s.originLabel ?? "自社"}）</span>
-                          {!isPastDay ? <CancelShiftButton shiftId={s.id} staffName={s.staffName} /> : null}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  {r.status === "PUBLISHED" && !isPastDay ? (
-                    <RecruitmentAssignControls
-                      recruitmentId={r.id}
-                      remaining={Math.max(r.maxEntries - r.filled, 0)}
-                      staffOptions={staffOptions}
-                    />
-                  ) : r.status === "PUBLISHED" ? (
-                    <p className="mt-2 text-xs text-muted">過去の日付のため変更できません。</p>
-                  ) : null}
-                </li>
-              );
-            })}
+            {recruitments.map((r) => (
+              <OrderCard
+                key={r.id}
+                recruitment={r}
+                assignedShifts={shifts.filter((s) => s.publicRecruitmentId === r.id)}
+                staffOptions={staffOptions}
+                isPastDay={isPastDay}
+                onEdit={() => setEditingRecruitmentId(r.id)}
+              />
+            ))}
           </ul>
         )}
       </div>
@@ -1053,6 +1003,325 @@ function OrderEditModal({
           </div>
         </Modal>
       ) : null}
+    </Modal>
+  );
+}
+
+function OrderCard({
+  recruitment: r,
+  assignedShifts,
+  staffOptions,
+  isPastDay,
+  onEdit,
+}: {
+  recruitment: RecruitmentRow;
+  assignedShifts: ShiftRow[];
+  staffOptions: StaffOption[];
+  isPastDay: boolean;
+  onEdit: () => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const [showAssign, setShowAssign] = useState(false);
+  const remaining = Math.max(r.maxEntries - r.filled, 0);
+
+  return (
+    <li className="rounded-lg border border-border p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-1.5">
+            <p className="font-semibold">{r.title}</p>
+            {r.visibility === "PUBLIC" ? (
+              <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-800">
+                公開募集
+              </span>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted">
+            {r.startTime ?? "終日"}
+            {r.startTime ? `〜${r.endTime}` : ""}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+            {r.filled}/{r.maxEntries}
+          </span>
+          <button
+            type="button"
+            onClick={onEdit}
+            className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-background"
+          >
+            <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5">
+              <path
+                d="M13.5 3.5L16.5 6.5L7 16H4V13L13.5 3.5Z"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+            </svg>
+            編集
+          </button>
+        </div>
+      </div>
+
+      {assignedShifts.length > 0 ? (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-1 text-xs font-semibold text-muted hover:text-primary"
+          >
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`}
+            >
+              <path
+                d="M5 7.5L10 12.5L15 7.5"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            確定スタッフ（{assignedShifts.length}名）
+          </button>
+          {expanded ? (
+            <ul className="mt-1 flex flex-col text-xs">
+              {assignedShifts.map((s) => {
+                const affiliation = s.originLabel && s.originLabel !== "自社" ? s.originLabel : null;
+                return (
+                  <li
+                    key={s.id}
+                    className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-b border-border/50 py-1.5 last:border-b-0"
+                  >
+                    <span className="truncate font-medium">{s.staffName}</span>
+                    <span className="text-muted">{affiliation ?? ""}</span>
+                    {!isPastDay ? <CancelShiftButton shiftId={s.id} staffName={s.staffName} /> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      {r.status === "PUBLISHED" && !isPastDay && remaining > 0 ? (
+        <button
+          type="button"
+          onClick={() => setShowAssign(true)}
+          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-background"
+        >
+          ＋ スタッフを追加
+        </button>
+      ) : r.status === "PUBLISHED" && isPastDay ? (
+        <p className="mt-2 text-xs text-muted">過去の日付のため変更できません。</p>
+      ) : null}
+
+      {showAssign ? (
+        <MultiAssignModal
+          recruitmentId={r.id}
+          remaining={remaining}
+          staffOptions={staffOptions}
+          excludeIds={assignedShifts.map((s) => s.staffUserId)}
+          onClose={() => setShowAssign(false)}
+        />
+      ) : null}
+    </li>
+  );
+}
+
+// 複数のスタッフをチェックボックスで選び、順番にアサインしていくポップアップ。
+// 重複が見つかった相手だけその場で「スキップ」か「重複を確認のうえ追加」を
+// 選ばせ、解決したら次のスタッフへ自動的に進む。
+function MultiAssignModal({
+  recruitmentId,
+  remaining,
+  staffOptions,
+  excludeIds,
+  onClose,
+}: {
+  recruitmentId: string;
+  remaining: number;
+  staffOptions: StaffOption[];
+  excludeIds: string[];
+  onClose: () => void;
+}) {
+  const eligible = staffOptions.filter((s) => !excludeIds.includes(s.id));
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [phase, setPhase] = useState<"select" | "done">("select");
+  const [pending, startTransition] = useTransition();
+  const [results, setResults] = useState<{ name: string; ok: boolean }[]>([]);
+  const [conflicts, setConflicts] = useState<{ id: string; startTime: string | null; endTime: string | null }[] | null>(
+    null,
+  );
+  const [overrideChecked, setOverrideChecked] = useState(false);
+  const [conflictTargetName, setConflictTargetName] = useState<string | null>(null);
+  const targetsRef = useRef<StaffOption[]>([]);
+  const indexRef = useRef(0);
+  const doneRef = useRef<{ name: string; ok: boolean }[]>([]);
+
+  function toggle(id: string) {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < remaining) next.add(id);
+      return next;
+    });
+  }
+
+  function processFrom(index: number) {
+    const targets = targetsRef.current;
+    if (index >= targets.length) {
+      setResults(doneRef.current);
+      setPhase("done");
+      return;
+    }
+    indexRef.current = index;
+    const target = targets[index];
+    startTransition(async () => {
+      try {
+        const result = await assignStaffToRecruitmentAction({ recruitmentId, staffUserId: target.id });
+        if (result.status === "conflict") {
+          setConflicts(result.conflicts);
+          setConflictTargetName(target.name);
+        } else {
+          doneRef.current = [...doneRef.current, { name: target.name, ok: true }];
+          processFrom(index + 1);
+        }
+      } catch {
+        doneRef.current = [...doneRef.current, { name: target.name, ok: false }];
+        processFrom(index + 1);
+      }
+    });
+  }
+
+  function startAssigning() {
+    targetsRef.current = eligible.filter((s) => checked.has(s.id));
+    doneRef.current = [];
+    processFrom(0);
+  }
+
+  function resolveConflict(override: boolean) {
+    const target = targetsRef.current[indexRef.current];
+    if (!override) {
+      doneRef.current = [...doneRef.current, { name: target.name, ok: false }];
+      setConflicts(null);
+      setConflictTargetName(null);
+      setOverrideChecked(false);
+      processFrom(indexRef.current + 1);
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const result = await assignStaffToRecruitmentAction({
+          recruitmentId,
+          staffUserId: target.id,
+          overrideShiftIds: (conflicts ?? []).map((c) => c.id),
+        });
+        doneRef.current = [...doneRef.current, { name: target.name, ok: result.status === "created" }];
+      } catch {
+        doneRef.current = [...doneRef.current, { name: target.name, ok: false }];
+      }
+      setConflicts(null);
+      setConflictTargetName(null);
+      setOverrideChecked(false);
+      processFrom(indexRef.current + 1);
+    });
+  }
+
+  return (
+    <Modal title="スタッフを追加" onClose={onClose}>
+      {phase === "select" ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-muted">残り{remaining}名まで選択できます。</p>
+          <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
+            {eligible.map((s) => (
+              <li key={s.id}>
+                <label className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-background">
+                  <input
+                    type="checkbox"
+                    checked={checked.has(s.id)}
+                    disabled={!checked.has(s.id) && checked.size >= remaining}
+                    onChange={() => toggle(s.id)}
+                  />
+                  <span className="text-sm">{s.name}</span>
+                </label>
+              </li>
+            ))}
+            {eligible.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted">追加できるスタッフがいません。</p>
+            ) : null}
+          </ul>
+
+          {conflicts ? (
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-xs text-red-700">
+              <p className="mb-1 font-semibold">{conflictTargetName}さんは他のシフトと重複しています。</p>
+              <ul className="mb-2 list-disc pl-4">
+                {conflicts.map((c) => (
+                  <li key={c.id}>{c.startTime ? `${c.startTime}〜${c.endTime}` : "終日/未定"}</li>
+                ))}
+              </ul>
+              <label className="mb-2 flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={overrideChecked}
+                  onChange={(e) => setOverrideChecked(e.target.checked)}
+                />
+                スタッフ本人と確認済み
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => resolveConflict(false)}
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs"
+                >
+                  スキップ
+                </button>
+                <button
+                  type="button"
+                  disabled={pending || !overrideChecked}
+                  onClick={() => resolveConflict(true)}
+                  className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+                >
+                  重複を確認のうえ追加する
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-2 flex justify-end gap-2">
+              <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm">
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={pending || checked.size === 0}
+                onClick={startAssigning}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                {checked.size}名をアサインする
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <div className="rounded-lg border border-border bg-background p-2 text-xs">
+            {results.map((r, i) => (
+              <p key={i} className={r.ok ? "text-muted" : "text-red-600"}>
+                {r.name}：{r.ok ? "追加しました" : "追加できませんでした"}
+              </p>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+          >
+            閉じる
+          </button>
+        </div>
+      )}
     </Modal>
   );
 }

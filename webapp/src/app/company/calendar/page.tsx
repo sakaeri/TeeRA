@@ -58,6 +58,7 @@ export default async function CompanyCalendarPage({
         shifts={shifts.map((s) => ({
           id: s.id,
           date: s.date.toISOString().slice(0, 10),
+          staffUserId: s.staffUserId,
           staffName: s.staff.name,
           startTime: s.startTime,
           endTime: s.endTime,
