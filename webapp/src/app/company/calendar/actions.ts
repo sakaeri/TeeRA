@@ -103,7 +103,6 @@ export async function createPublicRecruitmentAction(input: {
   endTime?: string;
   isUndecided: boolean;
   maxEntries: number;
-  publish: boolean;
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership, input.teamId)) throw new Error("forbidden");
@@ -120,7 +119,6 @@ export async function createPublicRecruitmentAction(input: {
     isUndecided: input.isUndecided,
     maxEntries: input.maxEntries,
     createdByUserId: userId,
-    publish: input.publish,
   });
   revalidatePath("/company/calendar");
 }

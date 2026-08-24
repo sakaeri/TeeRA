@@ -2054,7 +2054,7 @@ function RecruitmentFormModal({
     setDates((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
   }
 
-  function submit(publish: boolean) {
+  function submit() {
     setError(null);
     startTransition(async () => {
       try {
@@ -2067,7 +2067,6 @@ function RecruitmentFormModal({
           endTime: isUndecided ? undefined : endTime,
           isUndecided,
           maxEntries,
-          publish,
         });
         onClose();
       } catch {
@@ -2133,7 +2132,7 @@ function RecruitmentFormModal({
           <button
             type="button"
             disabled={pending}
-            onClick={() => submit(true)}
+            onClick={() => submit()}
             className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
             {pending ? "作成中…" : `${dates.length}件のオーダー募集を作成`}
@@ -2242,24 +2241,14 @@ function RecruitmentFormModal({
 
         {error ? <p className="text-xs text-red-600">{error}</p> : null}
 
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={pending || !title || dates.length === 0 || (teamRequired && !teamId)}
-            onClick={() => setStep("confirm")}
-            className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-          >
-            掲載する
-          </button>
-          <button
-            type="button"
-            disabled={pending || !title || dates.length === 0 || (teamRequired && !teamId)}
-            onClick={() => submit(false)}
-            className="flex-1 rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
-          >
-            下書き保存
-          </button>
-        </div>
+        <button
+          type="button"
+          disabled={pending || !title || dates.length === 0 || (teamRequired && !teamId)}
+          onClick={() => setStep("confirm")}
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        >
+          掲載する
+        </button>
       </div>
     </Modal>
   );

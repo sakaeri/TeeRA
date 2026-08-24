@@ -33,7 +33,6 @@ export async function createPublicRecruitment(params: {
   isUndecided: boolean;
   maxEntries: number;
   createdByUserId: string;
-  publish: boolean;
 }) {
   return prisma.$transaction(
     params.dates.map((date) =>
@@ -51,9 +50,9 @@ export async function createPublicRecruitment(params: {
           maxEntries: params.maxEntries,
           perEntryTeeCost: PER_ENTRY_TEE_COST,
           lockedTee: 0,
-          status: params.publish ? "PUBLISHED" : "DRAFT",
+          status: "PUBLISHED",
           visibility: "ORDER",
-          publishedAt: params.publish ? new Date() : undefined,
+          publishedAt: new Date(),
         },
       }),
     ),
