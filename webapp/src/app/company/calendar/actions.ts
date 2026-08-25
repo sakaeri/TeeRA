@@ -128,10 +128,7 @@ export async function openRecruitmentToPublicAction(input: {
   remaining: number;
   hourlyWage: number;
   wageType: WageType;
-  applicationConditions?: string;
-  attire?: string;
-  belongings?: string;
-  meetingPlace?: string;
+  extraItems: { label: string; value: string }[];
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
@@ -145,10 +142,7 @@ export async function openRecruitmentToPublicAction(input: {
     recruitmentId: input.recruitmentId,
     hourlyWage: input.hourlyWage,
     wageType: input.wageType,
-    applicationConditions: input.applicationConditions,
-    attire: input.attire,
-    belongings: input.belongings,
-    meetingPlace: input.meetingPlace,
+    extraItems: input.extraItems,
     updatedByUserId: userId,
   });
   revalidatePath("/company/calendar");
@@ -160,10 +154,7 @@ export async function saveRecruitmentPublicDraftAction(input: {
   recruitmentId: string;
   hourlyWage?: number;
   wageType?: WageType;
-  applicationConditions?: string;
-  attire?: string;
-  belongings?: string;
-  meetingPlace?: string;
+  extraItems: { label: string; value: string }[];
 }) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");

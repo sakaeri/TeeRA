@@ -72,10 +72,7 @@ type RecruitmentRow = {
   visibility: string; // "ORDER" | "PUBLIC"
   hourlyWage: number | null;
   wageType: string | null;
-  applicationConditions: string | null;
-  attire: string | null;
-  belongings: string | null;
-  meetingPlace: string | null;
+  extraItems: { label: string; value: string }[];
 };
 
 type ClientRecruitmentRow = {
@@ -769,6 +766,8 @@ const RECRUITMENT_STATUS_LABEL: Record<string, string> = {
   DELETED: "削除済み",
 };
 
+const RECRUITMENT_QUICK_ADD_ITEMS = ["応募条件", "服装", "持ち物", "集合場所"];
+
 // オーダー/公開募集カードの編集用ポップアップ。内容編集・削除・停止・
 // 公開募集への切り替えをここに集約する（以前はカレンダー下部に別パネルが
 // あり、人数上限の変更もブラウザのprompt()頼みだった）。
@@ -790,20 +789,10 @@ function OrderEditModal({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [wageAmount, setWageAmount] = useState(recruitment.hourlyWage ? String(recruitment.hourlyWage) : "");
   const [wageType, setWageType] = useState<"HOURLY" | "DAILY">((recruitment.wageType as "HOURLY" | "DAILY") || "HOURLY");
-  const [applicationConditions, setApplicationConditions] = useState(recruitment.applicationConditions ?? "");
-  const [attire, setAttire] = useState(recruitment.attire ?? "");
-  const [belongings, setBelongings] = useState(recruitment.belongings ?? "");
-  const [meetingPlace, setMeetingPlace] = useState(recruitment.meetingPlace ?? "");
-  const [openFields, setOpenFields] = useState<Set<string>>(
-    new Set(
-      [
-        recruitment.applicationConditions ? "conditions" : null,
-        recruitment.attire ? "attire" : null,
-        recruitment.belongings ? "belongings" : null,
-        recruitment.meetingPlace ? "meetingPlace" : null,
-      ].filter((v): v is string => v !== null),
-    ),
-  );
+  const [extraItems, setExtraItems] = useState<{ label: string; value: string }[]>(recruitment.extraItems);
+  const [customItemLabel, setCustomItemLabel] = useState("");
+  const [customItemValue, setCustomItemValue] = useState("");
+  const [showCustomItemForm, setShowCustomItemForm] = useState(false);
   const [agreedScope, setAgreedScope] = useState(false);
   const [agreedAccuracy, setAgreedAccuracy] = useState(false);
   const [agreedLiability, setAgreedLiability] = useState(false);
@@ -811,6 +800,16 @@ function OrderEditModal({
   const remaining = Math.max(recruitment.maxEntries - recruitment.filled, 0);
   const canManage = recruitment.status === "PUBLISHED" && !isPastDay;
   const allAgreed = agreedScope && agreedAccuracy && agreedLiability;
+
+  function addItem(label: string, value = "") {
+    setExtraItems((prev) => (prev.some((i) => i.label === label) ? prev : [...prev, { label, value }]));
+  }
+  function updateItemValue(label: string, value: string) {
+    setExtraItems((prev) => prev.map((i) => (i.label === label ? { ...i, value } : i)));
+  }
+  function removeItem(label: string) {
+    setExtraItems((prev) => prev.filter((i) => i.label !== label));
+  }
 
   function saveMaxEntries() {
     setError(null);
@@ -844,10 +843,7 @@ function OrderEditModal({
           remaining,
           hourlyWage: Number(wageAmount),
           wageType,
-          applicationConditions: applicationConditions || undefined,
-          attire: attire || undefined,
-          belongings: belongings || undefined,
-          meetingPlace: meetingPlace || undefined,
+          extraItems,
         });
         onClose();
       } catch {
@@ -864,10 +860,7 @@ function OrderEditModal({
           recruitmentId: recruitment.id,
           hourlyWage: wageAmount ? Number(wageAmount) : undefined,
           wageType,
-          applicationConditions: applicationConditions || undefined,
-          attire: attire || undefined,
-          belongings: belongings || undefined,
-          meetingPlace: meetingPlace || undefined,
+          extraItems,
         });
         onClose();
       } catch {
@@ -902,10 +895,11 @@ function OrderEditModal({
             <p>
               {recruitment.wageType === "DAILY" ? "日給" : "時給"} {recruitment.hourlyWage}円
             </p>
-            {recruitment.applicationConditions ? <p className="mt-1">応募条件：{recruitment.applicationConditions}</p> : null}
-            {recruitment.attire ? <p className="mt-1">服装：{recruitment.attire}</p> : null}
-            {recruitment.belongings ? <p className="mt-1">持ち物：{recruitment.belongings}</p> : null}
-            {recruitment.meetingPlace ? <p className="mt-1">集合場所：{recruitment.meetingPlace}</p> : null}
+            {recruitment.extraItems.map((item) => (
+              <p key={item.label} className="mt-1">
+                {item.label}：{item.value}
+              </p>
+            ))}
           </div>
         ) : null}
 
@@ -961,6 +955,19 @@ function OrderEditModal({
               </p>
             </div>
 
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 p-3">
+              <p className="text-xs text-foreground">
+                現在の残高では最大{affordableMaxEntries}名まで募集が可能です。{affordableMaxEntries + 1}
+                名以上募集を希望する場合はチャージしてください。
+              </p>
+              <Link
+                href="/company/wallet"
+                className="shrink-0 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+              >
+                チャージする
+              </Link>
+            </div>
+
             <Field label="時給／日給" className="mb-2">
               <div className="flex gap-2">
                 <input
@@ -980,78 +987,99 @@ function OrderEditModal({
               </div>
             </Field>
 
-            {!openFields.has("conditions") ? (
-              <button
-                type="button"
-                onClick={() => setOpenFields((prev) => new Set(prev).add("conditions"))}
-                className="mb-1.5 mr-1.5 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-background"
-              >
-                ＋ 応募条件
-              </button>
-            ) : (
-              <Field label="応募条件（任意）" className="mb-2">
-                <textarea
-                  value={applicationConditions}
-                  onChange={(e) => setApplicationConditions(e.target.value)}
-                  rows={2}
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-                />
-              </Field>
-            )}
-            {!openFields.has("attire") ? (
-              <button
-                type="button"
-                onClick={() => setOpenFields((prev) => new Set(prev).add("attire"))}
-                className="mb-1.5 mr-1.5 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-background"
-              >
-                ＋ 服装
-              </button>
-            ) : (
-              <Field label="服装（任意）" className="mb-2">
+            <p className="mb-1 text-xs font-semibold text-foreground">募集の詳細（任意）</p>
+            <p className="mb-2 text-[11px] text-muted">
+              この内容は所属していない方向けの表示です。所属登録済みのスタッフには表示されません
+            </p>
+
+            {extraItems.length > 0 ? (
+              <div className="mb-2 flex flex-col gap-2">
+                {extraItems.map((item) => (
+                  <div key={item.label} className="flex items-center gap-2">
+                    <span className="w-20 shrink-0 truncate text-xs text-muted">{item.label}</span>
+                    <input
+                      type="text"
+                      value={item.value}
+                      onChange={(e) => updateItemValue(item.label, e.target.value)}
+                      placeholder="内容"
+                      className="flex-1 rounded-lg border border-border px-2 py-1.5 text-sm"
+                    />
+                    <button type="button" onClick={() => removeItem(item.label)} className="text-red-600">
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {showCustomItemForm ? (
+              <div className="mb-2 flex items-center gap-2">
                 <input
                   type="text"
-                  value={attire}
-                  onChange={(e) => setAttire(e.target.value)}
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                  value={customItemLabel}
+                  onChange={(e) => setCustomItemLabel(e.target.value)}
+                  placeholder="項目名"
+                  className="w-24 rounded-lg border border-border px-2 py-1.5 text-sm"
                 />
-              </Field>
-            )}
-            {!openFields.has("belongings") ? (
-              <button
-                type="button"
-                onClick={() => setOpenFields((prev) => new Set(prev).add("belongings"))}
-                className="mb-1.5 mr-1.5 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-background"
-              >
-                ＋ 持ち物
-              </button>
-            ) : (
-              <Field label="持ち物（任意）" className="mb-2">
-                <textarea
-                  value={belongings}
-                  onChange={(e) => setBelongings(e.target.value)}
-                  rows={2}
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-                />
-              </Field>
-            )}
-            {!openFields.has("meetingPlace") ? (
-              <button
-                type="button"
-                onClick={() => setOpenFields((prev) => new Set(prev).add("meetingPlace"))}
-                className="mb-3 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-background"
-              >
-                ＋ 集合場所
-              </button>
-            ) : (
-              <Field label="集合場所（任意）" className="mb-3">
                 <input
                   type="text"
-                  value={meetingPlace}
-                  onChange={(e) => setMeetingPlace(e.target.value)}
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                  value={customItemValue}
+                  onChange={(e) => setCustomItemValue(e.target.value)}
+                  placeholder="内容（任意）"
+                  className="flex-1 rounded-lg border border-border px-2 py-1.5 text-sm"
                 />
-              </Field>
-            )}
+                <button
+                  type="button"
+                  disabled={!customItemLabel.trim()}
+                  onClick={() => {
+                    addItem(customItemLabel.trim(), customItemValue);
+                    setCustomItemLabel("");
+                    setCustomItemValue("");
+                    setShowCustomItemForm(false);
+                  }}
+                  className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                >
+                  追加
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCustomItemForm(false);
+                    setCustomItemLabel("");
+                    setCustomItemValue("");
+                  }}
+                  className="text-muted"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : null}
+
+            <div className="mb-3 flex flex-wrap gap-2">
+              {RECRUITMENT_QUICK_ADD_ITEMS.map((label) => {
+                const added = extraItems.some((i) => i.label === label);
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    disabled={added}
+                    onClick={() => addItem(label)}
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      added ? "border-border text-muted/50" : "border-border text-muted hover:border-primary"
+                    }`}
+                  >
+                    ＋{label}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setShowCustomItemForm(true)}
+                className="rounded-full border border-dashed border-border px-3 py-1 text-xs text-muted hover:border-primary"
+              >
+                ＋項目を追加
+              </button>
+            </div>
 
             <p className="mb-2 text-xs text-muted">
               残り{remaining}名 × 10 Tee = {remaining * 10} Tee がロックされます（残高で賄える上限: {affordableMaxEntries}名）。

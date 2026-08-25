@@ -66,10 +66,7 @@ export async function openRecruitmentToPublic(params: {
   recruitmentId: string;
   hourlyWage: number;
   wageType: WageType;
-  applicationConditions?: string;
-  attire?: string;
-  belongings?: string;
-  meetingPlace?: string;
+  extraItems: { label: string; value: string }[];
   updatedByUserId: string;
 }) {
   return prisma.$transaction(async (tx) => {
@@ -106,10 +103,7 @@ export async function openRecruitmentToPublic(params: {
         publicOpenedAt: new Date(),
         hourlyWage: params.hourlyWage,
         wageType: params.wageType,
-        applicationConditions: params.applicationConditions,
-        attire: params.attire,
-        belongings: params.belongings,
-        meetingPlace: params.meetingPlace,
+        extraItems: params.extraItems,
         lockedTee: recruitment.lockedTee + lockedTee,
       },
     });
@@ -125,10 +119,7 @@ export async function saveRecruitmentPublicDraft(params: {
   recruitmentId: string;
   hourlyWage?: number;
   wageType?: WageType;
-  applicationConditions?: string;
-  attire?: string;
-  belongings?: string;
-  meetingPlace?: string;
+  extraItems: { label: string; value: string }[];
 }) {
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: params.recruitmentId } });
   if (recruitment.visibility === "PUBLIC") {
@@ -140,10 +131,7 @@ export async function saveRecruitmentPublicDraft(params: {
     data: {
       hourlyWage: params.hourlyWage,
       wageType: params.wageType,
-      applicationConditions: params.applicationConditions,
-      attire: params.attire,
-      belongings: params.belongings,
-      meetingPlace: params.meetingPlace,
+      extraItems: params.extraItems,
     },
   });
 }

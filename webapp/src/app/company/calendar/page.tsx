@@ -97,10 +97,7 @@ export default async function CompanyCalendarPage({
           visibility: r.visibility,
           hourlyWage: r.hourlyWage,
           wageType: r.wageType,
-          applicationConditions: r.applicationConditions,
-          attire: r.attire,
-          belongings: r.belongings,
-          meetingPlace: r.meetingPlace,
+          extraItems: r.extraItems as { label: string; value: string }[],
         }))}
         clientRecruitments={clientRecruitments.map((r) => ({
           id: r.id,
