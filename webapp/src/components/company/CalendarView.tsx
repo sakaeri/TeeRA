@@ -35,6 +35,19 @@ type ShiftRow = {
   approvalStatus: string | null;
 };
 
+type ShiftHistoryRow = {
+  id: string;
+  date: string;
+  staffName: string;
+  publicRecruitmentId: string | null;
+  status: string; // "SUPERSEDED" | "CANCELLED"
+};
+
+const SHIFT_HISTORY_LABEL: Record<string, string> = {
+  SUPERSEDED: "別の枠に変更",
+  CANCELLED: "キャンセル済み",
+};
+
 const APPROVAL_PILL: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-800",
   APPROVED: "bg-sky-100 text-sky-800",
@@ -103,6 +116,7 @@ export function CalendarView({
   month,
   selectedTeamId,
   shifts,
+  shiftHistory,
   staffOptions,
   teams,
   shiftRequests,
@@ -117,6 +131,7 @@ export function CalendarView({
   month: number;
   selectedTeamId?: string;
   shifts: ShiftRow[];
+  shiftHistory: ShiftHistoryRow[];
   staffOptions: StaffOption[];
   teams: Team[];
   shiftRequests: ShiftRequestRow[];
@@ -386,6 +401,7 @@ export function CalendarView({
         <DayDetailModal
           dateStr={selectedDate}
           shifts={selectedShifts}
+          history={shiftHistory.filter((h) => h.date === selectedDate)}
           recruitments={recruitments.filter((r) => r.date === selectedDate)}
           clientOrders={clientRecruitments.filter((r) => r.date === selectedDate)}
           staffOptions={staffOptions}
@@ -484,6 +500,7 @@ function FabMenu({
 function DayDetailModal({
   dateStr,
   shifts,
+  history,
   recruitments,
   clientOrders,
   staffOptions,
@@ -494,6 +511,7 @@ function DayDetailModal({
 }: {
   dateStr: string;
   shifts: ShiftRow[];
+  history: ShiftHistoryRow[];
   recruitments: RecruitmentRow[];
   clientOrders: ClientRecruitmentRow[];
   staffOptions: StaffOption[];
@@ -738,6 +756,7 @@ function DayDetailModal({
                 key={r.id}
                 recruitment={r}
                 assignedShifts={shifts.filter((s) => s.publicRecruitmentId === r.id)}
+                history={history.filter((h) => h.publicRecruitmentId === r.id)}
                 staffOptions={staffOptions}
                 isPastDay={isPastDay}
                 onEdit={() => setEditingRecruitmentId(r.id)}
@@ -1209,17 +1228,20 @@ function OrderEditModal({
 function OrderCard({
   recruitment: r,
   assignedShifts,
+  history,
   staffOptions,
   isPastDay,
   onEdit,
 }: {
   recruitment: RecruitmentRow;
   assignedShifts: ShiftRow[];
+  history: ShiftHistoryRow[];
   staffOptions: StaffOption[];
   isPastDay: boolean;
   onEdit: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
   const remaining = Math.max(r.maxEntries - r.filled, 0);
 
@@ -1325,6 +1347,41 @@ function OrderCard({
           excludeIds={assignedShifts.map((s) => s.staffUserId)}
           onClose={() => setShowAssign(false)}
         />
+      ) : null}
+
+      {history.length > 0 ? (
+        <div className="mt-2 border-t border-border/50 pt-2">
+          <button
+            type="button"
+            onClick={() => setHistoryExpanded((v) => !v)}
+            className="flex items-center gap-1 text-[11px] text-muted/70 hover:text-muted"
+          >
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              className={`h-3 w-3 transition-transform ${historyExpanded ? "rotate-180" : ""}`}
+            >
+              <path
+                d="M5 7.5L10 12.5L15 7.5"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            変更履歴（{history.length}件）
+          </button>
+          {historyExpanded ? (
+            <ul className="mt-1 flex flex-col gap-0.5">
+              {history.map((h) => (
+                <li key={h.id} className="flex items-center justify-between text-[11px] text-muted/70">
+                  <span>{h.staffName}</span>
+                  <span>{SHIFT_HISTORY_LABEL[h.status] ?? h.status}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
       ) : null}
     </li>
   );

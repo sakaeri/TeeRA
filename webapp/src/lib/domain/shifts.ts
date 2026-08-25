@@ -178,6 +178,31 @@ export async function listShiftsForMonth(params: {
   });
 }
 
+// キャンセル・上書きで外れたオーダー枠の履歴。物理削除はしておらず
+// status(SUPERSEDED/CANCELLED)を変えているだけなので、オーダーカード下部に
+// 薄く出す「変更履歴」表示のためだけに別途取得する（通常の一覧には出さない）。
+export async function listShiftHistoryForMonth(params: {
+  companyId: string;
+  year: number;
+  month: number;
+  teamId?: string;
+}) {
+  const start = new Date(Date.UTC(params.year, params.month - 1, 1));
+  const end = new Date(Date.UTC(params.year, params.month, 1));
+
+  return prisma.shift.findMany({
+    where: {
+      companyId: params.companyId,
+      teamId: params.teamId,
+      date: { gte: start, lt: end },
+      status: { in: ["SUPERSEDED", "CANCELLED"] },
+      publicRecruitmentId: { not: null },
+    },
+    include: { staff: true },
+    orderBy: [{ date: "asc" }, { updatedAt: "asc" }],
+  });
+}
+
 export async function listStaffShiftsForMonth(params: {
   staffUserId: string;
   year: number;

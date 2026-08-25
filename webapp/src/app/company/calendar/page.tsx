@@ -1,5 +1,5 @@
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { listShiftsForMonth, listShiftRequests } from "@/lib/domain/shifts";
+import { listShiftsForMonth, listShiftRequests, listShiftHistoryForMonth } from "@/lib/domain/shifts";
 import {
   listPublicRecruitments,
   listClientRecruitments,
@@ -25,8 +25,9 @@ export default async function CompanyCalendarPage({
   const month = Number(sp.m) || dateMonth || now.getUTCMonth() + 1;
   const teamId = typeof sp.team === "string" && sp.team ? sp.team : undefined;
 
-  const [shifts, staff, teams, shiftRequests, recruitments, clientRecruitments, company] = await Promise.all([
+  const [shifts, shiftHistory, staff, teams, shiftRequests, recruitments, clientRecruitments, company] = await Promise.all([
     listShiftsForMonth({ companyId: membership.companyId, year, month, teamId }),
+    listShiftHistoryForMonth({ companyId: membership.companyId, year, month, teamId }),
     listStaff(membership.companyId),
     listTeams(membership.companyId),
     listShiftRequests({ companyId: membership.companyId, status: "PENDING" }),
@@ -72,6 +73,13 @@ export default async function CompanyCalendarPage({
           publicRecruitmentId: s.publicRecruitmentId,
           originLabel: s.source === "CLIENT" ? undefined : originLabel(staffOrigins.get(s.staffUserId)),
           approvalStatus: s.workReport?.approvalStatus ?? null,
+        }))}
+        shiftHistory={shiftHistory.map((s) => ({
+          id: s.id,
+          date: s.date.toISOString().slice(0, 10),
+          staffName: s.staff.name,
+          publicRecruitmentId: s.publicRecruitmentId,
+          status: s.status,
         }))}
         staffOptions={staff.map((s) => ({ id: s.userId, name: s.name }))}
         teams={teams.map((t) => ({ id: t.id, name: t.name }))}
