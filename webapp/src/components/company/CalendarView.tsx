@@ -289,9 +289,12 @@ export function CalendarView({
             <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </Link>
-        <div className="font-serif-jp text-lg font-bold">
+        <Link
+          href={`?y=${todayStr.slice(0, 4)}&m=${Number(todayStr.slice(5, 7))}${selectedTeamId ? `&team=${selectedTeamId}` : ""}`}
+          className="rounded-lg px-2 py-1 font-serif-jp text-lg font-bold hover:bg-background"
+        >
           {year}年{month}月
-        </div>
+        </Link>
         <Link
           href={`?y=${next.y}&m=${next.m}${selectedTeamId ? `&team=${selectedTeamId}` : ""}`}
           aria-label="次の月"
