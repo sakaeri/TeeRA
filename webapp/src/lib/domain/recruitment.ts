@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
-import { findConflictingShifts, isPastDate } from "@/lib/domain/shifts";
+import { findConflictingShifts, isPastDate, supersedeShift } from "@/lib/domain/shifts";
 import type { WageType } from "@/generated/prisma/enums";
 
 const PER_ENTRY_TEE_COST = 10;
@@ -475,16 +475,10 @@ export async function assignStaffToRecruitment(params: {
     }
 
     for (const overriddenId of params.overrideShiftIds ?? []) {
-      await tx.shift.update({
-        where: { id: overriddenId },
-        data: { status: "SUPERSEDED" },
-      });
-      await tx.conflictOverride.create({
-        data: {
-          newShiftId: shift.id,
-          overriddenShiftId: overriddenId,
-          confirmedByUserId: params.assignedByUserId,
-        },
+      await supersedeShift(tx, {
+        shiftId: overriddenId,
+        newShiftId: shift.id,
+        confirmedByUserId: params.assignedByUserId,
       });
     }
 

@@ -1,5 +1,40 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
+
+type Tx = Prisma.TransactionClient;
+
+// 上書き(override)で既存シフトをSUPERSEDEDにする際は、そのシフトの発生元
+// (公開募集の確定枠 / マッチ済みのシフト希望)も一緒に解放する。ここを怠ると
+// 元のシフトは一覧から消えるのに募集側のfilledカウントだけ残ってしまい、
+// 「1/1なのに確定スタッフが誰もいない」という不整合になる（cancelShiftと
+// 同じ考え方 — 発生元を必ず巻き戻す）。
+export async function supersedeShift(
+  tx: Tx,
+  params: { shiftId: string; newShiftId: string; confirmedByUserId: string },
+) {
+  await tx.shift.update({ where: { id: params.shiftId }, data: { status: "SUPERSEDED" } });
+  await tx.conflictOverride.create({
+    data: {
+      newShiftId: params.newShiftId,
+      overriddenShiftId: params.shiftId,
+      confirmedByUserId: params.confirmedByUserId,
+    },
+  });
+
+  const entry = await tx.recruitmentEntry.findFirst({ where: { resultingShiftId: params.shiftId } });
+  if (entry) {
+    await tx.recruitmentEntry.update({ where: { id: entry.id }, data: { status: "REJECTED" } });
+  }
+
+  const matchedRequest = await tx.shiftRequest.findFirst({ where: { matchedShiftId: params.shiftId } });
+  if (matchedRequest) {
+    await tx.shiftRequest.update({
+      where: { id: matchedRequest.id },
+      data: { status: "PENDING", matchedShiftId: null },
+    });
+  }
+}
 
 function timeToMinutes(t: string) {
   const [h, m] = t.split(":").map(Number);
@@ -105,16 +140,10 @@ export async function createAssignedShift(params: {
     });
 
     for (const overriddenId of params.overrideShiftIds ?? []) {
-      await tx.shift.update({
-        where: { id: overriddenId },
-        data: { status: "SUPERSEDED" },
-      });
-      await tx.conflictOverride.create({
-        data: {
-          newShiftId: created.id,
-          overriddenShiftId: overriddenId,
-          confirmedByUserId: params.confirmedByUserId,
-        },
+      await supersedeShift(tx, {
+        shiftId: overriddenId,
+        newShiftId: created.id,
+        confirmedByUserId: params.confirmedByUserId,
       });
     }
 
