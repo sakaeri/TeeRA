@@ -633,7 +633,7 @@ function DayDetailModal({
                 return (
                   <li
                     key={s.id}
-                    className="grid grid-cols-[1fr_120px_80px_auto] items-center gap-2 border-b border-border/50 py-2.5"
+                    className="grid grid-cols-[1fr_120px_80px_auto] items-center gap-2 border-b border-border/50 py-2.5 last:border-b-0"
                   >
                     <span className="min-w-0">
                       <span className="block truncate font-semibold">{s.staffName}</span>
@@ -695,7 +695,7 @@ function DayDetailModal({
                 {selectedClientGroup.rows.map((s) => (
                   <li
                     key={s.id}
-                    className="grid grid-cols-[1fr_120px_80px_auto] items-center gap-2 border-b border-border/50 py-2.5"
+                    className="grid grid-cols-[1fr_120px_80px_auto] items-center gap-2 border-b border-border/50 py-2.5 last:border-b-0"
                   >
                     <span className="truncate">
                       <span className="font-semibold">{s.staffName}</span>
