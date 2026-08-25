@@ -67,8 +67,8 @@ try {
   // should move until it's later switched to 公開募集.
   await admin.goto("http://localhost:3000/company/calendar");
   await admin.locator("button", { hasText: "＋" }).last().click();
-  await admin.getByText("オーダー募集").click();
-  await admin.waitForSelector("text=オーダー募集を作成");
+  await admin.getByText("募集を作成").click();
+  await admin.waitForSelector("text=募集を作成");
   const bodyBeforeFill = await admin.textContent("body");
   log("order creation form has no 時給/Tee-cap fields", !bodyBeforeFill.includes("時給") && !bodyBeforeFill.includes("残高で賄える"));
 
@@ -80,14 +80,14 @@ try {
   await admin.getByRole("button", { name: "掲載する" }).click();
   await admin.waitForTimeout(300);
   log("clicking 掲載する shows a confirmation step before creating", (await admin.textContent("body")).includes("内容を確認してください"));
-  await admin.getByRole("button", { name: /件のオーダー募集を作成/ }).click();
+  await admin.getByRole("button", { name: /件の募集を作成/ }).click();
   await admin.waitForTimeout(800);
 
   const balanceAfterCreate = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
   log("order creation does not touch Tee balance (100 -> 100)", balanceAfterCreate === 100);
 
   // the old bottom-of-calendar 公開募集一覧 panel is gone — remaining-slot
-  // count now shows as a pill on the オーダー tab inside the day-detail
+  // count now shows as a pill on the 募集一覧 tab inside the day-detail
   // modal, so open it via the date query param to check.
   await admin.goto(`http://localhost:3000/company/calendar?date=${today}`);
   await admin.waitForTimeout(600);
@@ -127,7 +127,7 @@ try {
   await admin
     .locator(".fixed.inset-0.z-20")
     .first()
-    .getByRole("button", { name: /^オーダー/ })
+    .getByRole("button", { name: /^募集一覧/ })
     .click();
   await admin.waitForTimeout(300);
   await admin.locator(".fixed.inset-0.z-20").first().getByRole("button", { name: "編集" }).click();

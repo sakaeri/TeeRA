@@ -482,7 +482,7 @@ function FabMenu({
             }}
             className="flex w-full items-center gap-2 border-t border-border px-4 py-3 text-left text-sm hover:bg-background"
           >
-            📣 オーダー募集
+            📣 募集を作成
           </button>
         </div>
       ) : null}
@@ -605,7 +605,7 @@ function DayDetailModal({
               }}
               className={`border-b-2 px-1 py-2 font-semibold ${tab === "client" ? "border-accent text-primary" : "border-transparent text-muted"}`}
             >
-              依頼主オーダー
+              オーダー
             </button>
           ) : null}
           {recruitments.length > 0 ? (
@@ -614,7 +614,7 @@ function DayDetailModal({
               onClick={() => setTab("recruit")}
               className={`flex items-center gap-2 border-b-2 px-1 py-2 font-semibold ${tab === "recruit" ? "border-accent text-primary" : "border-transparent text-muted"}`}
             >
-              オーダー
+              募集一覧
               {!isPastDay && remaining > 0 ? (
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">残り{remaining}名</span>
               ) : null}
@@ -623,7 +623,8 @@ function DayDetailModal({
         </div>
 
         {tab === "shifts" ? (
-          shifts.length === 0 ? (
+          <>
+          {shifts.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted">この日のシフトはありません。</p>
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
@@ -663,10 +664,12 @@ function DayDetailModal({
                 );
               })}
             </ul>
-          )
+          )}
+          <ShiftHistorySection history={history} />
+          </>
         ) : tab === "client" ? (
           clientGroups.length === 0 && clientOrders.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted">この日の依頼主オーダーはありません。</p>
+            <p className="py-6 text-center text-sm text-muted">この日のオーダーはありません。</p>
           ) : selectedClientGroup ? (
             <div>
               <button
@@ -717,10 +720,16 @@ function DayDetailModal({
             <div>
               {clientOrders.length > 0 ? (
                 <div className="mb-4">
-                  <p className="mb-2 text-xs font-semibold text-muted">オーダー（依頼主からの募集）</p>
+                  <p className="mb-2 text-xs font-semibold text-muted">依頼主からの募集</p>
                   <ul className="flex flex-col gap-2 text-sm">
                     {clientOrders.map((o) => (
-                      <ClientOrderRow key={o.id} order={o} staffOptions={staffOptions} disabled={isPastDay} />
+                      <ClientOrderRow
+                        key={o.id}
+                        order={o}
+                        history={history.filter((h) => h.publicRecruitmentId === o.id)}
+                        staffOptions={staffOptions}
+                        disabled={isPastDay}
+                      />
                     ))}
                   </ul>
                 </div>
@@ -900,7 +909,7 @@ function OrderEditModal({
               recruitment.visibility === "PUBLIC" ? "bg-sky-100 text-sky-800" : "bg-emerald-100 text-emerald-800"
             }`}
           >
-            {recruitment.visibility === "PUBLIC" ? "公開募集" : "オーダー"}
+            {recruitment.visibility === "PUBLIC" ? "公開募集" : "募集"}
           </span>
         </div>
         <p className="text-xs text-muted">
@@ -1195,7 +1204,7 @@ function OrderEditModal({
       </div>
 
       {confirmingDelete ? (
-        <Modal title="オーダーを削除しますか？" onClose={() => setConfirmingDelete(false)}>
+        <Modal title="この募集を削除しますか？" onClose={() => setConfirmingDelete(false)}>
           <p className="mb-4 text-sm text-muted">
             {recruitment.filled > 0
               ? `${recruitment.filled}名エントリーしています。削除するとエントリーもすべて取り消しになります。`
@@ -1241,7 +1250,6 @@ function OrderCard({
   onEdit: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
   const remaining = Math.max(r.maxEntries - r.filled, 0);
 
@@ -1349,41 +1357,41 @@ function OrderCard({
         />
       ) : null}
 
-      {history.length > 0 ? (
-        <div className="mt-2 border-t border-border/50 pt-2">
-          <button
-            type="button"
-            onClick={() => setHistoryExpanded((v) => !v)}
-            className="flex items-center gap-1 text-[11px] text-muted/70 hover:text-muted"
-          >
-            <svg
-              viewBox="0 0 20 20"
-              fill="none"
-              className={`h-3 w-3 transition-transform ${historyExpanded ? "rotate-180" : ""}`}
-            >
-              <path
-                d="M5 7.5L10 12.5L15 7.5"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            変更履歴（{history.length}件）
-          </button>
-          {historyExpanded ? (
-            <ul className="mt-1 flex flex-col gap-0.5">
-              {history.map((h) => (
-                <li key={h.id} className="flex items-center justify-between text-[11px] text-muted/70">
-                  <span>{h.staffName}</span>
-                  <span>{SHIFT_HISTORY_LABEL[h.status] ?? h.status}</span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
+      <ShiftHistorySection history={history} />
     </li>
+  );
+}
+
+// キャンセル・上書きで外れたスタッフを、カード下部に薄い折りたたみで表示する
+// 共通パーツ（募集一覧のオーダーカード／オーダータブの依頼主別カード／
+// スタッフシフトタブの3か所で使う）。履歴が無いカードには何も出さない。
+function ShiftHistorySection({ history }: { history: ShiftHistoryRow[] }) {
+  const [expanded, setExpanded] = useState(false);
+  if (history.length === 0) return null;
+
+  return (
+    <div className="mt-2 border-t border-border/50 pt-2">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1 text-[11px] text-muted/70 hover:text-muted"
+      >
+        <svg viewBox="0 0 20 20" fill="none" className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`}>
+          <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        変更履歴（{history.length}件）
+      </button>
+      {expanded ? (
+        <ul className="mt-1 flex flex-col gap-0.5">
+          {history.map((h) => (
+            <li key={h.id} className="flex items-center justify-between text-[11px] text-muted/70">
+              <span>{h.staffName}</span>
+              <span>{SHIFT_HISTORY_LABEL[h.status] ?? h.status}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
@@ -1779,10 +1787,12 @@ function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName:
 
 function ClientOrderRow({
   order,
+  history,
   staffOptions,
   disabled,
 }: {
   order: ClientRecruitmentRow;
+  history: ShiftHistoryRow[];
   staffOptions: StaffOption[];
   disabled?: boolean;
 }) {
@@ -1807,6 +1817,7 @@ function ClientOrderRow({
       ) : (
         <RecruitmentAssignControls recruitmentId={order.id} remaining={remaining} staffOptions={staffOptions} />
       )}
+      <ShiftHistorySection history={history} />
     </li>
   );
 }
@@ -2168,7 +2179,7 @@ function RecruitmentFormModal({
 
   if (step === "confirm") {
     return (
-      <Modal title="オーダー募集を作成" onClose={onClose}>
+      <Modal title="募集を作成" onClose={onClose}>
         <div className="flex flex-col gap-3">
           <button
             type="button"
@@ -2220,7 +2231,7 @@ function RecruitmentFormModal({
             onClick={() => submit()}
             className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
-            {pending ? "作成中…" : `${dates.length}件のオーダー募集を作成`}
+            {pending ? "作成中…" : `${dates.length}件の募集を作成`}
           </button>
         </div>
       </Modal>
@@ -2228,7 +2239,7 @@ function RecruitmentFormModal({
   }
 
   return (
-    <Modal title="オーダー募集を作成" onClose={onClose}>
+    <Modal title="募集を作成" onClose={onClose}>
       <div className="flex flex-col gap-3">
         <p className="-mt-2 text-xs text-muted">自社での勤務を募集します</p>
 
@@ -2307,7 +2318,7 @@ function RecruitmentFormModal({
         {dates.length === 0 ? (
           <p className="text-xs text-red-600">少なくとも1つ日付を選択してください。</p>
         ) : dates.length > 1 ? (
-          <p className="text-xs text-muted">選んだ{dates.length}日分、同じ内容のオーダーがそれぞれ独立して作成されます。</p>
+          <p className="text-xs text-muted">選んだ{dates.length}日分、同じ内容の募集がそれぞれ独立して作成されます。</p>
         ) : null}
 
         <Field label="備考（任意）">
@@ -2321,7 +2332,7 @@ function RecruitmentFormModal({
         </Field>
 
         <p className="text-xs text-muted">
-          自社スタッフ・配属済みの派遣スタッフのみが対象のオーダーとして作成されます（無料）。応募が足りない場合は、あとから公開募集への切り替えができます。
+          自社スタッフ・配属済みの派遣スタッフのみが対象の募集として作成されます（無料）。応募が足りない場合は、あとから公開募集への切り替えができます。
         </p>
 
         {error ? <p className="text-xs text-red-600">{error}</p> : null}

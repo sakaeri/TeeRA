@@ -178,9 +178,11 @@ export async function listShiftsForMonth(params: {
   });
 }
 
-// キャンセル・上書きで外れたオーダー枠の履歴。物理削除はしておらず
-// status(SUPERSEDED/CANCELLED)を変えているだけなので、オーダーカード下部に
-// 薄く出す「変更履歴」表示のためだけに別途取得する（通常の一覧には出さない）。
+// キャンセル・上書きで外れたシフト/募集枠の履歴。物理削除はしておらず
+// status(SUPERSEDED/CANCELLED)を変えているだけなので、各カード下部に薄く
+// 出す「変更履歴」表示のためだけに別途取得する（通常の一覧には出さない）。
+// publicRecruitmentIdの有無は問わない — 募集経由でない手動アサインの
+// キャンセルもスタッフシフトタブの履歴に含める。
 export async function listShiftHistoryForMonth(params: {
   companyId: string;
   year: number;
@@ -196,7 +198,6 @@ export async function listShiftHistoryForMonth(params: {
       teamId: params.teamId,
       date: { gte: start, lt: end },
       status: { in: ["SUPERSEDED", "CANCELLED"] },
-      publicRecruitmentId: { not: null },
     },
     include: { staff: true },
     orderBy: [{ date: "asc" }, { updatedAt: "asc" }],
