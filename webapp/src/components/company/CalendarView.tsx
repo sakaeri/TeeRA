@@ -106,6 +106,19 @@ type TagEntry =
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
+// 「未報告」の赤丸は、業務時間を過ぎてから初めて意味を持つ警告 — 未来日や
+// まだ終了時刻前の当日シフトを「未報告」扱いにすると、単なるノイズになる。
+function isReportOverdue(s: ShiftRow) {
+  if (s.approvalStatus) return false;
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  if (s.date > todayStr) return false;
+  if (s.date < todayStr) return true;
+  if (s.isAllDay || s.isUndecided || !s.endTime) return false;
+  const nowHHMM = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  return nowHHMM >= s.endTime;
+}
+
 function weekdayColor(dow: number) {
   if (dow === 0) return "text-red-600";
   if (dow === 6) return "text-blue-600";
@@ -527,7 +540,7 @@ function DayDetailModal({
   const isPastDay = dateStr < new Date().toISOString().slice(0, 10);
   const remaining = recruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
   const clientShifts = shifts.filter((s) => s.source === "CLIENT");
-  const hasUnreported = shifts.some((s) => !s.approvalStatus);
+  const hasUnreported = shifts.some((s) => isReportOverdue(s));
 
   const clientGroups = useMemo(() => {
     const map = new Map<string, { clientName: string; companyRelationshipId?: string; rows: ShiftRow[] }>();
