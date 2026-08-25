@@ -55,9 +55,12 @@ try {
   await admin.goto("http://localhost:3000/company/calendar");
   await admin.locator("button", { hasText: "＋" }).last().click();
   await admin.getByText("シフトを作成").click();
-  await admin.waitForSelector('input[type="date"]');
-  await admin.fill('input[type=date]', today);
-  await admin.getByRole("button", { name: "作成する" }).click();
+  const assignModal1 = admin.locator("div.fixed.inset-0.z-20").last();
+  await assignModal1.getByRole("button", { name: "社内（自社スタッフとして勤務）" }).click();
+  await assignModal1.getByRole("button", { name: "業務報告スタッフ" }).click();
+  await assignModal1.getByRole("button", { name: "次へ" }).click();
+  await admin.waitForTimeout(300);
+  await assignModal1.getByRole("button", { name: /件のシフトを作成/ }).click();
   await admin.waitForTimeout(800);
 
   // staff: clock in, clock out, submit report

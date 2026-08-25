@@ -24,37 +24,54 @@ import type { WageType } from "@/generated/prisma/enums";
 export async function createAssignedShiftAction(input: {
   teamId?: string;
   staffUserId: string;
-  date: string; // YYYY-MM-DD
+  dates: string[]; // YYYY-MM-DD, one or more
   startTime: string | null;
   endTime: string | null;
   isAllDay: boolean;
   isUndecided: boolean;
   note?: string;
-  overrideShiftIds?: string[];
   companyRelationshipId?: string;
+  overridesByDate?: Record<string, string[]>; // date -> conflicting shift ids to supersede, set once confirmed
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership, input.teamId)) throw new Error("forbidden");
 
-  const result = await createAssignedShift({
-    companyId: membership.companyId,
-    teamId: input.teamId,
-    staffUserId: input.staffUserId,
-    date: new Date(`${input.date}T00:00:00.000Z`),
-    startTime: input.startTime,
-    endTime: input.endTime,
-    isAllDay: input.isAllDay,
-    isUndecided: input.isUndecided,
-    companyRelationshipId: input.companyRelationshipId,
-    note: input.note,
-    confirmedByUserId: userId,
-    overrideShiftIds: input.overrideShiftIds,
-  });
+  const conflictsByDate: { date: string; conflicts: { id: string; startTime: string | null; endTime: string | null }[] }[] = [];
+  const createdShiftIds: string[] = [];
 
-  if (result.status === "created") {
-    revalidatePath("/company/calendar");
+  for (const date of input.dates) {
+    const result = await createAssignedShift({
+      companyId: membership.companyId,
+      teamId: input.teamId,
+      staffUserId: input.staffUserId,
+      date: new Date(`${date}T00:00:00.000Z`),
+      startTime: input.startTime,
+      endTime: input.endTime,
+      isAllDay: input.isAllDay,
+      isUndecided: input.isUndecided,
+      companyRelationshipId: input.companyRelationshipId,
+      note: input.note,
+      confirmedByUserId: userId,
+      overrideShiftIds: input.overridesByDate?.[date],
+    });
+    if (result.status === "conflict") {
+      conflictsByDate.push({ date, conflicts: result.conflicts });
+    } else {
+      createdShiftIds.push(result.shift.id);
+    }
   }
-  return result;
+
+  if (conflictsByDate.length > 0) {
+    // all-or-nothing across the whole date range: roll back this pass's
+    // successes so a retry with overridesByDate doesn't double-create them.
+    if (createdShiftIds.length > 0) {
+      await prisma.shift.deleteMany({ where: { id: { in: createdShiftIds } } });
+    }
+    return { status: "conflict" as const, conflictsByDate };
+  }
+
+  revalidatePath("/company/calendar");
+  return { status: "created" as const, count: createdShiftIds.length };
 }
 
 export async function matchShiftRequestAction(input: {

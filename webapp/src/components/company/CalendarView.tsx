@@ -1995,6 +1995,37 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
+// 選択肢を大きくタップできるリスト項目として表示する（チーム/勤務先/スタッフの
+// 各ステップで共通）。
+function WizardOptionButton({
+  label,
+  sublabel,
+  onClick,
+}: {
+  label: string;
+  sublabel?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-between rounded-xl border border-border bg-white px-4 py-3 text-left text-sm font-medium hover:border-primary hover:text-primary"
+    >
+      <span>
+        {label}
+        {sublabel ? <span className="ml-2 text-xs font-normal text-muted">{sublabel}</span> : null}
+      </span>
+      <span className="text-muted">›</span>
+    </button>
+  );
+}
+
+type AssignStep = "team" | "workplace" | "staff" | "datetime" | "confirm";
+
+// シフト作成: チーム→勤務先(社内/依頼主)→スタッフ→日時、の順に1画面ずつ選ばせ
+// てから最後に確認画面を出す（オーダー作成の確認画面と同じパターン）。
+// チームは既存仕様どおり任意項目のため「チームを指定しない」で読み飛ばせる。
 function AssignShiftModal({
   staffOptions,
   teams,
@@ -2010,38 +2041,68 @@ function AssignShiftModal({
   defaultCompanyRelationshipId?: string;
   onClose: () => void;
 }) {
-  const [staffUserId, setStaffUserId] = useState(staffOptions[0]?.id ?? "");
+  // defaultCompanyRelationshipIdが渡されている場合（依頼主の稼働履歴タブ等、
+  // 勤務先がすでに文脈上わかっている状態からの追加）は勤務先ステップを飛ばす。
+  const steps: AssignStep[] = [
+    ...(teams.length > 0 ? (["team"] as const) : []),
+    ...(defaultCompanyRelationshipId === undefined ? (["workplace"] as const) : []),
+    "staff",
+    "datetime",
+    "confirm",
+  ];
+  const [step, setStep] = useState<AssignStep>(steps[0]);
   const [teamId, setTeamId] = useState("");
   const [companyRelationshipId, setCompanyRelationshipId] = useState(defaultCompanyRelationshipId ?? "");
-  const [date, setDate] = useState(defaultDate);
+  const [clientSearch, setClientSearch] = useState("");
+  const [staffUserId, setStaffUserId] = useState("");
+  const [dates, setDates] = useState<string[]>([defaultDate]);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("18:00");
   const [isAllDay, setIsAllDay] = useState(false);
   const [isUndecided, setIsUndecided] = useState(false);
   const [note, setNote] = useState("");
-  const [conflicts, setConflicts] = useState<{ id: string; startTime: string | null; endTime: string | null }[] | null>(null);
+  const [conflictsByDate, setConflictsByDate] = useState<
+    { date: string; conflicts: { id: string; startTime: string | null; endTime: string | null }[] }[] | null
+  >(null);
   const [overrideChecked, setOverrideChecked] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function submit(overrideShiftIds?: string[]) {
+  function goBack() {
+    const i = steps.indexOf(step);
+    if (i > 0) setStep(steps[i - 1]);
+  }
+  function goNext() {
+    const i = steps.indexOf(step);
+    if (i < steps.length - 1) setStep(steps[i + 1]);
+  }
+
+  function toggleDate(d: string) {
+    setDates((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
+  }
+
+  function submit() {
     setError(null);
     startTransition(async () => {
       try {
+        const overridesByDate = conflictsByDate
+          ? Object.fromEntries(conflictsByDate.map((c) => [c.date, c.conflicts.map((x) => x.id)]))
+          : undefined;
         const result = await createAssignedShiftAction({
           teamId: teamId || undefined,
           staffUserId,
-          date,
+          dates,
           startTime: isAllDay || isUndecided ? null : startTime,
           endTime: isAllDay || isUndecided ? null : endTime,
           isAllDay,
           isUndecided,
           note: note || undefined,
-          overrideShiftIds,
           companyRelationshipId: companyRelationshipId || undefined,
+          overridesByDate,
         });
         if (result.status === "conflict") {
-          setConflicts(result.conflicts);
+          setConflictsByDate(result.conflictsByDate);
+          setOverrideChecked(false);
         } else {
           onClose();
         }
@@ -2051,129 +2112,259 @@ function AssignShiftModal({
     });
   }
 
+  const teamName = teams.find((t) => t.id === teamId)?.name;
+  const workplaceName = companyRelationshipId ? clients.find((c) => c.id === companyRelationshipId)?.name : "社内";
+  const staffName = staffOptions.find((s) => s.id === staffUserId)?.name;
+  const dateLabels = dates.map((d) => {
+    const dt = new Date(d + "T00:00:00Z");
+    return `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
+  });
+  const filteredClients = clients.filter((c) => c.name.includes(clientSearch));
+
+  const backButton =
+    steps.indexOf(step) > 0 ? (
+      <button type="button" onClick={goBack} className="-mt-1 self-start text-xs text-muted hover:text-primary">
+        ＜ 戻る
+      </button>
+    ) : null;
+
+  if (step === "team") {
+    return (
+      <Modal title="シフトを作成" onClose={onClose}>
+        <div className="flex flex-col gap-3">
+          <h3 className="font-serif-jp text-lg font-semibold">どのチームのシフトを作成しますか？</h3>
+          <div className="flex flex-col gap-2">
+            {teams.map((t) => (
+              <WizardOptionButton
+                key={t.id}
+                label={t.name}
+                onClick={() => {
+                  setTeamId(t.id);
+                  goNext();
+                }}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setTeamId("");
+              goNext();
+            }}
+            className="self-start text-xs text-muted underline hover:text-primary"
+          >
+            チームを指定しない
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+
+  if (step === "workplace") {
+    return (
+      <Modal title="シフトを作成" onClose={onClose}>
+        <div className="flex flex-col gap-3">
+          {backButton}
+          <h3 className="font-serif-jp text-lg font-semibold">勤務先を選択</h3>
+          <WizardOptionButton
+            label="社内（自社スタッフとして勤務）"
+            onClick={() => {
+              setCompanyRelationshipId("");
+              goNext();
+            }}
+          />
+          {clients.length > 0 ? (
+            <>
+              <p className="mt-1 text-xs text-muted">依頼主から選択</p>
+              <input
+                type="text"
+                value={clientSearch}
+                onChange={(e) => setClientSearch(e.target.value)}
+                placeholder="依頼主名で検索"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+              />
+              <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+                {filteredClients.map((c) => (
+                  <WizardOptionButton
+                    key={c.id}
+                    label={c.name}
+                    onClick={() => {
+                      setCompanyRelationshipId(c.id);
+                      goNext();
+                    }}
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
+        </div>
+      </Modal>
+    );
+  }
+
+  if (step === "staff") {
+    return (
+      <Modal title="シフトを作成" onClose={onClose}>
+        <div className="flex flex-col gap-3">
+          {backButton}
+          <h3 className="font-serif-jp text-lg font-semibold">{workplaceName}・スタッフを選択</h3>
+          <div className="flex max-h-96 flex-col gap-2 overflow-y-auto">
+            {staffOptions.map((s) => (
+              <WizardOptionButton
+                key={s.id}
+                label={s.name}
+                onClick={() => {
+                  setStaffUserId(s.id);
+                  goNext();
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
+  if (step === "datetime") {
+    return (
+      <Modal title="シフトを作成" onClose={onClose}>
+        <div className="flex flex-col gap-3">
+          {backButton}
+          <h3 className="font-serif-jp text-lg font-semibold">
+            {workplaceName}・{staffName}
+          </h3>
+
+          <div className="flex gap-4 text-xs">
+            <label className="flex items-center gap-1">
+              <input type="checkbox" checked={isAllDay} onChange={(e) => setIsAllDay(e.target.checked)} />
+              終日
+            </label>
+            <label className="flex items-center gap-1">
+              <input type="checkbox" checked={isUndecided} onChange={(e) => setIsUndecided(e.target.checked)} />
+              未定
+            </label>
+          </div>
+          {!isAllDay && !isUndecided ? (
+            <div className="flex gap-2">
+              <Field label="開始時刻">
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                />
+              </Field>
+              <Field label="終了時刻">
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                />
+              </Field>
+            </div>
+          ) : null}
+
+          <div className="flex flex-col gap-1 text-xs text-foreground/80">
+            <span>日付を選択（複数選択可）</span>
+            <MiniCalendarMultiSelect selected={dates} onToggle={toggleDate} initialDate={defaultDate} />
+          </div>
+          {dates.length === 0 ? (
+            <p className="text-xs text-red-600">少なくとも1つ日付を選択してください。</p>
+          ) : dates.length > 1 ? (
+            <p className="text-xs text-muted">選んだ{dates.length}日分、同じ内容のシフトがそれぞれ作成されます。</p>
+          ) : null}
+
+          <Field label="備考（任意）">
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+            />
+          </Field>
+
+          <button
+            type="button"
+            disabled={dates.length === 0}
+            onClick={goNext}
+            className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            次へ
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+
+  // step === "confirm"
   return (
     <Modal title="シフトを作成" onClose={onClose}>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="スタッフ">
-          <select
-            value={staffUserId}
-            onChange={(e) => setStaffUserId(e.target.value)}
-            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-          >
-            {staffOptions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        {teams.length > 0 ? (
-          <Field label="チーム（任意）">
-            <select
-              value={teamId}
-              onChange={(e) => setTeamId(e.target.value)}
-              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-            >
-              <option value="">なし</option>
-              {teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        ) : null}
-        {clients.length > 0 ? (
-          <Field label="取引先向け（依頼主）（任意）">
-            <select
-              value={companyRelationshipId}
-              onChange={(e) => setCompanyRelationshipId(e.target.value)}
-              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-            >
-              <option value="">自社勤務</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        ) : null}
-        <Field label="日付" className="col-span-2">
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-          />
-        </Field>
-        <div className="col-span-2 flex gap-4 text-xs">
-          <label className="flex items-center gap-1">
-            <input type="checkbox" checked={isAllDay} onChange={(e) => setIsAllDay(e.target.checked)} />
-            終日
-          </label>
-          <label className="flex items-center gap-1">
-            <input type="checkbox" checked={isUndecided} onChange={(e) => setIsUndecided(e.target.checked)} />
-            未定
-          </label>
-        </div>
-        {!isAllDay && !isUndecided ? (
-          <>
-            <Field label="開始">
-              <input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-              />
-            </Field>
-            <Field label="終了">
-              <input
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-              />
-            </Field>
-          </>
-        ) : null}
-        <Field label="備考（任意）" className="col-span-2">
-          <input
-            type="text"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-          />
-        </Field>
+      <div className="flex flex-col gap-3">
+        {backButton}
+        <h3 className="font-serif-jp text-lg font-semibold">内容を確認してください</h3>
 
-        {conflicts ? (
-          <div className="col-span-2 rounded-lg border border-red-300 bg-red-50 p-3 text-xs text-red-700">
-            <p className="mb-2 font-semibold">他のシフトと重複しています。</p>
+        <dl className="divide-y divide-border rounded-xl border border-border bg-background/40 text-sm">
+          <div className="flex items-center justify-between px-4 py-3">
+            <dt className="text-muted">スタッフ</dt>
+            <dd className="font-medium">{staffName}</dd>
+          </div>
+          {teams.length > 0 ? (
+            <div className="flex items-center justify-between px-4 py-3">
+              <dt className="text-muted">チーム</dt>
+              <dd className="font-medium">{teamName ?? "指定なし"}</dd>
+            </div>
+          ) : null}
+          <div className="flex items-center justify-between px-4 py-3">
+            <dt className="text-muted">勤務先</dt>
+            <dd className="font-medium">{workplaceName}</dd>
+          </div>
+          <div className="flex items-center justify-between px-4 py-3">
+            <dt className="text-muted">時間</dt>
+            <dd className="font-medium">{isAllDay ? "終日" : isUndecided ? "未定" : `${startTime}〜${endTime}`}</dd>
+          </div>
+          <div className="px-4 py-3">
+            <dt className="mb-1 text-muted">日付（{dates.length}件）</dt>
+            <dd className="flex flex-col gap-0.5 font-medium">
+              {dateLabels.map((label) => (
+                <span key={label}>{label}</span>
+              ))}
+            </dd>
+          </div>
+          {note ? (
+            <div className="px-4 py-3">
+              <dt className="mb-1 text-muted">備考</dt>
+              <dd className="font-medium whitespace-pre-wrap">{note}</dd>
+            </div>
+          ) : null}
+        </dl>
+
+        {conflictsByDate ? (
+          <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-xs text-red-700">
+            <p className="mb-2 font-semibold">他のシフトと重複している日があります。</p>
             <ul className="mb-2 list-disc pl-4">
-              {conflicts.map((c) => (
-                <li key={c.id}>{c.startTime ? `${c.startTime}〜${c.endTime}` : "終日/未定"}</li>
+              {conflictsByDate.map(({ date, conflicts }) => (
+                <li key={date}>
+                  {date}: {conflicts.map((c) => (c.startTime ? `${c.startTime}〜${c.endTime}` : "終日/未定")).join("、")}
+                </li>
               ))}
             </ul>
             <label className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={overrideChecked}
-                onChange={(e) => setOverrideChecked(e.target.checked)}
-              />
+              <input type="checkbox" checked={overrideChecked} onChange={(e) => setOverrideChecked(e.target.checked)} />
               スタッフ本人と確認済み
             </label>
           </div>
         ) : null}
 
-        {error ? <p className="col-span-2 text-xs text-red-600">{error}</p> : null}
+        {error ? <p className="text-xs text-red-600">{error}</p> : null}
 
         <button
           type="button"
-          disabled={pending || !staffUserId || (conflicts !== null && !overrideChecked)}
-          onClick={() => submit(conflicts && overrideChecked ? conflicts.map((c) => c.id) : undefined)}
-          className="col-span-2 mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          disabled={pending || !staffUserId || dates.length === 0 || (conflictsByDate !== null && !overrideChecked)}
+          onClick={() => submit()}
+          className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
-          {conflicts ? "重複を確認のうえ作成する" : "作成する"}
+          {pending ? "作成中…" : conflictsByDate ? "重複を確認のうえ作成する" : `${dates.length}件のシフトを作成`}
         </button>
       </div>
     </Modal>

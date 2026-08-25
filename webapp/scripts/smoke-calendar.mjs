@@ -83,14 +83,20 @@ try {
   log("matched shift appears in day detail panel", Boolean(dayDetailMatch && dayDetailMatch[0].includes("カレンダースタッフ")));
 
   // --- admin: create an overlapping assigned shift on same day -> expect conflict
+  // (no team in this company, so the wizard starts at 勤務先 step; the day-detail
+  // modal for targetDate is still open above, so its date is already selected as
+  // the wizard's default date — no need to touch the mini calendar)
   await admin.locator("button", { hasText: "＋" }).last().click();
   await admin.getByText("シフトを作成").click();
-  await admin.waitForSelector('input[type="date"]');
-  await admin.fill('input[type=date]', targetDate);
-  await admin.getByRole("button", { name: "作成する" }).click();
+  const assignModal = admin.locator("div.fixed.inset-0.z-20").last();
+  await assignModal.getByRole("button", { name: "社内（自社スタッフとして勤務）" }).click();
+  await assignModal.getByRole("button", { name: "カレンダースタッフ" }).click();
+  await assignModal.getByRole("button", { name: "次へ" }).click();
+  await admin.waitForTimeout(300);
+  await assignModal.getByRole("button", { name: /件のシフトを作成/ }).click();
   await admin.waitForTimeout(800);
   let modalBody = await admin.textContent("body");
-  log("conflict detected on overlapping assign", modalBody.includes("重複しています"));
+  log("conflict detected on overlapping assign", modalBody.includes("重複している日があります"));
 
   await admin.getByLabel("スタッフ本人と確認済み").check();
   await admin.getByRole("button", { name: "重複を確認のうえ作成する" }).click();

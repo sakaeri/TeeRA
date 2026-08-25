@@ -16,8 +16,9 @@ await page.waitForURL("http://localhost:3000/company");
 await page.screenshot({ path: "/tmp/visual-dashboard.png", fullPage: true });
 
 await page.goto("http://localhost:3000/company/calendar");
-await page.getByRole("button", { name: "+ シフトを作成" }).click();
-await page.waitForSelector('input[type="date"]');
+await page.locator("button", { hasText: "＋" }).last().click();
+await page.getByText("シフトを作成").click();
+await page.waitForSelector("text=勤務先を選択");
 await page.screenshot({ path: "/tmp/visual-assign-modal.png" });
 await page.keyboard.press("Escape").catch(() => {});
 
