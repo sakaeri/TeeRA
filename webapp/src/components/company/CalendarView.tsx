@@ -283,7 +283,7 @@ export function CalendarView({
               onChange={(e) => router.push(calendarUrl({ rel: e.target.value }))}
               className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
             >
-              <option value="">取引先を絞らない</option>
+              <option value="">すべて</option>
               {clients.length > 0 ? (
                 <optgroup label="依頼主">
                   {clients.map((c) => (
