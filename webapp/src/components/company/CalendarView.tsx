@@ -172,13 +172,22 @@ export function CalendarView({
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // 取引先を絞る: 依頼主/派遣会社どちらのCompanyRelationshipかは区別せず、
-  // 選ばれたIDをそのままteam同様クエリパラメータに載せる（絞り込みロジック
-  // 自体はlistShiftsForMonth側で関係の向きを見て振り分ける）。
-  const filterLabel = selectedRelationshipId
+  // 取引先を絞る: 選ばれたIDをそのままteam同様クエリパラメータに載せる
+  // （絞り込みロジック自体はlistShiftsForMonth側で関係の向きを見て振り分け
+  // る）。PDF/画像のタイトルでは、依頼主/派遣会社どちらか＋チーム名も
+  // 合わせて出す — 名前だけだと「Aチーム？取引先？」と分からないため。
+  const relationshipTypeLabel = selectedRelationshipId
+    ? (clients.some((c) => c.id === selectedRelationshipId) ? "依頼主" : "派遣会社")
+    : undefined;
+  const relationshipName = selectedRelationshipId
     ? (clients.find((c) => c.id === selectedRelationshipId)?.name ??
       agencies.find((a) => a.id === selectedRelationshipId)?.name)
     : undefined;
+  const teamName = selectedTeamId ? teams.find((t) => t.id === selectedTeamId)?.name : undefined;
+  const filterLabel =
+    [teamName, relationshipTypeLabel && relationshipName ? `${relationshipTypeLabel}：${relationshipName}` : null]
+      .filter(Boolean)
+      .join("・") || undefined;
 
   function calendarUrl(overrides: { team?: string; rel?: string }) {
     const params = new URLSearchParams({ y: String(year), m: String(month) });
@@ -307,7 +316,7 @@ export function CalendarView({
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href={`/api/calendar/pdf?y=${year}&m=${month}${selectedRelationshipId ? `&rel=${selectedRelationshipId}` : ""}`}
+            href={`/api/calendar/pdf?y=${year}&m=${month}${selectedTeamId ? `&team=${selectedTeamId}` : ""}${selectedRelationshipId ? `&rel=${selectedRelationshipId}` : ""}`}
             target="_blank"
             className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
           >

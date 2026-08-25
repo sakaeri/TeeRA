@@ -11,11 +11,13 @@ export async function GET(request: Request) {
   const now = new Date();
   const year = Number(url.searchParams.get("y")) || now.getUTCFullYear();
   const month = Number(url.searchParams.get("m")) || now.getUTCMonth() + 1;
+  const teamId = url.searchParams.get("team") || undefined;
   const companyRelationshipId = url.searchParams.get("rel") || undefined;
 
-  const [shifts, company, relationship] = await Promise.all([
-    listShiftsForMonth({ companyId: membership.companyId, year, month, companyRelationshipId }),
+  const [shifts, company, team, relationship] = await Promise.all([
+    listShiftsForMonth({ companyId: membership.companyId, year, month, teamId, companyRelationshipId }),
     prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
+    teamId ? prisma.team.findUnique({ where: { id: teamId } }) : null,
     companyRelationshipId
       ? prisma.companyRelationship.findUnique({
           where: { id: companyRelationshipId },
@@ -24,9 +26,18 @@ export async function GET(request: Request) {
       : null,
   ]);
 
-  const filterLabel = relationship
-    ? (relationship.clientCompany?.name ?? relationship.agencyCompany?.name ?? relationship.proxyName ?? undefined)
+  // 依頼主/派遣会社どちらの絞り込みかは関係の向きで判定する
+  // (listShiftsForMonthの絞り込みロジックと同じ考え方)。
+  const relationshipTypeLabel = relationship
+    ? (relationship.agencyCompanyId === membership.companyId ? "依頼主" : "派遣会社")
     : undefined;
+  const relationshipName = relationship
+    ? (relationship.clientCompany?.name ?? relationship.agencyCompany?.name ?? relationship.proxyName ?? "")
+    : undefined;
+  const filterLabel =
+    [team?.name, relationshipTypeLabel && relationshipName ? `${relationshipTypeLabel}：${relationshipName}` : null]
+      .filter(Boolean)
+      .join("・") || undefined;
 
   const data: CalendarPdfData = {
     companyName: company.name,
