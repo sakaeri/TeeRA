@@ -309,10 +309,14 @@ async function placedClientCompanyIds(companyId: string, staffUserId: string) {
 // スタッフに見える募集: ①自社の投稿（visibilityを問わず常に見える）、
 // ②依頼主名簿にある派遣先のうち、自分が配属記録を持つ会社のオーダー、
 // ③visibility=PUBLICの募集（TeeRA全体に公開されるため会社の関係を問わない）。
+// isAffiliated: 自社/配属先の投稿かどうか。時給・募集の詳細（応募条件等）は
+// 所属していない相手向けの情報のため、既に所属関係のあるスタッフには
+// 呼び出し側（呼び出し元コンポーネント）で伏せて表示する。
 export async function listOpenRecruitmentsForStaff(params: { companyId: string; staffUserId: string }) {
   const clientCompanyIds = await placedClientCompanyIds(params.companyId, params.staffUserId);
+  const affiliatedCompanyIds = new Set([params.companyId, ...clientCompanyIds]);
 
-  return prisma.publicRecruitment.findMany({
+  const recruitments = await prisma.publicRecruitment.findMany({
     where: {
       status: "PUBLISHED",
       OR: [
@@ -324,6 +328,8 @@ export async function listOpenRecruitmentsForStaff(params: { companyId: string; 
     include: { entries: true, company: true },
     orderBy: { date: "asc" },
   });
+
+  return recruitments.map((r) => ({ ...r, isAffiliated: affiliatedCompanyIds.has(r.companyId) }));
 }
 
 // スタッフの応募/管理者アサインの対象になれるか: 自社所属、配属記録あり、

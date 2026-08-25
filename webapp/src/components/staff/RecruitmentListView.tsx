@@ -11,6 +11,8 @@ type Row = {
   startTime: string | null;
   endTime: string | null;
   hourlyWage: number | null;
+  wageType: string | null;
+  extraItems: { label: string; value: string }[];
   maxEntries: number;
   filled: number;
   alreadyApplied: boolean;
@@ -50,8 +52,17 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
             <p className="text-sm text-muted">{r.companyName}</p>
             <p className="text-sm text-muted">
               {r.date} {r.startTime}〜{r.endTime}
-              {r.hourlyWage ? ` ／ 時給${r.hourlyWage}円` : ""}
+              {r.hourlyWage ? ` ／ ${r.wageType === "DAILY" ? "日給" : "時給"}${r.hourlyWage}円` : ""}
             </p>
+            {r.extraItems.length > 0 ? (
+              <div className="mt-1 flex flex-col gap-0.5">
+                {r.extraItems.map((item) => (
+                  <p key={item.label} className="text-xs text-muted">
+                    {item.label}：{item.value}
+                  </p>
+                ))}
+              </div>
+            ) : null}
             {errors[r.id] ? <p className="mt-1 text-xs text-red-600">{errors[r.id]}</p> : null}
             <button
               type="button"
