@@ -41,7 +41,7 @@ type ShiftHistoryRow = {
   staffName: string;
   publicRecruitmentId: string | null;
   status: string; // "SUPERSEDED" | "CANCELLED"
-  movedToLabel: string | null; // SUPERSEDEDのときだけ、移動先の枠名
+  originLabel: string | null; // 元々どの会社／募集の枠だったか（会社名／募集タイトル）
 };
 
 const SHIFT_HISTORY_LABEL: Record<string, string> = {
@@ -1388,8 +1388,8 @@ function ShiftHistorySection({ history }: { history: ShiftHistoryRow[] }) {
             <li key={h.id} className="flex items-center justify-between gap-2 text-[11px] text-muted/70">
               <span>{h.staffName}</span>
               <span className="text-right">
+                {h.originLabel ? `（${h.originLabel}） ` : ""}
                 {SHIFT_HISTORY_LABEL[h.status] ?? h.status}
-                {h.status === "SUPERSEDED" && h.movedToLabel ? `（→ ${h.movedToLabel}）` : ""}
               </span>
             </li>
           ))}

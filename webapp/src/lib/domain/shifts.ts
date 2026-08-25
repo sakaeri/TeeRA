@@ -201,9 +201,9 @@ export async function listShiftHistoryForMonth(params: {
     },
     include: {
       staff: true,
-      // SUPERSEDEDの場合、上書きで移動した先の枠名を「変更履歴」に出すため
-      // 新シフト側の募集タイトルまで辿る（手動シフトへの移動ならnullのまま）。
-      supersededBy: { include: { newShift: { include: { publicRecruitment: true } } } },
+      // 移動元の会社／募集名を「変更履歴」に出すため辿る（移動先は既に
+      // その枠のカードに正式に表示されるので不要 — 出すのは変更前の情報のみ）。
+      publicRecruitment: { include: { company: true } },
     },
     orderBy: [{ date: "asc" }, { updatedAt: "asc" }],
   });
