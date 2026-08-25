@@ -621,7 +621,12 @@ function FabMenu({
             }}
             className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm hover:bg-background"
           >
-            🗓 シフトを作成
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0 text-primary">
+              <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M3 9h18" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M8 3v4M16 3v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+            シフトを作成
           </button>
           <button
             type="button"
@@ -631,7 +636,17 @@ function FabMenu({
             }}
             className="flex w-full items-center gap-2 border-t border-border px-4 py-3 text-left text-sm hover:bg-background"
           >
-            📣 募集を作成
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0 text-primary">
+              <path
+                d="M3 10v4a1 1 0 001 1h2l3 4V5L6 9H4a1 1 0 00-1 1z"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinejoin="round"
+              />
+              <path d="M11 6.5l7-3v17l-7-3" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+              <path d="M7 15v2.5a1.5 1.5 0 003 0V16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+            募集を作成
           </button>
         </div>
       ) : null}
