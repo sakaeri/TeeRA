@@ -80,6 +80,13 @@ export default async function CompanyCalendarPage({
           staffName: s.staff.name,
           publicRecruitmentId: s.publicRecruitmentId,
           status: s.status,
+          movedToLabel:
+            s.status === "SUPERSEDED" && s.supersededBy
+              ? (s.supersededBy.newShift.publicRecruitment?.title ??
+                (s.supersededBy.newShift.isAllDay || s.supersededBy.newShift.isUndecided
+                  ? "終日/未定のシフト"
+                  : `${s.supersededBy.newShift.startTime}〜${s.supersededBy.newShift.endTime}のシフト`))
+              : null,
         }))}
         staffOptions={staff.map((s) => ({ id: s.userId, name: s.name }))}
         teams={teams.map((t) => ({ id: t.id, name: t.name }))}

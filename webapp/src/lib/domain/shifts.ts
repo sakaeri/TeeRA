@@ -199,7 +199,12 @@ export async function listShiftHistoryForMonth(params: {
       date: { gte: start, lt: end },
       status: { in: ["SUPERSEDED", "CANCELLED"] },
     },
-    include: { staff: true },
+    include: {
+      staff: true,
+      // SUPERSEDEDの場合、上書きで移動した先の枠名を「変更履歴」に出すため
+      // 新シフト側の募集タイトルまで辿る（手動シフトへの移動ならnullのまま）。
+      supersededBy: { include: { newShift: { include: { publicRecruitment: true } } } },
+    },
     orderBy: [{ date: "asc" }, { updatedAt: "asc" }],
   });
 }

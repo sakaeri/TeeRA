@@ -41,6 +41,7 @@ type ShiftHistoryRow = {
   staffName: string;
   publicRecruitmentId: string | null;
   status: string; // "SUPERSEDED" | "CANCELLED"
+  movedToLabel: string | null; // SUPERSEDEDのときだけ、移動先の枠名
 };
 
 const SHIFT_HISTORY_LABEL: Record<string, string> = {
@@ -1384,9 +1385,12 @@ function ShiftHistorySection({ history }: { history: ShiftHistoryRow[] }) {
       {expanded ? (
         <ul className="mt-1 flex flex-col gap-0.5">
           {history.map((h) => (
-            <li key={h.id} className="flex items-center justify-between text-[11px] text-muted/70">
+            <li key={h.id} className="flex items-center justify-between gap-2 text-[11px] text-muted/70">
               <span>{h.staffName}</span>
-              <span>{SHIFT_HISTORY_LABEL[h.status] ?? h.status}</span>
+              <span className="text-right">
+                {SHIFT_HISTORY_LABEL[h.status] ?? h.status}
+                {h.status === "SUPERSEDED" && h.movedToLabel ? `（→ ${h.movedToLabel}）` : ""}
+              </span>
             </li>
           ))}
         </ul>
