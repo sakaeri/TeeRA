@@ -198,6 +198,8 @@ export function CalendarView({
     return `?${params.toString()}`;
   }
 
+  const filterQuery = selectedTeamId ? `&team=${selectedTeamId}` : selectedRelationshipId ? `&rel=${selectedRelationshipId}` : "";
+
   async function shareAsImage() {
     if (!shareRef.current || sharingImage) return;
     setSharingImage(true);
@@ -274,45 +276,48 @@ export function CalendarView({
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <h1 className="font-serif-jp text-2xl font-bold">シフトカレンダー</h1>
+          {/* チーム・依頼主・派遣会社を1つの絞り込みにまとめる。実運用では
+              チーム＝契約先の依頼主がほぼ1:1なので、依頼主/派遣会社を選ぶ
+              こと自体が実質そのチームの絞り込みも兼ねるという前提。 */}
           <select
-            value={selectedTeamId ?? ""}
-            onChange={(e) => router.push(calendarUrl({ team: e.target.value }))}
+            value={selectedTeamId ? `team:${selectedTeamId}` : selectedRelationshipId ? `rel:${selectedRelationshipId}` : ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v.startsWith("team:")) router.push(calendarUrl({ team: v.slice(5), rel: "" }));
+              else if (v.startsWith("rel:")) router.push(calendarUrl({ team: "", rel: v.slice(4) }));
+              else router.push(calendarUrl({ team: "", rel: "" }));
+            }}
             className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
           >
             <option value="">全社（すべて表示）</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
+            {teams.length > 0 ? (
+              <optgroup label="チーム">
+                {teams.map((t) => (
+                  <option key={t.id} value={`team:${t.id}`}>
+                    {t.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+            {clients.length > 0 ? (
+              <optgroup label="依頼主">
+                {clients.map((c) => (
+                  <option key={c.id} value={`rel:${c.id}`}>
+                    {c.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+            {agencies.length > 0 ? (
+              <optgroup label="派遣会社">
+                {agencies.map((a) => (
+                  <option key={a.id} value={`rel:${a.id}`}>
+                    {a.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
           </select>
-          {clients.length > 0 || agencies.length > 0 ? (
-            <select
-              value={selectedRelationshipId ?? ""}
-              onChange={(e) => router.push(calendarUrl({ rel: e.target.value }))}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
-            >
-              <option value="">すべて</option>
-              {clients.length > 0 ? (
-                <optgroup label="依頼主">
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null}
-              {agencies.length > 0 ? (
-                <optgroup label="派遣会社">
-                  {agencies.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null}
-            </select>
-          ) : null}
         </div>
         <div className="flex items-center gap-2">
           <Link
@@ -336,7 +341,7 @@ export function CalendarView({
       <div className="rounded-2xl bg-white p-4">
       <div className="mb-2 flex items-center justify-center gap-2">
         <Link
-          href={`?y=${prev.y}&m=${prev.m}${selectedTeamId ? `&team=${selectedTeamId}` : ""}`}
+          href={`?y=${prev.y}&m=${prev.m}${filterQuery}`}
           aria-label="前の月"
           className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
         >
@@ -345,13 +350,13 @@ export function CalendarView({
           </svg>
         </Link>
         <Link
-          href={`?y=${todayStr.slice(0, 4)}&m=${Number(todayStr.slice(5, 7))}${selectedTeamId ? `&team=${selectedTeamId}` : ""}`}
+          href={`?y=${todayStr.slice(0, 4)}&m=${Number(todayStr.slice(5, 7))}${filterQuery}`}
           className="rounded-lg px-2 py-1 font-serif-jp text-lg font-bold hover:bg-background"
         >
           {year}年{month}月
         </Link>
         <Link
-          href={`?y=${next.y}&m=${next.m}${selectedTeamId ? `&team=${selectedTeamId}` : ""}`}
+          href={`?y=${next.y}&m=${next.m}${filterQuery}`}
           aria-label="次の月"
           className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
         >
