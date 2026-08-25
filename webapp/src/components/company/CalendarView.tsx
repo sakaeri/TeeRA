@@ -1981,7 +1981,12 @@ function ClientOrderRow({
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 p-4">
+    <div
+      className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">{title}</h3>
