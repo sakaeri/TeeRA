@@ -2058,7 +2058,6 @@ function AssignShiftModal({
   const [dates, setDates] = useState<string[]>([defaultDate]);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("18:00");
-  const [isAllDay, setIsAllDay] = useState(false);
   const [isUndecided, setIsUndecided] = useState(false);
   const [note, setNote] = useState("");
   const [conflictsByDate, setConflictsByDate] = useState<
@@ -2092,9 +2091,9 @@ function AssignShiftModal({
           teamId: teamId || undefined,
           staffUserId,
           dates,
-          startTime: isAllDay || isUndecided ? null : startTime,
-          endTime: isAllDay || isUndecided ? null : endTime,
-          isAllDay,
+          startTime: isUndecided ? null : startTime,
+          endTime: isUndecided ? null : endTime,
+          isAllDay: false,
           isUndecided,
           note: note || undefined,
           companyRelationshipId: companyRelationshipId || undefined,
@@ -2234,17 +2233,11 @@ function AssignShiftModal({
             {workplaceName}・{staffName}
           </h3>
 
-          <div className="flex gap-4 text-xs">
-            <label className="flex items-center gap-1">
-              <input type="checkbox" checked={isAllDay} onChange={(e) => setIsAllDay(e.target.checked)} />
-              終日
-            </label>
-            <label className="flex items-center gap-1">
-              <input type="checkbox" checked={isUndecided} onChange={(e) => setIsUndecided(e.target.checked)} />
-              未定
-            </label>
-          </div>
-          {!isAllDay && !isUndecided ? (
+          <label className="flex items-center gap-1 text-xs">
+            <input type="checkbox" checked={isUndecided} onChange={(e) => setIsUndecided(e.target.checked)} />
+            未定
+          </label>
+          {!isUndecided ? (
             <div className="flex gap-2">
               <Field label="開始時刻">
                 <input
@@ -2321,7 +2314,7 @@ function AssignShiftModal({
           </div>
           <div className="flex items-center justify-between px-4 py-3">
             <dt className="text-muted">時間</dt>
-            <dd className="font-medium">{isAllDay ? "終日" : isUndecided ? "未定" : `${startTime}〜${endTime}`}</dd>
+            <dd className="font-medium">{isUndecided ? "未定" : `${startTime}〜${endTime}`}</dd>
           </div>
           <div className="px-4 py-3">
             <dt className="mb-1 text-muted">日付（{dates.length}件）</dt>
