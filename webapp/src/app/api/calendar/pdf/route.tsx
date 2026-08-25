@@ -11,17 +11,29 @@ export async function GET(request: Request) {
   const now = new Date();
   const year = Number(url.searchParams.get("y")) || now.getUTCFullYear();
   const month = Number(url.searchParams.get("m")) || now.getUTCMonth() + 1;
+  const companyRelationshipId = url.searchParams.get("rel") || undefined;
 
-  const [shifts, company] = await Promise.all([
-    listShiftsForMonth({ companyId: membership.companyId, year, month }),
+  const [shifts, company, relationship] = await Promise.all([
+    listShiftsForMonth({ companyId: membership.companyId, year, month, companyRelationshipId }),
     prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
+    companyRelationshipId
+      ? prisma.companyRelationship.findUnique({
+          where: { id: companyRelationshipId },
+          include: { clientCompany: true, agencyCompany: true },
+        })
+      : null,
   ]);
+
+  const filterLabel = relationship
+    ? (relationship.clientCompany?.name ?? relationship.agencyCompany?.name ?? relationship.proxyName ?? undefined)
+    : undefined;
 
   const data: CalendarPdfData = {
     companyName: company.name,
     year,
     month,
     issuedAt: new Date().toISOString().slice(0, 10),
+    filterLabel,
     shifts: shifts.map((s) => ({
       date: s.date.toISOString().slice(0, 10),
       staffName: s.staff.name,

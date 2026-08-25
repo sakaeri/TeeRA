@@ -8,7 +8,7 @@ import {
 } from "@/lib/domain/recruitment";
 import { listStaff } from "@/lib/domain/roster";
 import { listTeams } from "@/lib/domain/teams";
-import { listClients } from "@/lib/domain/relationships";
+import { listClients, listAgencies } from "@/lib/domain/relationships";
 import { prisma } from "@/lib/prisma";
 import { CalendarView } from "@/components/company/CalendarView";
 
@@ -24,9 +24,10 @@ export default async function CompanyCalendarPage({
   const year = Number(sp.y) || dateYear || now.getUTCFullYear();
   const month = Number(sp.m) || dateMonth || now.getUTCMonth() + 1;
   const teamId = typeof sp.team === "string" && sp.team ? sp.team : undefined;
+  const relationshipId = typeof sp.rel === "string" && sp.rel ? sp.rel : undefined;
 
   const [shifts, shiftHistory, staff, teams, shiftRequests, recruitments, clientRecruitments, company] = await Promise.all([
-    listShiftsForMonth({ companyId: membership.companyId, year, month, teamId }),
+    listShiftsForMonth({ companyId: membership.companyId, year, month, teamId, companyRelationshipId: relationshipId }),
     listShiftHistoryForMonth({ companyId: membership.companyId, year, month, teamId }),
     listStaff(membership.companyId),
     listTeams(membership.companyId),
@@ -38,6 +39,7 @@ export default async function CompanyCalendarPage({
 
   const affordable = await affordableMaxEntries(membership.companyId);
   const clients = company.agencyEnabled ? await listClients(membership.companyId) : [];
+  const agencies = company.dispatchEnabled ? await listAgencies(membership.companyId) : [];
 
   // source=INHOUSEのシフトに立っているスタッフが、自社の名簿メンバーなのか
   // 配属記録のある派遣スタッフなのか公開募集経由なのかをまとめて解決する。
@@ -121,6 +123,9 @@ export default async function CompanyCalendarPage({
         teeBalance={company.teeBalance}
         affordableMaxEntries={affordable}
         clients={clients.map((c) => ({ id: c.id, name: c.clientCompany?.name ?? c.proxyName ?? "" }))}
+        agencies={agencies.map((a) => ({ id: a.id, name: a.agencyCompany?.name ?? a.proxyName ?? "" }))}
+        selectedRelationshipId={relationshipId}
+        companyName={company.name}
         initialSelectedDate={dateParam}
       />
     </main>

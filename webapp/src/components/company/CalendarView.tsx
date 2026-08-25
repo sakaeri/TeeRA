@@ -139,6 +139,9 @@ export function CalendarView({
   teeBalance,
   affordableMaxEntries,
   clients,
+  agencies,
+  selectedRelationshipId,
+  companyName,
   initialSelectedDate,
 }: {
   year: number;
@@ -154,6 +157,9 @@ export function CalendarView({
   teeBalance: number;
   affordableMaxEntries: number;
   clients: { id: string; name: string }[];
+  agencies: { id: string; name: string }[];
+  selectedRelationshipId?: string;
+  companyName: string;
   initialSelectedDate?: string;
 }) {
   const router = useRouter();
@@ -162,16 +168,33 @@ export function CalendarView({
   const [assignPreset, setAssignPreset] = useState<{ date: string; companyRelationshipId?: string } | null>(null);
   const [showRecruitForm, setShowRecruitForm] = useState(false);
   const [sharingImage, setSharingImage] = useState(false);
-  const gridRef = useRef<HTMLDivElement>(null);
+  const shareRef = useRef<HTMLDivElement>(null);
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
+  // 取引先を絞る: 依頼主/派遣会社どちらのCompanyRelationshipかは区別せず、
+  // 選ばれたIDをそのままteam同様クエリパラメータに載せる（絞り込みロジック
+  // 自体はlistShiftsForMonth側で関係の向きを見て振り分ける）。
+  const filterLabel = selectedRelationshipId
+    ? (clients.find((c) => c.id === selectedRelationshipId)?.name ??
+      agencies.find((a) => a.id === selectedRelationshipId)?.name)
+    : undefined;
+
+  function calendarUrl(overrides: { team?: string; rel?: string }) {
+    const params = new URLSearchParams({ y: String(year), m: String(month) });
+    const team = overrides.team !== undefined ? overrides.team : (selectedTeamId ?? "");
+    const rel = overrides.rel !== undefined ? overrides.rel : (selectedRelationshipId ?? "");
+    if (team) params.set("team", team);
+    if (rel) params.set("rel", rel);
+    return `?${params.toString()}`;
+  }
+
   async function shareAsImage() {
-    if (!gridRef.current || sharingImage) return;
+    if (!shareRef.current || sharingImage) return;
     setSharingImage(true);
     try {
       const { toBlob } = await import("html-to-image");
-      const blob = await toBlob(gridRef.current, { backgroundColor: "#ffffff", pixelRatio: 2 });
+      const blob = await toBlob(shareRef.current, { backgroundColor: "#ffffff", pixelRatio: 2 });
       if (!blob) return;
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -244,11 +267,7 @@ export function CalendarView({
           <h1 className="font-serif-jp text-2xl font-bold">シフトカレンダー</h1>
           <select
             value={selectedTeamId ?? ""}
-            onChange={(e) => {
-              const params = new URLSearchParams({ y: String(year), m: String(month) });
-              if (e.target.value) params.set("team", e.target.value);
-              router.push(`?${params.toString()}`);
-            }}
+            onChange={(e) => router.push(calendarUrl({ team: e.target.value }))}
             className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
           >
             <option value="">全社（すべて表示）</option>
@@ -258,10 +277,37 @@ export function CalendarView({
               </option>
             ))}
           </select>
+          {clients.length > 0 || agencies.length > 0 ? (
+            <select
+              value={selectedRelationshipId ?? ""}
+              onChange={(e) => router.push(calendarUrl({ rel: e.target.value }))}
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
+            >
+              <option value="">取引先を絞らない</option>
+              {clients.length > 0 ? (
+                <optgroup label="依頼主">
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {agencies.length > 0 ? (
+                <optgroup label="派遣会社">
+                  {agencies.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+            </select>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href={`/api/calendar/pdf?y=${year}&m=${month}`}
+            href={`/api/calendar/pdf?y=${year}&m=${month}${selectedRelationshipId ? `&rel=${selectedRelationshipId}` : ""}`}
             target="_blank"
             className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
           >
@@ -306,7 +352,7 @@ export function CalendarView({
         </Link>
       </div>
 
-      <div ref={gridRef} className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-1">
         {WEEKDAYS.map((w, i) => (
           <div key={w} className={`py-1 text-center text-xs font-semibold ${weekdayColor(i)}`}>
             {w}
@@ -414,6 +460,16 @@ export function CalendarView({
       </div>
       </div>
 
+      {/* 画像共有用の非表示コンテンツ — PDF出力と同じ日別リスト構成にして、
+          共有される「中身」が画像/PDFで一致するようにする（オンスクリーンの
+          月グリッドは1日5件までの表示に切り詰められるため、そのままキャプ
+          チャすると中身が食い違ってしまう）。 */}
+      <div style={{ position: "fixed", top: 0, left: "-9999px" }} aria-hidden>
+        <div ref={shareRef}>
+          <ShareableShiftList companyName={companyName} year={year} month={month} filterLabel={filterLabel} shifts={shifts} />
+        </div>
+      </div>
+
       {selectedDate ? (
         <DayDetailModal
           dateStr={selectedDate}
@@ -464,6 +520,68 @@ export function CalendarView({
       ) : null}
 
       <ShiftRequestsSection requests={shiftRequests} teams={teams} />
+    </div>
+  );
+}
+
+// PDF出力(CalendarPdfDocument)と同じ日別リスト構成 — スタッフ名／時間／
+// 取引先（自社ならその旨）を、切り詰めなしで並べる。画像共有はこのDOMを
+// キャプチャすることで、PDFと共有画像の「中身」を一致させる。
+function ShareableShiftList({
+  companyName,
+  year,
+  month,
+  filterLabel,
+  shifts,
+}: {
+  companyName: string;
+  year: number;
+  month: number;
+  filterLabel?: string;
+  shifts: ShiftRow[];
+}) {
+  const byDate = new Map<string, ShiftRow[]>();
+  for (const s of shifts) {
+    if (!byDate.has(s.date)) byDate.set(s.date, []);
+    byDate.get(s.date)!.push(s);
+  }
+  const dates = Array.from(byDate.keys()).sort();
+  const issuedAt = new Date().toISOString().slice(0, 10);
+
+  return (
+    <div className="w-[800px] bg-white p-8 text-sm text-foreground">
+      <p className="font-serif-jp text-xl font-bold text-primary">シフト表</p>
+      <p className="mb-4 text-xs text-muted">
+        {companyName} ／ 対象月: {year}年{month}月 ／ 発行日: {issuedAt}
+        {filterLabel ? ` ／ 絞り込み: ${filterLabel}` : ""}
+      </p>
+      {dates.length === 0 ? (
+        <p className="py-10 text-center text-muted">この月のシフトはありません。</p>
+      ) : (
+        dates.map((date) => {
+          const d = new Date(date + "T00:00:00Z");
+          const rows = byDate.get(date)!;
+          return (
+            <div key={date} className="mb-3">
+              <div className="flex items-center justify-between bg-background px-2 py-1 font-semibold">
+                <span>
+                  {d.getUTCMonth() + 1}月{d.getUTCDate()}日（{WEEKDAYS[d.getUTCDay()]}）
+                </span>
+                <span>{rows.length}件</span>
+              </div>
+              {rows.map((s) => (
+                <div key={s.id} className="flex items-center justify-between border-b border-border/50 px-2 py-1.5">
+                  <span className="w-2/5">{s.staffName}</span>
+                  <span className="w-1/3 text-muted">
+                    {s.isUndecided ? "未定" : s.isAllDay ? "終日" : `${s.startTime}〜${s.endTime}`}
+                  </span>
+                  <span className="w-1/4 text-right text-muted">{s.clientName ?? "自社"}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }

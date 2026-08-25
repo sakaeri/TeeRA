@@ -153,22 +153,43 @@ export async function createAssignedShift(params: {
   return { status: "created" as const, shift };
 }
 
+// companyRelationshipIdが指定された場合、絞り込み方向は関係の向きで決まる
+// (自社が"agencyCompanyId"側＝依頼主なら、その依頼主向けオーダーのシフトを
+// companyRelationshipIdで直接絞る／自社が"clientCompanyId"側＝派遣会社なら、
+// その派遣会社から配属記録のあるスタッフの自社内(INHOUSE)シフトを絞る)。
 export async function listShiftsForMonth(params: {
   companyId: string;
   year: number;
   month: number; // 1-12
   teamId?: string;
+  companyRelationshipId?: string;
 }) {
   const start = new Date(Date.UTC(params.year, params.month - 1, 1));
   const end = new Date(Date.UTC(params.year, params.month, 1));
 
+  const where: Prisma.ShiftWhereInput = {
+    companyId: params.companyId,
+    teamId: params.teamId,
+    date: { gte: start, lt: end },
+    status: { notIn: ["SUPERSEDED", "CANCELLED"] },
+  };
+
+  if (params.companyRelationshipId) {
+    const rel = await prisma.companyRelationship.findUniqueOrThrow({ where: { id: params.companyRelationshipId } });
+    if (rel.agencyCompanyId === params.companyId) {
+      where.companyRelationshipId = params.companyRelationshipId;
+    } else if (rel.clientCompanyId === params.companyId) {
+      const placements = await prisma.staffPlacement.findMany({
+        where: { companyRelationshipId: params.companyRelationshipId },
+        select: { staffUserId: true },
+      });
+      where.staffUserId = { in: placements.map((p) => p.staffUserId) };
+      where.source = "INHOUSE";
+    }
+  }
+
   return prisma.shift.findMany({
-    where: {
-      companyId: params.companyId,
-      teamId: params.teamId,
-      date: { gte: start, lt: end },
-      status: { notIn: ["SUPERSEDED", "CANCELLED"] },
-    },
+    where,
     include: {
       staff: true,
       workReport: true,
