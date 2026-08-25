@@ -32,7 +32,9 @@ export async function GET(request: Request) {
     ? (relationship.agencyCompanyId === membership.companyId ? "依頼主" : "派遣会社")
     : undefined;
   const relationshipName = relationship
-    ? (relationship.clientCompany?.name ?? relationship.agencyCompany?.name ?? relationship.proxyName ?? "")
+    ? (relationship.agencyCompanyId === membership.companyId
+        ? (relationship.clientCompany?.name ?? relationship.proxyName ?? "")
+        : (relationship.agencyCompany?.name ?? relationship.proxyName ?? ""))
     : undefined;
   const filterLabel =
     [team?.name, relationshipTypeLabel && relationshipName ? `${relationshipTypeLabel}：${relationshipName}` : null]
