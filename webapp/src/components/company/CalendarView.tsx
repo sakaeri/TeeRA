@@ -2025,7 +2025,8 @@ type AssignStep = "team" | "workplace" | "staff" | "datetime" | "confirm";
 
 // シフト作成: チーム→勤務先(社内/依頼主)→スタッフ→日時、の順に1画面ずつ選ばせ
 // てから最後に確認画面を出す（オーダー作成の確認画面と同じパターン）。
-// チームは既存仕様どおり任意項目のため「チームを指定しない」で読み飛ばせる。
+// チームは管理者ありきのシフト作成という位置づけのため必須（会社にチームが
+// 1つもない場合のみ、このステップ自体を飛ばす — オーダー作成と同じ扱い）。
 function AssignShiftModal({
   staffOptions,
   teams,
@@ -2144,16 +2145,6 @@ function AssignShiftModal({
               />
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setTeamId("");
-              goNext();
-            }}
-            className="self-start text-xs text-muted underline hover:text-primary"
-          >
-            チームを指定しない
-          </button>
         </div>
       </Modal>
     );
