@@ -2226,7 +2226,7 @@ function AssignShiftModal({
 
           <label className="flex items-center gap-1 text-xs">
             <input type="checkbox" checked={isUndecided} onChange={(e) => setIsUndecided(e.target.checked)} />
-            未定
+            時間未定
           </label>
           {!isUndecided ? (
             <div className="flex gap-2">
@@ -2305,7 +2305,7 @@ function AssignShiftModal({
           </div>
           <div className="flex items-center justify-between px-4 py-3">
             <dt className="text-muted">時間</dt>
-            <dd className="font-medium">{isUndecided ? "未定" : `${startTime}〜${endTime}`}</dd>
+            <dd className="font-medium">{isUndecided ? "時間未定" : `${startTime}〜${endTime}`}</dd>
           </div>
           <div className="px-4 py-3">
             <dt className="mb-1 text-muted">日付（{dates.length}件）</dt>
