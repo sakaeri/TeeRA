@@ -2069,9 +2069,11 @@ function AssignShiftModal({
   onClose: () => void;
 }) {
   // defaultCompanyRelationshipIdが渡されている場合（依頼主の稼働履歴タブ等、
-  // 勤務先がすでに文脈上わかっている状態からの追加）は勤務先ステップを飛ばす。
+  // 勤務先がすでに文脈上わかっている状態からの追加）は、勤務先ステップだけで
+  // なくチーム選択ステップも飛ばす — 飛ばさないと、通常の＋ボタンからの
+  // フローと最初の画面が見分けつかず「同じメニューが出た」ように見えるため。
   const steps: AssignStep[] = [
-    ...(teams.length > 0 ? (["team"] as const) : []),
+    ...(teams.length > 0 && defaultCompanyRelationshipId === undefined ? (["team"] as const) : []),
     ...(defaultCompanyRelationshipId === undefined ? (["workplace"] as const) : []),
     "staff",
     "datetime",
