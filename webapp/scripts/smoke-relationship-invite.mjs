@@ -35,26 +35,45 @@ try {
   await owner.click("button[type=submit]");
   await owner.waitForURL("http://localhost:3000/company");
 
-  // --- ① per-tab dedicated buttons + always-visible captions ---
+  // --- ① per-tab dedicated buttons; info note shown inside the add-menu at creation time ---
   await owner.goto("http://localhost:3000/company/roster");
   await owner.click("text=依頼主一覧");
   await owner.waitForTimeout(200);
   let bodyText = await owner.textContent("body");
   log("clients tab shows dedicated ＋依頼主を追加する button", bodyText.includes("＋依頼主を追加する"));
   log(
-    "clients tab caption text is visible on page (not just a hover title)",
-    bodyText.includes("スタッフの配属先の依頼主の名簿です。依頼主ごとに請求書を作成できます。"),
+    "clients tab caption NOT permanently visible on the list page itself",
+    !bodyText.includes("スタッフの配属先の依頼主の名簿です。依頼主ごとに請求書を作成できます。"),
   );
   log("old shared 取引先名簿を追加 button is gone", !bodyText.includes("取引先名簿を追加"));
+
+  await owner.click("text=＋依頼主を追加する");
+  await owner.waitForTimeout(200);
+  bodyText = await owner.textContent("body");
+  log(
+    "info note appears inside the add-menu when creating a 依頼主",
+    bodyText.includes("スタッフの配属先の依頼主の名簿です。依頼主ごとに請求書を作成できます。"),
+  );
+  await owner.click("text=＋依頼主を追加する");
+  await owner.waitForTimeout(200);
 
   await owner.click("text=派遣会社一覧");
   await owner.waitForTimeout(200);
   bodyText = await owner.textContent("body");
   log("agencies tab shows dedicated ＋派遣会社を追加する button", bodyText.includes("＋派遣会社を追加する"));
   log(
-    "agencies tab caption text is visible on page",
+    "agencies tab caption NOT permanently visible on the list page itself",
+    !bodyText.includes("自社にスタッフを派遣してくれている会社の名簿です。"),
+  );
+  await owner.click("text=＋派遣会社を追加する");
+  await owner.waitForTimeout(200);
+  bodyText = await owner.textContent("body");
+  log(
+    "info note appears inside the add-menu when creating a 派遣会社",
     bodyText.includes("自社にスタッフを派遣してくれている会社の名簿です。"),
   );
+  await owner.click("text=＋派遣会社を追加する");
+  await owner.waitForTimeout(200);
 
   // --- ⑨ generating an invite URL must NOT add a row to the list yet ---
   await owner.click("text=依頼主一覧");
