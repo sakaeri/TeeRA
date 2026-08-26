@@ -102,9 +102,7 @@ type ClientRecruitmentRow = {
   filled: number;
 };
 
-type TagEntry =
-  | { kind: "solid"; id: string; label: string; className: string }
-  | { kind: "split"; id: string; left: { label: string; className: string }; right: { label: string; className: string } };
+type TagEntry = { kind: "solid"; id: string; label: string; className: string };
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -393,53 +391,46 @@ export function CalendarView({
           }
           const dow = new Date(c.dateStr + "T00:00:00Z").getUTCDay();
           const dayShifts = shiftsByDate.get(c.dateStr) ?? [];
-          const inhouseShifts = dayShifts.filter((s) => s.source === "INHOUSE");
-          const clientShifts = dayShifts.filter((s) => s.source === "CLIENT");
+          // 自社勤務・依頼主向け勤務のどちらも、確定シフトとして同じ枠内に
+          // スタッフ名で表示する（依頼主向けは水色で区別）。以前は依頼主向けを
+          // 「オーダー◯件」という件数バッジにまとめていたが、スタッフ名が
+          // 見えず分かりにくいとの指摘を受けて名前表示に統一した。
+          const confirmedShifts = dayShifts.filter((s) => s.source === "INHOUSE" || s.source === "CLIENT");
           const dayRecruitments = recruitments.filter((r) => r.date === c.dateStr && r.status === "PUBLISHED");
           const recruitingCount = dayRecruitments.filter((r) => r.filled < r.maxEntries).length;
           const dayShiftRequests = shiftRequestsByDate.get(c.dateStr) ?? [];
           const isToday = c.dateStr === todayStr;
           const isSelected = c.dateStr === selectedDate;
 
-          // 募集中/オーダー share one row (half each) when both exist on the
-          // same day, so they count as a single slot toward the 5-slot cap.
-          const recruitTag =
-            recruitingCount > 0 ? { label: `募集中${recruitingCount}件`, className: "bg-amber-100 text-amber-900" } : null;
-          const orderTag =
-            clientShifts.length > 0 ? { label: `オーダー${clientShifts.length}件`, className: "bg-sky-100 text-sky-900" } : null;
-          const recruitOrderTag: TagEntry | null =
-            recruitTag && orderTag
-              ? { kind: "split", id: "recruit-order", left: recruitTag, right: orderTag }
-              : recruitTag
-                ? { kind: "solid", id: "recruit", ...recruitTag }
-                : orderTag
-                  ? { kind: "solid", id: "client", ...orderTag }
-                  : null;
+          const recruitTag: TagEntry | null =
+            recruitingCount > 0
+              ? { kind: "solid", id: "recruit", label: `募集中${recruitingCount}件`, className: "bg-amber-100 text-amber-900" }
+              : null;
 
           // Fixed row budget of 5 total: 未確定 (1 row, count only) and
-          // 募集＆オーダー (1 row) each reserve their slot only when there's
+          // 募集中 (1 row) each reserve their slot only when there's
           // something to show that day — confirmed-shift names get whatever's
-          // left, so a day with no unconfirmed/recruit&order activity can
+          // left, so a day with no unconfirmed/recruiting activity can
           // show up to 5 names instead of being capped at 3 regardless.
           const unconfirmedTag: TagEntry | null =
             dayShiftRequests.length > 0
               ? { kind: "solid", id: "unconfirmed", label: `未確定${dayShiftRequests.length}件`, className: "bg-rose-100 text-rose-900" }
               : null;
 
-          const reservedRows = (unconfirmedTag ? 1 : 0) + (recruitOrderTag ? 1 : 0);
+          const reservedRows = (unconfirmedTag ? 1 : 0) + (recruitTag ? 1 : 0);
           const confirmedSlotBudget = 5 - reservedRows;
-          const visibleConfirmed = inhouseShifts.slice(0, confirmedSlotBudget);
-          const hasOverflow = inhouseShifts.length > confirmedSlotBudget;
+          const visibleConfirmed = confirmedShifts.slice(0, confirmedSlotBudget);
+          const hasOverflow = confirmedShifts.length > confirmedSlotBudget;
 
           const tagEntries: TagEntry[] = [
             ...visibleConfirmed.map((s) => ({
               kind: "solid" as const,
               id: s.id,
               label: s.staffName,
-              className: "bg-emerald-100 text-emerald-900",
+              className: s.source === "CLIENT" ? "bg-sky-100 text-sky-900" : "bg-emerald-100 text-emerald-900",
             })),
             ...(unconfirmedTag ? [unconfirmedTag] : []),
-            ...(recruitOrderTag ? [recruitOrderTag] : []),
+            ...(recruitTag ? [recruitTag] : []),
           ];
 
           return (
@@ -454,34 +445,19 @@ export function CalendarView({
               <span className={`block text-center text-[11px] font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
               {hasOverflow ? (
                 <span
-                  title={`他${inhouseShifts.length - confirmedSlotBudget}件`}
+                  title={`他${confirmedShifts.length - confirmedSlotBudget}件`}
                   className="absolute right-0 top-0 h-0 w-0 border-r-[14px] border-b-[14px] border-r-accent border-b-transparent"
                 />
               ) : null}
               <div className="mt-px flex flex-col gap-[2px]">
-                {tagEntries.map((tag) =>
-                  tag.kind === "split" ? (
-                    <div key={tag.id} className="flex gap-[2px]">
-                      <span
-                        className={`flex-1 truncate rounded-full px-1 py-px text-center text-[8px] font-medium leading-tight ${tag.left.className}`}
-                      >
-                        {tag.left.label}
-                      </span>
-                      <span
-                        className={`flex-1 truncate rounded-full px-1 py-px text-center text-[8px] font-medium leading-tight ${tag.right.className}`}
-                      >
-                        {tag.right.label}
-                      </span>
-                    </div>
-                  ) : (
-                    <span
-                      key={tag.id}
-                      className={`truncate rounded-full px-1.5 py-px text-[8px] font-medium leading-tight ${tag.className}`}
-                    >
-                      {tag.label}
-                    </span>
-                  ),
-                )}
+                {tagEntries.map((tag) => (
+                  <span
+                    key={tag.id}
+                    className={`truncate rounded-full px-1.5 py-px text-[8px] font-medium leading-tight ${tag.className}`}
+                  >
+                    {tag.label}
+                  </span>
+                ))}
               </div>
             </button>
           );
@@ -790,7 +766,7 @@ function DayDetailModal({
               }}
               className={`border-b-2 px-1 py-2 font-semibold ${tab === "client" ? "border-accent text-primary" : "border-transparent text-muted"}`}
             >
-              オーダー
+              依頼主
             </button>
           ) : null}
           {recruitments.length > 0 ? (
@@ -854,7 +830,7 @@ function DayDetailModal({
           </>
         ) : tab === "client" ? (
           clientGroups.length === 0 && clientOrders.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted">この日のオーダーはありません。</p>
+            <p className="py-6 text-center text-sm text-muted">この日の依頼主関連の予定はありません。</p>
           ) : selectedClientGroup ? (
             <div>
               <button
@@ -921,7 +897,7 @@ function DayDetailModal({
               ) : null}
               {clientGroups.length > 0 ? (
                 <div>
-                  <p className="mb-2 text-xs font-semibold text-muted">アサイン済みスタッフ</p>
+                  <p className="mb-2 text-xs font-semibold text-muted">依頼主一覧</p>
                   <ul className="flex flex-col gap-1 text-sm">
                     {clientGroups.map((g) => (
                       <li key={g.key}>
@@ -2173,6 +2149,11 @@ function AssignShiftModal({
 
   const teamName = teams.find((t) => t.id === teamId)?.name;
   const workplaceName = companyRelationshipId ? clients.find((c) => c.id === companyRelationshipId)?.name : "社内";
+  // 依頼主の詳細から「＋スタッフを追加」で開いた場合は、＋ボタンのFabMenu
+  // （シフトを作成/募集を作成の選択）と同じタイトルだと同じ画面が再度出た
+  // ように見えて紛らわしいので、勤務先が最初から決まっている時はタイトルを
+  // 「◯◯にスタッフを追加」にして区別する。
+  const modalTitle = defaultCompanyRelationshipId !== undefined ? `${workplaceName}にスタッフを追加` : "シフトを作成";
   const staffName = staffOptions.find((s) => s.id === staffUserId)?.name;
   const dateLabels = dates.map((d) => {
     const dt = new Date(d + "T00:00:00Z");
@@ -2189,7 +2170,7 @@ function AssignShiftModal({
 
   if (step === "team") {
     return (
-      <Modal title="シフトを作成" onClose={onClose}>
+      <Modal title={modalTitle} onClose={onClose}>
         <div className="flex flex-col gap-3">
           <h3 className="font-serif-jp text-lg font-semibold">どのチームのシフトを作成しますか？</h3>
           <div className="flex flex-col gap-2">
@@ -2211,7 +2192,7 @@ function AssignShiftModal({
 
   if (step === "workplace") {
     return (
-      <Modal title="シフトを作成" onClose={onClose}>
+      <Modal title={modalTitle} onClose={onClose}>
         <div className="flex flex-col gap-3">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">勤務先を選択</h3>
@@ -2253,7 +2234,7 @@ function AssignShiftModal({
 
   if (step === "staff") {
     return (
-      <Modal title="シフトを作成" onClose={onClose}>
+      <Modal title={modalTitle} onClose={onClose}>
         <div className="flex flex-col gap-3">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">{workplaceName}・スタッフを選択</h3>
@@ -2276,7 +2257,7 @@ function AssignShiftModal({
 
   if (step === "datetime") {
     return (
-      <Modal title="シフトを作成" onClose={onClose}>
+      <Modal title={modalTitle} onClose={onClose}>
         <div className="flex flex-col gap-3">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">
@@ -2355,7 +2336,7 @@ function AssignShiftModal({
 
   // step === "confirm"
   return (
-    <Modal title="シフトを作成" onClose={onClose}>
+    <Modal title={modalTitle} onClose={onClose}>
       <div className="flex flex-col gap-3">
         {backButton}
         <h3 className="font-serif-jp text-lg font-semibold">内容を確認してください</h3>
