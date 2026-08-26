@@ -43,8 +43,9 @@ const ADD_BUTTON_LABEL: Record<Tab, string> = {
   agencies: "＋派遣会社を追加する",
 };
 
-// 依頼主/派遣会社を追加する時（＋追加するボタンのメニュー内）に表示する説明文
-// （プロトタイプの(i)ツールチップと同じ内容）。
+// 依頼主/派遣会社どちらの名簿を作ればいいか分からない人向けに、まだ1件も
+// 登録されていない空の状態でだけ出す説明文（プロトタイプの(i)ツールチップと
+// 同じ内容）。名簿ができた後（1件以上登録済み）はもう不要なので出さない。
 const TAB_DESCRIPTION: Partial<Record<Tab, string>> = {
   clients: "スタッフの配属先の依頼主の名簿です。依頼主ごとに請求書を作成できます。",
   agencies: "自社にスタッフを派遣してくれている会社の名簿です。",
@@ -148,15 +149,7 @@ export function RosterView({
             {ADD_BUTTON_LABEL[tab]}
           </button>
           {showAddMenu ? (
-            <div className="absolute right-0 z-10 mt-2 w-64 rounded-lg border border-border bg-white shadow-md">
-              {TAB_DESCRIPTION[tab] ? (
-                <div className="flex items-start gap-2 border-b border-border px-4 py-2.5 text-xs text-muted">
-                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted/20 text-[10px] font-bold text-muted">
-                    ?
-                  </span>
-                  <span>{TAB_DESCRIPTION[tab]}</span>
-                </div>
-              ) : null}
+            <div className="absolute right-0 z-10 mt-2 w-48 rounded-lg border border-border bg-white shadow-md">
               <button
                 type="button"
                 disabled={pending}
@@ -307,11 +300,19 @@ export function RosterView({
       ) : null}
 
       {tab === "clients" ? (
-        <RelationshipTable rows={clients} onRowClick={(id) => openRelationship(id, "client")} />
+        <RelationshipTable
+          rows={clients}
+          description={TAB_DESCRIPTION.clients}
+          onRowClick={(id) => openRelationship(id, "client")}
+        />
       ) : null}
 
       {tab === "agencies" ? (
-        <RelationshipTable rows={agencies} onRowClick={(id) => openRelationship(id, "agency")} />
+        <RelationshipTable
+          rows={agencies}
+          description={TAB_DESCRIPTION.agencies}
+          onRowClick={(id) => openRelationship(id, "agency")}
+        />
       ) : null}
 
       {selectedStaffId ? (
@@ -545,9 +546,11 @@ function TabButton({
 
 function RelationshipTable({
   rows,
+  description,
   onRowClick,
 }: {
   rows: RelationshipRow[];
+  description?: string;
   onRowClick: (id: string) => void;
 }) {
   return (
@@ -579,8 +582,16 @@ function RelationshipTable({
           ))}
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={2} className="py-8 text-center text-muted">
-                登録されていません。
+              <td colSpan={2} className="py-8">
+                {description ? (
+                  <div className="mx-auto mb-3 flex max-w-sm items-start gap-2 rounded-lg bg-background px-3 py-2.5 text-left text-xs text-muted">
+                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted/20 text-[10px] font-bold text-muted">
+                      ?
+                    </span>
+                    <span>{description}</span>
+                  </div>
+                ) : null}
+                <p className="text-center text-muted">登録されていません。</p>
               </td>
             </tr>
           ) : null}

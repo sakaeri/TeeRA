@@ -35,15 +35,16 @@ try {
   await owner.click("button[type=submit]");
   await owner.waitForURL("http://localhost:3000/company");
 
-  // --- ① per-tab dedicated buttons; info note shown inside the add-menu at creation time ---
+  // --- ① per-tab dedicated buttons; info note shown only in the empty
+  // roster state (helps decide which roster to build), gone once populated ---
   await owner.goto("http://localhost:3000/company/roster");
   await owner.click("text=依頼主一覧");
   await owner.waitForTimeout(200);
   let bodyText = await owner.textContent("body");
   log("clients tab shows dedicated ＋依頼主を追加する button", bodyText.includes("＋依頼主を追加する"));
   log(
-    "clients tab caption NOT permanently visible on the list page itself",
-    !bodyText.includes("スタッフの配属先の依頼主の名簿です。依頼主ごとに請求書を作成できます。"),
+    "empty 依頼主一覧 shows the info note (helps decide which roster to build)",
+    bodyText.includes("スタッフの配属先の依頼主の名簿です。依頼主ごとに請求書を作成できます。"),
   );
   log("old shared 取引先名簿を追加 button is gone", !bodyText.includes("取引先名簿を追加"));
 
@@ -51,8 +52,8 @@ try {
   await owner.waitForTimeout(200);
   bodyText = await owner.textContent("body");
   log(
-    "info note appears inside the add-menu when creating a 依頼主",
-    bodyText.includes("スタッフの配属先の依頼主の名簿です。依頼主ごとに請求書を作成できます。"),
+    "info note is NOT duplicated inside the add-menu itself (belongs to the empty state, not per-add)",
+    !bodyText.includes("スタッフの配属先の依頼主の名簿です。依頼主ごとに請求書を作成できます。仮アカウントを作成"),
   );
   await owner.click("text=＋依頼主を追加する");
   await owner.waitForTimeout(200);
@@ -62,18 +63,9 @@ try {
   bodyText = await owner.textContent("body");
   log("agencies tab shows dedicated ＋派遣会社を追加する button", bodyText.includes("＋派遣会社を追加する"));
   log(
-    "agencies tab caption NOT permanently visible on the list page itself",
-    !bodyText.includes("自社にスタッフを派遣してくれている会社の名簿です。"),
-  );
-  await owner.click("text=＋派遣会社を追加する");
-  await owner.waitForTimeout(200);
-  bodyText = await owner.textContent("body");
-  log(
-    "info note appears inside the add-menu when creating a 派遣会社",
+    "empty 派遣会社一覧 shows the info note",
     bodyText.includes("自社にスタッフを派遣してくれている会社の名簿です。"),
   );
-  await owner.click("text=＋派遣会社を追加する");
-  await owner.waitForTimeout(200);
 
   // --- ⑨ generating an invite URL must NOT add a row to the list yet ---
   await owner.click("text=依頼主一覧");
@@ -146,6 +138,10 @@ try {
   bodyText = await owner.textContent("body");
   log("owner's 依頼主一覧 now shows the counterpart's real company name", bodyText.includes("招待先株式会社"));
   log("no (名称未設定) placeholder shown", !bodyText.includes("名称未設定"));
+  log(
+    "info note is gone now that the roster is no longer empty (1 entry exists)",
+    !bodyText.includes("スタッフの配属先の依頼主の名簿です。依頼主ごとに請求書を作成できます。"),
+  );
 
   // --- STAFF role is blocked from redeeming a company-relationship invite ---
   await owner.goto("http://localhost:3000/company/roster");
