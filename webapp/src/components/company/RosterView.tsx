@@ -43,9 +43,13 @@ const ADD_BUTTON_LABEL: Record<Tab, string> = {
   agencies: "＋派遣会社を追加する",
 };
 
-// 依頼主/派遣会社どちらの名簿を作ればいいか分からない人向けに、まだ1件も
-// 登録されていない空の状態でだけ出す説明文（プロトタイプの(i)ツールチップと
-// 同じ内容）。名簿ができた後（1件以上登録済み）はもう不要なので出さない。
+// 追加メニューの見出し（プロトタイプの「依頼主名簿 (i)」「派遣会社名簿 (i)」に対応）。
+const ROSTER_LABEL: Partial<Record<Tab, string>> = {
+  clients: "依頼主名簿",
+  agencies: "派遣会社名簿",
+};
+
+// 見出し横の(i)アイコンをクリックすると出す説明文（プロトタイプのツールチップと同じ内容）。
 const TAB_DESCRIPTION: Partial<Record<Tab, string>> = {
   clients: "スタッフの配属先の依頼主の名簿です。依頼主ごとに請求書を作成できます。",
   agencies: "自社にスタッフを派遣してくれている会社の名簿です。",
@@ -92,6 +96,7 @@ export function RosterView({
   const [showInviteRelationshipModal, setShowInviteRelationshipModal] = useState<"client" | "agency" | null>(null);
   const [pending, startTransition] = useTransition();
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showAddMenuInfo, setShowAddMenuInfo] = useState(false);
   const [teamFilter, setTeamFilter] = useState("");
   const filteredStaff = teamFilter ? staff.filter((s) => s.teams.some((t) => t.teamId === teamFilter)) : staff;
   const [proxyNamePromptFor, setProxyNamePromptFor] = useState<
@@ -143,13 +148,34 @@ export function RosterView({
         <div className="relative">
           <button
             type="button"
-            onClick={() => setShowAddMenu((v) => !v)}
+            onClick={() => {
+              setShowAddMenu((v) => !v);
+              setShowAddMenuInfo(false);
+            }}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
           >
             {ADD_BUTTON_LABEL[tab]}
           </button>
           {showAddMenu ? (
-            <div className="absolute right-0 z-10 mt-2 w-48 rounded-lg border border-border bg-white shadow-md">
+            <div className="absolute right-0 z-10 mt-2 w-56 rounded-lg border border-border bg-white shadow-md">
+              {ROSTER_LABEL[tab] ? (
+                <div className="border-b border-border px-4 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-muted">{ROSTER_LABEL[tab]}</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddMenuInfo((v) => !v)}
+                      aria-label="説明を見る"
+                      className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted/20 text-[10px] font-bold text-muted"
+                    >
+                      i
+                    </button>
+                  </div>
+                  {showAddMenuInfo ? (
+                    <p className="mt-1.5 text-xs text-muted">{TAB_DESCRIPTION[tab]}</p>
+                  ) : null}
+                </div>
+              ) : null}
               <button
                 type="button"
                 disabled={pending}
@@ -300,19 +326,11 @@ export function RosterView({
       ) : null}
 
       {tab === "clients" ? (
-        <RelationshipTable
-          rows={clients}
-          description={TAB_DESCRIPTION.clients}
-          onRowClick={(id) => openRelationship(id, "client")}
-        />
+        <RelationshipTable rows={clients} onRowClick={(id) => openRelationship(id, "client")} />
       ) : null}
 
       {tab === "agencies" ? (
-        <RelationshipTable
-          rows={agencies}
-          description={TAB_DESCRIPTION.agencies}
-          onRowClick={(id) => openRelationship(id, "agency")}
-        />
+        <RelationshipTable rows={agencies} onRowClick={(id) => openRelationship(id, "agency")} />
       ) : null}
 
       {selectedStaffId ? (
@@ -546,11 +564,9 @@ function TabButton({
 
 function RelationshipTable({
   rows,
-  description,
   onRowClick,
 }: {
   rows: RelationshipRow[];
-  description?: string;
   onRowClick: (id: string) => void;
 }) {
   return (
@@ -582,16 +598,8 @@ function RelationshipTable({
           ))}
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={2} className="py-8">
-                {description ? (
-                  <div className="mx-auto mb-3 flex max-w-sm items-start gap-2 rounded-lg bg-background px-3 py-2.5 text-left text-xs text-muted">
-                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted/20 text-[10px] font-bold text-muted">
-                      ?
-                    </span>
-                    <span>{description}</span>
-                  </div>
-                ) : null}
-                <p className="text-center text-muted">登録されていません。</p>
+              <td colSpan={2} className="py-8 text-center text-muted">
+                登録されていません。
               </td>
             </tr>
           ) : null}
