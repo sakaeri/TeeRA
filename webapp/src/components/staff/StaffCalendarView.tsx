@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { submitShiftRequestAction } from "@/app/staff/actions";
+import { todayJst } from "@/lib/date";
 
 type ShiftRow = {
   id: string;
@@ -32,7 +33,7 @@ export function StaffCalendarView({
   shifts: ShiftRow[];
 }) {
   const [showWizard, setShowWizard] = useState(false);
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = todayJst();
 
   const shiftsByDate = useMemo(() => {
     const map = new Map<string, ShiftRow[]>();

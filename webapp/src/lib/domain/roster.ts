@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { createInvite } from "@/lib/domain/invites";
+import { todayJstParts } from "@/lib/date";
 
 export async function listStaff(companyId: string) {
   const memberships = await prisma.companyMembership.findMany({
@@ -39,9 +40,9 @@ export async function listStaffWithSummary(companyId: string) {
   const userIds = staff.map((s) => s.userId);
   if (userIds.length === 0) return staff.map((s) => ({ ...s, monthlyHours: 0, currentRateLabel: "—", contractStatus: "未送付" as const }));
 
-  const now = new Date();
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  const today = todayJstParts();
+  const start = new Date(Date.UTC(today.year, today.month - 1, 1));
+  const end = new Date(Date.UTC(today.year, today.month, 1));
 
   const [reports, contracts] = await Promise.all([
     prisma.workReport.findMany({

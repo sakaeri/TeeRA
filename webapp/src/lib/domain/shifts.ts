@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { todayJst } from "@/lib/date";
 import type { Prisma } from "@/generated/prisma/client";
 
 type Tx = Prisma.TransactionClient;
@@ -46,8 +47,7 @@ function timeToMinutes(t: string) {
 // still mutable. Dates are stored as @db.Date (UTC midnight), so compare
 // against today's own UTC midnight.
 export function isPastDate(date: Date) {
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const today = new Date(`${todayStr}T00:00:00.000Z`);
+  const today = new Date(`${todayJst()}T00:00:00.000Z`);
   return date.getTime() < today.getTime();
 }
 

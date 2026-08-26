@@ -5,11 +5,12 @@ import { listClients } from "@/lib/domain/relationships";
 import { getOrCreateInvoice, computeInvoiceTotals } from "@/lib/domain/invoicing";
 import { prisma } from "@/lib/prisma";
 import { InvoiceEditor } from "@/components/company/InvoiceEditor";
+import { todayJstParts } from "@/lib/date";
 import Link from "next/link";
 
 function currentMonth() {
-  const now = new Date();
-  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  const today = todayJstParts();
+  return `${today.year}-${String(today.month).padStart(2, "0")}`;
 }
 
 export default async function InvoicesPage({

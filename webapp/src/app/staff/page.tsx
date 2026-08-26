@@ -1,5 +1,6 @@
 import { requireCompanyStaffRole } from "@/lib/auth/session";
 import { listStaffShiftsForMonth } from "@/lib/domain/shifts";
+import { todayJstParts } from "@/lib/date";
 import { StaffCalendarView } from "@/components/staff/StaffCalendarView";
 
 export default async function StaffHomePage({
@@ -8,9 +9,9 @@ export default async function StaffHomePage({
   const { userId } = await requireCompanyStaffRole();
   const sp = await searchParams;
 
-  const now = new Date();
-  const year = Number(sp.y) || now.getUTCFullYear();
-  const month = Number(sp.m) || now.getUTCMonth() + 1;
+  const today = todayJstParts();
+  const year = Number(sp.y) || today.year;
+  const month = Number(sp.m) || today.month;
 
   const shifts = await listStaffShiftsForMonth({ staffUserId: userId, year, month });
 

@@ -2,15 +2,16 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { listShiftsForMonth } from "@/lib/domain/shifts";
 import { prisma } from "@/lib/prisma";
+import { todayJst, todayJstParts } from "@/lib/date";
 import { CalendarPdfDocument, type CalendarPdfData } from "@/lib/pdf/calendar";
 
 export async function GET(request: Request) {
   const { membership } = await requireCompanyAdminOrEditor();
 
   const url = new URL(request.url);
-  const now = new Date();
-  const year = Number(url.searchParams.get("y")) || now.getUTCFullYear();
-  const month = Number(url.searchParams.get("m")) || now.getUTCMonth() + 1;
+  const today = todayJstParts();
+  const year = Number(url.searchParams.get("y")) || today.year;
+  const month = Number(url.searchParams.get("m")) || today.month;
   const teamId = url.searchParams.get("team") || undefined;
   const companyRelationshipId = url.searchParams.get("rel") || undefined;
 
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
     companyName: company.name,
     year,
     month,
-    issuedAt: new Date().toISOString().slice(0, 10),
+    issuedAt: todayJst(),
     filterLabel,
     shifts: shifts.map((s) => ({
       date: s.date.toISOString().slice(0, 10),

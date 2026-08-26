@@ -10,6 +10,7 @@ import { listStaff } from "@/lib/domain/roster";
 import { listTeams } from "@/lib/domain/teams";
 import { listClients, listAgencies } from "@/lib/domain/relationships";
 import { prisma } from "@/lib/prisma";
+import { todayJstParts } from "@/lib/date";
 import { CalendarView } from "@/components/company/CalendarView";
 
 export default async function CompanyCalendarPage({
@@ -18,11 +19,11 @@ export default async function CompanyCalendarPage({
   const { membership } = await requireCompanyAdminOrEditor();
   const sp = await searchParams;
 
-  const now = new Date();
+  const today = todayJstParts();
   const dateParam = typeof sp.date === "string" && sp.date ? sp.date : undefined;
   const [dateYear, dateMonth] = dateParam ? dateParam.split("-").map(Number) : [];
-  const year = Number(sp.y) || dateYear || now.getUTCFullYear();
-  const month = Number(sp.m) || dateMonth || now.getUTCMonth() + 1;
+  const year = Number(sp.y) || dateYear || today.year;
+  const month = Number(sp.m) || dateMonth || today.month;
   const teamId = typeof sp.team === "string" && sp.team ? sp.team : undefined;
   const relationshipId = typeof sp.rel === "string" && sp.rel ? sp.rel : undefined;
 

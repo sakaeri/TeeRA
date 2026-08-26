@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getStaffMonthDetailAction, updateStaffNoteAction } from "@/app/company/actions";
+import { todayJstParts } from "@/lib/date";
 
 type StaffMonthDetail = {
   membershipId: string;
@@ -51,9 +52,9 @@ function timeLabel(d: StaffMonthDetail["days"][number]) {
 
 export function StaffDetailPanel({ userId, onClose }: { userId: string; onClose: () => void }) {
   const router = useRouter();
-  const now = new Date();
-  const [year, setYear] = useState(now.getUTCFullYear());
-  const [month, setMonth] = useState(now.getUTCMonth() + 1);
+  const initToday = todayJstParts();
+  const [year, setYear] = useState(initToday.year);
+  const [month, setMonth] = useState(initToday.month);
   const [tab, setTab] = useState<"history" | "contracts" | "note">("history");
   const [data, setData] = useState<StaffMonthDetail | null>(null);
   const [noteValue, setNoteValue] = useState("");

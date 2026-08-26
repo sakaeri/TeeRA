@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { todayJst, nowJstHHMM } from "@/lib/date";
 import {
   createAssignedShiftAction,
   matchShiftRequestAction,
@@ -110,13 +111,11 @@ const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 // まだ終了時刻前の当日シフトを「未報告」扱いにすると、単なるノイズになる。
 function isReportOverdue(s: ShiftRow) {
   if (s.approvalStatus) return false;
-  const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = todayJst();
   if (s.date > todayStr) return false;
   if (s.date < todayStr) return true;
   if (s.isAllDay || s.isUndecided || !s.endTime) return false;
-  const nowHHMM = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  return nowHHMM >= s.endTime;
+  return nowJstHHMM() >= s.endTime;
 }
 
 function weekdayColor(dow: number) {
@@ -170,7 +169,7 @@ export function CalendarView({
   const [sharingImage, setSharingImage] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = todayJst();
 
   // 取引先を絞る: 選ばれたIDをそのままteam同様クエリパラメータに載せる
   // （絞り込みロジック自体はlistShiftsForMonth側で関係の向きを見て振り分け
@@ -560,7 +559,7 @@ function ShareableShiftList({
     byDate.get(s.date)!.push(s);
   }
   const dates = Array.from(byDate.keys()).sort();
-  const issuedAt = new Date().toISOString().slice(0, 10);
+  const issuedAt = todayJst();
 
   return (
     <div className="w-[800px] bg-white p-8 text-sm text-foreground">
@@ -687,7 +686,7 @@ function DayDetailModal({
   const [tab, setTab] = useState<"shifts" | "client" | "recruit">("shifts");
   const [selectedClientKey, setSelectedClientKey] = useState<string | null>(null);
   const [editingRecruitmentId, setEditingRecruitmentId] = useState<string | null>(null);
-  const isPastDay = dateStr < new Date().toISOString().slice(0, 10);
+  const isPastDay = dateStr < todayJst();
   const remaining = recruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
   const clientShifts = shifts.filter((s) => s.source === "CLIENT");
   const hasUnreported = shifts.some((s) => isReportOverdue(s));
@@ -2393,7 +2392,7 @@ function MiniCalendarMultiSelect({
   const [viewYear, setViewYear] = useState(initialYear);
   const [viewMonth, setViewMonth] = useState(initialMonth);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
-  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayStr = useMemo(() => todayJst(), []);
 
   const cells = useMemo(() => {
     const firstOfMonth = new Date(Date.UTC(viewYear, viewMonth - 1, 1));

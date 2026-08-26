@@ -4,11 +4,12 @@ import { listStaff } from "@/lib/domain/roster";
 import { getOrCreateSalarySlip, getTotals } from "@/lib/domain/payroll";
 import { prisma } from "@/lib/prisma";
 import { SalarySlipEditor } from "@/components/company/SalarySlipEditor";
+import { todayJstParts } from "@/lib/date";
 import Link from "next/link";
 
 function currentMonth() {
-  const now = new Date();
-  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  const today = todayJstParts();
+  return `${today.year}-${String(today.month).padStart(2, "0")}`;
 }
 
 export default async function PayrollPage({

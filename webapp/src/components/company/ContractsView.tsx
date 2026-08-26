@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { todayJst } from "@/lib/date";
 import {
   createTemplateAction,
   updateTemplateAction,
@@ -384,7 +385,7 @@ export function TemplateModal({
     (editingTemplate?.contractPeriodType as "INDEFINITE" | "FIXED_TERM") ?? "INDEFINITE",
   );
   const [contractStartDate, setContractStartDate] = useState(
-    editingTemplate?.contractStartDate ?? new Date().toISOString().slice(0, 10),
+    editingTemplate?.contractStartDate ?? todayJst(),
   );
   const [contractEndDate, setContractEndDate] = useState(editingTemplate?.contractEndDate ?? "");
   const [wageType, setWageType] = useState(editingTemplate?.wageType ?? "HOURLY");

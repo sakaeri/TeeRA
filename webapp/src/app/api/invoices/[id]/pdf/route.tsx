@@ -2,6 +2,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { verifySession, getActiveMembership } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { computeInvoiceTotals } from "@/lib/domain/invoicing";
+import { todayJst } from "@/lib/date";
 import { InvoiceDocument, type InvoicePdfData } from "@/lib/pdf/invoice";
 
 export async function GET(request: Request, { params }: RouteContext<"/api/invoices/[id]/pdf">) {
@@ -58,7 +59,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
       periodLabel: invoice.periodLabel,
       dueDate: invoice.dueDate?.toISOString().slice(0, 10) ?? null,
       note: invoice.note,
-      issuedAt: new Date().toISOString().slice(0, 10),
+      issuedAt: todayJst(),
       registered,
       invoiceRegistrationNumber: invoice.invoiceRegistrationNumberSnapshot,
       lines: invoice.lines,

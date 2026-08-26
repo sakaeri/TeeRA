@@ -2,6 +2,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { listRedemptionsForCompany } from "@/lib/domain/promo";
 import { prisma } from "@/lib/prisma";
+import { todayJst } from "@/lib/date";
 import { PendingShipmentPdfDocument, type PendingShipmentPdfData } from "@/lib/pdf/promoShipment";
 
 export async function GET() {
@@ -14,7 +15,7 @@ export async function GET() {
 
   const data: PendingShipmentPdfData = {
     companyName: company.name,
-    issuedAt: new Date().toISOString().slice(0, 10),
+    issuedAt: todayJst(),
     rows: redemptions
       .filter((r) => r.status !== "SHIPPED")
       .map((r) => ({

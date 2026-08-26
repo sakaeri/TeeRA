@@ -2,6 +2,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { verifySession, getActiveMembership } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getTotals } from "@/lib/domain/payroll";
+import { todayJst } from "@/lib/date";
 import { SalarySlipDocument, type SalarySlipPdfData } from "@/lib/pdf/salarySlip";
 
 export async function GET(request: Request, { params }: RouteContext<"/api/salary-slips/[id]/pdf">) {
@@ -50,7 +51,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/salar
       companyName: slip.company.name,
       staffName: slip.staff.name,
       targetMonth: slip.targetMonth,
-      issuedAt: new Date().toISOString().slice(0, 10),
+      issuedAt: todayJst(),
       lines: slip.lines,
       deductions: slip.deductions as SalarySlipPdfData["deductions"],
       paidLeaveDaysUsed: slip.paidLeaveDaysUsed,
