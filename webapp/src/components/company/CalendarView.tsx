@@ -322,17 +322,32 @@ export function CalendarView({
           <Link
             href={`/api/calendar/pdf?y=${year}&m=${month}${selectedTeamId ? `&team=${selectedTeamId}` : ""}${selectedRelationshipId ? `&rel=${selectedRelationshipId}` : ""}`}
             target="_blank"
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
           >
-            📅 PDF出力
+            <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 shrink-0">
+              <path
+                d="M6 3h8l4 4v14a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinejoin="round"
+              />
+              <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+              <path d="M8 12h8M8 15.5h8M8 18.5h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            PDF出力
           </Link>
           <button
             type="button"
             disabled={sharingImage}
             onClick={shareAsImage}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:border-primary hover:text-primary disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:border-primary hover:text-primary disabled:opacity-60"
           >
-            {sharingImage ? "画像を作成中…" : "🖼 画像でシフトを共有"}
+            <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 shrink-0">
+              <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
+              <circle cx="8.5" cy="9.5" r="1.5" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M4 17l5-5 3 3 4-5 4 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {sharingImage ? "画像を作成中…" : "画像でシフトを共有"}
           </button>
         </div>
       </div>
@@ -1360,7 +1375,17 @@ function OrderEditModal({
                 onClick={() => setShowPublicForm(true)}
                 className="flex items-center justify-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-100"
               >
-                📣 公開募集に切り替える
+                <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0">
+                  <path
+                    d="M3 10v4a1 1 0 001 1h2l3 4V5L6 9H4a1 1 0 00-1 1z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinejoin="round"
+                  />
+                  <path d="M11 6.5l7-3v17l-7-3" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                  <path d="M7 15v2.5a1.5 1.5 0 003 0V16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+                公開募集に切り替える
               </button>
             ) : null}
             <button

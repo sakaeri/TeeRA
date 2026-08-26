@@ -413,8 +413,8 @@ export async function assignStaffToRecruitment(params: {
     date: recruitment.date,
     startTime: recruitment.startTime,
     endTime: recruitment.endTime,
-    isAllDay: !recruitment.startTime,
-    isUndecided: false,
+    isAllDay: false,
+    isUndecided: recruitment.isUndecided,
   });
   if (conflicts.length > 0 && !params.overrideShiftIds?.length) {
     return { status: "conflict" as const, conflicts };
@@ -453,8 +453,8 @@ export async function assignStaffToRecruitment(params: {
         date: recruitment.date,
         startTime: recruitment.startTime,
         endTime: recruitment.endTime,
-        isAllDay: !recruitment.startTime,
-        isUndecided: false,
+        isAllDay: false,
+        isUndecided: recruitment.isUndecided,
         note: recruitment.title,
         createdVia: "PUBLIC_RECRUIT_ENTRY",
         publicRecruitmentId: recruitment.id,
@@ -541,8 +541,8 @@ export async function applyToRecruitment(params: { recruitmentId: string; staffU
         date: recruitment.date,
         startTime: recruitment.startTime,
         endTime: recruitment.endTime,
-        isAllDay: !recruitment.startTime,
-        isUndecided: false,
+        isAllDay: false,
+        isUndecided: recruitment.isUndecided,
         note: recruitment.title,
         createdVia: "PUBLIC_RECRUIT_ENTRY",
         publicRecruitmentId: recruitment.id,
