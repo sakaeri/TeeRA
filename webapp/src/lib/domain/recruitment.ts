@@ -450,6 +450,10 @@ export async function assignStaffToRecruitment(params: {
         staffUserId: params.staffUserId,
         source: isOwnCompany ? "INHOUSE" : "CLIENT",
         companyRelationshipId,
+        // 依頼主の募集タイトルを業務内容として引き継ぐ — これが無いと、
+        // このオーダー経由で確定したシフトは請求単価（依頼主詳細の業務内容
+        // ×単価）を一意に決められず、常に単価未設定として扱われてしまう。
+        taskName: companyRelationshipId ? recruitment.title : undefined,
         date: recruitment.date,
         startTime: recruitment.startTime,
         endTime: recruitment.endTime,

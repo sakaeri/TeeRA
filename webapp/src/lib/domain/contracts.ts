@@ -181,12 +181,15 @@ export async function listPlacementRates(companyId: string) {
   });
 }
 
+// wageType/amount を省略すると「業務内容の登録だけ」を行う（単価は依頼主
+// 詳細で別途手動設定する）。既に単価が設定されている行に対して省略呼び出し
+// した場合は、その単価を消さずそのまま残す。
 export async function upsertPlacementRate(params: {
   companyId: string;
   companyRelationshipId?: string;
   taskName: string;
-  wageType: WageType;
-  amount: number;
+  wageType?: WageType;
+  amount?: number;
 }) {
   const existing = await prisma.companyPlacementRate.findFirst({
     where: {
@@ -197,6 +200,7 @@ export async function upsertPlacementRate(params: {
   });
 
   if (existing) {
+    if (params.wageType === undefined || params.amount === undefined) return existing;
     return prisma.companyPlacementRate.update({
       where: { id: existing.id },
       data: { wageType: params.wageType, amount: params.amount },
@@ -216,4 +220,36 @@ export async function upsertPlacementRate(params: {
 
 export async function deletePlacementRate(id: string) {
   return prisma.companyPlacementRate.delete({ where: { id } });
+}
+
+// 給与単価テーブル（スタッフ×業務内容）— keyed by staffUserId + taskName.
+export async function listStaffTaskRates(companyId: string) {
+  return prisma.staffTaskRate.findMany({
+    where: { companyId },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function upsertStaffTaskRate(params: {
+  companyId: string;
+  staffUserId: string;
+  taskName: string;
+  wageType: WageType;
+  amount: number;
+}) {
+  return prisma.staffTaskRate.upsert({
+    where: {
+      companyId_staffUserId_taskName: {
+        companyId: params.companyId,
+        staffUserId: params.staffUserId,
+        taskName: params.taskName,
+      },
+    },
+    update: { wageType: params.wageType, amount: params.amount },
+    create: params,
+  });
+}
+
+export async function deleteStaffTaskRate(id: string) {
+  return prisma.staffTaskRate.delete({ where: { id } });
 }

@@ -58,10 +58,10 @@ try {
 
   // placement rate for this client: 1500/hr
   await admin.goto("http://localhost:3000/company/settings?tab=contracts");
-  await admin.selectOption("select", { label: "GREEN TABLE 渋谷店" });
-  await admin.fill('input[placeholder="業務内容"]', "接客");
-  await admin.fill('input[placeholder="金額"]', "1500");
-  await admin.getByRole("button", { name: "＋追加" }).click();
+  await admin.locator("select").first().selectOption({ label: "GREEN TABLE 渋谷店" });
+  await admin.locator('input[placeholder="業務内容"]').first().fill("接客");
+  await admin.locator('input[placeholder="金額"]').first().fill("1500");
+  await admin.getByRole("button", { name: "＋追加" }).first().click();
   await admin.waitForTimeout(500);
 
   // invite + register staff

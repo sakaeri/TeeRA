@@ -10,6 +10,8 @@ import {
   deleteTemplate,
   upsertPlacementRate,
   deletePlacementRate,
+  upsertStaffTaskRate,
+  deleteStaffTaskRate,
   generateStaffContractFromNewTemplate,
   type TemplateInput,
 } from "@/lib/domain/contracts";
@@ -44,11 +46,13 @@ export async function deleteTemplateAction(templateId: string) {
   revalidatePath("/company/settings");
 }
 
+// wageType/amount を省略すると業務内容の登録のみ行う（シフト作成モーダルの
+// その場追加から呼ばれる場合）。単価は依頼主詳細（設定＞契約関連）で別途設定する。
 export async function upsertPlacementRateAction(input: {
   companyRelationshipId?: string;
   taskName: string;
-  wageType: "HOURLY" | "DAILY" | "MONTHLY";
-  amount: number;
+  wageType?: "HOURLY" | "DAILY" | "MONTHLY";
+  amount?: number;
 }) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
@@ -64,6 +68,33 @@ export async function deletePlacementRateAction(id: string) {
   if (!canManage(membership)) throw new Error("forbidden");
 
   await deletePlacementRate(id);
+  revalidatePath("/company/settings");
+}
+
+export async function upsertStaffTaskRateAction(input: {
+  staffUserId: string;
+  taskName: string;
+  wageType: "HOURLY" | "DAILY" | "MONTHLY";
+  amount: number;
+}) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManage(membership)) throw new Error("forbidden");
+
+  const staffMembership = await prisma.companyMembership.findFirst({
+    where: { userId: input.staffUserId, companyId: membership.companyId, role: "STAFF" },
+  });
+  if (!staffMembership) throw new Error("forbidden");
+
+  const rate = await upsertStaffTaskRate({ ...input, companyId: membership.companyId });
+  revalidatePath("/company/settings");
+  return rate;
+}
+
+export async function deleteStaffTaskRateAction(id: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManage(membership)) throw new Error("forbidden");
+
+  await deleteStaffTaskRate(id);
   revalidatePath("/company/settings");
 }
 

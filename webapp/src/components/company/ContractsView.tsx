@@ -8,6 +8,8 @@ import {
   deleteTemplateAction,
   upsertPlacementRateAction,
   deletePlacementRateAction,
+  upsertStaffTaskRateAction,
+  deleteStaffTaskRateAction,
   generateStaffContractAction,
 } from "@/app/company/contracts/actions";
 
@@ -47,11 +49,21 @@ type Rate = {
   clientName: string;
   companyRelationshipId: string | null;
   taskName: string;
+  wageType: string | null;
+  amount: number | null;
+};
+
+type StaffTaskRate = {
+  id: string;
+  staffUserId: string;
+  staffName: string;
+  taskName: string;
   wageType: string;
   amount: number;
 };
 
 export type ClientOption = { id: string; name: string };
+export type StaffOption = { userId: string; name: string };
 
 const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
   PART_TIME: "アルバイト",
@@ -67,16 +79,21 @@ export function ContractsView({
   templates,
   rates,
   clients,
+  staffTaskRates,
+  staff,
   companyName,
 }: {
   templates: Template[];
   rates: Rate[];
   clients: ClientOption[];
+  staffTaskRates: StaffTaskRate[];
+  staff: StaffOption[];
   companyName: string;
 }) {
   return (
     <div className="flex flex-col gap-10">
       <PlacementRatesSection rates={rates} clients={clients} />
+      <StaffTaskRatesSection rates={staffTaskRates} staff={staff} />
       <TemplatesSection templates={templates} clients={clients} companyName={companyName} />
     </div>
   );
@@ -115,7 +132,11 @@ function PlacementRatesSection({ rates, clients }: { rates: Rate[]; clients: Cli
               <td className="py-2">{r.clientName}</td>
               <td className="py-2">{r.taskName}</td>
               <td className="py-2">
-                {WAGE_TYPE_LABEL[r.wageType]} {r.amount}円
+                {r.wageType && r.amount != null ? (
+                  `${WAGE_TYPE_LABEL[r.wageType]} ${r.amount}円`
+                ) : (
+                  <span className="text-amber-700">単価未設定</span>
+                )}
               </td>
               <td className="py-2 text-right">
                 <button
@@ -138,6 +159,9 @@ function PlacementRatesSection({ rates, clients }: { rates: Rate[]; clients: Cli
           ) : null}
         </tbody>
       </table>
+      <p className="mb-2 text-xs text-muted">
+        シフト作成時にその場追加された業務内容は、ここで同じ配属先・業務内容を選んで単価を入力すると設定されます。
+      </p>
 
       <div className="flex flex-wrap items-end gap-2">
         <select
@@ -182,6 +206,116 @@ function PlacementRatesSection({ rates, clients }: { rates: Rate[]; clients: Cli
             startTransition(async () => {
               await upsertPlacementRateAction({
                 companyRelationshipId: companyRelationshipId || undefined,
+                taskName,
+                wageType: wageType as "HOURLY" | "DAILY" | "MONTHLY",
+                amount: Number(amount),
+              });
+              setTaskName("");
+              setAmount("");
+            })
+          }
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        >
+          ＋追加
+        </button>
+      </div>
+    </SectionCard>
+  );
+}
+
+// スタッフ×業務内容の給与単価。未登録の業務内容は、そのスタッフの雇用契約
+// の基本単価にフォールバックして給与計算される（payroll.ts参照）。
+function StaffTaskRatesSection({ rates, staff }: { rates: StaffTaskRate[]; staff: StaffOption[] }) {
+  const [pending, startTransition] = useTransition();
+  const [staffUserId, setStaffUserId] = useState("");
+  const [taskName, setTaskName] = useState("");
+  const [wageType, setWageType] = useState("HOURLY");
+  const [amount, setAmount] = useState("");
+
+  return (
+    <SectionCard title="スタッフ別 業務内容単価（給与）">
+      <table className="mb-4 w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-muted">
+            <th className="py-2">スタッフ</th>
+            <th className="py-2">業務内容</th>
+            <th className="py-2">単価</th>
+            <th className="py-2" />
+          </tr>
+        </thead>
+        <tbody>
+          {rates.map((r) => (
+            <tr key={r.id} className="border-b border-border/60">
+              <td className="py-2">{r.staffName}</td>
+              <td className="py-2">{r.taskName}</td>
+              <td className="py-2">
+                {WAGE_TYPE_LABEL[r.wageType]} {r.amount}円
+              </td>
+              <td className="py-2 text-right">
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => startTransition(() => deleteStaffTaskRateAction(r.id))}
+                  className="text-xs text-red-600 underline"
+                >
+                  削除
+                </button>
+              </td>
+            </tr>
+          ))}
+          {rates.length === 0 ? (
+            <tr>
+              <td colSpan={4} className="py-4 text-center text-muted">
+                登録されていません。未登録の業務内容は各スタッフの雇用契約の基本単価で計算されます。
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <select
+          value={staffUserId}
+          onChange={(e) => setStaffUserId(e.target.value)}
+          className="rounded-lg border border-border px-2 py-2 text-sm"
+        >
+          <option value="">スタッフを選択</option>
+          {staff.map((s) => (
+            <option key={s.userId} value={s.userId}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        <input
+          type="text"
+          value={taskName}
+          onChange={(e) => setTaskName(e.target.value)}
+          placeholder="業務内容"
+          className="rounded-lg border border-border px-2 py-2 text-sm"
+        />
+        <select
+          value={wageType}
+          onChange={(e) => setWageType(e.target.value)}
+          className="rounded-lg border border-border px-2 py-2 text-sm"
+        >
+          <option value="HOURLY">時給</option>
+          <option value="DAILY">日給</option>
+          <option value="MONTHLY">月給</option>
+        </select>
+        <input
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="金額"
+          className="w-28 rounded-lg border border-border px-2 py-2 text-sm"
+        />
+        <button
+          type="button"
+          disabled={pending || !staffUserId || !taskName || !amount}
+          onClick={() =>
+            startTransition(async () => {
+              await upsertStaffTaskRateAction({
+                staffUserId,
                 taskName,
                 wageType: wageType as "HOURLY" | "DAILY" | "MONTHLY",
                 amount: Number(amount),

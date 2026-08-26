@@ -61,6 +61,14 @@ type PlacementRate = {
   clientName: string;
   companyRelationshipId: string | null;
   taskName: string;
+  wageType: string | null;
+  amount: number | null;
+};
+type StaffTaskRate = {
+  id: string;
+  staffUserId: string;
+  staffName: string;
+  taskName: string;
   wageType: string;
   amount: number;
 };
@@ -93,6 +101,7 @@ export function SettingsView({
   staff,
   contractTemplates,
   placementRates,
+  staffTaskRates,
   contractClients,
   workReports,
 }: {
@@ -106,6 +115,7 @@ export function SettingsView({
   staff: StaffOption[];
   contractTemplates: ContractTemplate[];
   placementRates: PlacementRate[];
+  staffTaskRates: StaffTaskRate[];
   contractClients: ContractClientOption[];
   workReports: WorkReportRow[];
 }) {
@@ -148,6 +158,8 @@ export function SettingsView({
           templates={contractTemplates}
           rates={placementRates}
           clients={contractClients}
+          staffTaskRates={staffTaskRates}
+          staff={staff}
           companyName={companyName}
         />
       ) : null}

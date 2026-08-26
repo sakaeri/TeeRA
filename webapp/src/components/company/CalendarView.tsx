@@ -105,15 +105,14 @@ type ClientRecruitmentRow = {
 
 type TagEntry = { kind: "solid"; id: string; label: string; className: string };
 
-type PlacementRateRow = {
+// シフト作成モーダルの業務内容ステップで使う、依頼主ごとの業務名の登録
+// リスト。単価はここでは扱わない（単価は依頼主詳細で別途手動設定し、給与/
+// 請求計算のたびにそちらを都度参照する）。
+type TaskNameRow = {
   id: string;
   companyRelationshipId: string;
   taskName: string;
-  wageType: string; // "HOURLY" | "DAILY" | "MONTHLY"
-  amount: number;
 };
-
-const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -168,7 +167,7 @@ export function CalendarView({
   affordableMaxEntries: number;
   clients: { id: string; name: string }[];
   agencies: { id: string; name: string }[];
-  placementRates: PlacementRateRow[];
+  placementRates: TaskNameRow[];
   selectedRelationshipId?: string;
   companyName: string;
   initialSelectedDate?: string;
@@ -2020,20 +2019,20 @@ function AssignShiftModal({
   staffOptions: StaffOption[];
   teams: Team[];
   clients: { id: string; name: string }[];
-  placementRates: PlacementRateRow[];
+  placementRates: TaskNameRow[];
   defaultDate: string;
   onClose: () => void;
 }) {
   const [teamId, setTeamId] = useState("");
   const [companyRelationshipId, setCompanyRelationshipId] = useState("");
-  const [companyPlacementRateId, setCompanyPlacementRateId] = useState("");
-  // このモーダル内で新しく追加した単価（サーバー側のplacementRates propは
+  const [taskName, setTaskName] = useState("");
+  // このモーダル内で新しく追加した業務名（サーバー側のplacementRates propは
   // ページ全体のrevalidateを待たないと更新されないので、追加直後にその場で
   // 選べるようローカルにも保持しておく）。
-  const [extraRates, setExtraRates] = useState<PlacementRateRow[]>([]);
-  const allPlacementRates = [...placementRates, ...extraRates];
+  const [extraTaskNames, setExtraTaskNames] = useState<TaskNameRow[]>([]);
+  const allTaskNames = [...placementRates, ...extraTaskNames];
   const clientTaskOptions = companyRelationshipId
-    ? allPlacementRates.filter((r) => r.companyRelationshipId === companyRelationshipId)
+    ? allTaskNames.filter((r) => r.companyRelationshipId === companyRelationshipId)
     : [];
   const steps: AssignStep[] = [
     ...(teams.length > 0 ? (["team"] as const) : []),
@@ -2059,27 +2058,19 @@ function AssignShiftModal({
   const [error, setError] = useState<string | null>(null);
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [newTaskName, setNewTaskName] = useState("");
-  const [newTaskWageType, setNewTaskWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
-  const [newTaskAmount, setNewTaskAmount] = useState("");
   const [newTaskPending, startNewTaskTransition] = useTransition();
 
   function submitNewTask() {
-    if (!newTaskName.trim() || !newTaskAmount) return;
+    if (!newTaskName.trim()) return;
     startNewTaskTransition(async () => {
       const rate = await upsertPlacementRateAction({
         companyRelationshipId,
         taskName: newTaskName.trim(),
-        wageType: newTaskWageType,
-        amount: Number(newTaskAmount),
       });
-      setExtraRates((prev) => [
-        ...prev,
-        { id: rate.id, companyRelationshipId, taskName: rate.taskName, wageType: rate.wageType, amount: rate.amount },
-      ]);
-      setCompanyPlacementRateId(rate.id);
+      setExtraTaskNames((prev) => [...prev, { id: rate.id, companyRelationshipId, taskName: rate.taskName }]);
+      setTaskName(rate.taskName);
       setShowNewTaskForm(false);
       setNewTaskName("");
-      setNewTaskAmount("");
       goNext();
     });
   }
@@ -2123,7 +2114,7 @@ function AssignShiftModal({
           isUndecided,
           note: note || undefined,
           companyRelationshipId: companyRelationshipId || undefined,
-          companyPlacementRateId: companyPlacementRateId || undefined,
+          taskName: taskName || undefined,
           overridesByDate,
         });
         if (result.status === "conflict") {
@@ -2140,7 +2131,6 @@ function AssignShiftModal({
 
   const teamName = teams.find((t) => t.id === teamId)?.name;
   const workplaceName = companyRelationshipId ? clients.find((c) => c.id === companyRelationshipId)?.name : "社内";
-  const selectedTask = clientTaskOptions.find((r) => r.id === companyPlacementRateId);
   const staffName = staffOptions.find((s) => s.id === staffUserId)?.name;
   const dateLabels = dates.map((d) => {
     const dt = new Date(d + "T00:00:00Z");
@@ -2187,7 +2177,7 @@ function AssignShiftModal({
             label="社内（自社スタッフとして勤務）"
             onClick={() => {
               setCompanyRelationshipId("");
-              setCompanyPlacementRateId("");
+              setTaskName("");
               setStep("staff");
             }}
           />
@@ -2208,7 +2198,7 @@ function AssignShiftModal({
                     label={c.name}
                     onClick={() => {
                       setCompanyRelationshipId(c.id);
-                      setCompanyPlacementRateId("");
+                      setTaskName("");
                       setStep("task");
                     }}
                   />
@@ -2232,9 +2222,8 @@ function AssignShiftModal({
               <WizardOptionButton
                 key={r.id}
                 label={r.taskName}
-                sublabel={`${WAGE_TYPE_LABEL[r.wageType] ?? r.wageType}${r.amount}円`}
                 onClick={() => {
-                  setCompanyPlacementRateId(r.id);
+                  setTaskName(r.taskName);
                   goNext();
                 }}
               />
@@ -2250,28 +2239,9 @@ function AssignShiftModal({
                 placeholder="業務内容（例：キャディ業務）"
                 className="rounded-lg border border-border px-3 py-2 text-sm"
               />
-              <div className="flex gap-2">
-                <select
-                  value={newTaskWageType}
-                  onChange={(e) => setNewTaskWageType(e.target.value as "HOURLY" | "DAILY" | "MONTHLY")}
-                  className="rounded-lg border border-border px-2 py-2 text-sm"
-                >
-                  <option value="HOURLY">時給</option>
-                  <option value="DAILY">日給</option>
-                  <option value="MONTHLY">月給</option>
-                </select>
-                <input
-                  type="number"
-                  value={newTaskAmount}
-                  onChange={(e) => setNewTaskAmount(e.target.value)}
-                  placeholder="金額"
-                  className="w-24 rounded-lg border border-border px-2 py-2 text-sm"
-                />
-                <span className="self-center text-xs text-muted">円</span>
-              </div>
               <button
                 type="button"
-                disabled={newTaskPending || !newTaskName.trim() || !newTaskAmount}
+                disabled={newTaskPending || !newTaskName.trim()}
                 onClick={submitNewTask}
                 className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
               >
@@ -2291,7 +2261,7 @@ function AssignShiftModal({
           <button
             type="button"
             onClick={() => {
-              setCompanyPlacementRateId("");
+              setTaskName("");
               goNext();
             }}
             className="self-start text-xs text-muted hover:text-primary"
@@ -2427,13 +2397,10 @@ function AssignShiftModal({
             <dt className="text-muted">勤務先</dt>
             <dd className="font-medium">{workplaceName}</dd>
           </div>
-          {selectedTask ? (
+          {taskName ? (
             <div className="flex items-center justify-between px-4 py-3">
               <dt className="text-muted">業務内容</dt>
-              <dd className="font-medium">
-                {selectedTask.taskName}（{WAGE_TYPE_LABEL[selectedTask.wageType] ?? selectedTask.wageType}
-                {selectedTask.amount}円）
-              </dd>
+              <dd className="font-medium">{taskName}</dd>
             </div>
           ) : null}
           <div className="flex items-center justify-between px-4 py-3">

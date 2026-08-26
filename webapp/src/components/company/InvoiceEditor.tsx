@@ -29,6 +29,8 @@ type Totals = {
   total: number;
 };
 
+type UnresolvedShift = { shiftId: string; date: string; staffName: string; taskName: string | null };
+
 const STATUS_LABEL: Record<string, string> = { DRAFT: "下書き", CONFIRMED: "確定済み", ISSUED: "発行済み" };
 
 export function InvoiceEditor({
@@ -43,6 +45,7 @@ export function InvoiceEditor({
     registered: boolean;
     lines: Line[];
     totals: Totals;
+    unresolved: UnresolvedShift[];
   };
 }) {
   const [pending, startTransition] = useTransition();
@@ -55,6 +58,20 @@ export function InvoiceEditor({
 
   return (
     <div className="flex flex-col gap-6">
+      {invoice.unresolved.length > 0 ? (
+        <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="mb-2 font-semibold">単価未設定のため明細に計上されていないシフトがあります</p>
+          <ul className="flex flex-col gap-1">
+            {invoice.unresolved.map((u) => (
+              <li key={u.shiftId}>
+                {u.date} ／ {u.staffName} ／ {u.taskName ?? "業務内容未選択"}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs">設定＞契約関連の「賃金単価・請求単価」で該当の業務内容に単価を設定すると、次回の編集画面表示時に自動で明細に反映されます。</p>
+        </section>
+      ) : null}
+
       <section className="rounded-2xl border border-border bg-white/60 p-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-serif-jp text-lg font-bold text-primary">明細</h2>

@@ -107,7 +107,7 @@ export async function createAssignedShift(params: {
   confirmedByUserId: string;
   overrideShiftIds?: string[]; // set when the caller has already confirmed the override(s) with staff — one entry per conflicting shift being superseded
   companyRelationshipId?: string; // set for 取引先オーダー (source becomes CLIENT, billable on that client's invoice)
-  companyPlacementRateId?: string; // 業務内容/単価 — which of that client's rates this shift bills at
+  taskName?: string; // 業務内容 — 単価は保持しない。給与/請求計算時にその都度参照される
 }) {
   const conflicts = await findConflictingShifts({
     staffUserId: params.staffUserId,
@@ -130,7 +130,7 @@ export async function createAssignedShift(params: {
         staffUserId: params.staffUserId,
         source: params.companyRelationshipId ? "CLIENT" : "INHOUSE",
         companyRelationshipId: params.companyRelationshipId,
-        companyPlacementRateId: params.companyRelationshipId ? params.companyPlacementRateId : undefined,
+        taskName: params.companyRelationshipId ? params.taskName : undefined,
         date: params.date,
         startTime: params.startTime,
         endTime: params.endTime,

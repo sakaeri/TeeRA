@@ -23,6 +23,9 @@ async function defaultWageRate(companyId: string, staffUserId: string) {
   return { wageType: contract.template.wageType, amount: contract.wageAmountSnapshot };
 }
 
+// スタッフ×業務内容の単価テーブル。登録が無ければ雇用契約の基本単価
+// （defaultWageRate）にフォールバックする。
+
 // 稼働支給額 always recalculates fresh from that month's approved shifts —
 // unfinalized months regenerate their SHIFT lines each time this runs, but
 // CUSTOM lines and deductions/leave settings are left untouched.
@@ -49,28 +52,38 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     include: { shift: true },
   });
 
-  const wage = await defaultWageRate(params.companyId, params.staffUserId);
+  const baseWage = await defaultWageRate(params.companyId, params.staffUserId);
+  const taskRates = await prisma.staffTaskRate.findMany({
+    where: { companyId: params.companyId, staffUserId: params.staffUserId },
+  });
+  const taskRateByName = new Map(taskRates.map((r) => [r.taskName, { wageType: r.wageType, amount: r.amount }]));
 
   await prisma.$transaction(async (tx) => {
     await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, kind: "SHIFT" } });
-    // 月給契約は日々のシフト単位では自動計上しない（固定給のため、必要なら
-    // 手動でカスタム行を追加する）。時給/日給契約のみ自動生成する。
-    if (!wage || wage.wageType === "MONTHLY") return;
+    // 雇用契約が無いスタッフは自動計上できない。
+    if (!baseWage) return;
     for (const r of reports) {
       const workedHours = Math.round((r.computedMinutes / 60) * 100) / 100;
       if (workedHours <= 0) continue;
-      // 日給契約は「1シフト＝1日分」として単価をそのまま計上する（実働時間で
+      // その業務内容にスタッフ個別の単価が登録されていればそれを優先し、
+      // 無ければ雇用契約の基本単価にフォールバックする。
+      const wage = (r.shift.taskName ? taskRateByName.get(r.shift.taskName) : undefined) ?? baseWage;
+      // 月給は日々のシフト単位では自動計上しない（固定給のため、必要なら
+      // 手動でカスタム行を追加する）。時給/日給のみ自動生成する。
+      if (wage.wageType === "MONTHLY") continue;
+      // 日給は「1シフト＝1日分」として単価をそのまま計上する（実働時間で
       // 掛け算しない）。時給*時間との整合を保つため hours*rate=amount の形は
       // 崩さず、日給の場合は hours=1 として扱う。
       const isHourly = wage.wageType === "HOURLY";
       const lineHours = isHourly ? workedHours : 1;
       const rate = wage.amount;
+      const taskLabel = r.shift.taskName ? `（${r.shift.taskName}）` : "";
       await tx.salarySlipLine.create({
         data: {
           salarySlipId: slip.id,
           shiftId: r.shiftId,
           kind: "SHIFT",
-          description: `${r.shift.date.toISOString().slice(0, 10)} 勤務${isHourly ? "" : "（日給）"}`,
+          description: `${r.shift.date.toISOString().slice(0, 10)} 勤務${taskLabel}${isHourly ? "" : "（日給）"}`,
           hours: lineHours,
           rate,
           amount: Math.round(lineHours * rate),

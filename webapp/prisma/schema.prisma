@@ -47,6 +47,7 @@ model User {
   promoRedemptions           PromoRedemption[]
   conflictOverridesConfirmed ConflictOverride[]
   salarySlips                SalarySlip[]
+  staffTaskRates             StaffTaskRate[]
 
   @@index([email])
 }
@@ -75,6 +76,7 @@ model Company {
   agencyRelationships  CompanyRelationship[]  @relation("AgencySide") // this company sends staff out
   clientRelationships  CompanyRelationship[]  @relation("ClientSide") // this company receives staff
   placementRates       CompanyPlacementRate[]
+  staffTaskRates       StaffTaskRate[]
   contractTemplates    ContractTemplate[]
   shifts               Shift[]
   publicRecruitments   PublicRecruitment[]
@@ -207,21 +209,41 @@ enum WageType {
   MONTHLY
 }
 
-// Wage/billing rate table, keyed by 配属先（自社 or a client relationship）＋業務内容.
+// 請求単価テーブル、keyed by 配属先（自社 or a client relationship）＋業務内容.
+// wageType/amount は null もありえる（＝業務内容だけ登録されていて単価は
+// 未設定。シフト作成時に新しい業務内容だけその場追加できるようにするため）。
 model CompanyPlacementRate {
-  id                    String   @id @default(cuid())
+  id                    String    @id @default(cuid())
   companyId             String
   companyRelationshipId String? // null = 自社（本社/支社）
   taskName              String
-  wageType              WageType
-  amount                Int
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  wageType              WageType?
+  amount                Int?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyRelationship CompanyRelationship? @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
-  shifts              Shift[]
 
+  @@index([companyId])
+}
+
+// 給与単価テーブル、keyed by スタッフ＋業務内容。未登録の業務は
+// スタッフの雇用契約の基本単価にフォールバックする（payroll.ts参照）。
+model StaffTaskRate {
+  id          String   @id @default(cuid())
+  companyId   String
+  staffUserId String
+  taskName    String
+  wageType    WageType
+  amount      Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  staff   User    @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, staffUserId, taskName])
   @@index([companyId])
 }
 
@@ -287,7 +309,9 @@ model Shift {
   staffUserId            String
   source                 ShiftSource
   companyRelationshipId  String? // set when source = CLIENT
-  companyPlacementRateId String? // 業務内容/単価 — set when source = CLIENT and a rate was selected at creation
+  taskName               String? // 業務内容 — set when source = CLIENT and a task was selected at creation.
+  // 単価はここに保存しない。給与/請求計算のたびに、その時点の依頼主詳細
+  // （CompanyPlacementRate）・スタッフ詳細（StaffTaskRate）を都度参照して解決する。
   date                   DateTime        @db.Date
   startTime              String? // "HH:mm"; null when isUndecided
   endTime                String?
@@ -305,7 +329,6 @@ model Shift {
   staff                User                  @relation("ShiftStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
   companyRelationship  CompanyRelationship?  @relation(fields: [companyRelationshipId], references: [id], onDelete: SetNull)
   publicRecruitment    PublicRecruitment?    @relation(fields: [publicRecruitmentId], references: [id], onDelete: SetNull)
-  companyPlacementRate CompanyPlacementRate? @relation(fields: [companyPlacementRateId], references: [id], onDelete: SetNull)
 
   workReport      WorkReport?
   supersededBy    ConflictOverride?  @relation("OverriddenShift")

@@ -25,15 +25,14 @@ async function alreadyInvoicedShiftIds(companyRelationshipId: string, excludeInv
   return ids;
 }
 
-// フォールバック: シフト作成時に業務内容(単価)が選ばれていない場合のみ使う
-// 既定単価。関係に登録された一番古い単価。
-async function fallbackRateForRelationship(companyId: string, companyRelationshipId: string) {
-  const rate = await prisma.companyPlacementRate.findFirst({
-    where: { companyId, companyRelationshipId },
-    orderBy: { createdAt: "asc" },
-  });
-  return rate ? { taskName: rate.taskName, wageType: rate.wageType, amount: rate.amount } : null;
-}
+// 依頼主自身の募集(公開募集)に設定された単価は、それに直接応募した個人に
+// 支払うためのものであり、派遣元↔依頼主間の請求単価とは無関係（依頼主詳細
+// のCompanyPlacementRateとは別の話）。請求単価はあくまで依頼主詳細に業務
+// 内容ごとに登録された単価を参照する。単価が未登録の業務内容のシフトは
+// 明細行を作らず、未計上として警告表示する（他の業務の単価を誤って
+// 流用しない）。
+
+export type UnresolvedInvoiceShift = { shiftId: string; date: string; staffName: string; taskName: string | null };
 
 // 請求書の対象シフト: this agency's own shifts performed AT that client
 // (source=CLIENT), with approved WORKED hours, not already locked into a
@@ -41,23 +40,33 @@ async function fallbackRateForRelationship(companyId: string, companyRelationshi
 // at actual issuance, never at 確定 — chat29/30 bugfix).
 async function regenerateLines(invoiceId: string) {
   const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
-  if (invoice.status !== "DRAFT") return invoice;
+  if (invoice.status !== "DRAFT") return { invoice, unresolved: [] as UnresolvedInvoiceShift[] };
 
   const { start, end } = monthRange(invoice.periodLabel);
   const excluded = await alreadyInvoicedShiftIds(invoice.companyRelationshipId, invoice.id);
 
-  const shifts = await prisma.shift.findMany({
-    where: {
-      companyId: invoice.issuingCompanyId,
-      companyRelationshipId: invoice.companyRelationshipId,
-      source: "CLIENT",
-      date: { gte: start, lt: end },
-      status: { notIn: ["SUPERSEDED", "CANCELLED"] },
-    },
-    include: { staff: true, workReport: true, companyPlacementRate: true, publicRecruitment: true },
-  });
+  const [shifts, relationshipRates] = await Promise.all([
+    prisma.shift.findMany({
+      where: {
+        companyId: invoice.issuingCompanyId,
+        companyRelationshipId: invoice.companyRelationshipId,
+        source: "CLIENT",
+        date: { gte: start, lt: end },
+        status: { notIn: ["SUPERSEDED", "CANCELLED"] },
+      },
+      include: { staff: true, workReport: true },
+    }),
+    prisma.companyPlacementRate.findMany({
+      where: { companyId: invoice.issuingCompanyId, companyRelationshipId: invoice.companyRelationshipId },
+    }),
+  ]);
+  const rateByTask = new Map(
+    relationshipRates
+      .filter((r): r is typeof r & { wageType: NonNullable<typeof r.wageType>; amount: number } => r.wageType != null && r.amount != null)
+      .map((r) => [r.taskName, { wageType: r.wageType, amount: r.amount }]),
+  );
 
-  const fallbackRate = await fallbackRateForRelationship(invoice.issuingCompanyId, invoice.companyRelationshipId);
+  const unresolved: UnresolvedInvoiceShift[] = [];
 
   await prisma.$transaction(async (tx) => {
     await tx.invoiceLine.deleteMany({ where: { invoiceId: invoice.id, shiftId: { not: null } } });
@@ -68,23 +77,15 @@ async function regenerateLines(invoiceId: string) {
       const workedHours = Math.round((report.computedMinutes / 60) * 100) / 100;
       if (workedHours <= 0) continue;
 
-      // 依頼主自身の募集(依頼主からの募集/公開募集)を埋めたシフトは、その
-      // 募集に依頼主が設定した単価を最優先する — 依頼主は募集ごとに異なる
-      // 単価を設定できる（同じ業務内容でも依頼主/派遣会社によって単価が
-      // 違う、というケースをこれで区別する）。それ以外は、シフト作成時に
-      // 選んだ業務内容の単価を優先し、選ばれていなければその依頼主に登録
-      // されている一番古い単価にフォールバックする。月給の単価は日々の
-      // シフト単位では自動計上しない。
-      const recruitmentRate =
-        s.publicRecruitment?.wageType && s.publicRecruitment.hourlyWage != null
-          ? { taskName: s.publicRecruitment.title, wageType: s.publicRecruitment.wageType, amount: s.publicRecruitment.hourlyWage }
-          : null;
-      const taskRate = recruitmentRate ?? s.companyPlacementRate ?? fallbackRate;
-      if (!taskRate || taskRate.wageType === "MONTHLY") continue;
+      const taskRate = s.taskName ? rateByTask.get(s.taskName) : undefined;
+      if (!taskRate || taskRate.wageType === "MONTHLY") {
+        unresolved.push({ shiftId: s.id, date: s.date.toISOString().slice(0, 10), staffName: s.staff.name, taskName: s.taskName });
+        continue;
+      }
       const isHourly = taskRate.wageType === "HOURLY";
       const lineHours = isHourly ? workedHours : 1;
       const rate = taskRate.amount;
-      const taskLabel = taskRate.taskName ? `（${taskRate.taskName}）` : "";
+      const taskLabel = s.taskName ? `（${s.taskName}）` : "";
 
       await tx.invoiceLine.create({
         data: {
@@ -101,7 +102,7 @@ async function regenerateLines(invoiceId: string) {
     }
   });
 
-  return invoice;
+  return { invoice, unresolved };
 }
 
 export async function getOrCreateInvoice(params: {
@@ -135,11 +136,12 @@ export async function getOrCreateInvoice(params: {
     });
   }
 
-  await regenerateLines(invoice.id);
-  return prisma.invoice.findUniqueOrThrow({
+  const { unresolved } = await regenerateLines(invoice.id);
+  const full = await prisma.invoice.findUniqueOrThrow({
     where: { id: invoice.id },
     include: { lines: { orderBy: { sortOrder: "asc" } } },
   });
+  return { ...full, unresolved };
 }
 
 export async function addCustomLine(params: {

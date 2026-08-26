@@ -179,7 +179,7 @@ export async function getClientMonthDetail(params: {
     placementRates: placementRates.map((r) => ({
       id: r.id,
       taskName: r.taskName,
-      amountLabel: `${WAGE_TYPE_LABEL[r.wageType]}${r.amount}円`,
+      amountLabel: r.wageType && r.amount != null ? `${WAGE_TYPE_LABEL[r.wageType]}${r.amount}円` : "単価未設定",
     })),
     days: shifts.map((s) => ({
       shiftId: s.id,

@@ -38,6 +38,7 @@ export default async function InvoicesPage({
     lines: { id: string; staffName: string; description: string; hours: number; rate: number; amount: number; taxRatePercent: number }[];
     totals: ReturnType<typeof computeInvoiceTotals>;
     issues: { id: string; issuedAt: string }[];
+    unresolved: { shiftId: string; date: string; staffName: string; taskName: string | null }[];
   };
 
   let invoiceData: InvoiceData | null = null;
@@ -71,6 +72,7 @@ export default async function InvoicesPage({
       })),
       totals,
       issues: issues.map((i) => ({ id: i.id, issuedAt: i.issuedAt.toISOString() })),
+      unresolved: invoice.unresolved,
     };
   }
 

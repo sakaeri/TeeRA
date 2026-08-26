@@ -2,7 +2,7 @@ import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { listTeams } from "@/lib/domain/teams";
 import { listStaff } from "@/lib/domain/roster";
-import { listTemplates, listPlacementRates } from "@/lib/domain/contracts";
+import { listTemplates, listPlacementRates, listStaffTaskRates } from "@/lib/domain/contracts";
 import { listClients } from "@/lib/domain/relationships";
 import { listPendingReportsForCompany } from "@/lib/domain/workReports";
 import { SettingsView } from "@/components/company/SettingsView";
@@ -20,7 +20,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
 
   const company = await prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } });
 
-  const [admins, teams, staff, templates, rates, clients, reports] = await Promise.all([
+  const [admins, teams, staff, templates, rates, staffTaskRates, clients, reports] = await Promise.all([
     prisma.companyMembership.findMany({
       where: {
         companyId: membership.companyId,
@@ -33,9 +33,11 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
     listStaff(membership.companyId),
     listTemplates(membership.companyId),
     listPlacementRates(membership.companyId),
+    listStaffTaskRates(membership.companyId),
     company.agencyEnabled ? listClients(membership.companyId) : Promise.resolve([]),
     listPendingReportsForCompany(membership.companyId),
   ]);
+  const staffNameById = new Map(staff.map((s) => [s.userId, s.name]));
 
   const shifts = await prisma.shift.findMany({
     where: { id: { in: reports.map((r) => r.shiftId) } },
@@ -102,6 +104,14 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
           id: r.id,
           clientName: r.companyRelationship?.proxyName ?? "自社",
           companyRelationshipId: r.companyRelationshipId,
+          taskName: r.taskName,
+          wageType: r.wageType,
+          amount: r.amount,
+        }))}
+        staffTaskRates={staffTaskRates.map((r) => ({
+          id: r.id,
+          staffUserId: r.staffUserId,
+          staffName: staffNameById.get(r.staffUserId) ?? "",
           taskName: r.taskName,
           wageType: r.wageType,
           amount: r.amount,

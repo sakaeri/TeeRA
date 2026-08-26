@@ -49,18 +49,18 @@ try {
   await admin.waitForTimeout(600);
 
   await admin.goto("http://localhost:3000/company/settings?tab=contracts");
-  await admin.selectOption("select", { label: "GREEN TABLE" });
-  await admin.fill('input[placeholder="業務内容"]', "キャディ業務");
+  await admin.locator("select").first().selectOption({ label: "GREEN TABLE" });
+  await admin.locator('input[placeholder="業務内容"]').first().fill("キャディ業務");
   await admin.locator("select").nth(1).selectOption("DAILY");
-  await admin.fill('input[placeholder="金額"]', "8000");
-  await admin.getByRole("button", { name: "＋追加" }).click();
+  await admin.locator('input[placeholder="金額"]').first().fill("8000");
+  await admin.getByRole("button", { name: "＋追加" }).first().click();
   await admin.waitForTimeout(500);
 
-  await admin.selectOption("select", { label: "GREEN TABLE" });
-  await admin.fill('input[placeholder="業務内容"]', "作業");
+  await admin.locator("select").first().selectOption({ label: "GREEN TABLE" });
+  await admin.locator('input[placeholder="業務内容"]').first().fill("作業");
   await admin.locator("select").nth(1).selectOption("HOURLY");
-  await admin.fill('input[placeholder="金額"]', "1200");
-  await admin.getByRole("button", { name: "＋追加" }).click();
+  await admin.locator('input[placeholder="金額"]').first().fill("1200");
+  await admin.getByRole("button", { name: "＋追加" }).first().click();
   await admin.waitForTimeout(500);
 
   // invite + register staff
@@ -95,25 +95,27 @@ try {
   await modal.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);
   bodyText = await modal.textContent();
-  log("confirm screen shows selected 業務内容 with wage info", bodyText.includes("キャディ業務") && bodyText.includes("日給8000円"));
+  log("confirm screen shows selected 業務内容", bodyText.includes("キャディ業務"));
   await modal.getByRole("button", { name: /件のシフトを作成/ }).click();
   await admin.waitForTimeout(800);
 
   const shift1Id = psql(`select id from "Shift" where "staffUserId"='${staffUserId}' order by "createdAt" desc limit 1;`);
-  const shift1RateId = psql(`select "companyPlacementRateId" from "Shift" where id='${shift1Id}';`);
-  log("shift 1 stored its selected companyPlacementRateId", Boolean(shift1RateId));
+  const shift1TaskName = psql(`select "taskName" from "Shift" where id='${shift1Id}';`);
+  log("shift 1 stored its selected taskName", shift1TaskName === "キャディ業務");
 
   // assign shift 2: 作業 (HOURLY 1200円/hr), different date to avoid conflict
-  const now = new Date();
-  const day2 = String(Math.min(now.getDate() + 1, 27)).padStart(2, "0");
-  const day2Label = String(Number(day2));
+  // (read shift 1's actual date back — the server's JST "today" can differ
+  // from this script's local wall-clock date near JST midnight)
+  const shift1DateStr = psql(`select to_char(date, 'YYYY-MM-DD') from "Shift" where id='${shift1Id}';`);
+  const shift1Day = Number(shift1DateStr.slice(-2));
+  const day2Label = String(shift1Day < 28 ? shift1Day + 1 : shift1Day - 1);
   await admin.locator("button", { hasText: "＋" }).last().click();
   await admin.getByText("シフトを作成").click();
   modal = admin.locator("div.fixed.inset-0.z-20").last();
   await modal.getByRole("button", { name: "GREEN TABLE" }).click();
   await modal.getByRole("button", { name: /^作業/ }).click();
   await modal.getByRole("button", { name: "単価スタッフ" }).click();
-  await modal.getByRole("button", { name: String(now.getDate()), exact: true }).click(); // deselect today (the default)
+  await modal.getByRole("button", { name: String(shift1Day), exact: true }).click(); // deselect shift 1's date (the default)
   await modal.getByRole("button", { name: day2Label, exact: true }).click(); // select day2 instead
   await modal.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);

@@ -132,8 +132,6 @@ export default async function CompanyCalendarPage({
             id: r.id,
             companyRelationshipId: r.companyRelationshipId!,
             taskName: r.taskName,
-            wageType: r.wageType,
-            amount: r.amount,
           }))}
         agencies={agencies.map((a) => ({ id: a.id, name: a.agencyCompany?.name ?? a.proxyName ?? "" }))}
         selectedRelationshipId={relationshipId}

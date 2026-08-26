@@ -92,18 +92,22 @@ try {
   );
   log("client's recruitment created", Boolean(recruitmentId));
 
-  // publish it PUBLIC with an explicit wage directly (bypassing the multi-step
-  // public-switch UI which was already covered by smoke-recruitment.mjs;
-  // here we only need a PUBLISHED+PUBLIC+wage row to test the invoicing fix)
+  // publish it (bypassing the multi-step public-switch UI which was already
+  // covered by smoke-recruitment.mjs; a PUBLISHED row is all this test needs).
+  // Its wageType/hourlyWage are for paying an individual who applies directly
+  // — deliberately left set here to prove the invoicing math below does NOT
+  // use them for the agency↔client billing rate.
   psql(
     `update "PublicRecruitment" set status='PUBLISHED', visibility='PUBLIC', "wageType"='HOURLY', "hourlyWage"=2500, "publishedAt"=now() where id='${recruitmentId}';`,
   );
 
   // --- agency: see the client's recruitment under the オーダー tab, assign staff ---
+  // (the recruitment-creation form may default to a different day than
+  // "today" depending on time-of-day cutoffs, so read the actual date back)
+  const recruitmentDate = psql(`select to_char(date, 'DD') from "PublicRecruitment" where id='${recruitmentId}';`);
   await agency.goto("http://localhost:3000/company/calendar");
   await agency.waitForTimeout(300);
-  const now = new Date();
-  await agency.locator(`button:has-text("${now.getDate()}")`).first().click();
+  await agency.locator(`button:has-text("${Number(recruitmentDate)}")`).first().click();
   await agency.waitForTimeout(300);
   const dayModal = agency.locator("div.fixed.inset-0.z-20").last();
   let bodyText = await dayModal.textContent();
@@ -122,11 +126,13 @@ try {
   const shiftId = psql(`select id from "Shift" where "staffUserId"='${staffUserId}' order by "createdAt" desc limit 1;`);
   const shiftPublicRecruitmentId = psql(`select "publicRecruitmentId" from "Shift" where id='${shiftId}';`);
   log("shift created and linked to the client's recruitment", shiftPublicRecruitmentId === recruitmentId);
+  const shiftTaskName = psql(`select "taskName" from "Shift" where id='${shiftId}';`);
+  log("shift inherited the recruitment's title as its 業務内容 (taskName)", shiftTaskName === "キャディ募集");
 
   // --- ① verify: 確定スタッフ expand + ✕ (cancel) appear for this order ---
   await agency.reload();
   await agency.waitForTimeout(300);
-  await agency.locator(`button:has-text("${now.getDate()}")`).first().click();
+  await agency.locator(`button:has-text("${Number(recruitmentDate)}")`).first().click();
   await agency.waitForTimeout(300);
   const dayModal2 = agency.locator("div.fixed.inset-0.z-20").last();
   await dayModal2.getByRole("button", { name: "オーダー", exact: true }).click();
@@ -136,31 +142,48 @@ try {
   const cancelBtn = dayModal2.getByRole("button", { name: "シフトを解除" });
   log("① a ✕ (シフトを解除) button is present next to the assigned staff", await cancelBtn.count() > 0);
 
-  // --- approve the work report, then check the invoice line uses the RECRUITMENT's wage (2500円/hr), not any placement rate ---
+  // --- approve the work report, then check invoicing behavior ---
   psql(
     `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "clockIn", "clockOut", "computedMinutes", "createdAt", "updatedAt")` +
       ` values (gen_random_uuid()::text, '${shiftId}', '${staffUserId}', 'WORKED', 'APPROVED', now() - interval '5 hours', now(), 300, now(), now());`,
   );
-  // also seed a DIFFERENT (wrong-if-used) placement rate for this relationship, to prove it's correctly ignored
-  psql(
-    `insert into "CompanyPlacementRate" (id, "companyId", "companyRelationshipId", "taskName", "wageType", amount, "createdAt", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${agencyCompanyId}', '${relId}', 'ダミー単価', 'HOURLY', 999, now(), now());`,
-  );
-
   psql(`update "Company" set "teeBalance" = 10 where id = '${agencyCompanyId}';` +
     `insert into "TeeLedgerEntry" (id, "companyId", type, amount, "balanceAfter", "createdAt") values (gen_random_uuid()::text, '${agencyCompanyId}', 'ADJUSTMENT', 10, 10, now());`);
 
   const thisMonth = new Date().toISOString().slice(0, 7);
+
+  // ②(b) before any 業務内容 rate is registered for this relationship, the
+  // recruitment's own 2500円/hr must NOT be used for billing — the shift
+  // should show up as 単価未設定 instead of silently billing at that rate.
   await agency.goto(`http://localhost:3000/company/invoices?month=${thisMonth}&client=${relId}`);
   await agency.waitForTimeout(500);
+  let bodyText2 = await agency.textContent("body");
+  log("②(b) before a 業務内容 rate is registered, the shift is flagged 単価未設定 (recruitment's own wage is NOT used for billing)", bodyText2.includes("単価未設定") && bodyText2.includes("キャディ募集"));
+  let lineCountBefore = psql(`select count(*) from "InvoiceLine" il join "Invoice" i on i.id=il."invoiceId" where i."companyRelationshipId"='${relId}' and il."shiftId" is not null;`);
+  log("②(b) no invoice line auto-created from the recruitment's own wage", lineCountBefore === "0");
+
+  // now the agency registers a rate for that same 業務内容 (「キャディ募集」) under 依頼主詳細（設定＞契約関連）
+  await agency.goto("http://localhost:3000/company/settings?tab=contracts");
+  await agency.waitForTimeout(300);
+  await agency.locator("select").first().selectOption({ label: "依頼主本体株式会社" });
+  await agency.locator('input[placeholder="業務内容"]').first().fill("キャディ募集");
+  await agency.locator("select").nth(1).selectOption("HOURLY");
+  await agency.locator('input[placeholder="金額"]').first().fill("3000");
+  await agency.getByRole("button", { name: "＋追加" }).first().click();
+  await agency.waitForTimeout(500);
+
+  await agency.goto(`http://localhost:3000/company/invoices?month=${thisMonth}&client=${relId}`);
+  await agency.waitForTimeout(500);
+  bodyText2 = await agency.textContent("body");
+  log("②(b) 単価未設定 warning is gone once the rate is registered", !bodyText2.includes("単価未設定"));
 
   const line = JSON.parse(
     psql(
       `select json_agg(json_build_object('rate', rate, 'hours', hours, 'amount', amount, 'desc', description))->0 from "InvoiceLine" il join "Invoice" i on i.id=il."invoiceId" where i."companyRelationshipId"='${relId}';`,
     ),
   );
-  log("②(b) invoice line uses the recruitment's own rate (2500円), not the ダミー単価(999円)", line && Number(line.rate) === 2500);
-  log("②(b) invoice amount = 5h × 2500 = 12500", line && Number(line.amount) === 12500);
+  log("②(b) invoice line uses the rate registered in 依頼主詳細 (3000円), not the recruitment's own wage (2500円)", line && Number(line.rate) === 3000);
+  log("②(b) invoice amount = 5h × 3000 = 15000", line && Number(line.amount) === 15000);
 
   console.log(process.exitCode ? "CLIENT RECRUITMENT FLOW SMOKE TEST HAD FAILURES" : "CLIENT RECRUITMENT FLOW SMOKE TEST PASSED");
 } catch (err) {

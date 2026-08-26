@@ -44,9 +44,9 @@ try {
 
   // admin: add a placement rate, create a template
   await admin.goto("http://localhost:3000/company/settings?tab=contracts");
-  await admin.fill('input[placeholder="業務内容"]', "軽作業");
-  await admin.fill('input[placeholder="金額"]', "1200");
-  await admin.getByRole("button", { name: "＋追加" }).click();
+  await admin.locator('input[placeholder="業務内容"]').first().fill("軽作業");
+  await admin.locator('input[placeholder="金額"]').first().fill("1200");
+  await admin.getByRole("button", { name: "＋追加" }).first().click();
   await admin.waitForTimeout(500);
   let body = await admin.textContent("body");
   log("placement rate added", body.includes("軽作業") && body.includes("1200円"));
