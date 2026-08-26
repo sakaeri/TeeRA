@@ -31,6 +31,7 @@ export async function createAssignedShiftAction(input: {
   isUndecided: boolean;
   note?: string;
   companyRelationshipId?: string;
+  companyPlacementRateId?: string;
   overridesByDate?: Record<string, string[]>; // date -> conflicting shift ids to supersede, set once confirmed
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
@@ -50,6 +51,7 @@ export async function createAssignedShiftAction(input: {
       isAllDay: input.isAllDay,
       isUndecided: input.isUndecided,
       companyRelationshipId: input.companyRelationshipId,
+      companyPlacementRateId: input.companyPlacementRateId,
       note: input.note,
       confirmedByUserId: userId,
       overrideShiftIds: input.overridesByDate?.[date],

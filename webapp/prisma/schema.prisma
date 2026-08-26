@@ -220,6 +220,7 @@ model CompanyPlacementRate {
 
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyRelationship CompanyRelationship? @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
+  shifts              Shift[]
 
   @@index([companyId])
 }
@@ -280,29 +281,31 @@ enum ShiftStatus {
 }
 
 model Shift {
-  id                    String          @id @default(cuid())
-  companyId             String
-  teamId                String?
-  staffUserId           String
-  source                ShiftSource
-  companyRelationshipId String? // set when source = CLIENT
-  date                  DateTime        @db.Date
-  startTime             String? // "HH:mm"; null when isUndecided
-  endTime               String?
-  isAllDay              Boolean         @default(false)
-  isUndecided           Boolean         @default(false)
-  note                  String?
-  status                ShiftStatus     @default(CONFIRMED)
-  createdVia            ShiftCreatedVia
-  publicRecruitmentId   String?
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
+  id                     String          @id @default(cuid())
+  companyId              String
+  teamId                 String?
+  staffUserId            String
+  source                 ShiftSource
+  companyRelationshipId  String? // set when source = CLIENT
+  companyPlacementRateId String? // 業務内容/単価 — set when source = CLIENT and a rate was selected at creation
+  date                   DateTime        @db.Date
+  startTime              String? // "HH:mm"; null when isUndecided
+  endTime                String?
+  isAllDay               Boolean         @default(false)
+  isUndecided            Boolean         @default(false)
+  note                   String?
+  status                 ShiftStatus     @default(CONFIRMED)
+  createdVia             ShiftCreatedVia
+  publicRecruitmentId    String?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
 
-  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  team                Team?                @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  staff               User                 @relation("ShiftStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
-  companyRelationship CompanyRelationship? @relation(fields: [companyRelationshipId], references: [id], onDelete: SetNull)
-  publicRecruitment   PublicRecruitment?   @relation(fields: [publicRecruitmentId], references: [id], onDelete: SetNull)
+  company              Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  team                 Team?                 @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  staff                User                  @relation("ShiftStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
+  companyRelationship  CompanyRelationship?  @relation(fields: [companyRelationshipId], references: [id], onDelete: SetNull)
+  publicRecruitment    PublicRecruitment?    @relation(fields: [publicRecruitmentId], references: [id], onDelete: SetNull)
+  companyPlacementRate CompanyPlacementRate? @relation(fields: [companyPlacementRateId], references: [id], onDelete: SetNull)
 
   workReport      WorkReport?
   supersededBy    ConflictOverride?  @relation("OverriddenShift")
@@ -383,28 +386,28 @@ enum RecruitmentVisibility {
 // superseded, see CLAUDE.md's stale "実装済み" note vs. the final chat30
 // design). ORDER状態では課金しない。
 model PublicRecruitment {
-  id                     String                @id @default(cuid())
-  companyId              String
-  teamId                 String?
-  title                  String
-  jobDescription         String?
-  note                   String? // 備考（常時表示、集合場所・服装・持ち物などの簡易メモ。PUBLIC限定の構造化項目とは別）
-  date                   DateTime              @db.Date
-  startTime              String?
-  endTime                String?
-  isUndecided            Boolean               @default(false) // 時刻未定
-  hourlyWage             Int? // PUBLIC化で必須。wageTypeがDAILYの場合は日給の額
-  wageType               WageType? // PUBLIC化で設定。ORDER中はnull（自社/配属スタッフは既存契約の賃金に従うため募集側では持たない）
-  extraItems             Json                  @default("[]") // 応募条件/服装/持ち物/集合場所 quick-add chips + custom [{label, value}]（PUBLIC限定）
-  maxEntries             Int
-  perEntryTeeCost        Int                   @default(10)
-  lockedTee              Int // maxEntries * perEntryTeeCost currently locked from company balance (PUBLIC化以降のみ非ゼロ)
-  status                 RecruitmentStatus     @default(DRAFT)
-  visibility             RecruitmentVisibility @default(ORDER)
-  publishedAt            DateTime?
-  publicOpenedAt         DateTime? // ORDER -> PUBLICへ切り替えた日時
-  createdAt              DateTime              @default(now())
-  updatedAt              DateTime              @updatedAt
+  id              String                @id @default(cuid())
+  companyId       String
+  teamId          String?
+  title           String
+  jobDescription  String?
+  note            String? // 備考（常時表示、集合場所・服装・持ち物などの簡易メモ。PUBLIC限定の構造化項目とは別）
+  date            DateTime              @db.Date
+  startTime       String?
+  endTime         String?
+  isUndecided     Boolean               @default(false) // 時刻未定
+  hourlyWage      Int? // PUBLIC化で必須。wageTypeがDAILYの場合は日給の額
+  wageType        WageType? // PUBLIC化で設定。ORDER中はnull（自社/配属スタッフは既存契約の賃金に従うため募集側では持たない）
+  extraItems      Json                  @default("[]") // 応募条件/服装/持ち物/集合場所 quick-add chips + custom [{label, value}]（PUBLIC限定）
+  maxEntries      Int
+  perEntryTeeCost Int                   @default(10)
+  lockedTee       Int // maxEntries * perEntryTeeCost currently locked from company balance (PUBLIC化以降のみ非ゼロ)
+  status          RecruitmentStatus     @default(DRAFT)
+  visibility      RecruitmentVisibility @default(ORDER)
+  publishedAt     DateTime?
+  publicOpenedAt  DateTime? // ORDER -> PUBLICへ切り替えた日時
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
 
   company          Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   team             Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
@@ -563,8 +566,8 @@ model StaffContract {
   templateId         String
   staffUserId        String
   wageAmountSnapshot Int // wage amount at the moment of consent — a rate change invalidates consent (chat27 fix)
-  contractStartDate  DateTime? @db.Date // snapshot at consent; independent per staff even when sharing a template
-  contractEndDate    DateTime? @db.Date
+  contractStartDate  DateTime?           @db.Date // snapshot at consent; independent per staff even when sharing a template
+  contractEndDate    DateTime?           @db.Date
   consentedAt        DateTime?
   status             StaffContractStatus @default(PENDING_CONSENT)
   createdAt          DateTime            @default(now())

@@ -25,12 +25,14 @@ async function alreadyInvoicedShiftIds(companyRelationshipId: string, excludeInv
   return ids;
 }
 
-async function defaultRateForRelationship(companyId: string, companyRelationshipId: string) {
+// フォールバック: シフト作成時に業務内容(単価)が選ばれていない場合のみ使う
+// 既定単価。関係に登録された一番古い単価。
+async function fallbackRateForRelationship(companyId: string, companyRelationshipId: string) {
   const rate = await prisma.companyPlacementRate.findFirst({
     where: { companyId, companyRelationshipId },
     orderBy: { createdAt: "asc" },
   });
-  return rate?.amount ?? 0;
+  return rate ? { taskName: rate.taskName, wageType: rate.wageType, amount: rate.amount } : null;
 }
 
 // 請求書の対象シフト: this agency's own shifts performed AT that client
@@ -52,10 +54,10 @@ async function regenerateLines(invoiceId: string) {
       date: { gte: start, lt: end },
       status: { notIn: ["SUPERSEDED", "CANCELLED"] },
     },
-    include: { staff: true, workReport: true },
+    include: { staff: true, workReport: true, companyPlacementRate: true },
   });
 
-  const rate = await defaultRateForRelationship(invoice.issuingCompanyId, invoice.companyRelationshipId);
+  const fallbackRate = await fallbackRateForRelationship(invoice.issuingCompanyId, invoice.companyRelationshipId);
 
   await prisma.$transaction(async (tx) => {
     await tx.invoiceLine.deleteMany({ where: { invoiceId: invoice.id, shiftId: { not: null } } });
@@ -63,17 +65,30 @@ async function regenerateLines(invoiceId: string) {
       if (excluded.has(s.id)) continue;
       const report = s.workReport;
       if (!report || report.outcome !== "WORKED" || report.approvalStatus !== "APPROVED") continue;
-      const hours = Math.round((report.computedMinutes / 60) * 100) / 100;
-      if (hours <= 0) continue;
+      const workedHours = Math.round((report.computedMinutes / 60) * 100) / 100;
+      if (workedHours <= 0) continue;
+
+      // シフト作成時に選んだ業務内容の単価を優先し、選ばれていなければ
+      // その依頼主に登録されている一番古い単価にフォールバックする
+      // （業務内容が複数ある依頼主でも、日給/時給が混在していても正しく
+      // 区別できるようにするための対応）。月給の単価は日々のシフト単位では
+      // 自動計上しない。
+      const taskRate = s.companyPlacementRate ?? fallbackRate;
+      if (!taskRate || taskRate.wageType === "MONTHLY") continue;
+      const isHourly = taskRate.wageType === "HOURLY";
+      const lineHours = isHourly ? workedHours : 1;
+      const rate = taskRate.amount;
+      const taskLabel = taskRate.taskName ? `（${taskRate.taskName}）` : "";
+
       await tx.invoiceLine.create({
         data: {
           invoiceId: invoice.id,
           shiftId: s.id,
           staffName: s.staff.name,
-          description: `${s.date.toISOString().slice(0, 10)} 勤務`,
-          hours,
+          description: `${s.date.toISOString().slice(0, 10)} 勤務${taskLabel}`,
+          hours: lineHours,
           rate,
-          amount: Math.round(hours * rate),
+          amount: Math.round(lineHours * rate),
           taxRatePercent: 10,
         },
       });

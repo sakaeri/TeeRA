@@ -13,13 +13,14 @@ function monthRange(targetMonth: string) {
   return { start, end };
 }
 
-async function defaultHourlyRate(companyId: string, staffUserId: string) {
+async function defaultWageRate(companyId: string, staffUserId: string) {
   const contract = await prisma.staffContract.findFirst({
     where: { staffUserId, status: "ACTIVE", template: { companyId } },
     include: { template: true },
     orderBy: { createdAt: "desc" },
   });
-  return contract?.wageAmountSnapshot ?? 0;
+  if (!contract) return null;
+  return { wageType: contract.template.wageType, amount: contract.wageAmountSnapshot };
 }
 
 // 稼働支給額 always recalculates fresh from that month's approved shifts —
@@ -48,22 +49,31 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     include: { shift: true },
   });
 
-  const rate = await defaultHourlyRate(params.companyId, params.staffUserId);
+  const wage = await defaultWageRate(params.companyId, params.staffUserId);
 
   await prisma.$transaction(async (tx) => {
     await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, kind: "SHIFT" } });
+    // 月給契約は日々のシフト単位では自動計上しない（固定給のため、必要なら
+    // 手動でカスタム行を追加する）。時給/日給契約のみ自動生成する。
+    if (!wage || wage.wageType === "MONTHLY") return;
     for (const r of reports) {
-      const hours = Math.round((r.computedMinutes / 60) * 100) / 100;
-      if (hours <= 0) continue;
+      const workedHours = Math.round((r.computedMinutes / 60) * 100) / 100;
+      if (workedHours <= 0) continue;
+      // 日給契約は「1シフト＝1日分」として単価をそのまま計上する（実働時間で
+      // 掛け算しない）。時給*時間との整合を保つため hours*rate=amount の形は
+      // 崩さず、日給の場合は hours=1 として扱う。
+      const isHourly = wage.wageType === "HOURLY";
+      const lineHours = isHourly ? workedHours : 1;
+      const rate = wage.amount;
       await tx.salarySlipLine.create({
         data: {
           salarySlipId: slip.id,
           shiftId: r.shiftId,
           kind: "SHIFT",
-          description: `${r.shift.date.toISOString().slice(0, 10)} 勤務`,
-          hours,
+          description: `${r.shift.date.toISOString().slice(0, 10)} 勤務${isHourly ? "" : "（日給）"}`,
+          hours: lineHours,
           rate,
-          amount: Math.round(hours * rate),
+          amount: Math.round(lineHours * rate),
         },
       });
     }

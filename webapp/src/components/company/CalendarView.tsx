@@ -104,6 +104,16 @@ type ClientRecruitmentRow = {
 
 type TagEntry = { kind: "solid"; id: string; label: string; className: string };
 
+type PlacementRateRow = {
+  id: string;
+  companyRelationshipId: string;
+  taskName: string;
+  wageType: string; // "HOURLY" | "DAILY" | "MONTHLY"
+  amount: number;
+};
+
+const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
+
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
 // 「未報告」の赤丸は、業務時間を過ぎてから初めて意味を持つ警告 — 未来日や
@@ -138,6 +148,7 @@ export function CalendarView({
   affordableMaxEntries,
   clients,
   agencies,
+  placementRates,
   selectedRelationshipId,
   companyName,
   initialSelectedDate,
@@ -156,6 +167,7 @@ export function CalendarView({
   affordableMaxEntries: number;
   clients: { id: string; name: string }[];
   agencies: { id: string; name: string }[];
+  placementRates: PlacementRateRow[];
   selectedRelationshipId?: string;
   companyName: string;
   initialSelectedDate?: string;
@@ -504,6 +516,7 @@ export function CalendarView({
           staffOptions={staffOptions}
           teams={teams}
           clients={clients}
+          placementRates={placementRates}
           defaultDate={selectedDate ?? todayStr}
           onClose={() => setShowAssignForm(false)}
         />
@@ -1944,35 +1957,44 @@ function WizardOptionButton({
   );
 }
 
-type AssignStep = "team" | "workplace" | "staff" | "datetime" | "confirm";
+type AssignStep = "team" | "workplace" | "task" | "staff" | "datetime" | "confirm";
 
-// シフト作成: チーム→勤務先(社内/依頼主)→スタッフ→日時、の順に1画面ずつ選ばせ
-// てから最後に確認画面を出す（オーダー作成の確認画面と同じパターン）。
-// チームは管理者ありきのシフト作成という位置づけのため必須（会社にチームが
-// 1つもない場合のみ、このステップ自体を飛ばす — オーダー作成と同じ扱い）。
+// シフト作成: チーム→勤務先(社内/依頼主)→[業務内容]→スタッフ→日時、の順に
+// 1画面ずつ選ばせてから最後に確認画面を出す（オーダー作成の確認画面と同じ
+// パターン）。チームは管理者ありきのシフト作成という位置づけのため必須
+// （会社にチームが1つもない場合のみ、このステップ自体を飛ばす — オーダー
+// 作成と同じ扱い）。業務内容は、選んだ依頼主に単価表(業務内容)が登録されて
+// いる場合のみ挟む — 請求書生成時にどの単価を使うか一意に決めるため。
 function AssignShiftModal({
   staffOptions,
   teams,
   clients,
+  placementRates,
   defaultDate,
   onClose,
 }: {
   staffOptions: StaffOption[];
   teams: Team[];
   clients: { id: string; name: string }[];
+  placementRates: PlacementRateRow[];
   defaultDate: string;
   onClose: () => void;
 }) {
+  const [teamId, setTeamId] = useState("");
+  const [companyRelationshipId, setCompanyRelationshipId] = useState("");
+  const [companyPlacementRateId, setCompanyPlacementRateId] = useState("");
+  const clientTaskOptions = companyRelationshipId
+    ? placementRates.filter((r) => r.companyRelationshipId === companyRelationshipId)
+    : [];
   const steps: AssignStep[] = [
     ...(teams.length > 0 ? (["team"] as const) : []),
     "workplace",
+    ...(clientTaskOptions.length > 0 ? (["task"] as const) : []),
     "staff",
     "datetime",
     "confirm",
   ];
   const [step, setStep] = useState<AssignStep>(steps[0]);
-  const [teamId, setTeamId] = useState("");
-  const [companyRelationshipId, setCompanyRelationshipId] = useState("");
   const [clientSearch, setClientSearch] = useState("");
   const [staffUserId, setStaffUserId] = useState("");
   const [dates, setDates] = useState<string[]>([defaultDate]);
@@ -2026,6 +2048,7 @@ function AssignShiftModal({
           isUndecided,
           note: note || undefined,
           companyRelationshipId: companyRelationshipId || undefined,
+          companyPlacementRateId: companyPlacementRateId || undefined,
           overridesByDate,
         });
         if (result.status === "conflict") {
@@ -2042,6 +2065,7 @@ function AssignShiftModal({
 
   const teamName = teams.find((t) => t.id === teamId)?.name;
   const workplaceName = companyRelationshipId ? clients.find((c) => c.id === companyRelationshipId)?.name : "社内";
+  const selectedTask = clientTaskOptions.find((r) => r.id === companyPlacementRateId);
   const staffName = staffOptions.find((s) => s.id === staffUserId)?.name;
   const dateLabels = dates.map((d) => {
     const dt = new Date(d + "T00:00:00Z");
@@ -2088,7 +2112,8 @@ function AssignShiftModal({
             label="社内（自社スタッフとして勤務）"
             onClick={() => {
               setCompanyRelationshipId("");
-              goNext();
+              setCompanyPlacementRateId("");
+              setStep("staff");
             }}
           />
           {clients.length > 0 ? (
@@ -2108,13 +2133,39 @@ function AssignShiftModal({
                     label={c.name}
                     onClick={() => {
                       setCompanyRelationshipId(c.id);
-                      goNext();
+                      setCompanyPlacementRateId("");
+                      const hasTaskOptions = placementRates.some((r) => r.companyRelationshipId === c.id);
+                      setStep(hasTaskOptions ? "task" : "staff");
                     }}
                   />
                 ))}
               </div>
             </>
           ) : null}
+        </div>
+      </Modal>
+    );
+  }
+
+  if (step === "task") {
+    return (
+      <Modal title="シフトを作成" onClose={onClose}>
+        <div className="flex flex-col gap-3">
+          {backButton}
+          <h3 className="font-serif-jp text-lg font-semibold">{workplaceName}・業務内容を選択</h3>
+          <div className="flex flex-col gap-2">
+            {clientTaskOptions.map((r) => (
+              <WizardOptionButton
+                key={r.id}
+                label={r.taskName}
+                sublabel={`${WAGE_TYPE_LABEL[r.wageType] ?? r.wageType}${r.amount}円`}
+                onClick={() => {
+                  setCompanyPlacementRateId(r.id);
+                  goNext();
+                }}
+              />
+            ))}
+          </div>
         </div>
       </Modal>
     );
@@ -2244,6 +2295,15 @@ function AssignShiftModal({
             <dt className="text-muted">勤務先</dt>
             <dd className="font-medium">{workplaceName}</dd>
           </div>
+          {selectedTask ? (
+            <div className="flex items-center justify-between px-4 py-3">
+              <dt className="text-muted">業務内容</dt>
+              <dd className="font-medium">
+                {selectedTask.taskName}（{WAGE_TYPE_LABEL[selectedTask.wageType] ?? selectedTask.wageType}
+                {selectedTask.amount}円）
+              </dd>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between px-4 py-3">
             <dt className="text-muted">時間</dt>
             <dd className="font-medium">{isUndecided ? "時間未定" : `${startTime}〜${endTime}`}</dd>

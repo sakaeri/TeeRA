@@ -89,6 +89,7 @@ try {
   await admin.getByText("シフトを作成").click();
   const assignModal1 = admin.locator("div.fixed.inset-0.z-20").last();
   await assignModal1.getByRole("button", { name: "GREEN TABLE 渋谷店" }).click();
+  await assignModal1.getByRole("button", { name: /接客/ }).click();
   await assignModal1.getByRole("button", { name: "請求スタッフ" }).click();
   await assignModal1.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);
