@@ -205,6 +205,7 @@ export async function getStaffMonthDetail(params: {
   return {
     membershipId: membership.id,
     name: membership.user.name,
+    isProxy: membership.user.isProxy,
     note: membership.note ?? "",
     teams: teamMemberships.map((tm) => ({ teamId: tm.teamId, teamName: tm.team.name })),
     monthlyHours: Math.round(hours * 10) / 10,

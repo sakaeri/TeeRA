@@ -88,6 +88,51 @@ export async function addRealAgency(params: { companyId: string; proxyName: stri
   });
 }
 
+// 「本アカウントを招待」で依頼主/派遣会社を追加する場合は、名前を入力させず
+// 招待URLだけをその場で発行する — 相手が招待を受諾すれば相手の会社名がその
+// まま関係の名前になるので、proxyNameは不要（null）。
+export async function inviteNewClient(params: { companyId: string; createdByUserId: string }) {
+  const company = await prisma.company.findUniqueOrThrow({ where: { id: params.companyId } });
+  if (!company.agencyEnabled) {
+    await prisma.company.update({ where: { id: params.companyId }, data: { agencyEnabled: true } });
+  }
+  const rel = await prisma.companyRelationship.create({
+    data: {
+      ownerCompanyId: params.companyId,
+      agencyCompanyId: params.companyId,
+      clientCompanyId: null,
+      proxyName: null,
+    },
+  });
+  return inviteRelationshipUpgrade({
+    companyRelationshipId: rel.id,
+    companyId: params.companyId,
+    createdByUserId: params.createdByUserId,
+    kind: "CLIENT_UPGRADE",
+  });
+}
+
+export async function inviteNewAgency(params: { companyId: string; createdByUserId: string }) {
+  const company = await prisma.company.findUniqueOrThrow({ where: { id: params.companyId } });
+  if (!company.dispatchEnabled) {
+    await prisma.company.update({ where: { id: params.companyId }, data: { dispatchEnabled: true } });
+  }
+  const rel = await prisma.companyRelationship.create({
+    data: {
+      ownerCompanyId: params.companyId,
+      clientCompanyId: params.companyId,
+      agencyCompanyId: null,
+      proxyName: null,
+    },
+  });
+  return inviteRelationshipUpgrade({
+    companyRelationshipId: rel.id,
+    companyId: params.companyId,
+    createdByUserId: params.createdByUserId,
+    kind: "AGENCY_UPGRADE",
+  });
+}
+
 // 招待する: invite the proxy counterpart to link their own real company
 // account to this relationship (CLIENT_UPGRADE / AGENCY_UPGRADE).
 export async function inviteRelationshipUpgrade(params: {
@@ -132,8 +177,13 @@ export async function getClientMonthDetail(params: {
 }) {
   const relationship = await prisma.companyRelationship.findFirstOrThrow({
     where: { id: params.companyRelationshipId, ownerCompanyId: params.companyId },
-    include: { clientCompany: true },
+    include: { clientCompany: true, agencyCompany: true },
   });
+  // 依頼主一覧（自社がagencyCompanyId側）なら相手はclientCompany、派遣会社
+  // 一覧（自社がclientCompanyId側）なら相手はagencyCompany — PDF絞り込み
+  // ラベルの向き判定と同じ考え方。
+  const isClientDirection = relationship.agencyCompanyId === params.companyId;
+  const counterpartCompany = isClientDirection ? relationship.clientCompany : relationship.agencyCompany;
 
   const start = new Date(Date.UTC(params.year, params.month - 1, 1));
   const end = new Date(Date.UTC(params.year, params.month, 1));
@@ -161,7 +211,8 @@ export async function getClientMonthDetail(params: {
 
   return {
     relationshipId: relationship.id,
-    name: relationship.clientCompany?.name ?? relationship.proxyName ?? "",
+    name: counterpartCompany?.name ?? relationship.proxyName ?? "",
+    isProxy: !counterpartCompany,
     note: relationship.note ?? "",
     shiftCount: shifts.length,
     unapprovedCount,

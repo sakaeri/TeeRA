@@ -30,7 +30,7 @@ try {
   await page.click("text=＋スタッフを招待する");
   await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "一般スタッフ");
-  await page.click("text=作成");
+  await page.getByRole("button", { name: "作成", exact: true }).click();
   await page.waitForTimeout(600);
 
   await page.getByRole("link", { name: "ダッシュボード", exact: true }).click();

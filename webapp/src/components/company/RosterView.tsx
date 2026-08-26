@@ -5,11 +5,10 @@ import Link from "next/link";
 import {
   inviteStaffAction,
   createProxyStaffAction,
-  inviteProxyUpgradeAction,
   addClientAction,
   addAgencyAction,
-  inviteClientUpgradeAction,
-  inviteAgencyUpgradeAction,
+  inviteNewClientAction,
+  inviteNewAgencyAction,
 } from "@/app/company/actions";
 import { StaffDetailPanel } from "@/components/company/StaffDetailPanel";
 import { ClientDetailPanel } from "@/components/company/ClientDetailPanel";
@@ -30,6 +29,12 @@ const CONTRACT_STATUS_STYLE: Record<string, string> = {
   確認済み: "bg-emerald-100 text-emerald-800",
   確認待ち: "bg-amber-100 text-amber-800",
   未送付: "bg-rose-100 text-rose-800",
+};
+
+const PROXY_PROMPT_TITLE: Record<"client" | "agency" | "staff", string> = {
+  staff: "スタッフの仮アカウントを作成",
+  client: "依頼主の仮アカウントを作成",
+  agency: "派遣会社の仮アカウントを作成",
 };
 
 type RelationshipRow = {
@@ -72,6 +77,7 @@ export function RosterView({
   const [tab, setTab] = useState<Tab>("staff");
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(null);
+  const [selectedRelationshipKind, setSelectedRelationshipKind] = useState<"client" | "agency" | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [showInviteStaffModal, setShowInviteStaffModal] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -83,6 +89,11 @@ export function RosterView({
     "client" | "agency" | "staff" | null
   >(null);
   const [proxyNameInput, setProxyNameInput] = useState("");
+
+  function openRelationship(id: string, kind: "client" | "agency") {
+    setSelectedRelationshipId(id);
+    setSelectedRelationshipKind(kind);
+  }
 
   function copyToClipboard(url: string) {
     setInviteUrl(url);
@@ -115,23 +126,19 @@ export function RosterView({
     });
   }
 
-  function handleUpgradeProxyStaff(userId: string) {
+  function handleInviteNewClient() {
     startTransition(async () => {
-      const url = await inviteProxyUpgradeAction(userId);
+      const url = await inviteNewClientAction();
       copyToClipboard(url);
+      setTab("clients");
     });
   }
 
-  function handleUpgradeRelationship(
-    id: string,
-    kind: "client" | "agency",
-  ) {
+  function handleInviteNewAgency() {
     startTransition(async () => {
-      const url =
-        kind === "client"
-          ? await inviteClientUpgradeAction(id)
-          : await inviteAgencyUpgradeAction(id);
+      const url = await inviteNewAgencyAction();
       copyToClipboard(url);
+      setTab("agencies");
     });
   }
 
@@ -215,7 +222,23 @@ export function RosterView({
             ＋ 取引先名簿を追加
           </button>
           {showAddMenu ? (
-            <div className="absolute left-0 z-10 mt-2 w-44 rounded-lg border border-border bg-white shadow-md">
+            <div className="absolute left-0 z-10 mt-2 w-64 rounded-lg border border-border bg-white shadow-md">
+              <p
+                className="px-4 pt-3 pb-1 text-xs font-semibold text-muted"
+                title="スタッフの配属先の依頼主の名簿です。依頼主ごとに請求書を作成できます"
+              >
+                依頼主名簿
+              </p>
+              <button
+                type="button"
+                className="block w-full px-4 py-2 text-left text-sm hover:bg-background"
+                onClick={() => {
+                  setShowAddMenu(false);
+                  handleInviteNewClient();
+                }}
+              >
+                本アカウントを招待
+              </button>
               <button
                 type="button"
                 className="block w-full px-4 py-2 text-left text-sm hover:bg-background"
@@ -224,7 +247,23 @@ export function RosterView({
                   setProxyNamePromptFor("client");
                 }}
               >
-                依頼主名簿
+                仮アカウントを作成
+              </button>
+              <p
+                className="border-t border-border px-4 pt-3 pb-1 text-xs font-semibold text-muted"
+                title="自社にスタッフを派遣してくれている会社の名簿です"
+              >
+                派遣会社名簿
+              </p>
+              <button
+                type="button"
+                className="block w-full px-4 py-2 text-left text-sm hover:bg-background"
+                onClick={() => {
+                  setShowAddMenu(false);
+                  handleInviteNewAgency();
+                }}
+              >
+                本アカウントを招待
               </button>
               <button
                 type="button"
@@ -234,7 +273,7 @@ export function RosterView({
                   setProxyNamePromptFor("agency");
                 }}
               >
-                派遣会社名簿
+                仮アカウントを作成
               </button>
             </div>
           ) : null}
@@ -255,57 +294,69 @@ export function RosterView({
       ) : null}
 
       {proxyNamePromptFor ? (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-white p-4">
-          <input
-            type="text"
-            autoFocus
-            value={proxyNameInput}
-            onChange={(e) => setProxyNameInput(e.target.value)}
-            placeholder="名称を入力"
-            className="flex-1 rounded-lg border border-border px-3 py-2 text-sm"
-          />
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => handleCreateProxy(proxyNamePromptFor)}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-          >
-            作成
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setProxyNamePromptFor(null);
-              setProxyNameInput("");
-            }}
-            className="text-sm text-muted"
-          >
-            キャンセル
-          </button>
+        <div
+          className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4"
+          onClick={() => {
+            setProxyNamePromptFor(null);
+            setProxyNameInput("");
+          }}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-serif-jp text-lg font-bold text-primary">
+                {PROXY_PROMPT_TITLE[proxyNamePromptFor]}
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setProxyNamePromptFor(null);
+                  setProxyNameInput("");
+                }}
+                className="text-muted"
+              >
+                ✕
+              </button>
+            </div>
+            <input
+              type="text"
+              autoFocus
+              value={proxyNameInput}
+              onChange={(e) => setProxyNameInput(e.target.value)}
+              placeholder="名称を入力"
+              className="mb-4 w-full rounded-lg border border-border px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              disabled={pending || !proxyNameInput.trim()}
+              onClick={() => handleCreateProxy(proxyNamePromptFor)}
+              className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              作成
+            </button>
+          </div>
         </div>
       ) : null}
 
       {tab === "staff" ? (
-        <div>
+        <div className="overflow-hidden rounded-xl border border-border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-left text-muted">
-                <th className="py-2">氏名</th>
-                <th className="py-2">今月稼働</th>
-                <th className="py-2">現在の単価</th>
-                <th className="py-2">チーム</th>
-                <th className="py-2">契約書</th>
-                <th className="py-2" />
+              <tr className="border-b border-border bg-background/60 text-left text-xs text-muted">
+                <th className="px-4 py-3 font-semibold">氏名</th>
+                <th className="px-4 py-3 font-semibold">今月稼働</th>
+                <th className="px-4 py-3 font-semibold">現在の単価</th>
+                <th className="px-4 py-3 font-semibold">チーム</th>
+                <th className="px-4 py-3 font-semibold">契約書</th>
               </tr>
             </thead>
             <tbody>
               {filteredStaff.map((s) => (
                 <tr
                   key={s.membershipId}
-                  className="cursor-pointer border-b border-border/60 hover:bg-background"
+                  className="cursor-pointer border-b border-border/60 last:border-b-0 hover:bg-background/60"
                   onClick={() => setSelectedStaffId(s.userId)}
                 >
-                  <td className="py-2 font-medium">
+                  <td className="px-4 py-3.5 font-medium">
                     {s.name}
                     {s.isProxy ? (
                       <span className="ml-2 rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">
@@ -313,9 +364,9 @@ export function RosterView({
                       </span>
                     ) : null}
                   </td>
-                  <td className="py-2 text-muted">{s.monthlyHours}h</td>
-                  <td className="py-2 text-muted">{s.currentRateLabel}</td>
-                  <td className="py-2">
+                  <td className="px-4 py-3.5 text-muted">{s.monthlyHours}h</td>
+                  <td className="px-4 py-3.5 text-muted">{s.currentRateLabel}</td>
+                  <td className="px-4 py-3.5">
                     <div className="flex flex-wrap gap-1">
                       {s.teams.length === 0 ? (
                         <span className="text-muted">—</span>
@@ -331,31 +382,16 @@ export function RosterView({
                       )}
                     </div>
                   </td>
-                  <td className="py-2">
+                  <td className="px-4 py-3.5">
                     <span className={`rounded-md px-2 py-1 text-xs font-semibold ${CONTRACT_STATUS_STYLE[s.contractStatus]}`}>
                       {s.contractStatus}
                     </span>
-                  </td>
-                  <td className="py-2 text-right">
-                    {s.isProxy ? (
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleUpgradeProxyStaff(s.userId);
-                        }}
-                        className="text-xs text-primary underline"
-                      >
-                        本アカウントと連携する→
-                      </button>
-                    ) : null}
                   </td>
                 </tr>
               ))}
               {filteredStaff.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-muted">
+                  <td colSpan={5} className="py-8 text-center text-muted">
                     スタッフが登録されていません。
                   </td>
                 </tr>
@@ -366,33 +402,25 @@ export function RosterView({
       ) : null}
 
       {tab === "clients" ? (
-        <RelationshipTable
-          rows={clients}
-          onUpgrade={(id) => handleUpgradeRelationship(id, "client")}
-          onRowClick={(id) => setSelectedRelationshipId(id)}
-          pending={pending}
-        />
+        <RelationshipTable rows={clients} onRowClick={(id) => openRelationship(id, "client")} />
       ) : null}
 
       {tab === "agencies" ? (
-        <RelationshipTable
-          rows={agencies}
-          onUpgrade={(id) => handleUpgradeRelationship(id, "agency")}
-          pending={pending}
-        />
-      ) : null}
-
-      {teams.length > 0 ? (
-        <p className="mt-8 text-xs text-muted">
-          チーム: {teams.map((t) => t.name).join("、")}（チーム割り当ては設定タブから行えます）
-        </p>
+        <RelationshipTable rows={agencies} onRowClick={(id) => openRelationship(id, "agency")} />
       ) : null}
 
       {selectedStaffId ? (
         <StaffDetailPanel userId={selectedStaffId} onClose={() => setSelectedStaffId(null)} />
       ) : null}
-      {selectedRelationshipId ? (
-        <ClientDetailPanel relationshipId={selectedRelationshipId} onClose={() => setSelectedRelationshipId(null)} />
+      {selectedRelationshipId && selectedRelationshipKind ? (
+        <ClientDetailPanel
+          relationshipId={selectedRelationshipId}
+          kind={selectedRelationshipKind}
+          onClose={() => {
+            setSelectedRelationshipId(null);
+            setSelectedRelationshipKind(null);
+          }}
+        />
       ) : null}
       {showInviteStaffModal ? (
         <InviteStaffModal templates={templates} onClose={() => setShowInviteStaffModal(false)} />
@@ -540,67 +568,47 @@ function TabButton({
 
 function RelationshipTable({
   rows,
-  onUpgrade,
   onRowClick,
-  pending,
 }: {
   rows: RelationshipRow[];
-  onUpgrade: (id: string) => void;
-  onRowClick?: (id: string) => void;
-  pending: boolean;
+  onRowClick: (id: string) => void;
 }) {
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="border-b border-border text-left text-muted">
-          <th className="py-2">名称</th>
-          <th className="py-2">状態</th>
-          <th className="py-2" />
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr
-            key={r.id}
-            className={`border-b border-border/60 ${onRowClick ? "cursor-pointer hover:bg-background" : ""}`}
-            onClick={() => onRowClick?.(r.id)}
-          >
-            <td className="py-2">
-              {r.name}
-              {r.isProxy ? (
-                <span className="ml-2 rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">
-                  仮
-                </span>
-              ) : null}
-            </td>
-            <td className="py-2 text-muted">
-              {r.status === "ACTIVE" ? "有効" : "無効"}
-            </td>
-            <td className="py-2 text-right">
-              {r.isProxy ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUpgrade(r.id);
-                  }}
-                  className="text-xs text-primary underline"
-                >
-                  招待する
-                </button>
-              ) : null}
-            </td>
+    <div className="overflow-hidden rounded-xl border border-border">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border bg-background/60 text-left text-xs text-muted">
+            <th className="px-4 py-3 font-semibold">名称</th>
+            <th className="px-4 py-3 font-semibold">状態</th>
           </tr>
-        ))}
-        {rows.length === 0 ? (
-          <tr>
-            <td colSpan={3} className="py-6 text-center text-muted">
-              登録されていません。
-            </td>
-          </tr>
-        ) : null}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr
+              key={r.id}
+              className="cursor-pointer border-b border-border/60 last:border-b-0 hover:bg-background/60"
+              onClick={() => onRowClick(r.id)}
+            >
+              <td className="px-4 py-3.5">
+                {r.name}
+                {r.isProxy ? (
+                  <span className="ml-2 rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">
+                    仮
+                  </span>
+                ) : null}
+              </td>
+              <td className="px-4 py-3.5 text-muted">{r.status === "ACTIVE" ? "有効" : "無効"}</td>
+            </tr>
+          ))}
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={2} className="py-8 text-center text-muted">
+                登録されていません。
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
   );
 }

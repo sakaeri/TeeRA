@@ -44,9 +44,10 @@ try {
   // activate agency module with a proxy client
   await admin.goto("http://localhost:3000/company/roster");
   await admin.click("text=＋ 取引先名簿を追加");
-  await admin.click("text=依頼主名簿");
+  await admin.waitForTimeout(200);
+  await admin.locator("text=仮アカウントを作成").first().click();
   await admin.fill('input[placeholder="名称を入力"]', "GREEN TABLE 渋谷店");
-  await admin.click("text=作成");
+  await admin.getByRole("button", { name: "作成", exact: true }).click();
   await admin.waitForTimeout(600);
   const companyRelationshipId = psql(
     `select id from "CompanyRelationship" where "ownerCompanyId"='${companyId}' order by "createdAt" desc limit 1;`,

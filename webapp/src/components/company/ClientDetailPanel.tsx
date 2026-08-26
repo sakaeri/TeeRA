@@ -2,12 +2,18 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { getClientMonthDetailAction, updateClientNoteAction } from "@/app/company/actions";
+import {
+  getClientMonthDetailAction,
+  updateClientNoteAction,
+  inviteClientUpgradeAction,
+  inviteAgencyUpgradeAction,
+} from "@/app/company/actions";
 import { todayJstParts } from "@/lib/date";
 
 type ClientMonthDetail = {
   relationshipId: string;
   name: string;
+  isProxy: boolean;
   note: string;
   shiftCount: number;
   unapprovedCount: number;
@@ -43,7 +49,15 @@ function timeLabel(d: ClientMonthDetail["days"][number]) {
   return `${d.startTime ?? "--:--"}〜${d.endTime ?? "--:--"}`;
 }
 
-export function ClientDetailPanel({ relationshipId, onClose }: { relationshipId: string; onClose: () => void }) {
+export function ClientDetailPanel({
+  relationshipId,
+  kind,
+  onClose,
+}: {
+  relationshipId: string;
+  kind: "client" | "agency";
+  onClose: () => void;
+}) {
   const router = useRouter();
   const initToday = todayJstParts();
   const [year, setYear] = useState(initToday.year);
@@ -52,6 +66,14 @@ export function ClientDetailPanel({ relationshipId, onClose }: { relationshipId:
   const [data, setData] = useState<ClientMonthDetail | null>(null);
   const [noteValue, setNoteValue] = useState("");
   const [pending, startTransition] = useTransition();
+  const [upgradeUrl, setUpgradeUrl] = useState<string | null>(null);
+
+  function handleUpgrade() {
+    startTransition(async () => {
+      const url = kind === "client" ? await inviteClientUpgradeAction(relationshipId) : await inviteAgencyUpgradeAction(relationshipId);
+      setUpgradeUrl(url);
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +107,45 @@ export function ClientDetailPanel({ relationshipId, onClose }: { relationshipId:
           <p className="text-sm text-muted">読み込み中…</p>
         ) : (
           <>
-            <h2 className="mb-4 font-serif-jp text-xl font-bold">{data.name}</h2>
+            <h2 className="mb-3 font-serif-jp text-xl font-bold">{data.name}</h2>
+
+            {data.isProxy ? (
+              <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 p-3 text-xs">
+                {upgradeUrl ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={upgradeUrl}
+                      className="flex-1 rounded-lg border border-border bg-white px-2 py-1.5 text-xs text-muted"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (typeof navigator !== "undefined" && navigator.clipboard) {
+                          navigator.clipboard.writeText(upgradeUrl).catch(() => {});
+                        }
+                      }}
+                      className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+                    >
+                      コピー
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <span>仮アカウントです。招待URLを送って本アカウントと連携できます。</span>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={handleUpgrade}
+                      className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                    >
+                      本アカウントと連携する
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : null}
 
             <div className="mb-4 flex gap-4 border-b border-border text-sm">
               <button

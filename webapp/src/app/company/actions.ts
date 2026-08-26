@@ -17,6 +17,8 @@ import {
   addRealClient,
   addRealAgency,
   inviteRelationshipUpgrade,
+  inviteNewClient,
+  inviteNewAgency,
   getClientMonthDetail,
   updateClientNote,
 } from "@/lib/domain/relationships";
@@ -130,6 +132,24 @@ export async function inviteAgencyUpgradeAction(companyRelationshipId: string) {
     createdByUserId: userId,
     kind: "AGENCY_UPGRADE",
   });
+  return absoluteInviteUrl(invite.token);
+}
+
+export async function inviteNewClientAction() {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  const invite = await inviteNewClient({ companyId: membership.companyId, createdByUserId: userId });
+  revalidatePath("/company/roster");
+  return absoluteInviteUrl(invite.token);
+}
+
+export async function inviteNewAgencyAction() {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  const invite = await inviteNewAgency({ companyId: membership.companyId, createdByUserId: userId });
+  revalidatePath("/company/roster");
   return absoluteInviteUrl(invite.token);
 }
 

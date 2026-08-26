@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { getStaffMonthDetailAction, updateStaffNoteAction } from "@/app/company/actions";
+import { getStaffMonthDetailAction, updateStaffNoteAction, inviteProxyUpgradeAction } from "@/app/company/actions";
 import { todayJstParts } from "@/lib/date";
 
 type StaffMonthDetail = {
   membershipId: string;
   name: string;
+  isProxy: boolean;
   note: string;
   teams: { teamId: string; teamName: string }[];
   monthlyHours: number;
@@ -59,6 +60,14 @@ export function StaffDetailPanel({ userId, onClose }: { userId: string; onClose:
   const [data, setData] = useState<StaffMonthDetail | null>(null);
   const [noteValue, setNoteValue] = useState("");
   const [pending, startTransition] = useTransition();
+  const [upgradeUrl, setUpgradeUrl] = useState<string | null>(null);
+
+  function handleUpgrade() {
+    startTransition(async () => {
+      const url = await inviteProxyUpgradeAction(userId);
+      setUpgradeUrl(url);
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +104,45 @@ export function StaffDetailPanel({ userId, onClose }: { userId: string; onClose:
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-serif-jp text-xl font-bold">{data.name}</h2>
             </div>
+
+            {data.isProxy ? (
+              <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 p-3 text-xs">
+                {upgradeUrl ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={upgradeUrl}
+                      className="flex-1 rounded-lg border border-border bg-white px-2 py-1.5 text-xs text-muted"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (typeof navigator !== "undefined" && navigator.clipboard) {
+                          navigator.clipboard.writeText(upgradeUrl).catch(() => {});
+                        }
+                      }}
+                      className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+                    >
+                      コピー
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <span>仮アカウントです。本人に招待URLを送って本アカウントと連携できます。</span>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={handleUpgrade}
+                      className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                    >
+                      本アカウントと連携する
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
             <div className="mb-4 flex flex-wrap gap-1">
               {data.teams.length === 0 ? (
                 <span className="text-xs text-muted">チーム未所属</span>
