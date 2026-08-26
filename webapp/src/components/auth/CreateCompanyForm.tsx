@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { createCompanyAction, type FormState } from "@/app/actions/auth";
 
-export function CreateCompanyForm() {
+export function CreateCompanyForm({ inviteToken }: { inviteToken?: string }) {
   const [state, action, pending] = useActionState<FormState, FormData>(
     createCompanyAction,
     undefined,
@@ -11,6 +11,7 @@ export function CreateCompanyForm() {
 
   return (
     <form action={action} className="flex flex-col gap-4">
+      {inviteToken ? <input type="hidden" name="invite" value={inviteToken} /> : null}
       <div className="flex flex-col gap-1">
         <label htmlFor="name" className="text-sm text-foreground/80">
           本部名

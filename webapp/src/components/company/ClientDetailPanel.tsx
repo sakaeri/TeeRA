@@ -162,13 +162,15 @@ export function ClientDetailPanel({
               >
                 スタッフ一覧
               </button>
-              <button
-                type="button"
-                onClick={() => setTab("rates")}
-                className={`border-b-2 px-1 py-2 font-semibold ${tab === "rates" ? "border-accent text-primary" : "border-transparent text-muted"}`}
-              >
-                契約・単価
-              </button>
+              {kind === "client" ? (
+                <button
+                  type="button"
+                  onClick={() => setTab("rates")}
+                  className={`border-b-2 px-1 py-2 font-semibold ${tab === "rates" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                >
+                  契約・単価
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setTab("note")}
@@ -192,7 +194,7 @@ export function ClientDetailPanel({
                   </button>
                 </div>
 
-                <div className="mb-4 grid grid-cols-3 gap-2 text-center">
+                <div className={`mb-4 grid gap-2 text-center ${kind === "client" ? "grid-cols-3" : "grid-cols-2"}`}>
                   <div className="rounded-lg border border-border p-3">
                     <p className="text-xs text-muted">稼働数</p>
                     <p className="text-lg font-bold">{data.shiftCount}件</p>
@@ -201,18 +203,20 @@ export function ClientDetailPanel({
                     <p className="text-xs text-muted">未承認数</p>
                     <p className="text-lg font-bold text-rose-600">{data.unapprovedCount}件</p>
                   </div>
-                  <div className="flex flex-col items-center justify-center rounded-lg border border-border p-3">
-                    <p className="mb-1 text-xs text-muted">請求明細</p>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        router.push(`/company/invoices?month=${year}-${String(month).padStart(2, "0")}&client=${relationshipId}`)
-                      }
-                      className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
-                    >
-                      作成する
-                    </button>
-                  </div>
+                  {kind === "client" ? (
+                    <div className="flex flex-col items-center justify-center rounded-lg border border-border p-3">
+                      <p className="mb-1 text-xs text-muted">請求明細</p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          router.push(`/company/invoices?month=${year}-${String(month).padStart(2, "0")}&client=${relationshipId}`)
+                        }
+                        className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
+                      >
+                        作成する
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
 
                 <ul className="flex flex-col gap-1">

@@ -88,55 +88,14 @@ export async function addRealAgency(params: { companyId: string; proxyName: stri
   });
 }
 
-// 「本アカウントを招待」で依頼主/派遣会社を追加する場合は、名前を入力させず
-// 招待URLだけをその場で発行する — 相手が招待を受諾すれば相手の会社名がその
-// まま関係の名前になるので、proxyNameは不要（null）。
-export async function inviteNewClient(params: { companyId: string; createdByUserId: string }) {
-  const company = await prisma.company.findUniqueOrThrow({ where: { id: params.companyId } });
-  if (!company.agencyEnabled) {
-    await prisma.company.update({ where: { id: params.companyId }, data: { agencyEnabled: true } });
-  }
-  const rel = await prisma.companyRelationship.create({
-    data: {
-      ownerCompanyId: params.companyId,
-      agencyCompanyId: params.companyId,
-      clientCompanyId: null,
-      proxyName: null,
-    },
-  });
-  return inviteRelationshipUpgrade({
-    companyRelationshipId: rel.id,
-    companyId: params.companyId,
-    createdByUserId: params.createdByUserId,
-    kind: "CLIENT_UPGRADE",
-  });
-}
-
-export async function inviteNewAgency(params: { companyId: string; createdByUserId: string }) {
-  const company = await prisma.company.findUniqueOrThrow({ where: { id: params.companyId } });
-  if (!company.dispatchEnabled) {
-    await prisma.company.update({ where: { id: params.companyId }, data: { dispatchEnabled: true } });
-  }
-  const rel = await prisma.companyRelationship.create({
-    data: {
-      ownerCompanyId: params.companyId,
-      clientCompanyId: params.companyId,
-      agencyCompanyId: null,
-      proxyName: null,
-    },
-  });
-  return inviteRelationshipUpgrade({
-    companyRelationshipId: rel.id,
-    companyId: params.companyId,
-    createdByUserId: params.createdByUserId,
-    kind: "AGENCY_UPGRADE",
-  });
-}
-
 // 招待する: invite the proxy counterpart to link their own real company
 // account to this relationship (CLIENT_UPGRADE / AGENCY_UPGRADE).
+// companyRelationshipIdを省略した場合は「本アカウントを招待」で新規に関係を
+// 作る場合 — まだ関係(CompanyRelationship)自体は存在せず、招待が実際に
+// 相手に受諾された時点(redeemCompanyRelationshipInvite)で初めて作成される。
+// 招待を発行しただけでは名簿には何も現れない。
 export async function inviteRelationshipUpgrade(params: {
-  companyRelationshipId: string;
+  companyRelationshipId?: string;
   companyId: string; // owner company issuing the invite
   createdByUserId: string;
   kind: "CLIENT_UPGRADE" | "AGENCY_UPGRADE";

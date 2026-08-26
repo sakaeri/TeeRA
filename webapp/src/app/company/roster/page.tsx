@@ -3,7 +3,6 @@ import { listStaffWithSummary } from "@/lib/domain/roster";
 import { listClients, listAgencies } from "@/lib/domain/relationships";
 import { listTeams } from "@/lib/domain/teams";
 import { listTemplates } from "@/lib/domain/contracts";
-import { prisma } from "@/lib/prisma";
 import { RosterView } from "@/components/company/RosterView";
 
 const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
@@ -18,14 +17,13 @@ const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日�
 export default async function RosterPage() {
   const { membership } = await requireCompanyAdminOrEditor();
 
-  const company = await prisma.company.findUniqueOrThrow({
-    where: { id: membership.companyId },
-  });
-
+  // 依頼主一覧/派遣会社一覧タブは常時表示する（スタッフ一覧と同じく、0件でも
+  // 「追加する」ボタン付きの空状態を出す）ので、agencyEnabled/dispatchEnabled
+  // に関わらず常に取得する。
   const [staff, clients, agencies, teams, templates] = await Promise.all([
     listStaffWithSummary(membership.companyId),
-    company.agencyEnabled ? listClients(membership.companyId) : Promise.resolve([]),
-    company.dispatchEnabled ? listAgencies(membership.companyId) : Promise.resolve([]),
+    listClients(membership.companyId),
+    listAgencies(membership.companyId),
     listTeams(membership.companyId),
     listTemplates(membership.companyId),
   ]);
@@ -60,8 +58,6 @@ export default async function RosterPage() {
                 : "自社",
             contractStartDate: t.contractStartDate.toISOString().slice(0, 10),
           }))}
-        agencyEnabled={company.agencyEnabled}
-        dispatchEnabled={company.dispatchEnabled}
       />
     </main>
   );

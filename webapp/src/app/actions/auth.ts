@@ -11,7 +11,7 @@ import {
   CreateCompanySchema,
 } from "@/lib/validation/auth";
 import { verifySession } from "@/lib/auth/session";
-import { redeemInvite } from "@/lib/domain/invites";
+import { redeemInvite, lookupInvite, redeemCompanyRelationshipInvite } from "@/lib/domain/invites";
 
 export type FormState =
   | { errors?: Record<string, string[]>; message?: string }
@@ -53,6 +53,15 @@ export async function registerAction(
 
   const inviteToken = formData.get("inviteToken");
   if (typeof inviteToken === "string" && inviteToken.length > 0) {
+    // CLIENT_UPGRADE/AGENCY_UPGRADE招待は会社同士を結びつけるものなので、
+    // 受け取る側にも自社が必要 — 先に会社登録へ回し、完了後にこの招待へ戻す。
+    const lookup = await lookupInvite(inviteToken);
+    if (
+      lookup.status === "valid" &&
+      (lookup.invite.kind === "CLIENT_UPGRADE" || lookup.invite.kind === "AGENCY_UPGRADE")
+    ) {
+      redirect(`/register/company?invite=${inviteToken}`);
+    }
     redirect(`/invite/${inviteToken}`);
   }
 
@@ -118,6 +127,11 @@ export async function createCompanyAction(
     data: { userId, companyId: company.id, role: "COMPANY_ADMIN" },
   });
 
+  const inviteToken = formData.get("invite");
+  if (typeof inviteToken === "string" && inviteToken.length > 0) {
+    redirect(`/invite/${inviteToken}`);
+  }
+
   redirect("/company");
 }
 
@@ -132,6 +146,29 @@ export async function redeemInviteAction(token: string) {
   }
 
   redirect("/home");
+}
+
+// CLIENT_UPGRADE / AGENCY_UPGRADE: ログイン中ユーザーが管理者/編集者として
+// 所属する自社を、この招待の相手側企業として結びつける。
+export async function redeemCompanyRelationshipInviteAction(token: string) {
+  const { userId } = await verifySession();
+
+  const membership = await prisma.companyMembership.findFirst({ where: { userId } });
+  if (!membership) {
+    redirect(`/register/company?invite=${token}`);
+  }
+  if (membership.role === "STAFF") {
+    redirect(`/invite/${token}?error=requires_admin`);
+  }
+
+  try {
+    await redeemCompanyRelationshipInvite(token, membership.companyId);
+  } catch (error) {
+    const messageKey = error instanceof Error ? error.message : "unknown";
+    redirect(`/invite/${token}?error=${messageKey}`);
+  }
+
+  redirect("/company/roster");
 }
 
 function z_flatten(

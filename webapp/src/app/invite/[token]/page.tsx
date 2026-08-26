@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { lookupInvite } from "@/lib/domain/invites";
-import { redeemInviteAction } from "@/app/actions/auth";
+import { redeemInviteAction, redeemCompanyRelationshipInviteAction } from "@/app/actions/auth";
 import { prisma } from "@/lib/prisma";
 
 const KIND_LABEL: Record<string, string> = {
@@ -64,6 +64,7 @@ export default async function InvitePage({
   const existingMembership = await prisma.companyMembership.findFirst({
     where: { userId: session.user.id },
   });
+  const isCompanyRelationshipInvite = invite.kind === "CLIENT_UPGRADE" || invite.kind === "AGENCY_UPGRADE";
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-6 py-16">
@@ -85,8 +86,43 @@ export default async function InvitePage({
             このアカウントはすでに別の本部に所属しているため、この招待を受け取れません。
           </p>
         ) : null}
+        {errorKey === "requires_admin" ? (
+          <p className="mb-4 text-sm text-red-600">
+            自社の管理者/編集者のみがこの招待を受け取れます。
+          </p>
+        ) : null}
 
-        {existingMembership ? (
+        {isCompanyRelationshipInvite ? (
+          !existingMembership ? (
+            <div>
+              <p className="mb-4 text-sm text-muted">
+                この招待は会社同士を結びつけるものです。先に自社の本部を作成してください。
+              </p>
+              <Link
+                href={`/register/company?invite=${token}`}
+                className="block rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+              >
+                本部を作成する
+              </Link>
+            </div>
+          ) : existingMembership.role === "STAFF" ? (
+            <p className="text-sm text-red-600">自社の管理者/編集者のみがこの招待を受け取れます。</p>
+          ) : (
+            <form
+              action={async () => {
+                "use server";
+                await redeemCompanyRelationshipInviteAction(token);
+              }}
+            >
+              <button
+                type="submit"
+                className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+              >
+                この会社として招待を受け取る
+              </button>
+            </form>
+          )
+        ) : existingMembership ? (
           <p className="text-sm text-red-600">
             このアカウントはすでに別の本部に所属しているため、この招待を受け取れません。
           </p>

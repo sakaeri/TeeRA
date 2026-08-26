@@ -55,22 +55,23 @@ try {
   await page.click("text=閉じる");
   await page.waitForTimeout(300);
 
-  // + 取引先名簿を追加 -> 依頼主名簿: 仮アカウントを作成 (2 identical buttons
-  // exist, one per category, so scope to the first — 依頼主名簿's own)
-  await page.click("text=＋ 取引先名簿を追加");
+  // 依頼主一覧タブ -> ＋依頼主を追加する -> 仮アカウントを作成
+  await page.click("text=依頼主一覧");
   await page.waitForTimeout(200);
-  await page.locator("text=仮アカウントを作成").first().click();
+  log("依頼主一覧 tab visible without any 依頼主 yet", bodyText.includes("依頼主一覧"));
+  await page.click("text=＋依頼主を追加する");
+  await page.waitForTimeout(200);
+  await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "仮依頼主サンプル");
   await page.getByRole("button", { name: "作成", exact: true }).click();
   await page.waitForTimeout(800);
   bodyText = await page.textContent("body");
-  log("agency module activated -> 依頼主一覧 tab visible", bodyText.includes("依頼主一覧"));
   log("proxy client relationship listed", bodyText.includes("仮依頼主サンプル"));
 
   // add a SECOND 依頼主 to confirm the list supports more than one entry
-  await page.click("text=＋ 取引先名簿を追加");
+  await page.click("text=＋依頼主を追加する");
   await page.waitForTimeout(200);
-  await page.locator("text=仮アカウントを作成").first().click();
+  await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "仮依頼主サンプル2");
   await page.getByRole("button", { name: "作成", exact: true }).click();
   await page.waitForTimeout(800);

@@ -130,6 +130,11 @@ export async function redeemInvite(token: string, userId: string) {
 // Links the redeeming user's own company into the CompanyRelationship the
 // invite points at. Used for CLIENT_UPGRADE (redeemer becomes clientCompany)
 // and AGENCY_UPGRADE (redeemer becomes agencyCompany) invites.
+//
+// invite.companyRelationshipIdがnullの場合（「本アカウントを招待」で最初から
+// 招待のみ発行したケース）は、この受諾のタイミングで初めて関係を作る —
+// 招待を出しただけの段階では招待元の名簿には何も表示されない、という仕様
+// (chat: 相手が承認するまでリストに載るのはおかしい)を成立させるため。
 export async function redeemCompanyRelationshipInvite(
   token: string,
   redeemingCompanyId: string,
@@ -142,17 +147,31 @@ export async function redeemCompanyRelationshipInvite(
     if (invite.kind !== "CLIENT_UPGRADE" && invite.kind !== "AGENCY_UPGRADE") {
       throw new Error("wrong_invite_kind");
     }
-    if (!invite.companyRelationshipId) throw new Error("missing_relationship");
 
-    const data =
-      invite.kind === "CLIENT_UPGRADE"
-        ? { clientCompanyId: redeemingCompanyId }
-        : { agencyCompanyId: redeemingCompanyId };
-
-    await tx.companyRelationship.update({
-      where: { id: invite.companyRelationshipId },
-      data,
-    });
+    if (invite.companyRelationshipId) {
+      const data =
+        invite.kind === "CLIENT_UPGRADE"
+          ? { clientCompanyId: redeemingCompanyId }
+          : { agencyCompanyId: redeemingCompanyId };
+      await tx.companyRelationship.update({
+        where: { id: invite.companyRelationshipId },
+        data,
+      });
+    } else {
+      if (invite.kind === "CLIENT_UPGRADE") {
+        await tx.company.update({ where: { id: invite.companyId }, data: { agencyEnabled: true } });
+      } else {
+        await tx.company.update({ where: { id: invite.companyId }, data: { dispatchEnabled: true } });
+      }
+      await tx.companyRelationship.create({
+        data: {
+          ownerCompanyId: invite.companyId,
+          agencyCompanyId: invite.kind === "CLIENT_UPGRADE" ? invite.companyId : redeemingCompanyId,
+          clientCompanyId: invite.kind === "CLIENT_UPGRADE" ? redeemingCompanyId : invite.companyId,
+          status: "ACTIVE",
+        },
+      });
+    }
 
     await tx.inviteToken.update({
       where: { id: invite.id },
