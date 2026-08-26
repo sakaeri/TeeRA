@@ -2127,8 +2127,17 @@ function AssignShiftModal({
     if (i < steps.length - 1) setStep(steps[i + 1]);
   }
 
+  // 確認画面で重複を検出した後、戻って日付や時間を変更したら、前回の重複
+  // チェック結果は古くなるので破棄する（次の送信時にサーバー側で選び直した
+  // 内容に対して再チェックされる）。
+  function clearStaleConflicts() {
+    setConflictsByDate(null);
+    setOverrideChecked(false);
+  }
+
   function toggleDate(d: string) {
     setDates((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
+    clearStaleConflicts();
   }
 
   function submit() {
@@ -2275,7 +2284,14 @@ function AssignShiftModal({
           </h3>
 
           <label className="flex items-center gap-1 text-xs">
-            <input type="checkbox" checked={isUndecided} onChange={(e) => setIsUndecided(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={isUndecided}
+              onChange={(e) => {
+                setIsUndecided(e.target.checked);
+                clearStaleConflicts();
+              }}
+            />
             時間未定
           </label>
           {!isUndecided ? (
@@ -2284,7 +2300,10 @@ function AssignShiftModal({
                 <input
                   type="time"
                   value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
+                  onChange={(e) => {
+                    setStartTime(e.target.value);
+                    clearStaleConflicts();
+                  }}
                   className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                 />
               </Field>
@@ -2292,7 +2311,10 @@ function AssignShiftModal({
                 <input
                   type="time"
                   value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
+                  onChange={(e) => {
+                    setEndTime(e.target.value);
+                    clearStaleConflicts();
+                  }}
                   className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                 />
               </Field>
