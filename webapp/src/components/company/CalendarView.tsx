@@ -163,7 +163,6 @@ export function CalendarView({
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<string | null>(initialSelectedDate ?? null);
   const [showAssignForm, setShowAssignForm] = useState(false);
-  const [assignPreset, setAssignPreset] = useState<{ date: string; companyRelationshipId?: string } | null>(null);
   const [showRecruitForm, setShowRecruitForm] = useState(false);
   const [sharingImage, setSharingImage] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
@@ -391,13 +390,15 @@ export function CalendarView({
           }
           const dow = new Date(c.dateStr + "T00:00:00Z").getUTCDay();
           const dayShifts = shiftsByDate.get(c.dateStr) ?? [];
-          // 自社勤務・依頼主向け勤務のどちらも、確定シフトとして同じ枠内に
-          // スタッフ名で表示する（依頼主向けは水色で区別）。以前は依頼主向けを
-          // 「オーダー◯件」という件数バッジにまとめていたが、スタッフ名が
-          // 見えず分かりにくいとの指摘を受けて名前表示に統一した。
+          // 自社勤務・依頼主向け勤務のどちらも「こちらが作成/確定させたシフト」
+          // という点で同じなので、緑のスタッフ名タグとして同じ枠内に表示する
+          // （依頼主で絞り込みたい時はカレンダー上部の絞り込みを使う）。
           const confirmedShifts = dayShifts.filter((s) => s.source === "INHOUSE" || s.source === "CLIENT");
           const dayRecruitments = recruitments.filter((r) => r.date === c.dateStr && r.status === "PUBLISHED");
           const recruitingCount = dayRecruitments.filter((r) => r.filled < r.maxEntries).length;
+          // オーダー＝依頼主が出した募集（本アカウントで繋がっている依頼主が
+          // 出した求人）。こちらが作成したシフトはオーダーには含めない。
+          const dayClientOrders = clientRecruitments.filter((r) => r.date === c.dateStr && r.filled < r.maxEntries);
           const dayShiftRequests = shiftRequestsByDate.get(c.dateStr) ?? [];
           const isToday = c.dateStr === todayStr;
           const isSelected = c.dateStr === selectedDate;
@@ -406,18 +407,21 @@ export function CalendarView({
             recruitingCount > 0
               ? { kind: "solid", id: "recruit", label: `募集中${recruitingCount}件`, className: "bg-amber-100 text-amber-900" }
               : null;
+          const orderTag: TagEntry | null =
+            dayClientOrders.length > 0
+              ? { kind: "solid", id: "client-order", label: `オーダー${dayClientOrders.length}件`, className: "bg-sky-100 text-sky-900" }
+              : null;
 
-          // Fixed row budget of 5 total: 未確定 (1 row, count only) and
-          // 募集中 (1 row) each reserve their slot only when there's
-          // something to show that day — confirmed-shift names get whatever's
-          // left, so a day with no unconfirmed/recruiting activity can
-          // show up to 5 names instead of being capped at 3 regardless.
+          // Fixed row budget of 5 total: 未確定・募集中・オーダー (1 row each,
+          // only when there's something to show that day) — confirmed-shift
+          // names get whatever's left, so a day with none of those can show
+          // up to 5 names instead of being capped regardless.
           const unconfirmedTag: TagEntry | null =
             dayShiftRequests.length > 0
               ? { kind: "solid", id: "unconfirmed", label: `未確定${dayShiftRequests.length}件`, className: "bg-rose-100 text-rose-900" }
               : null;
 
-          const reservedRows = (unconfirmedTag ? 1 : 0) + (recruitTag ? 1 : 0);
+          const reservedRows = (unconfirmedTag ? 1 : 0) + (recruitTag ? 1 : 0) + (orderTag ? 1 : 0);
           const confirmedSlotBudget = 5 - reservedRows;
           const visibleConfirmed = confirmedShifts.slice(0, confirmedSlotBudget);
           const hasOverflow = confirmedShifts.length > confirmedSlotBudget;
@@ -427,10 +431,11 @@ export function CalendarView({
               kind: "solid" as const,
               id: s.id,
               label: s.staffName,
-              className: s.source === "CLIENT" ? "bg-sky-100 text-sky-900" : "bg-emerald-100 text-emerald-900",
+              className: "bg-emerald-100 text-emerald-900",
             })),
             ...(unconfirmedTag ? [unconfirmedTag] : []),
             ...(recruitTag ? [recruitTag] : []),
+            ...(orderTag ? [orderTag] : []),
           ];
 
           return (
@@ -486,18 +491,11 @@ export function CalendarView({
           affordableMaxEntries={affordableMaxEntries}
           onNavigate={setSelectedDate}
           onClose={() => setSelectedDate(null)}
-          onAssign={(companyRelationshipId) => {
-            setAssignPreset({ date: selectedDate, companyRelationshipId });
-            setShowAssignForm(true);
-          }}
         />
       ) : null}
 
       <FabMenu
-        onCreateShift={() => {
-          setAssignPreset(null);
-          setShowAssignForm(true);
-        }}
+        onCreateShift={() => setShowAssignForm(true)}
         onCreateRecruitment={() => setShowRecruitForm(true)}
       />
 
@@ -506,12 +504,8 @@ export function CalendarView({
           staffOptions={staffOptions}
           teams={teams}
           clients={clients}
-          defaultDate={assignPreset?.date ?? selectedDate ?? todayStr}
-          defaultCompanyRelationshipId={assignPreset?.companyRelationshipId}
-          onClose={() => {
-            setShowAssignForm(false);
-            setAssignPreset(null);
-          }}
+          defaultDate={selectedDate ?? todayStr}
+          onClose={() => setShowAssignForm(false)}
         />
       ) : null}
 
@@ -663,7 +657,6 @@ function DayDetailModal({
   affordableMaxEntries,
   onNavigate,
   onClose,
-  onAssign,
 }: {
   dateStr: string;
   shifts: ShiftRow[];
@@ -674,30 +667,12 @@ function DayDetailModal({
   affordableMaxEntries: number;
   onNavigate: (dateStr: string) => void;
   onClose: () => void;
-  onAssign: (companyRelationshipId?: string) => void;
 }) {
   const [tab, setTab] = useState<"shifts" | "client" | "recruit">("shifts");
-  const [selectedClientKey, setSelectedClientKey] = useState<string | null>(null);
   const [editingRecruitmentId, setEditingRecruitmentId] = useState<string | null>(null);
   const isPastDay = dateStr < todayJst();
   const remaining = recruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
-  const clientShifts = shifts.filter((s) => s.source === "CLIENT");
   const hasUnreported = shifts.some((s) => isReportOverdue(s));
-
-  const clientGroups = useMemo(() => {
-    const map = new Map<string, { clientName: string; companyRelationshipId?: string; rows: ShiftRow[] }>();
-    for (const s of clientShifts) {
-      const key = s.companyRelationshipId ?? s.clientName ?? "依頼主未設定";
-      const existing = map.get(key);
-      if (existing) {
-        existing.rows.push(s);
-      } else {
-        map.set(key, { clientName: s.clientName ?? "依頼主未設定", companyRelationshipId: s.companyRelationshipId ?? undefined, rows: [s] });
-      }
-    }
-    return Array.from(map.entries()).map(([key, g]) => ({ key, ...g }));
-  }, [clientShifts]);
-  const selectedClientGroup = selectedClientKey ? clientGroups.find((g) => g.key === selectedClientKey) : undefined;
 
   const date = new Date(dateStr + "T00:00:00Z");
   const weekdayLabel = WEEKDAYS[date.getUTCDay()];
@@ -757,16 +732,13 @@ function DayDetailModal({
               <span className="absolute -right-1.5 -top-0.5 h-2 w-2 rounded-full bg-red-500" aria-label="未報告あり" />
             ) : null}
           </button>
-          {clientShifts.length > 0 || clientOrders.length > 0 ? (
+          {clientOrders.length > 0 ? (
             <button
               type="button"
-              onClick={() => {
-                setTab("client");
-                setSelectedClientKey(null);
-              }}
+              onClick={() => setTab("client")}
               className={`border-b-2 px-1 py-2 font-semibold ${tab === "client" ? "border-accent text-primary" : "border-transparent text-muted"}`}
             >
-              依頼主
+              オーダー
             </button>
           ) : null}
           {recruitments.length > 0 ? (
@@ -829,95 +801,20 @@ function DayDetailModal({
           <ShiftHistorySection history={history} />
           </>
         ) : tab === "client" ? (
-          clientGroups.length === 0 && clientOrders.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted">この日の依頼主関連の予定はありません。</p>
-          ) : selectedClientGroup ? (
-            <div>
-              <button
-                type="button"
-                onClick={() => setSelectedClientKey(null)}
-                className="mb-2 flex items-center gap-1 text-sm text-muted hover:text-primary"
-              >
-                ‹ 依頼主一覧に戻る
-              </button>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="font-semibold">{selectedClientGroup.clientName}</p>
-                {isPastDay ? null : (
-                  <button
-                    type="button"
-                    onClick={() => onAssign(selectedClientGroup.companyRelationshipId)}
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-background"
-                  >
-                    ＋ スタッフを追加
-                  </button>
-                )}
-              </div>
-              <ul className="flex flex-col gap-1 text-sm">
-                {selectedClientGroup.rows.map((s) => (
-                  <li
-                    key={s.id}
-                    className="grid grid-cols-[1fr_120px_80px_auto] items-center gap-2 border-b border-border/50 py-2.5 last:border-b-0"
-                  >
-                    <span className="truncate">
-                      <span className="font-semibold">{s.staffName}</span>
-                      {s.note ? <span className="ml-1.5 text-xs text-muted">（{s.note}）</span> : null}
-                    </span>
-                    <span className="text-muted">
-                      {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
-                    </span>
-                    {s.approvalStatus ? (
-                      <span className={`w-fit rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
-                        {APPROVAL_LABEL[s.approvalStatus] ?? s.approvalStatus}
-                      </span>
-                    ) : (
-                      <span className="w-fit rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
-                    )}
-                    {!isPastDay && s.createdVia === "PUBLIC_RECRUIT_ENTRY" ? <CancelShiftButton shiftId={s.id} staffName={s.staffName} /> : null}
-                  </li>
-                ))}
-              </ul>
-            </div>
+          clientOrders.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted">この日のオーダーはありません。</p>
           ) : (
-            <div>
-              {clientOrders.length > 0 ? (
-                <div className="mb-4">
-                  <p className="mb-2 text-xs font-semibold text-muted">依頼主からの募集</p>
-                  <ul className="flex flex-col gap-2 text-sm">
-                    {clientOrders.map((o) => (
-                      <ClientOrderRow
-                        key={o.id}
-                        order={o}
-                        history={history.filter((h) => h.publicRecruitmentId === o.id)}
-                        staffOptions={staffOptions}
-                        disabled={isPastDay}
-                      />
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              {clientGroups.length > 0 ? (
-                <div>
-                  <p className="mb-2 text-xs font-semibold text-muted">依頼主一覧</p>
-                  <ul className="flex flex-col gap-1 text-sm">
-                    {clientGroups.map((g) => (
-                      <li key={g.key}>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedClientKey(g.key)}
-                          className="flex w-full items-center justify-between border-b border-border/50 py-2.5 text-left hover:bg-background"
-                        >
-                          <span className="font-semibold">{g.clientName}</span>
-                          <span className="flex items-center gap-2 text-muted">
-                            {g.rows.length}名
-                            <span aria-hidden>›</span>
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </div>
+            <ul className="flex flex-col gap-2 text-sm">
+              {clientOrders.map((o) => (
+                <ClientOrderRow
+                  key={o.id}
+                  order={o}
+                  history={history.filter((h) => h.publicRecruitmentId === o.id)}
+                  staffOptions={staffOptions}
+                  disabled={isPastDay}
+                />
+              ))}
+            </ul>
           )
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
@@ -2058,30 +1955,24 @@ function AssignShiftModal({
   teams,
   clients,
   defaultDate,
-  defaultCompanyRelationshipId,
   onClose,
 }: {
   staffOptions: StaffOption[];
   teams: Team[];
   clients: { id: string; name: string }[];
   defaultDate: string;
-  defaultCompanyRelationshipId?: string;
   onClose: () => void;
 }) {
-  // defaultCompanyRelationshipIdが渡されている場合（依頼主の稼働履歴タブ等、
-  // 勤務先がすでに文脈上わかっている状態からの追加）は、勤務先ステップだけで
-  // なくチーム選択ステップも飛ばす — 飛ばさないと、通常の＋ボタンからの
-  // フローと最初の画面が見分けつかず「同じメニューが出た」ように見えるため。
   const steps: AssignStep[] = [
-    ...(teams.length > 0 && defaultCompanyRelationshipId === undefined ? (["team"] as const) : []),
-    ...(defaultCompanyRelationshipId === undefined ? (["workplace"] as const) : []),
+    ...(teams.length > 0 ? (["team"] as const) : []),
+    "workplace",
     "staff",
     "datetime",
     "confirm",
   ];
   const [step, setStep] = useState<AssignStep>(steps[0]);
   const [teamId, setTeamId] = useState("");
-  const [companyRelationshipId, setCompanyRelationshipId] = useState(defaultCompanyRelationshipId ?? "");
+  const [companyRelationshipId, setCompanyRelationshipId] = useState("");
   const [clientSearch, setClientSearch] = useState("");
   const [staffUserId, setStaffUserId] = useState("");
   const [dates, setDates] = useState<string[]>([defaultDate]);
@@ -2151,11 +2042,6 @@ function AssignShiftModal({
 
   const teamName = teams.find((t) => t.id === teamId)?.name;
   const workplaceName = companyRelationshipId ? clients.find((c) => c.id === companyRelationshipId)?.name : "社内";
-  // 依頼主の詳細から「＋スタッフを追加」で開いた場合は、＋ボタンのFabMenu
-  // （シフトを作成/募集を作成の選択）と同じタイトルだと同じ画面が再度出た
-  // ように見えて紛らわしいので、勤務先が最初から決まっている時はタイトルを
-  // 「◯◯にスタッフを追加」にして区別する。
-  const modalTitle = defaultCompanyRelationshipId !== undefined ? `${workplaceName}にスタッフを追加` : "シフトを作成";
   const staffName = staffOptions.find((s) => s.id === staffUserId)?.name;
   const dateLabels = dates.map((d) => {
     const dt = new Date(d + "T00:00:00Z");
@@ -2172,7 +2058,7 @@ function AssignShiftModal({
 
   if (step === "team") {
     return (
-      <Modal title={modalTitle} onClose={onClose}>
+      <Modal title="シフトを作成" onClose={onClose}>
         <div className="flex flex-col gap-3">
           <h3 className="font-serif-jp text-lg font-semibold">どのチームのシフトを作成しますか？</h3>
           <div className="flex flex-col gap-2">
@@ -2194,7 +2080,7 @@ function AssignShiftModal({
 
   if (step === "workplace") {
     return (
-      <Modal title={modalTitle} onClose={onClose}>
+      <Modal title="シフトを作成" onClose={onClose}>
         <div className="flex flex-col gap-3">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">勤務先を選択</h3>
@@ -2236,7 +2122,7 @@ function AssignShiftModal({
 
   if (step === "staff") {
     return (
-      <Modal title={modalTitle} onClose={onClose}>
+      <Modal title="シフトを作成" onClose={onClose}>
         <div className="flex flex-col gap-3">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">{workplaceName}・スタッフを選択</h3>
@@ -2259,7 +2145,7 @@ function AssignShiftModal({
 
   if (step === "datetime") {
     return (
-      <Modal title={modalTitle} onClose={onClose}>
+      <Modal title="シフトを作成" onClose={onClose}>
         <div className="flex flex-col gap-3">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">
@@ -2338,7 +2224,7 @@ function AssignShiftModal({
 
   // step === "confirm"
   return (
-    <Modal title={modalTitle} onClose={onClose}>
+    <Modal title="シフトを作成" onClose={onClose}>
       <div className="flex flex-col gap-3">
         {backButton}
         <h3 className="font-serif-jp text-lg font-semibold">内容を確認してください</h3>

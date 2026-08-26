@@ -25,8 +25,9 @@ try {
   await admin.click("button[type=submit]");
   await admin.waitForURL("http://localhost:3000/company");
 
-  // create a team too — the ＋スタッフを追加 shortcut must skip the team step
-  // as well as the workplace step, not just the latter (regression for ③).
+  // create a team too — this used to make the (now-removed) ＋スタッフを追加
+  // shortcut show a redundant team-picker step; confirm no such shortcut
+  // remains reachable at all now.
   await admin.click("text=設定");
   await admin.waitForURL("http://localhost:3000/company/settings");
   await admin.fill('input[placeholder="新しいチーム名"]', "検証チーム");
@@ -59,7 +60,7 @@ try {
   await staff.click("text=参加する");
   await staff.waitForURL("http://localhost:3000/staff");
 
-  // assign TESUTO to client テスト on today's date
+  // assign TESUTO to client テスト (via the normal ＋ button flow, incl. team)
   await admin.goto("http://localhost:3000/company/calendar");
   await admin.locator("button", { hasText: "＋" }).last().click();
   await admin.getByText("シフトを作成").click();
@@ -72,38 +73,27 @@ try {
   await modal.getByRole("button", { name: /件のシフトを作成/ }).click();
   await admin.waitForTimeout(800);
 
-  // month view shows the staff name directly, not just an "オーダーN件" count
+  // month view: staff name shown, always green (no sky-blue distinction)
   await admin.goto("http://localhost:3000/company/calendar");
   await admin.waitForTimeout(500);
   let bodyText = await admin.textContent("body");
   log("month view shows the assigned staff's name for a client shift", bodyText.includes("TESUTO"));
-  log("month view no longer collapses client shifts into オーダーN件", !bodyText.includes("オーダー1件"));
+  const staffTagEl = await admin.locator("span:has-text('TESUTO')").first();
+  const staffTagClass = (await staffTagEl.getAttribute("class")) ?? "";
+  log("client-workplace shift's name tag is green like any other confirmed shift", staffTagClass.includes("emerald"));
+  log("client-workplace shift's name tag is NOT sky-blue", !staffTagClass.includes("sky"));
+  log("month view does not show an オーダーN件 badge for a shift WE created", !bodyText.includes("オーダー1件"));
 
   const now = new Date();
   await admin.locator(`button:has-text("${now.getDate()}")`).first().click();
   await admin.waitForTimeout(300);
   const dayModal = admin.locator("div.fixed.inset-0.z-20").last();
   bodyText = await dayModal.textContent();
-  log("day-detail tab is labeled 依頼主 (not the overloaded term オーダー)", bodyText.includes("依頼主"));
-
-  await dayModal.getByRole("button", { name: "依頼主", exact: true }).click();
-  await admin.waitForTimeout(300);
-  bodyText = await dayModal.textContent();
-  log("client list section is labeled 依頼主一覧", bodyText.includes("依頼主一覧"));
-  log("old アサイン済みスタッフ label is gone", !bodyText.includes("アサイン済みスタッフ"));
-
-  await dayModal.getByRole("button", { name: /テスト/ }).click();
-  await admin.waitForTimeout(300);
-  await dayModal.getByRole("button", { name: "＋ スタッフを追加" }).click();
-  await admin.waitForTimeout(500);
-  bodyText = await admin.textContent("body");
   log(
-    "clicking ＋スタッフを追加 does NOT show the FabMenu's シフトを作成/募集を作成 choice",
-    !(bodyText.includes("シフトを作成") && bodyText.includes("募集を作成")),
+    "day-detail has no オーダー tab (only a shift WE assigned, no client-posted recruitment exists)",
+    !bodyText.includes("オーダー"),
   );
-  log("modal title is client-specific (テストにスタッフを追加), not the generic シフトを作成", bodyText.includes("テストにスタッフを追加"));
-  log("workplace AND team steps were both skipped straight to staff selection", bodyText.includes("テスト・スタッフを選択"));
-  log("team-picker (どのチームのシフトを作成しますか？) is NOT shown for this shortcut", !bodyText.includes("どのチームのシフトを作成しますか"));
+  log("the assigned shift shows up in スタッフシフト with its 依頼主 badge inline", bodyText.includes("TESUTO") && bodyText.includes("テスト"));
 
   console.log(process.exitCode ? "CLIENT ORDER TAB SMOKE TEST HAD FAILURES" : "CLIENT ORDER TAB SMOKE TEST PASSED");
 } catch (err) {
