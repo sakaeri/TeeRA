@@ -54,7 +54,7 @@ async function regenerateLines(invoiceId: string) {
       date: { gte: start, lt: end },
       status: { notIn: ["SUPERSEDED", "CANCELLED"] },
     },
-    include: { staff: true, workReport: true, companyPlacementRate: true },
+    include: { staff: true, workReport: true, companyPlacementRate: true, publicRecruitment: true },
   });
 
   const fallbackRate = await fallbackRateForRelationship(invoice.issuingCompanyId, invoice.companyRelationshipId);
@@ -68,12 +68,18 @@ async function regenerateLines(invoiceId: string) {
       const workedHours = Math.round((report.computedMinutes / 60) * 100) / 100;
       if (workedHours <= 0) continue;
 
-      // シフト作成時に選んだ業務内容の単価を優先し、選ばれていなければ
-      // その依頼主に登録されている一番古い単価にフォールバックする
-      // （業務内容が複数ある依頼主でも、日給/時給が混在していても正しく
-      // 区別できるようにするための対応）。月給の単価は日々のシフト単位では
-      // 自動計上しない。
-      const taskRate = s.companyPlacementRate ?? fallbackRate;
+      // 依頼主自身の募集(依頼主からの募集/公開募集)を埋めたシフトは、その
+      // 募集に依頼主が設定した単価を最優先する — 依頼主は募集ごとに異なる
+      // 単価を設定できる（同じ業務内容でも依頼主/派遣会社によって単価が
+      // 違う、というケースをこれで区別する）。それ以外は、シフト作成時に
+      // 選んだ業務内容の単価を優先し、選ばれていなければその依頼主に登録
+      // されている一番古い単価にフォールバックする。月給の単価は日々の
+      // シフト単位では自動計上しない。
+      const recruitmentRate =
+        s.publicRecruitment?.wageType && s.publicRecruitment.hourlyWage != null
+          ? { taskName: s.publicRecruitment.title, wageType: s.publicRecruitment.wageType, amount: s.publicRecruitment.hourlyWage }
+          : null;
+      const taskRate = recruitmentRate ?? s.companyPlacementRate ?? fallbackRate;
       if (!taskRate || taskRate.wageType === "MONTHLY") continue;
       const isHourly = taskRate.wageType === "HOURLY";
       const lineHours = isHourly ? workedHours : 1;

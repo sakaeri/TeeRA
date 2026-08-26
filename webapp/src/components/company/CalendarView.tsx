@@ -17,6 +17,7 @@ import {
   assignStaffToRecruitmentAction,
   cancelShiftAction,
 } from "@/app/company/calendar/actions";
+import { upsertPlacementRateAction } from "@/app/company/contracts/actions";
 
 type ShiftRow = {
   id: string;
@@ -822,9 +823,10 @@ function DayDetailModal({
                 <ClientOrderRow
                   key={o.id}
                   order={o}
+                  assignedShifts={shifts.filter((s) => s.publicRecruitmentId === o.id)}
                   history={history.filter((h) => h.publicRecruitmentId === o.id)}
                   staffOptions={staffOptions}
-                  disabled={isPastDay}
+                  isPastDay={isPastDay}
                 />
               ))}
             </ul>
@@ -1875,15 +1877,18 @@ function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName:
 
 function ClientOrderRow({
   order,
+  assignedShifts,
   history,
   staffOptions,
-  disabled,
+  isPastDay,
 }: {
   order: ClientRecruitmentRow;
+  assignedShifts: ShiftRow[];
   history: ShiftHistoryRow[];
   staffOptions: StaffOption[];
-  disabled?: boolean;
+  isPastDay?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(true);
   const remaining = Math.max(order.maxEntries - order.filled, 0);
 
   return (
@@ -1900,7 +1905,46 @@ function ClientOrderRow({
           {order.filled}/{order.maxEntries}名
         </span>
       </div>
-      {disabled ? (
+
+      {assignedShifts.length > 0 ? (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-1 text-xs font-semibold text-muted hover:text-primary"
+          >
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`}
+            >
+              <path
+                d="M5 7.5L10 12.5L15 7.5"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            確定スタッフ（{assignedShifts.length}名）
+          </button>
+          {expanded ? (
+            <ul className="mt-1 flex flex-col text-xs">
+              {assignedShifts.map((s) => (
+                <li
+                  key={s.id}
+                  className="grid grid-cols-[1fr_auto] items-center gap-2 border-b border-border/50 py-1.5 last:border-b-0"
+                >
+                  <span className="truncate font-medium">{s.staffName}</span>
+                  {!isPastDay ? <CancelShiftButton shiftId={s.id} staffName={s.staffName} /> : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      {isPastDay ? (
         <p className="mt-2 text-xs text-muted">過去の日付のため変更できません。</p>
       ) : (
         <RecruitmentAssignControls recruitmentId={order.id} remaining={remaining} staffOptions={staffOptions} />
@@ -1983,13 +2027,18 @@ function AssignShiftModal({
   const [teamId, setTeamId] = useState("");
   const [companyRelationshipId, setCompanyRelationshipId] = useState("");
   const [companyPlacementRateId, setCompanyPlacementRateId] = useState("");
+  // このモーダル内で新しく追加した単価（サーバー側のplacementRates propは
+  // ページ全体のrevalidateを待たないと更新されないので、追加直後にその場で
+  // 選べるようローカルにも保持しておく）。
+  const [extraRates, setExtraRates] = useState<PlacementRateRow[]>([]);
+  const allPlacementRates = [...placementRates, ...extraRates];
   const clientTaskOptions = companyRelationshipId
-    ? placementRates.filter((r) => r.companyRelationshipId === companyRelationshipId)
+    ? allPlacementRates.filter((r) => r.companyRelationshipId === companyRelationshipId)
     : [];
   const steps: AssignStep[] = [
     ...(teams.length > 0 ? (["team"] as const) : []),
     "workplace",
-    ...(clientTaskOptions.length > 0 ? (["task"] as const) : []),
+    ...(companyRelationshipId ? (["task"] as const) : []),
     "staff",
     "datetime",
     "confirm",
@@ -2008,6 +2057,32 @@ function AssignShiftModal({
   const [overrideChecked, setOverrideChecked] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [showNewTaskForm, setShowNewTaskForm] = useState(false);
+  const [newTaskName, setNewTaskName] = useState("");
+  const [newTaskWageType, setNewTaskWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
+  const [newTaskAmount, setNewTaskAmount] = useState("");
+  const [newTaskPending, startNewTaskTransition] = useTransition();
+
+  function submitNewTask() {
+    if (!newTaskName.trim() || !newTaskAmount) return;
+    startNewTaskTransition(async () => {
+      const rate = await upsertPlacementRateAction({
+        companyRelationshipId,
+        taskName: newTaskName.trim(),
+        wageType: newTaskWageType,
+        amount: Number(newTaskAmount),
+      });
+      setExtraRates((prev) => [
+        ...prev,
+        { id: rate.id, companyRelationshipId, taskName: rate.taskName, wageType: rate.wageType, amount: rate.amount },
+      ]);
+      setCompanyPlacementRateId(rate.id);
+      setShowNewTaskForm(false);
+      setNewTaskName("");
+      setNewTaskAmount("");
+      goNext();
+    });
+  }
 
   function goBack() {
     const i = steps.indexOf(step);
@@ -2134,8 +2209,7 @@ function AssignShiftModal({
                     onClick={() => {
                       setCompanyRelationshipId(c.id);
                       setCompanyPlacementRateId("");
-                      const hasTaskOptions = placementRates.some((r) => r.companyRelationshipId === c.id);
-                      setStep(hasTaskOptions ? "task" : "staff");
+                      setStep("task");
                     }}
                   />
                 ))}
@@ -2166,6 +2240,64 @@ function AssignShiftModal({
               />
             ))}
           </div>
+
+          {showNewTaskForm ? (
+            <div className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-3">
+              <input
+                type="text"
+                value={newTaskName}
+                onChange={(e) => setNewTaskName(e.target.value)}
+                placeholder="業務内容（例：キャディ業務）"
+                className="rounded-lg border border-border px-3 py-2 text-sm"
+              />
+              <div className="flex gap-2">
+                <select
+                  value={newTaskWageType}
+                  onChange={(e) => setNewTaskWageType(e.target.value as "HOURLY" | "DAILY" | "MONTHLY")}
+                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                >
+                  <option value="HOURLY">時給</option>
+                  <option value="DAILY">日給</option>
+                  <option value="MONTHLY">月給</option>
+                </select>
+                <input
+                  type="number"
+                  value={newTaskAmount}
+                  onChange={(e) => setNewTaskAmount(e.target.value)}
+                  placeholder="金額"
+                  className="w-24 rounded-lg border border-border px-2 py-2 text-sm"
+                />
+                <span className="self-center text-xs text-muted">円</span>
+              </div>
+              <button
+                type="button"
+                disabled={newTaskPending || !newTaskName.trim() || !newTaskAmount}
+                onClick={submitNewTask}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                この業務内容を追加して次へ
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowNewTaskForm(true)}
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-semibold text-muted hover:border-primary hover:text-primary"
+            >
+              ＋ 新しい業務内容を追加する
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              setCompanyPlacementRateId("");
+              goNext();
+            }}
+            className="self-start text-xs text-muted hover:text-primary"
+          >
+            選ばずに進む
+          </button>
         </div>
       </Modal>
     );

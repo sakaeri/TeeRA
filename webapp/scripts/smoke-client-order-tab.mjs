@@ -67,6 +67,7 @@ try {
   let modal = admin.locator("div.fixed.inset-0.z-20").last();
   await modal.getByRole("button", { name: "検証チーム" }).click();
   await modal.getByRole("button", { name: "テスト" }).click();
+  await modal.getByRole("button", { name: "選ばずに進む" }).click();
   await modal.getByRole("button", { name: "TESUTO" }).click();
   await modal.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);

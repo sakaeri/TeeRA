@@ -53,8 +53,10 @@ export async function upsertPlacementRateAction(input: {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
 
-  await upsertPlacementRate({ ...input, companyId: membership.companyId });
+  const rate = await upsertPlacementRate({ ...input, companyId: membership.companyId });
   revalidatePath("/company/settings");
+  revalidatePath("/company/calendar");
+  return rate;
 }
 
 export async function deletePlacementRateAction(id: string) {
