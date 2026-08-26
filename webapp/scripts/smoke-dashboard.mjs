@@ -27,7 +27,7 @@ try {
   // create a regular staff member — they must NOT be an assignable recipient
   // (only company admins/editors can see this dashboard and resolve todos)
   await page.click("text=スタッフ名簿");
-  await page.click("text=＋スタッフを招待する");
+  await page.click("text=＋スタッフを追加する");
   await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "一般スタッフ");
   await page.getByRole("button", { name: "作成", exact: true }).click();

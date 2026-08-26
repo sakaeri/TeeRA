@@ -4,6 +4,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { todayJst, nowJstHHMM } from "@/lib/date";
+import { useClickOutside } from "@/lib/useClickOutside";
 import {
   createAssignedShiftAction,
   matchShiftRequestAction,
@@ -622,9 +623,10 @@ function FabMenu({
   onCreateRecruitment: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const menuRef = useClickOutside<HTMLDivElement>(open, () => setOpen(false));
 
   return (
-    <div className="fixed bottom-8 right-8 z-20 flex flex-col items-end gap-2">
+    <div ref={menuRef} className="fixed bottom-8 right-8 z-20 flex flex-col items-end gap-2">
       {open ? (
         <div className="mb-1 w-48 overflow-hidden rounded-xl border border-border bg-white shadow-lg">
           <button

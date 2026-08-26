@@ -45,7 +45,7 @@ try {
   );
 
   await admin.click("text=スタッフ名簿");
-  await admin.click("text=＋スタッフを招待する");
+  await admin.click("text=＋スタッフを追加する");
   await admin.click("text=本アカウントを招待");
   await admin.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForSelector('input[readonly]');

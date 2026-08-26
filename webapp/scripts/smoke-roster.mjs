@@ -28,7 +28,7 @@ try {
   await page.waitForURL("http://localhost:3000/company/roster");
 
   // invite real staff
-  await page.click("text=＋スタッフを招待する");
+  await page.click("text=＋スタッフを追加する");
   await page.click("text=本アカウントを招待");
   await page.getByRole("button", { name: "招待URLを発行する" }).click();
   await page.waitForSelector('input[readonly]');
@@ -38,7 +38,7 @@ try {
   let bodyText = await page.textContent("body");
 
   // create proxy staff
-  await page.click("text=＋スタッフを招待する");
+  await page.click("text=＋スタッフを追加する");
   await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "仮スタッフ花子");
   await page.getByRole("button", { name: "作成", exact: true }).click();

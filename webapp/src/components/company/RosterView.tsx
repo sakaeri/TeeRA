@@ -12,6 +12,7 @@ import {
 } from "@/app/company/actions";
 import { StaffDetailPanel } from "@/components/company/StaffDetailPanel";
 import { ClientDetailPanel } from "@/components/company/ClientDetailPanel";
+import { useClickOutside } from "@/lib/useClickOutside";
 
 type StaffRow = {
   membershipId: string;
@@ -38,7 +39,7 @@ const PROXY_PROMPT_TITLE: Record<"client" | "agency" | "staff", string> = {
 };
 
 const ADD_BUTTON_LABEL: Record<Tab, string> = {
-  staff: "＋スタッフを招待する",
+  staff: "＋スタッフを追加する",
   clients: "＋依頼主を追加する",
   agencies: "＋派遣会社を追加する",
 };
@@ -103,6 +104,7 @@ export function RosterView({
     "client" | "agency" | "staff" | null
   >(null);
   const [proxyNameInput, setProxyNameInput] = useState("");
+  const addMenuRef = useClickOutside<HTMLDivElement>(showAddMenu, () => setShowAddMenu(false));
 
   function openRelationship(id: string, kind: "client" | "agency") {
     setSelectedRelationshipId(id);
@@ -145,7 +147,7 @@ export function RosterView({
           </select>
         </div>
 
-        <div className="relative">
+        <div className="relative" ref={addMenuRef}>
           <button
             type="button"
             onClick={() => {

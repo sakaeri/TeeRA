@@ -167,7 +167,7 @@ try {
 
   // register a fresh personal account, join owner's own company as STAFF via a staff invite, then try to redeem the agency-relationship invite
   await owner.goto("http://localhost:3000/company/roster");
-  await owner.click("text=＋スタッフを招待する");
+  await owner.click("text=＋スタッフを追加する");
   await owner.click("text=本アカウントを招待");
   await owner.getByRole("button", { name: "招待URLを発行する" }).click();
   await owner.waitForSelector('input[readonly]');
