@@ -1099,28 +1099,30 @@ function OrderEditModal({
           </div>
         ) : null}
 
-        <Field label="募集人数の上限">
-          <div className="flex gap-2">
-            <input
-              type="number"
-              min={recruitment.filled}
-              value={maxEntries}
-              disabled={!canManage}
-              onChange={(e) => setMaxEntries(Number(e.target.value))}
-              className="w-full rounded-lg border border-border px-3 py-2 text-sm disabled:bg-gray-50"
-            />
-            {canManage ? (
-              <button
-                type="button"
-                disabled={pending || maxEntries === recruitment.maxEntries}
-                onClick={saveMaxEntries}
-                className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-background disabled:opacity-50"
-              >
-                変更する
-              </button>
-            ) : null}
-          </div>
-        </Field>
+        {!showPublicForm ? (
+          <Field label="募集人数の上限">
+            <div className="flex gap-2">
+              <input
+                type="number"
+                min={recruitment.filled}
+                value={maxEntries}
+                disabled={!canManage}
+                onChange={(e) => setMaxEntries(Number(e.target.value))}
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm disabled:bg-gray-50"
+              />
+              {canManage ? (
+                <button
+                  type="button"
+                  disabled={pending || maxEntries === recruitment.maxEntries}
+                  onClick={saveMaxEntries}
+                  className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-background disabled:opacity-50"
+                >
+                  変更する
+                </button>
+              ) : null}
+            </div>
+          </Field>
+        ) : null}
 
         {error ? <p className="text-xs text-red-600">{error}</p> : null}
 
@@ -1166,12 +1168,6 @@ function OrderEditModal({
 
             <Field label="時給／日給" className="mb-2">
               <div className="flex gap-2">
-                <input
-                  type="number"
-                  value={wageAmount}
-                  onChange={(e) => setWageAmount(e.target.value)}
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-                />
                 <select
                   value={wageType}
                   onChange={(e) => setWageType(e.target.value as "HOURLY" | "DAILY")}
@@ -1180,6 +1176,12 @@ function OrderEditModal({
                   <option value="HOURLY">時給</option>
                   <option value="DAILY">日給</option>
                 </select>
+                <input
+                  type="number"
+                  value={wageAmount}
+                  onChange={(e) => setWageAmount(e.target.value)}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                />
               </div>
             </Field>
 
@@ -1260,8 +1262,10 @@ function OrderEditModal({
                     type="button"
                     disabled={added}
                     onClick={() => addItem(label)}
-                    className={`rounded-full border px-3 py-1 text-xs ${
-                      added ? "border-border text-muted/50" : "border-border text-muted hover:border-primary"
+                    className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                      added
+                        ? "border-border text-muted/50"
+                        : "border-primary/50 text-primary hover:border-primary hover:bg-primary/5"
                     }`}
                   >
                     ＋{label}
@@ -1271,7 +1275,7 @@ function OrderEditModal({
               <button
                 type="button"
                 onClick={() => setShowCustomItemForm(true)}
-                className="rounded-full border border-dashed border-border px-3 py-1 text-xs text-muted hover:border-primary"
+                className="rounded-full border border-dashed border-primary/50 px-3 py-1 text-xs font-medium text-primary hover:border-primary hover:bg-primary/5"
               >
                 ＋項目を追加
               </button>
