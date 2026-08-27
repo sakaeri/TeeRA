@@ -85,14 +85,31 @@ try {
   const panel = admin.locator("div.fixed.inset-0.z-30").last();
   await panel.getByRole("button", { name: "業務内容単価" }).click();
 
+  // 業務内容の入力欄は、既に登録済みの業務名がある会社では選択式（既存の名前を
+  // 選ぶ or ＋新しい業務内容を追加する）に切り替わる。まだ無ければ通常のテキスト
+  // 入力のまま。
+  async function fillTaskName(name) {
+    const input = panel.locator('input[placeholder*="業務内容"]');
+    if ((await input.count()) === 0) {
+      const picker = panel.locator("select").first();
+      const hasOption = (await picker.locator("option", { hasText: name }).count()) > 0;
+      if (hasOption) {
+        await picker.selectOption({ label: name });
+        return;
+      }
+      await picker.selectOption({ label: "＋ 新しい業務内容を追加する" });
+    }
+    await panel.locator('input[placeholder*="業務内容"]').fill(name);
+  }
+
   async function addRate(taskName, workplace, amount) {
     await panel.getByRole("button", { name: "＋業務内容を追加" }).click();
     await admin.waitForTimeout(150);
-    await panel.locator('input[placeholder*="業務内容"]').fill(taskName);
+    await fillTaskName(taskName);
     if (workplace) {
       await panel.getByLabel("勤務先").selectOption({ label: workplace });
     }
-    await panel.locator("select").nth(1).selectOption("DAILY");
+    await panel.locator("select").last().selectOption("DAILY");
     await panel.locator('input[placeholder="金額"]').fill(String(amount));
     await panel.getByRole("button", { name: "追加", exact: true }).click();
     await admin.waitForTimeout(400);

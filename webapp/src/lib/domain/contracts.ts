@@ -199,6 +199,26 @@ export async function listPlacementRates(companyId: string) {
   });
 }
 
+// 依頼主単価/スタッフ単価の「＋業務内容を追加」で、自由入力による表記ゆれ
+// （キャディ／キャディ業務／Caddie…）を防ぐための候補一覧。実際にシフトで
+// 使われた業務名と、既に登録済みの単価表の業務名を統合して返す。
+export async function listKnownTaskNames(companyId: string): Promise<string[]> {
+  const [shiftNames, placementNames, staffRateNames] = await Promise.all([
+    prisma.shift.findMany({
+      where: { companyId, taskName: { not: null } },
+      select: { taskName: true },
+      distinct: ["taskName"],
+    }),
+    prisma.companyPlacementRate.findMany({ where: { companyId }, select: { taskName: true }, distinct: ["taskName"] }),
+    prisma.staffTaskRate.findMany({ where: { companyId }, select: { taskName: true }, distinct: ["taskName"] }),
+  ]);
+  const names = new Set<string>();
+  for (const s of shiftNames) if (s.taskName) names.add(s.taskName);
+  for (const p of placementNames) names.add(p.taskName);
+  for (const s of staffRateNames) names.add(s.taskName);
+  return Array.from(names).sort((a, b) => a.localeCompare(b, "ja"));
+}
+
 // 業務内容名だけを登録する（単価は付けない）— シフト作成時のその場追加用。
 // companyRelationshipId がnullの複合ユニークキーはPrismaのupsertでは扱えない
 // ため、findFirst+create で代用する。

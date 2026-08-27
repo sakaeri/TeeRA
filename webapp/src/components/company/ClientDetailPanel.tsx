@@ -64,10 +64,12 @@ function timeLabel(d: ClientMonthDetail["days"][number]) {
 export function ClientDetailPanel({
   relationshipId,
   kind,
+  knownTaskNames,
   onClose,
 }: {
   relationshipId: string;
   kind: "client" | "agency";
+  knownTaskNames: string[];
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -270,7 +272,12 @@ export function ClientDetailPanel({
             ) : null}
 
             {tab === "rates" ? (
-              <PlacementRatesTab relationshipId={relationshipId} rates={data.placementRates} onChanged={refresh} />
+              <PlacementRatesTab
+                relationshipId={relationshipId}
+                rates={data.placementRates}
+                knownTaskNames={knownTaskNames}
+                onChanged={refresh}
+              />
             ) : null}
 
             {tab === "note" ? (
@@ -305,6 +312,8 @@ const WAGE_TYPE_OPTIONS: { value: "HOURLY" | "DAILY" | "MONTHLY"; label: string 
   { value: "MONTHLY", label: "月給" },
 ];
 
+const NEW_TASK_NAME_SENTINEL = "__new__";
+
 // 単価は上書きしない — 編集は新しいバージョンを開始日付きで積む、削除は
 // 単価未設定に戻すバージョンを積む（履歴は消えない）。バージョンが1つも
 // 無い（一度も単価が設定されていない）業務内容だけは、間違い登録の取消し
@@ -312,10 +321,12 @@ const WAGE_TYPE_OPTIONS: { value: "HOURLY" | "DAILY" | "MONTHLY"; label: string 
 function PlacementRatesTab({
   relationshipId,
   rates,
+  knownTaskNames,
   onChanged,
 }: {
   relationshipId: string;
   rates: PlacementRate[];
+  knownTaskNames: string[];
   onChanged: () => Promise<void>;
 }) {
   const [pending, startTransition] = useTransition();
@@ -327,10 +338,17 @@ function PlacementRatesTab({
   const [endingId, setEndingId] = useState<string | null>(null);
   const [endEffectiveFrom, setEndEffectiveFrom] = useState(todayJst());
   const [showNewForm, setShowNewForm] = useState(false);
+  const [newTaskNameMode, setNewTaskNameMode] = useState<"pick" | "custom">("custom");
   const [newTaskName, setNewTaskName] = useState("");
   const [newWageType, setNewWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
   const [newAmount, setNewAmount] = useState("");
   const [newEffectiveFrom, setNewEffectiveFrom] = useState(todayJst());
+
+  function openNewForm() {
+    setShowNewForm(true);
+    setNewTaskName("");
+    setNewTaskNameMode(knownTaskNames.length > 0 ? "pick" : "custom");
+  }
 
   const amendingRate = rates.find((r) => r.id === amendingId) ?? null;
   const endingRate = rates.find((r) => r.id === endingId) ?? null;
@@ -396,7 +414,7 @@ function PlacementRatesTab({
       <div className="mb-1 flex items-center justify-end">
         <button
           type="button"
-          onClick={() => setShowNewForm(true)}
+          onClick={openNewForm}
           className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
         >
           ＋業務内容を追加
@@ -562,13 +580,50 @@ function PlacementRatesTab({
               </button>
             </div>
             <div className="flex flex-col gap-2">
-              <input
-                type="text"
-                value={newTaskName}
-                onChange={(e) => setNewTaskName(e.target.value)}
-                placeholder="業務内容（例：キャディ業務）"
-                className="rounded-lg border border-border px-3 py-2 text-sm"
-              />
+              {newTaskNameMode === "pick" ? (
+                <select
+                  value={newTaskName}
+                  onChange={(e) => {
+                    if (e.target.value === NEW_TASK_NAME_SENTINEL) {
+                      setNewTaskNameMode("custom");
+                      setNewTaskName("");
+                    } else {
+                      setNewTaskName(e.target.value);
+                    }
+                  }}
+                  className="rounded-lg border border-border px-3 py-2 text-sm"
+                >
+                  <option value="">業務内容を選択</option>
+                  {knownTaskNames.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                  <option value={NEW_TASK_NAME_SENTINEL}>＋ 新しい業務内容を追加する</option>
+                </select>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  <input
+                    type="text"
+                    value={newTaskName}
+                    onChange={(e) => setNewTaskName(e.target.value)}
+                    placeholder="業務内容（例：キャディ業務）"
+                    className="rounded-lg border border-border px-3 py-2 text-sm"
+                  />
+                  {knownTaskNames.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewTaskNameMode("pick");
+                        setNewTaskName("");
+                      }}
+                      className="self-start text-xs text-muted hover:text-primary"
+                    >
+                      ← 既存の業務内容から選ぶ
+                    </button>
+                  ) : null}
+                </div>
+              )}
               <div className="flex flex-wrap items-end gap-2">
                 <select
                   value={newWageType}

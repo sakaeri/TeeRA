@@ -82,12 +82,14 @@ export function RosterView({
   agencies,
   teams,
   templates,
+  knownTaskNames,
 }: {
   staff: StaffRow[];
   clients: RelationshipRow[];
   agencies: RelationshipRow[];
   teams: Team[];
   templates: ContractTemplateOption[];
+  knownTaskNames: string[];
 }) {
   const [tab, setTab] = useState<Tab>("staff");
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
@@ -339,6 +341,7 @@ export function RosterView({
         <StaffDetailPanel
           userId={selectedStaffId}
           clients={clients.map((c) => ({ id: c.id, name: c.name }))}
+          knownTaskNames={knownTaskNames}
           onClose={() => setSelectedStaffId(null)}
         />
       ) : null}
@@ -346,6 +349,7 @@ export function RosterView({
         <ClientDetailPanel
           relationshipId={selectedRelationshipId}
           kind={selectedRelationshipKind}
+          knownTaskNames={knownTaskNames}
           onClose={() => {
             setSelectedRelationshipId(null);
             setSelectedRelationshipKind(null);

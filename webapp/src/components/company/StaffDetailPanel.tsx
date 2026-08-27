@@ -67,10 +67,12 @@ function timeLabel(d: StaffMonthDetail["days"][number]) {
 export function StaffDetailPanel({
   userId,
   clients,
+  knownTaskNames,
   onClose,
 }: {
   userId: string;
   clients: ClientOption[];
+  knownTaskNames: string[];
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -285,7 +287,13 @@ export function StaffDetailPanel({
             ) : null}
 
             {tab === "rates" ? (
-              <StaffTaskRatesTab userId={userId} rates={data.taskRates} clients={clients} onChanged={refresh} />
+              <StaffTaskRatesTab
+                userId={userId}
+                rates={data.taskRates}
+                clients={clients}
+                knownTaskNames={knownTaskNames}
+                onChanged={refresh}
+              />
             ) : null}
 
             {tab === "note" ? (
@@ -320,17 +328,21 @@ const WAGE_TYPE_OPTIONS: { value: "HOURLY" | "DAILY" | "MONTHLY"; label: string 
   { value: "MONTHLY", label: "月給" },
 ];
 
+const NEW_TASK_NAME_SENTINEL = "__new__";
+
 // 単価は上書きしない — 編集は新しいバージョンを開始日付きで積む、終了は
 // 単価未設定（雇用契約の基本単価にフォールバック）に戻すバージョンを積む。
 function StaffTaskRatesTab({
   userId,
   rates,
   clients,
+  knownTaskNames,
   onChanged,
 }: {
   userId: string;
   rates: StaffTaskRate[];
   clients: ClientOption[];
+  knownTaskNames: string[];
   onChanged: () => Promise<void>;
 }) {
   const [pending, startTransition] = useTransition();
@@ -342,11 +354,18 @@ function StaffTaskRatesTab({
   const [endingId, setEndingId] = useState<string | null>(null);
   const [endEffectiveFrom, setEndEffectiveFrom] = useState(todayJst());
   const [showNewForm, setShowNewForm] = useState(false);
+  const [newTaskNameMode, setNewTaskNameMode] = useState<"pick" | "custom">("custom");
   const [newTaskName, setNewTaskName] = useState("");
   const [newCompanyRelationshipId, setNewCompanyRelationshipId] = useState("");
   const [newWageType, setNewWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
   const [newAmount, setNewAmount] = useState("");
   const [newEffectiveFrom, setNewEffectiveFrom] = useState(todayJst());
+
+  function openNewForm() {
+    setShowNewForm(true);
+    setNewTaskName("");
+    setNewTaskNameMode(knownTaskNames.length > 0 ? "pick" : "custom");
+  }
 
   const amendingRate = rates.find((r) => r.id === amendingId) ?? null;
   const endingRate = rates.find((r) => r.id === endingId) ?? null;
@@ -409,7 +428,7 @@ function StaffTaskRatesTab({
         <p className="text-xs text-muted">未登録の業務内容は、雇用契約の基本単価で給与計算されます。</p>
         <button
           type="button"
-          onClick={() => setShowNewForm(true)}
+          onClick={openNewForm}
           className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
         >
           ＋業務内容を追加
@@ -563,13 +582,50 @@ function StaffTaskRatesTab({
               </button>
             </div>
             <div className="flex flex-col gap-2">
-              <input
-                type="text"
-                value={newTaskName}
-                onChange={(e) => setNewTaskName(e.target.value)}
-                placeholder="業務内容（例：キャディ業務）"
-                className="rounded-lg border border-border px-3 py-2 text-sm"
-              />
+              {newTaskNameMode === "pick" ? (
+                <select
+                  value={newTaskName}
+                  onChange={(e) => {
+                    if (e.target.value === NEW_TASK_NAME_SENTINEL) {
+                      setNewTaskNameMode("custom");
+                      setNewTaskName("");
+                    } else {
+                      setNewTaskName(e.target.value);
+                    }
+                  }}
+                  className="rounded-lg border border-border px-3 py-2 text-sm"
+                >
+                  <option value="">業務内容を選択</option>
+                  {knownTaskNames.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                  <option value={NEW_TASK_NAME_SENTINEL}>＋ 新しい業務内容を追加する</option>
+                </select>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  <input
+                    type="text"
+                    value={newTaskName}
+                    onChange={(e) => setNewTaskName(e.target.value)}
+                    placeholder="業務内容（例：キャディ業務）"
+                    className="rounded-lg border border-border px-3 py-2 text-sm"
+                  />
+                  {knownTaskNames.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewTaskNameMode("pick");
+                        setNewTaskName("");
+                      }}
+                      className="self-start text-xs text-muted hover:text-primary"
+                    >
+                      ← 既存の業務内容から選ぶ
+                    </button>
+                  ) : null}
+                </div>
+              )}
               <label className="flex flex-col gap-0.5 text-xs text-muted">
                 勤務先
                 <select

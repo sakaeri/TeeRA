@@ -19,6 +19,23 @@ const admin = await adminCtx.newPage();
 const staffCtx = await browser.newContext();
 const staff = await staffCtx.newPage();
 
+// 業務内容の入力欄は、既に登録済みの業務名がある会社では選択式（既存の名前を
+// 選ぶ or ＋新しい業務内容を追加する）に切り替わる。まだ無ければ通常のテキスト
+// 入力のまま。
+async function fillTaskName(panel, name) {
+  const input = panel.locator('input[placeholder*="業務内容"]');
+  if ((await input.count()) === 0) {
+    const picker = panel.locator("select").first();
+    const hasOption = (await picker.locator("option", { hasText: name }).count()) > 0;
+    if (hasOption) {
+      await picker.selectOption({ label: name });
+      return;
+    }
+    await picker.selectOption({ label: "＋ 新しい業務内容を追加する" });
+  }
+  await panel.locator('input[placeholder*="業務内容"]').fill(name);
+}
+
 const adminEmail = `taskrate-admin-${Date.now()}@example.com`;
 const staffEmail = `taskrate-staff-${Date.now()}@example.com`;
 
@@ -57,15 +74,15 @@ try {
   await panel.getByRole("button", { name: "単価", exact: true }).click();
 
   await panel.getByRole("button", { name: "＋業務内容を追加" }).click();
-  await panel.locator('input[placeholder*="業務内容"]').fill("キャディ業務");
-  await panel.locator("select").selectOption("DAILY");
+  await fillTaskName(panel, "キャディ業務");
+  await panel.locator("select").last().selectOption("DAILY");
   await panel.locator('input[placeholder="金額"]').fill("8000");
   await panel.getByRole("button", { name: "追加", exact: true }).click();
   await admin.waitForTimeout(500);
 
   await panel.getByRole("button", { name: "＋業務内容を追加" }).click();
-  await panel.locator('input[placeholder*="業務内容"]').fill("作業");
-  await panel.locator("select").selectOption("HOURLY");
+  await fillTaskName(panel, "作業");
+  await panel.locator("select").last().selectOption("HOURLY");
   await panel.locator('input[placeholder="金額"]').fill("1200");
   await panel.getByRole("button", { name: "追加", exact: true }).click();
   await admin.waitForTimeout(500);
