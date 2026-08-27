@@ -10,10 +10,9 @@ import {
   deleteTemplate,
   registerPlacementTaskName,
   addPlacementRateVersion,
-  endPlacementRate,
-  deleteUnpricedPlacementTaskName,
+  deletePlacementTaskName,
   addStaffTaskRateVersion,
-  endStaffTaskRate,
+  deleteStaffTaskRate,
   generateStaffContractFromNewTemplate,
   type TemplateInput,
 } from "@/lib/domain/contracts";
@@ -97,32 +96,14 @@ export async function addPlacementRateVersionAction(input: {
   return version;
 }
 
-export async function endPlacementRateAction(placementRateId: string, effectiveFrom: string) {
-  const { userId, membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
-
-  const rate = await prisma.companyPlacementRate.findFirstOrThrow({
-    where: { id: placementRateId, companyId: membership.companyId },
-  });
-  await endPlacementRate({
-    placementRateId: rate.id,
-    effectiveFrom: new Date(`${effectiveFrom}T00:00:00.000Z`),
-    createdByUserId: userId,
-  });
-  revalidatePath("/company/settings");
-  revalidatePath("/company/roster");
-  revalidatePath("/company/calendar");
-  revalidatePath("/company/invoices");
-}
-
-export async function deleteUnpricedPlacementTaskNameAction(placementRateId: string) {
+export async function deletePlacementTaskNameAction(placementRateId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
 
   const rate = await prisma.companyPlacementRate.findFirstOrThrow({
     where: { id: placementRateId, companyId: membership.companyId },
   });
-  await deleteUnpricedPlacementTaskName(rate.id);
+  await deletePlacementTaskName(rate.id);
   revalidatePath("/company/settings");
   revalidatePath("/company/roster");
   revalidatePath("/company/calendar");
@@ -166,26 +147,14 @@ export async function addStaffTaskRateVersionAction(input: {
   return version;
 }
 
-export async function endStaffTaskRateAction(staffTaskRateId: string, effectiveFrom: string) {
-  const { userId, membership } = await requireCompanyAdminOrEditor();
+export async function deleteStaffTaskRateAction(staffTaskRateId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
 
   const rate = await prisma.staffTaskRate.findFirstOrThrow({
     where: { id: staffTaskRateId, companyId: membership.companyId },
   });
-  await endStaffTaskRate({
-    staffTaskRateId: rate.id,
-    effectiveFrom: new Date(`${effectiveFrom}T00:00:00.000Z`),
-    createdByUserId: userId,
-  });
-
-  const workplaceLabel = rate.companyRelationshipId ? await relationshipLabel(rate.companyRelationshipId) : "勤務先問わず";
-  await createStaffNotice({
-    companyId: membership.companyId,
-    staffUserId: rate.staffUserId,
-    message: `「${rate.taskName}」（${workplaceLabel}）の個別単価が終了しました（${effectiveFrom}から基本単価に戻ります）`,
-  });
-
+  await deleteStaffTaskRate(rate.id);
   revalidatePath("/company/settings");
   revalidatePath("/company/roster");
 }

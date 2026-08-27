@@ -146,8 +146,8 @@ try {
   );
   log("a shift dated AFTER the rate change bills at the NEW rate (1500円/h)", newLine && Number(newLine.rate) === 1500 && Number(newLine.amount) === 6000);
 
-  // now end the rate entirely (from tomorrow) and confirm a shift the day
-  // after still resolves to "unpriced" (history preserved, not deleted).
+  // "終了する" is gone — a rate that has already been billed on an approved
+  // shift can no longer be deleted either (history must stay intact).
   await admin.goto("http://localhost:3000/company/roster");
   await admin.click("text=依頼主一覧");
   await admin.waitForTimeout(200);
@@ -155,28 +155,32 @@ try {
   await admin.waitForTimeout(300);
   panel = admin.locator("div.fixed.inset-0.z-30").last();
   await panel.getByRole("button", { name: "単価", exact: true }).click();
-  await panel.getByRole("button", { name: "終了する" }).click();
-  const endDate = addDays(today, 2);
-  await panel.locator('input[type=date]').fill(endDate);
-  await panel.getByRole("button", { name: "終了する", exact: true }).last().click();
-  await admin.waitForTimeout(500);
-
-  const versionCountAfterEnd = psql(`select count(*) from "CompanyPlacementRateVersion" where "placementRateId"='${placementRateId}';`);
-  log("ending the rate adds a 3rd version (history preserved, nothing deleted)", versionCountAfterEnd === "3");
-
-  const shiftAfterEndId = psql(
-    `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'CLIENT', '${relId}', '警備業務', '${endDate}', '09:00', '13:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
+  log("終了するボタンは廃止されている", (await panel.getByRole("button", { name: "終了する" }).count()) === 0);
+  await panel.getByRole("button", { name: "削除", exact: true }).click();
+  await admin.waitForTimeout(400);
+  const panelTextAfterDeleteAttempt = await panel.textContent();
+  log(
+    "使用済みの単価は削除できず、エラーメッセージが表示される",
+    panelTextAfterDeleteAttempt.includes("使用されているため削除できません"),
   );
-  psql(
-    `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "clockIn", "clockOut", "computedMinutes", "createdAt", "updatedAt")` +
-      ` values (gen_random_uuid()::text, '${shiftAfterEndId}', '${staffUserId}', 'WORKED', 'APPROVED', now() - interval '4 hours', now(), 240, now(), now());`,
-  );
-  const endMonth = endDate.slice(0, 7);
-  await admin.goto(`http://localhost:3000/company/invoices?month=${endMonth}&client=${relId}`);
+  const stillExistsCount = psql(`select count(*) from "CompanyPlacementRate" where id='${placementRateId}';`);
+  log("使用済みの単価は削除されず残っている", stillExistsCount === "1");
+
+  // a never-used task rate CAN be deleted outright.
+  await panel.getByRole("button", { name: "＋業務内容を追加" }).click();
+  await admin.waitForTimeout(150);
+  if ((await panel.locator('input[placeholder*="業務内容"]').count()) === 0) {
+    await panel.locator("select").first().selectOption({ label: "＋ 新しい業務内容を追加する" });
+  }
+  await panel.locator('input[placeholder*="業務内容"]').fill("未使用業務");
+  await panel.locator('input[placeholder="金額"]').fill("2000");
+  await panel.getByRole("button", { name: "追加", exact: true }).click();
   await admin.waitForTimeout(500);
-  const bodyAfterEnd = await admin.textContent("body");
-  log("a shift dated after the ended rate shows up as 単価未設定 again", bodyAfterEnd.includes("単価未設定"));
+  const unusedRateId = psql(`select id from "CompanyPlacementRate" where "taskName"='未使用業務' and "companyRelationshipId"='${relId}';`);
+  await panel.locator("li", { hasText: "未使用業務" }).getByRole("button", { name: "削除" }).click();
+  await admin.waitForTimeout(400);
+  const unusedStillExists = psql(`select count(*) from "CompanyPlacementRate" where id='${unusedRateId}';`);
+  log("未使用の単価は削除できる", unusedStillExists === "0");
 
   console.log(process.exitCode ? "RATE VERSIONING SMOKE TEST HAD FAILURES" : "RATE VERSIONING SMOKE TEST PASSED");
 } catch (err) {

@@ -149,33 +149,40 @@ try {
   );
   log("shift after the rate change pays at the NEW rate (9000円 flat, DAILY)", newLine && Number(newLine.rate) === 9000 && Number(newLine.hours) === 1 && Number(newLine.amount) === 9000);
 
-  // end the override -> falls back to base HOURLY 1500円 contract
+  // "終了する" is gone — a rate that has already been used by an approved
+  // shift can no longer be deleted either (history must stay intact).
   await admin.goto("http://localhost:3000/company/roster");
   await admin.click("text=履歴給与スタッフ");
   await admin.waitForTimeout(300);
   const panel2 = admin.locator("div.fixed.inset-0.z-30").last();
   await panel2.getByRole("button", { name: "業務内容単価" }).click();
-  await panel2.getByRole("button", { name: "終了する" }).click();
-  const endDate = addDays(today, 2);
-  await panel2.locator('input[type=date]').fill(endDate);
-  await panel2.getByRole("button", { name: "終了する", exact: true }).last().click();
-  await admin.waitForTimeout(500);
+  log("終了するボタンは廃止されている", (await panel2.getByRole("button", { name: "終了する" }).count()) === 0);
+  await panel2.getByRole("button", { name: "削除", exact: true }).click();
+  await admin.waitForTimeout(400);
+  const panelTextAfterDeleteAttempt = await panel2.textContent();
+  log(
+    "使用済みの単価は削除できず、エラーメッセージが表示される",
+    panelTextAfterDeleteAttempt.includes("使用されているため削除できません"),
+  );
+  const stillExistsCount = psql(`select count(*) from "StaffTaskRate" where id='${staffTaskRateId}';`);
+  log("使用済みの単価は削除されず残っている", stillExistsCount === "1");
 
-  const endShiftId = psql(
-    `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'CLIENT', '${relId}', '特殊作業', '${endDate}', '09:00', '17:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
-  );
-  psql(
-    `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "clockIn", "clockOut", "computedMinutes", "createdAt", "updatedAt")` +
-      ` values (gen_random_uuid()::text, '${endShiftId}', '${staffUserId}', 'WORKED', 'APPROVED', now() - interval '8 hours', now(), 480, now(), now());`,
-  );
-  const endMonth = endDate.slice(0, 7);
-  await admin.goto(`http://localhost:3000/company/payroll?month=${endMonth}&staff=${staffUserId}`);
+  // a never-used task rate CAN be deleted outright.
+  await panel2.getByRole("button", { name: "＋業務内容を追加" }).click();
+  await admin.waitForTimeout(150);
+  if ((await panel2.locator('input[placeholder*="業務内容"]').count()) === 0) {
+    await panel2.locator("select").first().selectOption({ label: "＋ 新しい業務内容を追加する" });
+  }
+  await panel2.locator('input[placeholder*="業務内容"]').fill("未使用業務");
+  await panel2.locator("select").last().selectOption("HOURLY");
+  await panel2.locator('input[placeholder="金額"]').fill("1200");
+  await panel2.getByRole("button", { name: "追加", exact: true }).click();
   await admin.waitForTimeout(500);
-  const endLine = JSON.parse(
-    psql(`select json_agg(json_build_object('rate',rate,'hours',hours,'amount',amount))->0 from "SalarySlipLine" ssl join "SalarySlip" ss on ss.id=ssl."salarySlipId" where ss."staffUserId"='${staffUserId}' and ssl."shiftId"='${endShiftId}';`),
-  );
-  log("shift after ending the override falls back to the base HOURLY 1500円 contract (8h × 1500)", endLine && Number(endLine.rate) === 1500 && Number(endLine.hours) === 8 && Number(endLine.amount) === 12000);
+  const unusedRateId = psql(`select id from "StaffTaskRate" where "taskName"='未使用業務' and "staffUserId"='${staffUserId}';`);
+  await panel2.locator("li", { hasText: "未使用業務" }).getByRole("button", { name: "削除" }).click();
+  await admin.waitForTimeout(400);
+  const unusedStillExists = psql(`select count(*) from "StaffTaskRate" where id='${unusedRateId}';`);
+  log("未使用の単価は削除できる", unusedStillExists === "0");
 
   console.log(process.exitCode ? "STAFF RATE VERSIONING SMOKE TEST HAD FAILURES" : "STAFF RATE VERSIONING SMOKE TEST PASSED");
 } catch (err) {

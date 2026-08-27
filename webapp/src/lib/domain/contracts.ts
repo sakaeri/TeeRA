@@ -266,30 +266,34 @@ export async function addPlacementRateVersion(params: {
   });
 }
 
-// 単価を終了する（指定日から単価未設定に戻す）。履歴は消さず残る。
-export async function endPlacementRate(params: {
-  placementRateId: string;
-  effectiveFrom: Date;
-  createdByUserId: string;
-}) {
-  return prisma.companyPlacementRateVersion.create({
-    data: {
-      placementRateId: params.placementRateId,
-      wageType: null,
-      amount: null,
-      effectiveFrom: params.effectiveFrom,
-      createdByUserId: params.createdByUserId,
+// 承認済みの実績シフト（出勤した・承認済み）でこの単価が実際に参照されて
+// いるかどうか。使用済みの単価は削除できない（過去の給与/請求計算の根拠を
+// 壊さないため）。未使用なら、単価をいくつ積んでいても削除してよい
+// （「終了する」機能は廃止 — 使わなくなった単価はそのまま放置すればよく、
+// 一度も使われていないものだけ間違い登録の取消しとして削除できれば十分）。
+export async function isPlacementRateUsed(placementRateId: string): Promise<boolean> {
+  const rate = await prisma.companyPlacementRate.findUniqueOrThrow({ where: { id: placementRateId } });
+  // 自社(companyRelationshipId=null)向けの登録は請求計算(CLIENTシフトのみ
+  // 対象)からは参照されないため、常に未使用扱いでよい。
+  if (!rate.companyRelationshipId) return false;
+  const shifts = await prisma.shift.findMany({
+    where: {
+      companyId: rate.companyId,
+      companyRelationshipId: rate.companyRelationshipId,
+      source: "CLIENT",
+      status: { notIn: ["SUPERSEDED", "CANCELLED"] },
     },
+    include: { workReport: true },
+  });
+  return shifts.some((s) => {
+    if (!s.workReport || s.workReport.outcome !== "WORKED" || s.workReport.approvalStatus !== "APPROVED") return false;
+    const effectiveTaskName = s.workReport.taskName ?? s.taskName;
+    return effectiveTaskName === rate.taskName;
   });
 }
 
-// バージョンが1つも無い（＝一度も単価が設定されたことがない）業務内容の登録だけを取り消す。
-export async function deleteUnpricedPlacementTaskName(id: string) {
-  const rate = await prisma.companyPlacementRate.findUniqueOrThrow({
-    where: { id },
-    include: { versions: true },
-  });
-  if (rate.versions.length > 0) throw new Error("has_rate_history");
+export async function deletePlacementTaskName(id: string) {
+  if (await isPlacementRateUsed(id)) throw new Error("rate_in_use");
   return prisma.companyPlacementRate.delete({ where: { id } });
 }
 
@@ -374,19 +378,32 @@ export async function addStaffTaskRateVersion(params: {
   });
 }
 
-// 単価を終了する（指定日から雇用契約の基本単価にフォールバックする状態に戻す）。
-export async function endStaffTaskRate(params: {
-  staffTaskRateId: string;
-  effectiveFrom: Date;
-  createdByUserId: string;
-}) {
-  return prisma.staffTaskRateVersion.create({
-    data: {
-      staffTaskRateId: params.staffTaskRateId,
-      wageType: null,
-      amount: null,
-      effectiveFrom: params.effectiveFrom,
-      createdByUserId: params.createdByUserId,
-    },
+// 承認済みの実績シフト（出勤した・承認済み）でこの単価が実際に参照されて
+// いるか（pickStaffTaskRateの解決結果がこの行と一致するか）を判定する。
+// 使用済みなら削除不可、未使用ならいつでも削除できる（「終了する」機能は
+// 廃止 — 使わなくなった単価はそのまま放置すればよい）。
+export async function isStaffTaskRateUsed(staffTaskRateId: string): Promise<boolean> {
+  const rate = await prisma.staffTaskRate.findUniqueOrThrow({ where: { id: staffTaskRateId } });
+  const siblings = await prisma.staffTaskRate.findMany({
+    where: { companyId: rate.companyId, staffUserId: rate.staffUserId, taskName: rate.taskName },
   });
+  const shifts = await prisma.shift.findMany({
+    where: {
+      companyId: rate.companyId,
+      staffUserId: rate.staffUserId,
+      status: { notIn: ["SUPERSEDED", "CANCELLED"] },
+    },
+    include: { workReport: true },
+  });
+  return shifts.some((s) => {
+    if (!s.workReport || s.workReport.outcome !== "WORKED" || s.workReport.approvalStatus !== "APPROVED") return false;
+    const effectiveTaskName = s.workReport.taskName ?? s.taskName;
+    if (effectiveTaskName !== rate.taskName) return false;
+    return pickStaffTaskRate(siblings, s.companyRelationshipId)?.id === rate.id;
+  });
+}
+
+export async function deleteStaffTaskRate(id: string) {
+  if (await isStaffTaskRateUsed(id)) throw new Error("rate_in_use");
+  return prisma.staffTaskRate.delete({ where: { id } });
 }

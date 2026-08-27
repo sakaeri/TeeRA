@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getStaffMonthDetailAction, updateStaffNoteAction, inviteProxyUpgradeAction } from "@/app/company/actions";
-import { addStaffTaskRateVersionAction, endStaffTaskRateAction } from "@/app/company/contracts/actions";
+import { addStaffTaskRateVersionAction, deleteStaffTaskRateAction } from "@/app/company/contracts/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
 
 type StaffTaskRate = {
@@ -338,8 +338,9 @@ const WAGE_TYPE_OPTIONS: { value: "HOURLY" | "DAILY" | "MONTHLY"; label: string 
 
 const NEW_TASK_NAME_SENTINEL = "__new__";
 
-// 単価は上書きしない — 編集は新しいバージョンを開始日付きで積む、終了は
-// 単価未設定（雇用契約の基本単価にフォールバック）に戻すバージョンを積む。
+// 単価は上書きしない — 編集は新しいバージョンを開始日付きで積む。削除は
+// 承認済みの実績シフトで一度も参照されていないものだけ可能（間違い登録の
+// 取消し用）。既に使われた単価は削除できず、そのまま残しておく。
 function StaffTaskRatesTab({
   userId,
   rates,
@@ -359,8 +360,7 @@ function StaffTaskRatesTab({
   const [amendWageType, setAmendWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
   const [amendAmount, setAmendAmount] = useState("");
   const [amendEffectiveFrom, setAmendEffectiveFrom] = useState(todayJst());
-  const [endingId, setEndingId] = useState<string | null>(null);
-  const [endEffectiveFrom, setEndEffectiveFrom] = useState(todayJst());
+  const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
   const [newTaskNameMode, setNewTaskNameMode] = useState<"pick" | "custom">("custom");
   const [newTaskName, setNewTaskName] = useState("");
@@ -376,10 +376,8 @@ function StaffTaskRatesTab({
   }
 
   const amendingRate = rates.find((r) => r.id === amendingId) ?? null;
-  const endingRate = rates.find((r) => r.id === endingId) ?? null;
 
   function startAmend(r: StaffTaskRate) {
-    setEndingId(null);
     setAmendingId(r.id);
     setAmendWageType("HOURLY");
     setAmendAmount("");
@@ -402,11 +400,15 @@ function StaffTaskRatesTab({
     });
   }
 
-  function submitEnd(r: StaffTaskRate) {
+  function submitDelete(r: StaffTaskRate) {
+    setDeleteError(null);
     startTransition(async () => {
-      await endStaffTaskRateAction(r.id, endEffectiveFrom);
-      setEndingId(null);
-      await onChanged();
+      try {
+        await deleteStaffTaskRateAction(r.id);
+        await onChanged();
+      } catch {
+        setDeleteError({ id: r.id, message: "この業務内容は給料計算の実績で使用されているため削除できません。" });
+      }
     });
   }
 
@@ -465,16 +467,15 @@ function StaffTaskRatesTab({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setAmendingId(null);
-                  setEndingId(r.id);
-                  setEndEffectiveFrom(todayJst());
-                }}
-                className="text-muted hover:text-red-600"
+                disabled={pending}
+                onClick={() => submitDelete(r)}
+                className="text-muted hover:text-red-600 disabled:opacity-60"
               >
-                終了する
+                削除
               </button>
             </div>
+
+            {deleteError?.id === r.id ? <p className="mt-1 text-xs text-red-600">{deleteError.message}</p> : null}
 
             {expandedId === r.id ? (
               <ul className="mt-2 flex flex-col text-xs text-muted">
@@ -538,38 +539,6 @@ function StaffTaskRatesTab({
               className="mt-3 self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
               保存
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {endingRate ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setEndingId(null)}>
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
-              <h4 className="font-serif-jp text-base font-bold text-primary">
-                単価を終了（{endingRate.taskName} ／ {endingRate.workplaceLabel}）
-              </h4>
-              <button type="button" onClick={() => setEndingId(null)} aria-label="閉じる" className="text-muted hover:text-primary">
-                ✕
-              </button>
-            </div>
-            <label className="flex flex-col gap-0.5 text-xs text-muted">
-              終了日（この日から基本単価に戻す）
-              <input
-                type="date"
-                value={endEffectiveFrom}
-                onChange={(e) => setEndEffectiveFrom(e.target.value)}
-                className="rounded-lg border border-border px-2 py-2 text-sm"
-              />
-            </label>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => submitEnd(endingRate)}
-              className="mt-3 self-start rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              終了する
             </button>
           </div>
         </div>
