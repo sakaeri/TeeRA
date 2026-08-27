@@ -390,6 +390,16 @@ function PlacementRatesTab({
 
   return (
     <div className="flex flex-col gap-2">
+      <div className="mb-1 flex items-center justify-end">
+        <button
+          type="button"
+          onClick={() => setShowNewForm(true)}
+          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+        >
+          ＋業務内容を追加
+        </button>
+      </div>
+
       <ul className="flex flex-col gap-2">
         {rates.map((r) => {
           const isUnpriced = r.versions.length === 0;
@@ -485,8 +495,13 @@ function PlacementRatesTab({
                   >
                     保存
                   </button>
-                  <button type="button" onClick={() => setAmendingId(null)} className="text-xs text-muted">
-                    やめる
+                  <button
+                    type="button"
+                    onClick={() => setAmendingId(null)}
+                    aria-label="キャンセル"
+                    className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-primary"
+                  >
+                    ✕
                   </button>
                 </div>
               ) : null}
@@ -510,8 +525,13 @@ function PlacementRatesTab({
                   >
                     終了する
                   </button>
-                  <button type="button" onClick={() => setEndingId(null)} className="text-xs text-muted">
-                    やめる
+                  <button
+                    type="button"
+                    onClick={() => setEndingId(null)}
+                    aria-label="キャンセル"
+                    className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-primary"
+                  >
+                    ✕
                   </button>
                 </div>
               ) : null}
@@ -522,61 +542,68 @@ function PlacementRatesTab({
       </ul>
 
       {showNewForm ? (
-        <div className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-3">
-          <input
-            type="text"
-            value={newTaskName}
-            onChange={(e) => setNewTaskName(e.target.value)}
-            placeholder="業務内容（例：キャディ業務）"
-            className="rounded-lg border border-border px-3 py-2 text-sm"
-          />
-          <div className="flex flex-wrap items-end gap-2">
-            <select
-              value={newWageType}
-              onChange={(e) => setNewWageType(e.target.value as "HOURLY" | "DAILY" | "MONTHLY")}
-              className="rounded-lg border border-border px-2 py-2 text-sm"
-            >
-              {WAGE_TYPE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              value={newAmount}
-              onChange={(e) => setNewAmount(e.target.value)}
-              placeholder="金額"
-              className="w-24 rounded-lg border border-border px-2 py-2 text-sm"
-            />
-            <label className="flex flex-col gap-0.5 text-xs text-muted">
-              開始日
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setShowNewForm(false)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="font-serif-jp text-base font-bold text-primary">業務内容を追加</h4>
+              <button
+                type="button"
+                onClick={() => setShowNewForm(false)}
+                aria-label="閉じる"
+                className="text-muted hover:text-primary"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
               <input
-                type="date"
-                value={newEffectiveFrom}
-                onChange={(e) => setNewEffectiveFrom(e.target.value)}
-                className="rounded-lg border border-border px-2 py-2 text-sm"
+                type="text"
+                value={newTaskName}
+                onChange={(e) => setNewTaskName(e.target.value)}
+                placeholder="業務内容（例：キャディ業務）"
+                className="rounded-lg border border-border px-3 py-2 text-sm"
               />
-            </label>
+              <div className="flex flex-wrap items-end gap-2">
+                <select
+                  value={newWageType}
+                  onChange={(e) => setNewWageType(e.target.value as "HOURLY" | "DAILY" | "MONTHLY")}
+                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                >
+                  {WAGE_TYPE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  value={newAmount}
+                  onChange={(e) => setNewAmount(e.target.value)}
+                  placeholder="金額"
+                  className="w-24 rounded-lg border border-border px-2 py-2 text-sm"
+                />
+                <label className="flex flex-col gap-0.5 text-xs text-muted">
+                  開始日
+                  <input
+                    type="date"
+                    value={newEffectiveFrom}
+                    onChange={(e) => setNewEffectiveFrom(e.target.value)}
+                    className="rounded-lg border border-border px-2 py-2 text-sm"
+                  />
+                </label>
+              </div>
+              <button
+                type="button"
+                disabled={pending || !newTaskName.trim() || !newAmount}
+                onClick={submitNewTask}
+                className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                追加
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            disabled={pending || !newTaskName.trim() || !newAmount}
-            onClick={submitNewTask}
-            className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-          >
-            追加
-          </button>
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setShowNewForm(true)}
-          className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-semibold text-muted hover:border-primary hover:text-primary"
-        >
-          ＋業務内容を追加
-        </button>
-      )}
+      ) : null}
     </div>
   );
 }
