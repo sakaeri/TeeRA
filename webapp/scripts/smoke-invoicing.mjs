@@ -56,13 +56,21 @@ try {
   );
   log("proxy client relationship created", Boolean(companyRelationshipId));
 
-  // placement rate for this client: 1500/hr
-  await admin.goto("http://localhost:3000/company/settings?tab=contracts");
-  await admin.locator("select").first().selectOption({ label: "GREEN TABLE 渋谷店" });
-  await admin.locator('input[placeholder="業務内容"]').first().fill("接客");
-  await admin.locator('input[placeholder="金額"]').first().fill("1500");
-  await admin.getByRole("button", { name: "＋追加" }).first().click();
+  // placement rate for this client: 1500/hr (set via 依頼主詳細＞単価タブ)
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.click("text=依頼主一覧");
+  await admin.waitForTimeout(200);
+  await admin.click("text=GREEN TABLE 渋谷店");
+  await admin.waitForTimeout(300);
+  const clientPanel = admin.locator("div.fixed.inset-0.z-30").last();
+  await clientPanel.getByRole("button", { name: "単価", exact: true }).click();
+  await clientPanel.getByRole("button", { name: "＋業務内容を追加" }).click();
+  await clientPanel.locator('input[placeholder*="業務内容"]').fill("接客");
+  await clientPanel.locator('input[placeholder="金額"]').fill("1500");
+  await clientPanel.getByRole("button", { name: "追加", exact: true }).click();
   await admin.waitForTimeout(500);
+  await clientPanel.click("text=閉じる");
+  await admin.waitForTimeout(200);
 
   // invite + register staff
   await admin.goto("http://localhost:3000/company/roster");

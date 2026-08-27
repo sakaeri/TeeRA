@@ -172,24 +172,40 @@ export async function listStaffContracts(staffUserId: string) {
   });
 }
 
-// 賃金単価/請求単価テーブル — keyed by 配属先（自社=null または取引先）＋業務内容.
+// 単価は上書きせず、開始日付きのバージョンを積み重ねて履歴として残す
+// （編集＝新バージョン追加、終了＝wageType/amountがnullのバージョン追加）。
+// この関数はversions配列（effectiveFrom昇順）から、指定日時点で有効な
+// バージョンを1つ選ぶ純粋関数 — invoicing.ts / payroll.ts の単価解決で使う。
+export function resolveRateVersion<T extends { wageType: WageType | null; amount: number | null; effectiveFrom: Date }>(
+  versions: T[],
+  asOf: Date,
+): { wageType: WageType; amount: number } | null {
+  let active: T | null = null;
+  for (const v of versions) {
+    if (v.effectiveFrom <= asOf && (!active || v.effectiveFrom >= active.effectiveFrom)) {
+      active = v;
+    }
+  }
+  if (!active || active.wageType === null || active.amount === null) return null;
+  return { wageType: active.wageType, amount: active.amount };
+}
+
+// 賃金単価/請求単価テーブル — keyed by 配属先（自社=null または取引先）＋業務内容。
 export async function listPlacementRates(companyId: string) {
   return prisma.companyPlacementRate.findMany({
     where: { companyId },
-    include: { companyRelationship: true },
+    include: { companyRelationship: true, versions: { orderBy: { effectiveFrom: "asc" } } },
     orderBy: { createdAt: "asc" },
   });
 }
 
-// wageType/amount を省略すると「業務内容の登録だけ」を行う（単価は依頼主
-// 詳細で別途手動設定する）。既に単価が設定されている行に対して省略呼び出し
-// した場合は、その単価を消さずそのまま残す。
-export async function upsertPlacementRate(params: {
+// 業務内容名だけを登録する（単価は付けない）— シフト作成時のその場追加用。
+// companyRelationshipId がnullの複合ユニークキーはPrismaのupsertでは扱えない
+// ため、findFirst+create で代用する。
+export async function registerPlacementTaskName(params: {
   companyId: string;
   companyRelationshipId?: string;
   taskName: string;
-  wageType?: WageType;
-  amount?: number;
 }) {
   const existing = await prisma.companyPlacementRate.findFirst({
     where: {
@@ -198,46 +214,84 @@ export async function upsertPlacementRate(params: {
       taskName: params.taskName,
     },
   });
-
-  if (existing) {
-    if (params.wageType === undefined || params.amount === undefined) return existing;
-    return prisma.companyPlacementRate.update({
-      where: { id: existing.id },
-      data: { wageType: params.wageType, amount: params.amount },
-    });
-  }
-
+  if (existing) return existing;
   return prisma.companyPlacementRate.create({
+    data: { companyId: params.companyId, companyRelationshipId: params.companyRelationshipId, taskName: params.taskName },
+  });
+}
+
+// 新しい単価バージョンを追加する（既存の単価を上書きしない）。
+export async function addPlacementRateVersion(params: {
+  companyId: string;
+  companyRelationshipId?: string;
+  taskName: string;
+  wageType: WageType;
+  amount: number;
+  effectiveFrom: Date;
+  createdByUserId: string;
+}) {
+  const rate = await registerPlacementTaskName({
+    companyId: params.companyId,
+    companyRelationshipId: params.companyRelationshipId,
+    taskName: params.taskName,
+  });
+  return prisma.companyPlacementRateVersion.create({
     data: {
-      companyId: params.companyId,
-      companyRelationshipId: params.companyRelationshipId,
-      taskName: params.taskName,
+      placementRateId: rate.id,
       wageType: params.wageType,
       amount: params.amount,
+      effectiveFrom: params.effectiveFrom,
+      createdByUserId: params.createdByUserId,
     },
   });
 }
 
-export async function deletePlacementRate(id: string) {
+// 単価を終了する（指定日から単価未設定に戻す）。履歴は消さず残る。
+export async function endPlacementRate(params: {
+  placementRateId: string;
+  effectiveFrom: Date;
+  createdByUserId: string;
+}) {
+  return prisma.companyPlacementRateVersion.create({
+    data: {
+      placementRateId: params.placementRateId,
+      wageType: null,
+      amount: null,
+      effectiveFrom: params.effectiveFrom,
+      createdByUserId: params.createdByUserId,
+    },
+  });
+}
+
+// バージョンが1つも無い（＝一度も単価が設定されたことがない）業務内容の登録だけを取り消す。
+export async function deleteUnpricedPlacementTaskName(id: string) {
+  const rate = await prisma.companyPlacementRate.findUniqueOrThrow({
+    where: { id },
+    include: { versions: true },
+  });
+  if (rate.versions.length > 0) throw new Error("has_rate_history");
   return prisma.companyPlacementRate.delete({ where: { id } });
 }
 
-// 給与単価テーブル（スタッフ×業務内容）— keyed by staffUserId + taskName.
+// 給与単価テーブル（スタッフ×業務内容）— keyed by staffUserId + taskName。
 export async function listStaffTaskRates(companyId: string) {
   return prisma.staffTaskRate.findMany({
     where: { companyId },
+    include: { versions: { orderBy: { effectiveFrom: "asc" } } },
     orderBy: { createdAt: "asc" },
   });
 }
 
-export async function upsertStaffTaskRate(params: {
+export async function addStaffTaskRateVersion(params: {
   companyId: string;
   staffUserId: string;
   taskName: string;
   wageType: WageType;
   amount: number;
+  effectiveFrom: Date;
+  createdByUserId: string;
 }) {
-  return prisma.staffTaskRate.upsert({
+  const rate = await prisma.staffTaskRate.upsert({
     where: {
       companyId_staffUserId_taskName: {
         companyId: params.companyId,
@@ -245,11 +299,33 @@ export async function upsertStaffTaskRate(params: {
         taskName: params.taskName,
       },
     },
-    update: { wageType: params.wageType, amount: params.amount },
-    create: params,
+    update: {},
+    create: { companyId: params.companyId, staffUserId: params.staffUserId, taskName: params.taskName },
+  });
+  return prisma.staffTaskRateVersion.create({
+    data: {
+      staffTaskRateId: rate.id,
+      wageType: params.wageType,
+      amount: params.amount,
+      effectiveFrom: params.effectiveFrom,
+      createdByUserId: params.createdByUserId,
+    },
   });
 }
 
-export async function deleteStaffTaskRate(id: string) {
-  return prisma.staffTaskRate.delete({ where: { id } });
+// 単価を終了する（指定日から雇用契約の基本単価にフォールバックする状態に戻す）。
+export async function endStaffTaskRate(params: {
+  staffTaskRateId: string;
+  effectiveFrom: Date;
+  createdByUserId: string;
+}) {
+  return prisma.staffTaskRateVersion.create({
+    data: {
+      staffTaskRateId: params.staffTaskRateId,
+      wageType: null,
+      amount: null,
+      effectiveFrom: params.effectiveFrom,
+      createdByUserId: params.createdByUserId,
+    },
+  });
 }

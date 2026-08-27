@@ -3,7 +3,15 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getStaffMonthDetailAction, updateStaffNoteAction, inviteProxyUpgradeAction } from "@/app/company/actions";
-import { todayJstParts } from "@/lib/date";
+import { addStaffTaskRateVersionAction, endStaffTaskRateAction } from "@/app/company/contracts/actions";
+import { todayJstParts, todayJst } from "@/lib/date";
+
+type StaffTaskRate = {
+  id: string;
+  taskName: string;
+  currentLabel: string;
+  versions: { id: string; label: string; effectiveFrom: string }[];
+};
 
 type StaffMonthDetail = {
   membershipId: string;
@@ -21,6 +29,7 @@ type StaffMonthDetail = {
     workplaceName: string;
     contractStartDate: string;
   }[];
+  taskRates: StaffTaskRate[];
   days: {
     shiftId: string;
     date: string;
@@ -56,7 +65,7 @@ export function StaffDetailPanel({ userId, onClose }: { userId: string; onClose:
   const initToday = todayJstParts();
   const [year, setYear] = useState(initToday.year);
   const [month, setMonth] = useState(initToday.month);
-  const [tab, setTab] = useState<"history" | "contracts" | "note">("history");
+  const [tab, setTab] = useState<"history" | "contracts" | "rates" | "note">("history");
   const [data, setData] = useState<StaffMonthDetail | null>(null);
   const [noteValue, setNoteValue] = useState("");
   const [pending, startTransition] = useTransition();
@@ -66,6 +75,13 @@ export function StaffDetailPanel({ userId, onClose }: { userId: string; onClose:
     startTransition(async () => {
       const url = await inviteProxyUpgradeAction(userId);
       setUpgradeUrl(url);
+    });
+  }
+
+  function refresh() {
+    return getStaffMonthDetailAction(userId, year, month).then((d) => {
+      setData(d);
+      setNoteValue(d.note);
     });
   }
 
@@ -172,6 +188,13 @@ export function StaffDetailPanel({ userId, onClose }: { userId: string; onClose:
               </button>
               <button
                 type="button"
+                onClick={() => setTab("rates")}
+                className={`border-b-2 px-1 py-2 font-semibold ${tab === "rates" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+              >
+                業務内容単価
+              </button>
+              <button
+                type="button"
                 onClick={() => setTab("note")}
                 className={`border-b-2 px-1 py-2 font-semibold ${tab === "note" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
@@ -249,6 +272,8 @@ export function StaffDetailPanel({ userId, onClose }: { userId: string; onClose:
               </ul>
             ) : null}
 
+            {tab === "rates" ? <StaffTaskRatesTab userId={userId} rates={data.taskRates} onChanged={refresh} /> : null}
+
             {tab === "note" ? (
               <div className="flex flex-col gap-3">
                 <textarea
@@ -271,6 +296,264 @@ export function StaffDetailPanel({ userId, onClose }: { userId: string; onClose:
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+const WAGE_TYPE_OPTIONS: { value: "HOURLY" | "DAILY" | "MONTHLY"; label: string }[] = [
+  { value: "HOURLY", label: "時給" },
+  { value: "DAILY", label: "日給" },
+  { value: "MONTHLY", label: "月給" },
+];
+
+// 単価は上書きしない — 編集は新しいバージョンを開始日付きで積む、終了は
+// 単価未設定（雇用契約の基本単価にフォールバック）に戻すバージョンを積む。
+function StaffTaskRatesTab({
+  userId,
+  rates,
+  onChanged,
+}: {
+  userId: string;
+  rates: StaffTaskRate[];
+  onChanged: () => Promise<void>;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [amendingId, setAmendingId] = useState<string | null>(null);
+  const [amendWageType, setAmendWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
+  const [amendAmount, setAmendAmount] = useState("");
+  const [amendEffectiveFrom, setAmendEffectiveFrom] = useState(todayJst());
+  const [endingId, setEndingId] = useState<string | null>(null);
+  const [endEffectiveFrom, setEndEffectiveFrom] = useState(todayJst());
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newTaskName, setNewTaskName] = useState("");
+  const [newWageType, setNewWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
+  const [newAmount, setNewAmount] = useState("");
+  const [newEffectiveFrom, setNewEffectiveFrom] = useState(todayJst());
+
+  function startAmend(r: StaffTaskRate) {
+    setEndingId(null);
+    setAmendingId(r.id);
+    setAmendWageType("HOURLY");
+    setAmendAmount("");
+    setAmendEffectiveFrom(todayJst());
+  }
+
+  function submitAmend(r: StaffTaskRate) {
+    if (!amendAmount) return;
+    startTransition(async () => {
+      await addStaffTaskRateVersionAction({
+        staffUserId: userId,
+        taskName: r.taskName,
+        wageType: amendWageType,
+        amount: Number(amendAmount),
+        effectiveFrom: amendEffectiveFrom,
+      });
+      setAmendingId(null);
+      await onChanged();
+    });
+  }
+
+  function submitEnd(r: StaffTaskRate) {
+    startTransition(async () => {
+      await endStaffTaskRateAction(r.id, endEffectiveFrom);
+      setEndingId(null);
+      await onChanged();
+    });
+  }
+
+  function submitNewTask() {
+    if (!newTaskName.trim() || !newAmount) return;
+    startTransition(async () => {
+      await addStaffTaskRateVersionAction({
+        staffUserId: userId,
+        taskName: newTaskName.trim(),
+        wageType: newWageType,
+        amount: Number(newAmount),
+        effectiveFrom: newEffectiveFrom,
+      });
+      setShowNewForm(false);
+      setNewTaskName("");
+      setNewAmount("");
+      setNewEffectiveFrom(todayJst());
+      await onChanged();
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-muted">未登録の業務内容は、雇用契約の基本単価で給与計算されます。</p>
+      <ul className="flex flex-col gap-2">
+        {rates.map((r) => (
+          <li key={r.id} className="rounded-lg border border-border p-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">{r.taskName}</span>
+              <span className="text-muted">{r.currentLabel}</span>
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+              <button
+                type="button"
+                onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                className="text-muted hover:text-primary"
+              >
+                {expandedId === r.id ? "▲ 履歴を閉じる" : `▼ 履歴（${r.versions.length}件）`}
+              </button>
+              <button type="button" onClick={() => startAmend(r)} className="text-primary hover:underline">
+                単価を変更
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAmendingId(null);
+                  setEndingId(r.id);
+                  setEndEffectiveFrom(todayJst());
+                }}
+                className="text-muted hover:text-red-600"
+              >
+                終了する
+              </button>
+            </div>
+
+            {expandedId === r.id ? (
+              <ul className="mt-2 flex flex-col text-xs text-muted">
+                {r.versions.map((v) => (
+                  <li key={v.id} className="flex items-center justify-between border-t border-border/50 py-1">
+                    <span>{v.effectiveFrom} 〜</span>
+                    <span>{v.label}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            {amendingId === r.id ? (
+              <div className="mt-2 flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-border p-2">
+                <select
+                  value={amendWageType}
+                  onChange={(e) => setAmendWageType(e.target.value as "HOURLY" | "DAILY" | "MONTHLY")}
+                  className="rounded-lg border border-border px-2 py-1.5 text-xs"
+                >
+                  {WAGE_TYPE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  value={amendAmount}
+                  onChange={(e) => setAmendAmount(e.target.value)}
+                  placeholder="金額"
+                  className="w-20 rounded-lg border border-border px-2 py-1.5 text-xs"
+                />
+                <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+                  開始日
+                  <input
+                    type="date"
+                    value={amendEffectiveFrom}
+                    onChange={(e) => setAmendEffectiveFrom(e.target.value)}
+                    className="rounded-lg border border-border px-2 py-1.5 text-xs"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={pending || !amendAmount}
+                  onClick={() => submitAmend(r)}
+                  className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                >
+                  保存
+                </button>
+                <button type="button" onClick={() => setAmendingId(null)} className="text-xs text-muted">
+                  やめる
+                </button>
+              </div>
+            ) : null}
+
+            {endingId === r.id ? (
+              <div className="mt-2 flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-border p-2">
+                <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+                  終了日（この日から基本単価に戻す）
+                  <input
+                    type="date"
+                    value={endEffectiveFrom}
+                    onChange={(e) => setEndEffectiveFrom(e.target.value)}
+                    className="rounded-lg border border-border px-2 py-1.5 text-xs"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => submitEnd(r)}
+                  className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                >
+                  終了する
+                </button>
+                <button type="button" onClick={() => setEndingId(null)} className="text-xs text-muted">
+                  やめる
+                </button>
+              </div>
+            ) : null}
+          </li>
+        ))}
+        {rates.length === 0 ? <p className="py-6 text-center text-sm text-muted">個別の単価は登録されていません。</p> : null}
+      </ul>
+
+      {showNewForm ? (
+        <div className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-3">
+          <input
+            type="text"
+            value={newTaskName}
+            onChange={(e) => setNewTaskName(e.target.value)}
+            placeholder="業務内容（例：キャディ業務）"
+            className="rounded-lg border border-border px-3 py-2 text-sm"
+          />
+          <div className="flex flex-wrap items-end gap-2">
+            <select
+              value={newWageType}
+              onChange={(e) => setNewWageType(e.target.value as "HOURLY" | "DAILY" | "MONTHLY")}
+              className="rounded-lg border border-border px-2 py-2 text-sm"
+            >
+              {WAGE_TYPE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              value={newAmount}
+              onChange={(e) => setNewAmount(e.target.value)}
+              placeholder="金額"
+              className="w-24 rounded-lg border border-border px-2 py-2 text-sm"
+            />
+            <label className="flex flex-col gap-0.5 text-xs text-muted">
+              開始日
+              <input
+                type="date"
+                value={newEffectiveFrom}
+                onChange={(e) => setNewEffectiveFrom(e.target.value)}
+                className="rounded-lg border border-border px-2 py-2 text-sm"
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            disabled={pending || !newTaskName.trim() || !newAmount}
+            onClick={submitNewTask}
+            className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            追加
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowNewForm(true)}
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-semibold text-muted hover:border-primary hover:text-primary"
+        >
+          ＋業務内容を追加
+        </button>
+      )}
     </div>
   );
 }

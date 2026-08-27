@@ -56,22 +56,6 @@ type ContractTemplate = {
   status: string;
   contractedStaffNames: string[];
 };
-type PlacementRate = {
-  id: string;
-  clientName: string;
-  companyRelationshipId: string | null;
-  taskName: string;
-  wageType: string | null;
-  amount: number | null;
-};
-type StaffTaskRate = {
-  id: string;
-  staffUserId: string;
-  staffName: string;
-  taskName: string;
-  wageType: string;
-  amount: number;
-};
 type ContractClientOption = { id: string; name: string };
 
 type WorkReportRow = {
@@ -100,8 +84,6 @@ export function SettingsView({
   teams,
   staff,
   contractTemplates,
-  placementRates,
-  staffTaskRates,
   contractClients,
   workReports,
 }: {
@@ -114,8 +96,6 @@ export function SettingsView({
   teams: Team[];
   staff: StaffOption[];
   contractTemplates: ContractTemplate[];
-  placementRates: PlacementRate[];
-  staffTaskRates: StaffTaskRate[];
   contractClients: ContractClientOption[];
   workReports: WorkReportRow[];
 }) {
@@ -154,14 +134,7 @@ export function SettingsView({
       ) : null}
 
       {tab === "contracts" ? (
-        <ContractsView
-          templates={contractTemplates}
-          rates={placementRates}
-          clients={contractClients}
-          staffTaskRates={staffTaskRates}
-          staff={staff}
-          companyName={companyName}
-        />
+        <ContractsView templates={contractTemplates} clients={contractClients} companyName={companyName} />
       ) : null}
 
       {tab === "workreports" ? <WorkReportsQueue reports={workReports} /> : null}

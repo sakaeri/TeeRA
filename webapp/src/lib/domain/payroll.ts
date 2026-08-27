@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
+import { resolveRateVersion } from "@/lib/domain/contracts";
 
 const FIXED_DEDUCTION_LABELS = ["社会保険料", "厚生年金", "雇用保険料", "所得税", "市県民税"];
 
@@ -55,8 +56,9 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
   const baseWage = await defaultWageRate(params.companyId, params.staffUserId);
   const taskRates = await prisma.staffTaskRate.findMany({
     where: { companyId: params.companyId, staffUserId: params.staffUserId },
+    include: { versions: true },
   });
-  const taskRateByName = new Map(taskRates.map((r) => [r.taskName, { wageType: r.wageType, amount: r.amount }]));
+  const taskRatesByName = new Map(taskRates.map((r) => [r.taskName, r.versions]));
 
   await prisma.$transaction(async (tx) => {
     await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, kind: "SHIFT" } });
@@ -65,9 +67,10 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     for (const r of reports) {
       const workedHours = Math.round((r.computedMinutes / 60) * 100) / 100;
       if (workedHours <= 0) continue;
-      // その業務内容にスタッフ個別の単価が登録されていればそれを優先し、
-      // 無ければ雇用契約の基本単価にフォールバックする。
-      const wage = (r.shift.taskName ? taskRateByName.get(r.shift.taskName) : undefined) ?? baseWage;
+      // その業務内容に、シフトの日付時点で有効なスタッフ個別の単価があれば
+      // それを優先し、無ければ雇用契約の基本単価にフォールバックする。
+      const versions = r.shift.taskName ? taskRatesByName.get(r.shift.taskName) : undefined;
+      const wage = (versions ? resolveRateVersion(versions, r.shift.date) : null) ?? baseWage;
       // 月給は日々のシフト単位では自動計上しない（固定給のため、必要なら
       // 手動でカスタム行を追加する）。時給/日給のみ自動生成する。
       if (wage.wageType === "MONTHLY") continue;

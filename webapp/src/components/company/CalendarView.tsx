@@ -17,7 +17,7 @@ import {
   assignStaffToRecruitmentAction,
   cancelShiftAction,
 } from "@/app/company/calendar/actions";
-import { upsertPlacementRateAction } from "@/app/company/contracts/actions";
+import { registerPlacementTaskNameAction } from "@/app/company/contracts/actions";
 
 type ShiftRow = {
   id: string;
@@ -2068,7 +2068,7 @@ function AssignShiftModal({
   function submitNewTask() {
     if (!newTaskName.trim()) return;
     startNewTaskTransition(async () => {
-      const rate = await upsertPlacementRateAction({
+      const rate = await registerPlacementTaskNameAction({
         companyRelationshipId,
         taskName: newTaskName.trim(),
       });

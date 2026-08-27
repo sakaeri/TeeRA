@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
+import { resolveRateVersion } from "@/lib/domain/contracts";
 
 function monthRange(periodLabel: string) {
   const [year, month] = periodLabel.split("-").map(Number);
@@ -58,13 +59,10 @@ async function regenerateLines(invoiceId: string) {
     }),
     prisma.companyPlacementRate.findMany({
       where: { companyId: invoice.issuingCompanyId, companyRelationshipId: invoice.companyRelationshipId },
+      include: { versions: true },
     }),
   ]);
-  const rateByTask = new Map(
-    relationshipRates
-      .filter((r): r is typeof r & { wageType: NonNullable<typeof r.wageType>; amount: number } => r.wageType != null && r.amount != null)
-      .map((r) => [r.taskName, { wageType: r.wageType, amount: r.amount }]),
-  );
+  const ratesByTask = new Map(relationshipRates.map((r) => [r.taskName, r.versions]));
 
   const unresolved: UnresolvedInvoiceShift[] = [];
 
@@ -77,7 +75,11 @@ async function regenerateLines(invoiceId: string) {
       const workedHours = Math.round((report.computedMinutes / 60) * 100) / 100;
       if (workedHours <= 0) continue;
 
-      const taskRate = s.taskName ? rateByTask.get(s.taskName) : undefined;
+      // その業務内容の、シフトの日付時点で有効だった単価バージョンを使う
+      // （単価は上書きせず履歴で積まれるため、後日単価を直しても過去の
+      // 確定済みシフトの計算結果は変わらない）。
+      const versions = s.taskName ? ratesByTask.get(s.taskName) : undefined;
+      const taskRate = versions ? resolveRateVersion(versions, s.date) : null;
       if (!taskRate || taskRate.wageType === "MONTHLY") {
         unresolved.push({ shiftId: s.id, date: s.date.toISOString().slice(0, 10), staffName: s.staff.name, taskName: s.taskName });
         continue;

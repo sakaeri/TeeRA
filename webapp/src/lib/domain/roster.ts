@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { createInvite } from "@/lib/domain/invites";
 import { todayJstParts } from "@/lib/date";
+import { resolveRateVersion } from "@/lib/domain/contracts";
 
 export async function listStaff(companyId: string) {
   const memberships = await prisma.companyMembership.findMany({
@@ -202,6 +203,13 @@ export async function getStaffMonthDetail(params: {
     orderBy: { createdAt: "desc" },
   });
 
+  const taskRates = await prisma.staffTaskRate.findMany({
+    where: { companyId: params.companyId, staffUserId: params.userId },
+    include: { versions: { orderBy: { effectiveFrom: "desc" } } },
+    orderBy: { createdAt: "asc" },
+  });
+  const today = new Date();
+
   return {
     membershipId: membership.id,
     name: membership.user.name,
@@ -224,6 +232,19 @@ export async function getStaffMonthDetail(params: {
           : "自社",
       contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
     })),
+    taskRates: taskRates.map((r) => {
+      const current = resolveRateVersion(r.versions, today);
+      return {
+        id: r.id,
+        taskName: r.taskName,
+        currentLabel: current ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円` : "単価未設定",
+        versions: r.versions.map((v) => ({
+          id: v.id,
+          label: v.wageType && v.amount != null ? `${WAGE_TYPE_LABEL[v.wageType]}${v.amount}円` : "単価未設定（終了）",
+          effectiveFrom: v.effectiveFrom.toISOString().slice(0, 10),
+        })),
+      };
+    }),
     days: shifts.map((s) => ({
       shiftId: s.id,
       date: s.date.toISOString().slice(0, 10),

@@ -43,13 +43,18 @@ try {
   await staff.click("text=参加する");
   await staff.waitForURL("http://localhost:3000/staff");
 
-  // pick two future dates in the current month (same month as "today" so no
-  // mini-calendar navigation is needed): dayA gets booked first, dayB stays free
+  // pick two other dates in the current month (same month as "today" so no
+  // mini-calendar navigation is needed, and neither collides with "today"'s
+  // default-selected date): dayA gets booked first, dayB stays free. Days
+  // before today are disabled in the picker, so this must always step
+  // forward — clamped to the real last day of the month, not a hardcoded one.
   const now = new Date();
-  const dayA = String(Math.min(now.getDate() + 1, 27)).padStart(2, "0");
-  const dayB = String(Math.min(now.getDate() + 2, 28)).padStart(2, "0");
-  const dayALabel = String(Number(dayA));
-  const dayBLabel = String(Number(dayB));
+  const todayDate = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const dayANum = Math.min(todayDate + 1, daysInMonth);
+  const dayBNum = Math.min(todayDate + 2, daysInMonth);
+  const dayALabel = String(dayANum);
+  const dayBLabel = String(dayBNum);
 
   // existing shift on dayA only (via the assign wizard itself, so no team setup needed)
   await admin.goto("http://localhost:3000/company/calendar");

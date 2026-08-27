@@ -1,6 +1,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { resolveRateVersion } from "@/lib/domain/contracts";
 
 // 依頼主一覧 (from this company's perspective as the sending/agency side):
 // companies this company sends staff to.
@@ -160,13 +161,15 @@ export async function getClientMonthDetail(params: {
     }),
     prisma.companyPlacementRate.findMany({
       where: { companyId: params.companyId, companyRelationshipId: params.companyRelationshipId },
-      orderBy: { createdAt: "desc" },
+      include: { versions: { orderBy: { effectiveFrom: "desc" } } },
+      orderBy: { createdAt: "asc" },
     }),
   ]);
 
   const staffMap = new Map<string, string>();
   for (const s of shifts) staffMap.set(s.staffUserId, s.staff.name);
   const unapprovedCount = shifts.filter((s) => s.workReport && s.workReport.approvalStatus !== "APPROVED").length;
+  const today = new Date();
 
   return {
     relationshipId: relationship.id,
@@ -176,11 +179,19 @@ export async function getClientMonthDetail(params: {
     shiftCount: shifts.length,
     unapprovedCount,
     staff: Array.from(staffMap.entries()).map(([userId, name]) => ({ userId, name })),
-    placementRates: placementRates.map((r) => ({
-      id: r.id,
-      taskName: r.taskName,
-      amountLabel: r.wageType && r.amount != null ? `${WAGE_TYPE_LABEL[r.wageType]}${r.amount}円` : "単価未設定",
-    })),
+    placementRates: placementRates.map((r) => {
+      const current = resolveRateVersion(r.versions, today);
+      return {
+        id: r.id,
+        taskName: r.taskName,
+        currentLabel: current ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円` : "単価未設定",
+        versions: r.versions.map((v) => ({
+          id: v.id,
+          label: v.wageType && v.amount != null ? `${WAGE_TYPE_LABEL[v.wageType]}${v.amount}円` : "単価未設定（終了）",
+          effectiveFrom: v.effectiveFrom.toISOString().slice(0, 10),
+        })),
+      };
+    }),
     days: shifts.map((s) => ({
       shiftId: s.id,
       date: s.date.toISOString().slice(0, 10),

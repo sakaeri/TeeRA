@@ -42,21 +42,14 @@ try {
   await staff.click("text=参加する");
   await staff.waitForURL("http://localhost:3000/staff");
 
-  // admin: add a placement rate, create a template
+  // admin: create a template
   await admin.goto("http://localhost:3000/company/settings?tab=contracts");
-  await admin.locator('input[placeholder="業務内容"]').first().fill("軽作業");
-  await admin.locator('input[placeholder="金額"]').first().fill("1200");
-  await admin.getByRole("button", { name: "＋追加" }).first().click();
-  await admin.waitForTimeout(500);
-  let body = await admin.textContent("body");
-  log("placement rate added", body.includes("軽作業") && body.includes("1200円"));
-
   await admin.getByRole("button", { name: "＋テンプレートを作成" }).click();
   await admin.getByText("業務内容", { exact: true }).locator("xpath=..").locator("input").fill("倉庫内軽作業");
   await admin.getByText("賃金", { exact: true }).locator("xpath=..").locator("input[type=number]").fill("1200");
   await admin.getByRole("button", { name: "テンプレートを生成" }).click();
   await admin.waitForTimeout(600);
-  body = await admin.textContent("body");
+  let body = await admin.textContent("body");
   log("template created and editable", body.includes("アルバイト・倉庫内軽作業") && body.includes("編集可能"));
 
   // staff: consent to the contract

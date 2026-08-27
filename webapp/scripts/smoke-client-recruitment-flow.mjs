@@ -128,6 +128,8 @@ try {
   log("shift created and linked to the client's recruitment", shiftPublicRecruitmentId === recruitmentId);
   const shiftTaskName = psql(`select "taskName" from "Shift" where id='${shiftId}';`);
   log("shift inherited the recruitment's title as its 業務内容 (taskName)", shiftTaskName === "キャディ募集");
+  const autoRegisteredRateId = psql(`select id from "CompanyPlacementRate" where "taskName"='キャディ募集' and "companyRelationshipId"='${relId}';`);
+  log("業務内容 was auto-registered (unpriced) for 依頼主詳細＞単価タブ to find", Boolean(autoRegisteredRateId));
 
   // --- ① verify: 確定スタッフ expand + ✕ (cancel) appear for this order ---
   await agency.reload();
@@ -162,14 +164,18 @@ try {
   let lineCountBefore = psql(`select count(*) from "InvoiceLine" il join "Invoice" i on i.id=il."invoiceId" where i."companyRelationshipId"='${relId}' and il."shiftId" is not null;`);
   log("②(b) no invoice line auto-created from the recruitment's own wage", lineCountBefore === "0");
 
-  // now the agency registers a rate for that same 業務内容 (「キャディ募集」) under 依頼主詳細（設定＞契約関連）
-  await agency.goto("http://localhost:3000/company/settings?tab=contracts");
+  // now the agency registers a rate for that same 業務内容 (「キャディ募集」),
+  // already auto-registered (unpriced) above, via 依頼主詳細＞単価タブ
+  await agency.goto("http://localhost:3000/company/roster");
+  await agency.click("text=依頼主一覧");
+  await agency.waitForTimeout(200);
+  await agency.click("text=依頼主本体株式会社");
   await agency.waitForTimeout(300);
-  await agency.locator("select").first().selectOption({ label: "依頼主本体株式会社" });
-  await agency.locator('input[placeholder="業務内容"]').first().fill("キャディ募集");
-  await agency.locator("select").nth(1).selectOption("HOURLY");
-  await agency.locator('input[placeholder="金額"]').first().fill("3000");
-  await agency.getByRole("button", { name: "＋追加" }).first().click();
+  const clientPanel = agency.locator("div.fixed.inset-0.z-30").last();
+  await clientPanel.getByRole("button", { name: "単価", exact: true }).click();
+  await clientPanel.getByRole("button", { name: "単価を変更" }).click();
+  await clientPanel.locator('input[type=number]').fill("3000");
+  await clientPanel.getByRole("button", { name: "保存" }).click();
   await agency.waitForTimeout(500);
 
   await agency.goto(`http://localhost:3000/company/invoices?month=${thisMonth}&client=${relId}`);

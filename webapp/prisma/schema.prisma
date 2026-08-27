@@ -48,6 +48,8 @@ model User {
   conflictOverridesConfirmed ConflictOverride[]
   salarySlips                SalarySlip[]
   staffTaskRates             StaffTaskRate[]
+  companyPlacementRateVersionsCreated CompanyPlacementRateVersion[]
+  staffTaskRateVersionsCreated        StaffTaskRateVersion[]
 
   @@index([email])
 }
@@ -209,42 +211,74 @@ enum WageType {
   MONTHLY
 }
 
-// 請求単価テーブル、keyed by 配属先（自社 or a client relationship）＋業務内容.
-// wageType/amount は null もありえる（＝業務内容だけ登録されていて単価は
-// 未設定。シフト作成時に新しい業務内容だけその場追加できるようにするため）。
+// 請求単価の「業務内容」登録— keyed by 配属先（自社 or a client relationship）
+// ＋業務内容。単価そのものはCompanyPlacementRateVersionに履歴として積む
+// （編集＝新しいバージョンの追加、削除＝終了バージョンの追加。上書きしない）。
+// バージョンが1つも無い状態＝シフト作成時に業務内容だけその場追加され、
+// 単価がまだ設定されていない状態を表す。
 model CompanyPlacementRate {
-  id                    String    @id @default(cuid())
+  id                    String   @id @default(cuid())
   companyId             String
   companyRelationshipId String? // null = 自社（本社/支社）
   taskName              String
-  wageType              WageType?
-  amount                Int?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime @default(now())
 
-  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyRelationship CompanyRelationship? @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
+  company             Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyRelationship CompanyRelationship?        @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
+  versions            CompanyPlacementRateVersion[]
 
+  @@unique([companyId, companyRelationshipId, taskName])
   @@index([companyId])
 }
 
-// 給与単価テーブル、keyed by スタッフ＋業務内容。未登録の業務は
+// wageType/amountがnull＝「この日付から単価未設定（終了）」を表す履歴行。
+model CompanyPlacementRateVersion {
+  id                 String    @id @default(cuid())
+  placementRateId    String
+  wageType           WageType?
+  amount             Int?
+  effectiveFrom      DateTime  @db.Date
+  createdByUserId    String?
+  createdAt          DateTime  @default(now())
+
+  placementRate CompanyPlacementRate @relation(fields: [placementRateId], references: [id], onDelete: Cascade)
+  createdBy     User?                @relation(fields: [createdByUserId], references: [id])
+
+  @@index([placementRateId, effectiveFrom])
+}
+
+// 給与単価の「業務内容」登録 — keyed by スタッフ＋業務内容。未登録
+// （バージョンが1つも無い、またはeffectiveFrom時点で単価未設定）の業務は
 // スタッフの雇用契約の基本単価にフォールバックする（payroll.ts参照）。
 model StaffTaskRate {
   id          String   @id @default(cuid())
   companyId   String
   staffUserId String
   taskName    String
-  wageType    WageType
-  amount      Int
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  staff   User    @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+  company  Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  staff    User                   @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+  versions StaffTaskRateVersion[]
 
   @@unique([companyId, staffUserId, taskName])
   @@index([companyId])
+}
+
+// wageType/amountがnull＝「この日付から単価未設定（終了、契約の基本単価に戻す）」を表す履歴行。
+model StaffTaskRateVersion {
+  id              String    @id @default(cuid())
+  staffTaskRateId String
+  wageType        WageType?
+  amount          Int?
+  effectiveFrom   DateTime  @db.Date
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+
+  staffTaskRate StaffTaskRate @relation(fields: [staffTaskRateId], references: [id], onDelete: Cascade)
+  createdBy     User?         @relation(fields: [createdByUserId], references: [id])
+
+  @@index([staffTaskRateId, effectiveFrom])
 }
 
 enum InviteKind {

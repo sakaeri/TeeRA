@@ -216,14 +216,14 @@ try {
   await owner.click("text=仮派遣会社サンプル");
   await owner.waitForTimeout(300);
   bodyText = await owner.textContent("body");
-  log("agency-direction panel hides 契約・単価 tab", !bodyText.includes("契約・単価"));
+  log("agency-direction panel hides 単価 tab", !bodyText.includes("単価"));
   log("agency-direction panel hides 請求明細 card", !bodyText.includes("請求明細"));
   log("agency-direction panel still shows 稼働数/未承認数", bodyText.includes("稼働数") && bodyText.includes("未承認数"));
   await owner.click("text=閉じる");
   await owner.waitForTimeout(200);
 
   // sanity: the client-direction proxy created earlier via the invite flow's
-  // sibling (依頼主一覧) case should still show all 3, incl. 契約・単価.
+  // sibling (依頼主一覧) case should still show all 3, incl. 単価.
   // We didn't create a client-direction proxy in this script, so instead
   // reuse the already-redeemed real client relationship (kind="client").
   await owner.click("text=依頼主一覧");
@@ -231,7 +231,7 @@ try {
   await owner.click("text=招待先株式会社");
   await owner.waitForTimeout(300);
   bodyText = await owner.textContent("body");
-  log("client-direction panel still shows 契約・単価 tab", bodyText.includes("契約・単価"));
+  log("client-direction panel still shows 単価 tab", bodyText.includes("単価"));
   log("client-direction panel still shows 請求明細 card", bodyText.includes("請求明細"));
 
   console.log(process.exitCode ? "RELATIONSHIP INVITE SMOKE TEST HAD FAILURES" : "RELATIONSHIP INVITE SMOKE TEST PASSED");

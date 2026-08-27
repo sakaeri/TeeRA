@@ -48,20 +48,29 @@ try {
   await admin.getByRole("button", { name: "作成", exact: true }).click();
   await admin.waitForTimeout(600);
 
-  await admin.goto("http://localhost:3000/company/settings?tab=contracts");
-  await admin.locator("select").first().selectOption({ label: "GREEN TABLE" });
-  await admin.locator('input[placeholder="業務内容"]').first().fill("キャディ業務");
-  await admin.locator("select").nth(1).selectOption("DAILY");
-  await admin.locator('input[placeholder="金額"]').first().fill("8000");
-  await admin.getByRole("button", { name: "＋追加" }).first().click();
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.click("text=依頼主一覧");
+  await admin.waitForTimeout(200);
+  await admin.click("text=GREEN TABLE");
+  await admin.waitForTimeout(300);
+  let panel = admin.locator("div.fixed.inset-0.z-30").last();
+  await panel.getByRole("button", { name: "単価", exact: true }).click();
+
+  await panel.getByRole("button", { name: "＋業務内容を追加" }).click();
+  await panel.locator('input[placeholder*="業務内容"]').fill("キャディ業務");
+  await panel.locator("select").selectOption("DAILY");
+  await panel.locator('input[placeholder="金額"]').fill("8000");
+  await panel.getByRole("button", { name: "追加", exact: true }).click();
   await admin.waitForTimeout(500);
 
-  await admin.locator("select").first().selectOption({ label: "GREEN TABLE" });
-  await admin.locator('input[placeholder="業務内容"]').first().fill("作業");
-  await admin.locator("select").nth(1).selectOption("HOURLY");
-  await admin.locator('input[placeholder="金額"]').first().fill("1200");
-  await admin.getByRole("button", { name: "＋追加" }).first().click();
+  await panel.getByRole("button", { name: "＋業務内容を追加" }).click();
+  await panel.locator('input[placeholder*="業務内容"]').fill("作業");
+  await panel.locator("select").selectOption("HOURLY");
+  await panel.locator('input[placeholder="金額"]').fill("1200");
+  await panel.getByRole("button", { name: "追加", exact: true }).click();
   await admin.waitForTimeout(500);
+  await panel.click("text=閉じる");
+  await admin.waitForTimeout(200);
 
   // invite + register staff
   await admin.goto("http://localhost:3000/company/roster");

@@ -84,10 +84,9 @@ try {
   bodyText = await modal.textContent();
   log("advanced to staff step after task-name-only add", bodyText.includes("スタッフを選択"));
 
-  const taskRow = JSON.parse(
-    psql(`select json_agg(json_build_object('taskName',"taskName",'wageType',"wageType",'amount',amount))->0 from "CompanyPlacementRate" where "taskName"='キャディ業務' and "companyRelationshipId"='${relId}';`),
-  );
-  log("CompanyPlacementRate row created with taskName only, wageType/amount null", taskRow.taskName === "キャディ業務" && taskRow.wageType === null && taskRow.amount === null);
+  const placementRateId = psql(`select id from "CompanyPlacementRate" where "taskName"='キャディ業務' and "companyRelationshipId"='${relId}';`);
+  const versionCountBefore = psql(`select count(*) from "CompanyPlacementRateVersion" where "placementRateId"='${placementRateId}';`);
+  log("CompanyPlacementRate row created with taskName only, 0 versions (no rate)", Boolean(placementRateId) && versionCountBefore === "0");
 
   await modal.getByRole("button", { name: "分離スタッフ" }).click();
   await modal.getByRole("button", { name: "次へ" }).click();
@@ -118,22 +117,29 @@ try {
   let lineCount = psql(`select count(*) from "InvoiceLine" il join "Invoice" i on i.id=il."invoiceId" where i."companyRelationshipId"='${relId}' and il."shiftId" is not null;`);
   log("no invoice line was auto-created while rate is unset", lineCount === "0");
 
-  // now set the rate via ContractsView (設定＞契約関連) using the SAME taskName -> should update the existing row
-  await admin.goto("http://localhost:3000/company/settings?tab=contracts");
+  // now set the rate via 依頼主詳細＞単価タブ, on the SAME (already-registered,
+  // unpriced) taskName -> should add a version to the same parent row, not
+  // create a duplicate.
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.click("text=依頼主一覧");
+  await admin.waitForTimeout(200);
+  await admin.click("text=分離先");
   await admin.waitForTimeout(300);
-  await admin.locator("select").first().selectOption({ label: "分離先" });
-  await admin.locator('input[placeholder="業務内容"]').first().fill("キャディ業務");
-  await admin.locator("select").nth(1).selectOption("DAILY");
-  await admin.locator('input[type=number]').first().fill("9000");
-  await admin.getByRole("button", { name: "＋追加" }).first().click();
+  const clientPanel = admin.locator("div.fixed.inset-0.z-30").last();
+  await clientPanel.getByRole("button", { name: "単価", exact: true }).click();
+  await clientPanel.getByRole("button", { name: "単価を変更" }).click();
+  await clientPanel.locator("select").selectOption("DAILY");
+  await clientPanel.locator('input[type=number]').fill("9000");
+  await clientPanel.getByRole("button", { name: "保存" }).click();
   await admin.waitForTimeout(500);
 
   const updatedRateCount = psql(`select count(*) from "CompanyPlacementRate" where "taskName"='キャディ業務' and "companyRelationshipId"='${relId}';`);
   log("setting the rate updated the SAME row (no duplicate)", updatedRateCount === "1");
-  const updatedRate = JSON.parse(
-    psql(`select json_agg(json_build_object('wageType',"wageType",'amount',amount))->0 from "CompanyPlacementRate" where "taskName"='キャディ業務' and "companyRelationshipId"='${relId}';`),
+  const versions = JSON.parse(
+    psql(`select json_agg(json_build_object('wageType',"wageType",'amount',amount)) from "CompanyPlacementRateVersion" where "placementRateId"='${placementRateId}';`),
   );
-  log("rate now set to DAILY/9000", updatedRate.wageType === "DAILY" && Number(updatedRate.amount) === 9000);
+  log("exactly one version was added (edit=new version, not overwrite)", versions.length === 1);
+  log("rate now set to DAILY/9000", versions[0].wageType === "DAILY" && Number(versions[0].amount) === 9000);
 
   // re-open invoice -> line should now auto-generate at the newly-set rate
   await admin.goto(`http://localhost:3000/company/invoices?month=${thisMonth}&client=${relId}`);

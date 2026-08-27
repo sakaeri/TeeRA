@@ -75,22 +75,26 @@ try {
   await staff.getByRole("button", { name: "契約を結ぶ" }).click();
   await staff.waitForTimeout(600);
 
-  // register the client-side task name "キャディ業務" (no rate needed for this test)
-  // and a staff-specific override rate for it: DAILY 8000円
-  await admin.goto("http://localhost:3000/company/settings?tab=contracts");
+  // a staff-specific override rate for "キャディ業務": DAILY 8000円
+  // (set via スタッフ詳細＞業務内容単価 tab)
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.click("text=個別単価スタッフ");
   await admin.waitForTimeout(300);
-  const staffSelect = admin.locator("select").filter({ hasText: "スタッフを選択" });
-  await staffSelect.selectOption({ label: "個別単価スタッフ" });
-  await admin.locator('input[placeholder="業務内容"]').last().fill("キャディ業務");
-  await admin.locator("select").filter({ hasText: "時給" }).last().selectOption("DAILY");
-  await admin.locator('input[type=number]').last().fill("8000");
-  await admin.getByRole("button", { name: "＋追加" }).last().click();
+  const staffPanel = admin.locator("div.fixed.inset-0.z-30").last();
+  await staffPanel.getByRole("button", { name: "業務内容単価" }).click();
+  await staffPanel.getByRole("button", { name: "＋業務内容を追加" }).click();
+  await staffPanel.locator('input[placeholder*="業務内容"]').fill("キャディ業務");
+  await staffPanel.locator("select").selectOption("DAILY");
+  await staffPanel.locator('input[placeholder="金額"]').fill("8000");
+  await staffPanel.getByRole("button", { name: "追加", exact: true }).click();
   await admin.waitForTimeout(500);
+  await staffPanel.click("text=閉じる");
+  await admin.waitForTimeout(200);
 
   const staffRateRow = JSON.parse(
-    psql(`select json_agg(json_build_object('taskName',"taskName",'wageType',"wageType",'amount',amount))->0 from "StaffTaskRate" where "staffUserId"='${staffUserId}';`),
+    psql(`select json_agg(json_build_object('taskName',srt."taskName",'wageType',srtv."wageType",'amount',srtv.amount))->0 from "StaffTaskRate" srt join "StaffTaskRateVersion" srtv on srtv."staffTaskRateId" = srt.id where srt."staffUserId"='${staffUserId}';`),
   );
-  log("StaffTaskRate created via settings UI", staffRateRow && staffRateRow.taskName === "キャディ業務" && staffRateRow.wageType === "DAILY" && Number(staffRateRow.amount) === 8000);
+  log("StaffTaskRate created via スタッフ詳細 UI", staffRateRow && staffRateRow.taskName === "キャディ業務" && staffRateRow.wageType === "DAILY" && Number(staffRateRow.amount) === 8000);
 
   // shift #1: taskName has a staff-specific override -> should use DAILY 8000円 flat (8h worked)
   await admin.goto("http://localhost:3000/company/calendar");

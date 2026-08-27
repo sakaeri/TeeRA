@@ -443,6 +443,19 @@ export async function assignStaffToRecruitment(params: {
       },
     });
 
+    // 依頼主詳細＞単価タブで見つけて単価設定できるよう、業務内容の登録
+    // （単価は付けない）も一緒に行っておく。
+    if (companyRelationshipId) {
+      const existingTaskName = await tx.companyPlacementRate.findFirst({
+        where: { companyId: params.assignerCompanyId, companyRelationshipId, taskName: recruitment.title },
+      });
+      if (!existingTaskName) {
+        await tx.companyPlacementRate.create({
+          data: { companyId: params.assignerCompanyId, companyRelationshipId, taskName: recruitment.title },
+        });
+      }
+    }
+
     const shift = await tx.shift.create({
       data: {
         companyId: params.assignerCompanyId,
