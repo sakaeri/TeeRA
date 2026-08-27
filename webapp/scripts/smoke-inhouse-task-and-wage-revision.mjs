@@ -95,12 +95,22 @@ try {
   log("自社向けの業務内容が会社共通の登録一覧にも載る（companyRelationshipId=null）", registeredInCompanyWide === "1");
 
   // --- ③ 雇用契約書の基本給を改定 → 上書き＋お知らせ（結び直し不要）
+  // 業務内容単価タブに「基本給」行として並び、そこから改定する
+  // （契約書管理タブは契約の中身の確認用のみ）。
   await admin.goto("http://localhost:3000/company/roster");
   await admin.locator("tbody tr", { hasText: "自社確認花子" }).click();
   await admin.waitForTimeout(300);
   const panel = admin.locator("div.fixed.inset-0.z-30").last();
   await panel.getByRole("button", { name: "契約書管理" }).click();
-  await panel.getByRole("button", { name: "基本給を改定" }).click();
+  log(
+    "契約書管理タブに「基本給を改定」ボタンは無い（業務内容単価タブに統一）",
+    (await panel.getByRole("button", { name: "基本給を改定" }).count()) === 0,
+  );
+  await panel.getByRole("button", { name: "業務内容単価" }).click();
+  const baseWageRow = panel.locator("li", { hasText: "基本給" });
+  log("業務内容単価タブに「基本給」の行が他の単価と並んで表示される", (await baseWageRow.count()) === 1);
+  log("基本給の行に勤務先ラベル（自社）が表示される", (await baseWageRow.textContent()).includes("自社"));
+  await baseWageRow.getByRole("button", { name: "改定" }).click();
   await admin.waitForTimeout(150);
   const wageInput = admin.locator("div.fixed.inset-0.z-40").last().locator('input[type=number]');
   await wageInput.fill("1200");

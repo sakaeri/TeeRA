@@ -157,7 +157,7 @@ try {
   await panel.getByRole("button", { name: "単価", exact: true }).click();
   log("終了するボタンは廃止されている", (await panel.getByRole("button", { name: "終了する" }).count()) === 0);
   await panel.getByRole("button", { name: "削除", exact: true }).click();
-  await admin.waitForTimeout(400);
+  await admin.waitForTimeout(800);
   const panelTextAfterDeleteAttempt = await panel.textContent();
   log(
     "使用済みの単価は削除できず、エラーメッセージが表示される",

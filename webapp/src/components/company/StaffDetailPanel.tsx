@@ -304,14 +304,7 @@ export function StaffDetailPanel({
               <ul className="flex flex-col gap-2">
                 {data.contracts.map((c) => (
                   <li key={c.id} className="rounded-lg border border-border p-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold">{c.title}</p>
-                      {c.status === "ACTIVE" ? (
-                        <button type="button" onClick={() => startEditWage(c)} className="text-xs text-primary hover:underline">
-                          基本給を改定
-                        </button>
-                      ) : null}
-                    </div>
+                    <p className="font-semibold">{c.title}</p>
                     <p className="text-muted">
                       {c.workplaceName} ／ {c.wageLabel}
                     </p>
@@ -330,6 +323,8 @@ export function StaffDetailPanel({
                 clients={clients}
                 knownTaskNames={knownTaskNames}
                 onChanged={refresh}
+                baseContract={data.contracts.find((c) => c.status === "ACTIVE") ?? null}
+                onEditBaseWage={startEditWage}
               />
             ) : null}
 
@@ -425,12 +420,16 @@ function StaffTaskRatesTab({
   clients,
   knownTaskNames,
   onChanged,
+  baseContract,
+  onEditBaseWage,
 }: {
   userId: string;
   rates: StaffTaskRate[];
   clients: ClientOption[];
   knownTaskNames: string[];
   onChanged: () => Promise<void>;
+  baseContract: StaffMonthDetail["contracts"][number] | null;
+  onEditBaseWage: (c: StaffMonthDetail["contracts"][number]) => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -523,6 +522,21 @@ function StaffTaskRatesTab({
         </button>
       </div>
       <ul className="flex flex-col gap-2">
+        {baseContract ? (
+          <li className="rounded-lg border border-border bg-background/40 p-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">
+                基本給 <span className="text-xs font-normal text-muted">（{baseContract.workplaceName}）</span>
+              </span>
+              <span className="text-muted">{baseContract.wageLabel}</span>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+              <button type="button" onClick={() => onEditBaseWage(baseContract)} className="text-primary hover:underline">
+                改定
+              </button>
+            </div>
+          </li>
+        ) : null}
         {rates.map((r) => (
           <li key={r.id} className="rounded-lg border border-border p-3 text-sm">
             <div className="flex items-center justify-between">
