@@ -273,7 +273,8 @@ export async function deleteUnpricedPlacementTaskName(id: string) {
   return prisma.companyPlacementRate.delete({ where: { id } });
 }
 
-// 給与単価テーブル（スタッフ×業務内容）— keyed by staffUserId + taskName。
+// 給与単価テーブル（スタッフ×業務内容×勤務先）— keyed by staffUserId + taskName
+// + companyRelationshipId（null＝勤務先を問わない、自社を含む）。
 export async function listStaffTaskRates(companyId: string) {
   return prisma.staffTaskRate.findMany({
     where: { companyId },
@@ -282,26 +283,51 @@ export async function listStaffTaskRates(companyId: string) {
   });
 }
 
+// シフトの勤務先(companyRelationshipId)に一致する行を優先し、無ければ
+// companyRelationshipId=null（勤務先を問わない）の行にフォールバックする。
+export function pickStaffTaskRate<T extends { companyRelationshipId: string | null }>(
+  rows: T[],
+  shiftCompanyRelationshipId: string | null,
+): T | null {
+  const exact = rows.find((r) => r.companyRelationshipId === shiftCompanyRelationshipId);
+  if (exact) return exact;
+  if (shiftCompanyRelationshipId !== null) {
+    const general = rows.find((r) => r.companyRelationshipId === null);
+    if (general) return general;
+  }
+  return null;
+}
+
+// companyRelationshipId がnullの複合ユニークキーはPrismaのupsertでは扱えない
+// ため、findFirst+create で代用する（registerPlacementTaskNameと同じ理由）。
 export async function addStaffTaskRateVersion(params: {
   companyId: string;
   staffUserId: string;
   taskName: string;
+  companyRelationshipId?: string;
   wageType: WageType;
   amount: number;
   effectiveFrom: Date;
   createdByUserId: string;
 }) {
-  const rate = await prisma.staffTaskRate.upsert({
+  const existing = await prisma.staffTaskRate.findFirst({
     where: {
-      companyId_staffUserId_taskName: {
+      companyId: params.companyId,
+      staffUserId: params.staffUserId,
+      taskName: params.taskName,
+      companyRelationshipId: params.companyRelationshipId ?? null,
+    },
+  });
+  const rate =
+    existing ??
+    (await prisma.staffTaskRate.create({
+      data: {
         companyId: params.companyId,
         staffUserId: params.staffUserId,
         taskName: params.taskName,
+        companyRelationshipId: params.companyRelationshipId,
       },
-    },
-    update: {},
-    create: { companyId: params.companyId, staffUserId: params.staffUserId, taskName: params.taskName },
-  });
+    }));
   return prisma.staffTaskRateVersion.create({
     data: {
       staffTaskRateId: rate.id,

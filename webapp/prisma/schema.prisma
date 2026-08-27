@@ -48,6 +48,7 @@ model User {
   conflictOverridesConfirmed ConflictOverride[]
   salarySlips                SalarySlip[]
   staffTaskRates             StaffTaskRate[]
+  staffNotices                        StaffNotice[]
   companyPlacementRateVersionsCreated CompanyPlacementRateVersion[]
   staffTaskRateVersionsCreated        StaffTaskRateVersion[]
 
@@ -79,6 +80,7 @@ model Company {
   clientRelationships  CompanyRelationship[]  @relation("ClientSide") // this company receives staff
   placementRates       CompanyPlacementRate[]
   staffTaskRates       StaffTaskRate[]
+  staffNotices         StaffNotice[]
   contractTemplates    ContractTemplate[]
   shifts               Shift[]
   publicRecruitments   PublicRecruitment[]
@@ -176,6 +178,7 @@ model CompanyRelationship {
   clientCompany Company? @relation("ClientSide", fields: [clientCompanyId], references: [id], onDelete: SetNull)
 
   placementRates    CompanyPlacementRate[]
+  staffTaskRates    StaffTaskRate[]
   contractTemplates ContractTemplate[]
   shifts            Shift[]
   invoices          Invoice[]
@@ -250,18 +253,23 @@ model CompanyPlacementRateVersion {
 // 給与単価の「業務内容」登録 — keyed by スタッフ＋業務内容。未登録
 // （バージョンが1つも無い、またはeffectiveFrom時点で単価未設定）の業務は
 // スタッフの雇用契約の基本単価にフォールバックする（payroll.ts参照）。
+// companyRelationshipId: null＝勤務先を問わない（自社を含む）、指定あり＝その
+// 依頼主での勤務限定の単価。給与計算では、シフトの勤務先に一致する行を
+// 優先し、無ければcompanyRelationshipId=nullの行にフォールバックする。
 model StaffTaskRate {
-  id          String   @id @default(cuid())
-  companyId   String
-  staffUserId String
-  taskName    String
-  createdAt   DateTime @default(now())
+  id                    String   @id @default(cuid())
+  companyId             String
+  staffUserId           String
+  taskName              String
+  companyRelationshipId String?
+  createdAt             DateTime @default(now())
 
-  company  Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  staff    User                   @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
-  versions StaffTaskRateVersion[]
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  staff               User                 @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+  companyRelationship CompanyRelationship? @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
+  versions            StaffTaskRateVersion[]
 
-  @@unique([companyId, staffUserId, taskName])
+  @@unique([companyId, staffUserId, taskName, companyRelationshipId])
   @@index([companyId])
 }
 
@@ -279,6 +287,22 @@ model StaffTaskRateVersion {
   createdBy     User?         @relation(fields: [createdByUserId], references: [id])
 
   @@index([staffTaskRateId, effectiveFrom])
+}
+
+// スタッフ向けのお知らせ（例：個別単価の変更・終了）。同意を求めるものでは
+// なく、既読管理のみの一方向の通知。
+model StaffNotice {
+  id          String    @id @default(cuid())
+  companyId   String
+  staffUserId String
+  message     String
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  staff   User    @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@index([staffUserId, readAt])
 }
 
 enum InviteKind {

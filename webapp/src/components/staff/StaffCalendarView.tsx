@@ -59,54 +59,71 @@ export function StaffCalendarView({
 
   const prev = month === 1 ? { y: year - 1, m: 12 } : { y: year, m: month - 1 };
   const next = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
+  const CONFIRMED_SLOT_BUDGET = 5;
 
   return (
-    <div>
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href={`?y=${prev.y}&m=${prev.m}`} className="text-lg text-muted">
-            ‹
-          </Link>
-          <div className="font-serif-jp text-lg font-bold">
-            {year}年{month}月
-          </div>
-          <Link href={`?y=${next.y}&m=${next.m}`} className="text-lg text-muted">
-            ›
-          </Link>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowWizard(true)}
-          className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+    <div className="rounded-2xl bg-white p-4">
+      <div className="mb-2 flex items-center justify-center gap-2">
+        <Link
+          href={`?y=${prev.y}&m=${prev.m}`}
+          aria-label="前の月"
+          className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
         >
-          ＋シフト希望を出す
-        </button>
+          <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+            <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </Link>
+        <Link
+          href={`?y=${todayStr.slice(0, 4)}&m=${Number(todayStr.slice(5, 7))}`}
+          className="rounded-lg px-2 py-1 font-serif-jp text-lg font-bold hover:bg-background"
+        >
+          {year}年{month}月
+        </Link>
+        <Link
+          href={`?y=${next.y}&m=${next.m}`}
+          aria-label="次の月"
+          className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
+        >
+          <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+            <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </Link>
       </div>
 
-      <div className="grid grid-cols-7 overflow-hidden rounded-xl border border-border">
+      <div className="grid grid-cols-7 gap-1">
         {WEEKDAYS.map((w, i) => (
-          <div
-            key={w}
-            className={`border-b border-border bg-white/60 py-2 text-center text-xs font-semibold ${weekdayColor(i)}`}
-          >
+          <div key={w} className={`py-1 text-center text-xs font-semibold ${weekdayColor(i)}`}>
             {w}
           </div>
         ))}
         {cells.map((c, i) => {
           if (!c.dateStr) {
-            return <div key={i} className="min-h-20 border-b border-r border-border/50 bg-background" />;
+            return <div key={i} className="h-[100px]" />;
           }
           const dow = new Date(c.dateStr + "T00:00:00Z").getUTCDay();
           const dayShifts = shiftsByDate.get(c.dateStr) ?? [];
           const isToday = c.dateStr === todayStr;
+          const visibleShifts = dayShifts.slice(0, CONFIRMED_SLOT_BUDGET);
+          const hasOverflow = dayShifts.length > CONFIRMED_SLOT_BUDGET;
           return (
-            <div key={i} className={`min-h-20 border-b border-r border-border/50 p-2 ${isToday ? "bg-accent/25" : "bg-white/40"}`}>
-              <span className={`text-xs font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
-              <div className="mt-1 flex flex-col gap-0.5">
-                {dayShifts.map((s) => (
+            <div
+              key={i}
+              className={`relative flex h-[100px] flex-col items-stretch justify-start overflow-hidden rounded-xl rounded-tr-none p-1.5 ${
+                isToday ? "bg-accent/25" : "bg-white/40"
+              }`}
+            >
+              <span className={`block text-center text-[11px] font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
+              {hasOverflow ? (
+                <span
+                  title={`他${dayShifts.length - CONFIRMED_SLOT_BUDGET}件`}
+                  className="absolute right-0 top-0 h-0 w-0 border-r-[14px] border-b-[14px] border-r-accent border-b-transparent"
+                />
+              ) : null}
+              <div className="mt-px flex flex-col gap-[2px]">
+                {visibleShifts.map((s) => (
                   <span
                     key={s.id}
-                    className="truncate rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-900"
+                    className="truncate rounded-full bg-emerald-100 px-1.5 py-px text-[8px] font-medium leading-tight text-emerald-900"
                   >
                     {s.companyName} {s.isAllDay ? "終日" : s.isUndecided ? "未定" : s.startTime}
                   </span>
@@ -116,6 +133,14 @@ export function StaffCalendarView({
           );
         })}
       </div>
+
+      <button
+        type="button"
+        onClick={() => setShowWizard(true)}
+        className="fixed bottom-8 right-8 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-2xl text-primary-foreground shadow-lg"
+      >
+        ＋
+      </button>
 
       {showWizard ? <ApplyWizard onClose={() => setShowWizard(false)} /> : null}
     </div>

@@ -5,6 +5,7 @@ import { requireCompanyStaffRole } from "@/lib/auth/session";
 import { submitShiftRequest } from "@/lib/domain/shifts";
 import { applyToRecruitment } from "@/lib/domain/recruitment";
 import { clockIn, clockOut, submitWorkReport } from "@/lib/domain/workReports";
+import { markStaffNoticeRead } from "@/lib/domain/notices";
 import { prisma } from "@/lib/prisma";
 
 async function assertOwnShift(shiftId: string, staffUserId: string) {
@@ -73,4 +74,10 @@ export async function applyToRecruitmentAction(recruitmentId: string) {
   revalidatePath("/staff/recruitments");
   revalidatePath("/staff");
   return { error: null };
+}
+
+export async function markStaffNoticeReadAction(noticeId: string) {
+  const { userId } = await requireCompanyStaffRole();
+  await markStaffNoticeRead(noticeId, userId);
+  revalidatePath("/staff");
 }

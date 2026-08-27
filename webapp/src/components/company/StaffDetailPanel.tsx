@@ -9,9 +9,13 @@ import { todayJstParts, todayJst } from "@/lib/date";
 type StaffTaskRate = {
   id: string;
   taskName: string;
+  companyRelationshipId: string | null;
+  workplaceLabel: string;
   currentLabel: string;
   versions: { id: string; label: string; effectiveFrom: string }[];
 };
+
+type ClientOption = { id: string; name: string };
 
 type StaffMonthDetail = {
   membershipId: string;
@@ -60,7 +64,15 @@ function timeLabel(d: StaffMonthDetail["days"][number]) {
   return `${d.startTime ?? "--:--"}〜${d.endTime ?? "--:--"}`;
 }
 
-export function StaffDetailPanel({ userId, onClose }: { userId: string; onClose: () => void }) {
+export function StaffDetailPanel({
+  userId,
+  clients,
+  onClose,
+}: {
+  userId: string;
+  clients: ClientOption[];
+  onClose: () => void;
+}) {
   const router = useRouter();
   const initToday = todayJstParts();
   const [year, setYear] = useState(initToday.year);
@@ -272,7 +284,9 @@ export function StaffDetailPanel({ userId, onClose }: { userId: string; onClose:
               </ul>
             ) : null}
 
-            {tab === "rates" ? <StaffTaskRatesTab userId={userId} rates={data.taskRates} onChanged={refresh} /> : null}
+            {tab === "rates" ? (
+              <StaffTaskRatesTab userId={userId} rates={data.taskRates} clients={clients} onChanged={refresh} />
+            ) : null}
 
             {tab === "note" ? (
               <div className="flex flex-col gap-3">
@@ -311,10 +325,12 @@ const WAGE_TYPE_OPTIONS: { value: "HOURLY" | "DAILY" | "MONTHLY"; label: string 
 function StaffTaskRatesTab({
   userId,
   rates,
+  clients,
   onChanged,
 }: {
   userId: string;
   rates: StaffTaskRate[];
+  clients: ClientOption[];
   onChanged: () => Promise<void>;
 }) {
   const [pending, startTransition] = useTransition();
@@ -327,6 +343,7 @@ function StaffTaskRatesTab({
   const [endEffectiveFrom, setEndEffectiveFrom] = useState(todayJst());
   const [showNewForm, setShowNewForm] = useState(false);
   const [newTaskName, setNewTaskName] = useState("");
+  const [newCompanyRelationshipId, setNewCompanyRelationshipId] = useState("");
   const [newWageType, setNewWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
   const [newAmount, setNewAmount] = useState("");
   const [newEffectiveFrom, setNewEffectiveFrom] = useState(todayJst());
@@ -345,6 +362,7 @@ function StaffTaskRatesTab({
       await addStaffTaskRateVersionAction({
         staffUserId: userId,
         taskName: r.taskName,
+        companyRelationshipId: r.companyRelationshipId ?? undefined,
         wageType: amendWageType,
         amount: Number(amendAmount),
         effectiveFrom: amendEffectiveFrom,
@@ -368,12 +386,14 @@ function StaffTaskRatesTab({
       await addStaffTaskRateVersionAction({
         staffUserId: userId,
         taskName: newTaskName.trim(),
+        companyRelationshipId: newCompanyRelationshipId || undefined,
         wageType: newWageType,
         amount: Number(newAmount),
         effectiveFrom: newEffectiveFrom,
       });
       setShowNewForm(false);
       setNewTaskName("");
+      setNewCompanyRelationshipId("");
       setNewAmount("");
       setNewEffectiveFrom(todayJst());
       await onChanged();
@@ -396,7 +416,9 @@ function StaffTaskRatesTab({
         {rates.map((r) => (
           <li key={r.id} className="rounded-lg border border-border p-3 text-sm">
             <div className="flex items-center justify-between">
-              <span className="font-medium">{r.taskName}</span>
+              <span className="font-medium">
+                {r.taskName} <span className="text-xs font-normal text-muted">（{r.workplaceLabel}）</span>
+              </span>
               <span className="text-muted">{r.currentLabel}</span>
             </div>
 
@@ -539,6 +561,21 @@ function StaffTaskRatesTab({
                 placeholder="業務内容（例：キャディ業務）"
                 className="rounded-lg border border-border px-3 py-2 text-sm"
               />
+              <label className="flex flex-col gap-0.5 text-xs text-muted">
+                勤務先
+                <select
+                  value={newCompanyRelationshipId}
+                  onChange={(e) => setNewCompanyRelationshipId(e.target.value)}
+                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                >
+                  <option value="">勤務先を問わない</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <div className="flex flex-wrap items-end gap-2">
                 <select
                   value={newWageType}

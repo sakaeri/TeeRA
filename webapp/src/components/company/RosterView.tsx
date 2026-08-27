@@ -336,7 +336,11 @@ export function RosterView({
       ) : null}
 
       {selectedStaffId ? (
-        <StaffDetailPanel userId={selectedStaffId} onClose={() => setSelectedStaffId(null)} />
+        <StaffDetailPanel
+          userId={selectedStaffId}
+          clients={clients.map((c) => ({ id: c.id, name: c.name }))}
+          onClose={() => setSelectedStaffId(null)}
+        />
       ) : null}
       {selectedRelationshipId && selectedRelationshipKind ? (
         <ClientDetailPanel

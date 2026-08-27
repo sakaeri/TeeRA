@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
-import { resolveRateVersion } from "@/lib/domain/contracts";
+import { resolveRateVersion, pickStaffTaskRate } from "@/lib/domain/contracts";
 
 const FIXED_DEDUCTION_LABELS = ["社会保険料", "厚生年金", "雇用保険料", "所得税", "市県民税"];
 
@@ -58,7 +58,12 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     where: { companyId: params.companyId, staffUserId: params.staffUserId },
     include: { versions: true },
   });
-  const taskRatesByName = new Map(taskRates.map((r) => [r.taskName, r.versions]));
+  const taskRateRowsByName = new Map<string, typeof taskRates>();
+  for (const r of taskRates) {
+    const list = taskRateRowsByName.get(r.taskName) ?? [];
+    list.push(r);
+    taskRateRowsByName.set(r.taskName, list);
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, kind: "SHIFT" } });
@@ -67,10 +72,12 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     for (const r of reports) {
       const workedHours = Math.round((r.computedMinutes / 60) * 100) / 100;
       if (workedHours <= 0) continue;
-      // その業務内容に、シフトの日付時点で有効なスタッフ個別の単価があれば
-      // それを優先し、無ければ雇用契約の基本単価にフォールバックする。
-      const versions = r.shift.taskName ? taskRatesByName.get(r.shift.taskName) : undefined;
-      const wage = (versions ? resolveRateVersion(versions, r.shift.date) : null) ?? baseWage;
+      // その業務内容・その勤務先に、シフトの日付時点で有効なスタッフ個別の
+      // 単価があればそれを優先し（勤務先限定＞勤務先を問わない、の順で
+      // 探す）、無ければ雇用契約の基本単価にフォールバックする。
+      const candidateRows = r.shift.taskName ? taskRateRowsByName.get(r.shift.taskName) : undefined;
+      const matchedRow = candidateRows ? pickStaffTaskRate(candidateRows, r.shift.companyRelationshipId) : null;
+      const wage = (matchedRow ? resolveRateVersion(matchedRow.versions, r.shift.date) : null) ?? baseWage;
       // 月給は日々のシフト単位では自動計上しない（固定給のため、必要なら
       // 手動でカスタム行を追加する）。時給/日給のみ自動生成する。
       if (wage.wageType === "MONTHLY") continue;

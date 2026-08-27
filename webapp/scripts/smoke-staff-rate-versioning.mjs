@@ -91,7 +91,7 @@ try {
   await panel.getByRole("button", { name: "業務内容単価" }).click();
   await panel.getByRole("button", { name: "＋業務内容を追加" }).click();
   await panel.locator('input[placeholder*="業務内容"]').fill("特殊作業");
-  await panel.locator("select").selectOption("DAILY");
+  await panel.locator("select").nth(1).selectOption("DAILY");
   await panel.locator('input[placeholder="金額"]').fill("6000");
   await panel.locator('input[type=date]').fill(addDays(today, -30));
   await panel.getByRole("button", { name: "追加", exact: true }).click();

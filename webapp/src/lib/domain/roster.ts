@@ -205,7 +205,10 @@ export async function getStaffMonthDetail(params: {
 
   const taskRates = await prisma.staffTaskRate.findMany({
     where: { companyId: params.companyId, staffUserId: params.userId },
-    include: { versions: { orderBy: { effectiveFrom: "desc" } } },
+    include: {
+      versions: { orderBy: { effectiveFrom: "desc" } },
+      companyRelationship: { include: { clientCompany: true } },
+    },
     orderBy: { createdAt: "asc" },
   });
   const today = new Date();
@@ -237,6 +240,10 @@ export async function getStaffMonthDetail(params: {
       return {
         id: r.id,
         taskName: r.taskName,
+        companyRelationshipId: r.companyRelationshipId,
+        workplaceLabel: r.companyRelationshipId
+          ? (r.companyRelationship?.clientCompany?.name ?? r.companyRelationship?.proxyName ?? "取引先")
+          : "勤務先問わず",
         currentLabel: current ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円` : "単価未設定",
         versions: r.versions.map((v) => ({
           id: v.id,
