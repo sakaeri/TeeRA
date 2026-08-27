@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { registerStaffTaskName, registerPlacementTaskName } from "@/lib/domain/contracts";
 
 // Approval routing (permission-rules-memo.md, bugfixed in chat29): approver
 // company is derived from the shift's source. INHOUSE -> the shift's own
@@ -61,6 +62,26 @@ export async function submitWorkReport(params: {
   if (params.outcome === "WORKED") {
     if (!existing?.clockIn || !existing?.clockOut) {
       throw new Error("clock_in_out_required");
+    }
+    if (params.taskName) {
+      // 業務報告で選ばれた（または新規入力された）業務内容を単価表にも登録
+      // しておく — こうしないと後で会社側が単価を設定しようとしたとき、
+      // ここで入力された文字列と一致する候補が一覧に出てこない
+      // （表記ゆれ対策の意味が無くなってしまう）。単価は付けず登録のみ。
+      const shift = await prisma.shift.findUniqueOrThrow({ where: { id: params.shiftId } });
+      await registerStaffTaskName({
+        companyId: shift.companyId,
+        staffUserId: params.staffUserId,
+        taskName: params.taskName,
+        companyRelationshipId: shift.companyRelationshipId ?? undefined,
+      });
+      if (shift.source === "CLIENT" && shift.companyRelationshipId) {
+        await registerPlacementTaskName({
+          companyId: shift.companyId,
+          companyRelationshipId: shift.companyRelationshipId,
+          taskName: params.taskName,
+        });
+      }
     }
     return prisma.workReport.update({
       where: { shiftId: params.shiftId },

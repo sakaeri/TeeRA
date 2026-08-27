@@ -137,6 +137,62 @@ try {
     line && Number(line.rate) === 9000 && Number(line.amount) === 9000,
   );
 
+  // --- scenario 2: a genuinely NEW task name typed at report time for a
+  // CLIENT-workplace shift should get registered (unpriced) into BOTH
+  // StaffTaskRate and CompanyPlacementRate, so it shows up as a pickable
+  // candidate later instead of being invisible/unmatchable forever.
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.click("text=依頼主一覧");
+  await admin.waitForTimeout(200);
+  await admin.click("text=＋依頼主を追加する");
+  await admin.waitForTimeout(200);
+  await admin.click("text=仮アカウントを作成");
+  await admin.fill('input[placeholder="名称を入力"]', "新規業務先");
+  await admin.getByRole("button", { name: "作成", exact: true }).click();
+  await admin.waitForTimeout(600);
+  const relId = psql(
+    `select cr.id from "CompanyRelationship" cr join "Company" c on c."id"=cr."ownerCompanyId" where c.id='${companyId}' and cr."proxyName"='新規業務先';`,
+  );
+
+  // dated yesterday (not today, unlike shift1) so ordering on the timecard
+  // list (orderBy date desc) is deterministic — shift2 always sorts last.
+  const shift2Id = psql(
+    `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'CLIENT', '${relId}', null, current_date - interval '1 day', '09:00', '17:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
+  );
+  psql(
+    `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "clockIn", "clockOut", "computedMinutes", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${shift2Id}', '${staffUserId}', 'WORKED', now() - interval '8 hours', now(), 480, now(), now());`,
+  );
+
+  await staff.goto("http://localhost:3000/staff/timecard");
+  await staff.waitForTimeout(400);
+  const taskNameLabel2 = staff.locator("label", { hasText: "業務内容" }).last();
+  const picker2 = taskNameLabel2.locator("select");
+  await picker2.selectOption({ label: "＋ 新しい業務内容を追加する" });
+  await taskNameLabel2.locator('input[placeholder*="業務内容"]').fill("受付業務");
+  await staff.getByRole("button", { name: "業務報告を提出する" }).last().click();
+  await staff.waitForTimeout(500);
+
+  const staffTaskRateCount = psql(
+    `select count(*) from "StaffTaskRate" where "companyId"='${companyId}' and "staffUserId"='${staffUserId}' and "taskName"='受付業務' and "companyRelationshipId"='${relId}';`,
+  );
+  log("新規入力した業務内容が未登録のStaffTaskRateとして自動登録される", staffTaskRateCount === "1");
+
+  const placementRateCount = psql(
+    `select count(*) from "CompanyPlacementRate" where "companyId"='${companyId}' and "companyRelationshipId"='${relId}' and "taskName"='受付業務';`,
+  );
+  log("同じ業務内容が依頼主の単価表（CompanyPlacementRate）にも未登録として自動登録される", placementRateCount === "1");
+
+  // still unpriced -> now visible as a pickable candidate for THIS staff (not silently unmatchable)
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.locator("tbody tr", { hasText: "確定花子" }).click();
+  await admin.waitForTimeout(300);
+  const panel2 = admin.locator("div.fixed.inset-0.z-30").last();
+  await panel2.getByRole("button", { name: "業務内容単価" }).click();
+  const panelText2 = await panel2.textContent();
+  log("スタッフ詳細の単価タブに「受付業務」が未設定のまま一覧表示される", panelText2.includes("受付業務") && panelText2.includes("単価未設定"));
+
   console.log(process.exitCode ? "WORKREPORT TASK NAME SMOKE TEST HAD FAILURES" : "WORKREPORT TASK NAME SMOKE TEST PASSED");
 } catch (err) {
   console.error("WORKREPORT TASK NAME SMOKE TEST FAILED", err);

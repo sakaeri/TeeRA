@@ -318,8 +318,35 @@ export function pickStaffTaskRate<T extends { companyRelationshipId: string | nu
   return null;
 }
 
-// companyRelationshipId がnullの複合ユニークキーはPrismaのupsertでは扱えない
-// ため、findFirst+create で代用する（registerPlacementTaskNameと同じ理由）。
+// 業務内容名だけを登録する（単価は付けない）— 業務報告での新規追加など、
+// その場登録用。companyRelationshipId がnullの複合ユニークキーはPrismaの
+// upsertでは扱えないため、findFirst+create で代用する
+// （registerPlacementTaskNameと同じ理由）。
+export async function registerStaffTaskName(params: {
+  companyId: string;
+  staffUserId: string;
+  taskName: string;
+  companyRelationshipId?: string;
+}) {
+  const existing = await prisma.staffTaskRate.findFirst({
+    where: {
+      companyId: params.companyId,
+      staffUserId: params.staffUserId,
+      taskName: params.taskName,
+      companyRelationshipId: params.companyRelationshipId ?? null,
+    },
+  });
+  if (existing) return existing;
+  return prisma.staffTaskRate.create({
+    data: {
+      companyId: params.companyId,
+      staffUserId: params.staffUserId,
+      taskName: params.taskName,
+      companyRelationshipId: params.companyRelationshipId,
+    },
+  });
+}
+
 export async function addStaffTaskRateVersion(params: {
   companyId: string;
   staffUserId: string;
@@ -330,24 +357,12 @@ export async function addStaffTaskRateVersion(params: {
   effectiveFrom: Date;
   createdByUserId: string;
 }) {
-  const existing = await prisma.staffTaskRate.findFirst({
-    where: {
-      companyId: params.companyId,
-      staffUserId: params.staffUserId,
-      taskName: params.taskName,
-      companyRelationshipId: params.companyRelationshipId ?? null,
-    },
+  const rate = await registerStaffTaskName({
+    companyId: params.companyId,
+    staffUserId: params.staffUserId,
+    taskName: params.taskName,
+    companyRelationshipId: params.companyRelationshipId,
   });
-  const rate =
-    existing ??
-    (await prisma.staffTaskRate.create({
-      data: {
-        companyId: params.companyId,
-        staffUserId: params.staffUserId,
-        taskName: params.taskName,
-        companyRelationshipId: params.companyRelationshipId,
-      },
-    }));
   return prisma.staffTaskRateVersion.create({
     data: {
       staffTaskRateId: rate.id,
