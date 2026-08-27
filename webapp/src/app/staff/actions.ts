@@ -31,6 +31,7 @@ export async function submitWorkReportAction(input: {
   shiftId: string;
   outcome: "WORKED" | "ABSENT" | "CANCELLED_BY_EMPLOYER";
   comment?: string;
+  taskName?: string;
 }) {
   const { userId } = await requireCompanyStaffRole();
   await assertOwnShift(input.shiftId, userId);
@@ -39,6 +40,7 @@ export async function submitWorkReportAction(input: {
     staffUserId: userId,
     outcome: input.outcome,
     comment: input.comment,
+    taskName: input.taskName,
   });
   revalidatePath("/staff/timecard");
 }

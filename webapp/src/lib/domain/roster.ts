@@ -261,6 +261,7 @@ export async function getStaffMonthDetail(params: {
       isUndecided: s.isUndecided,
       approvalStatus: s.workReport?.approvalStatus ?? null,
       outcome: s.workReport?.outcome ?? null,
+      taskName: s.workReport?.taskName ?? s.taskName,
     })),
   };
 }

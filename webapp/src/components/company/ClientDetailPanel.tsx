@@ -40,6 +40,7 @@ type ClientMonthDetail = {
     isAllDay: boolean;
     isUndecided: boolean;
     approvalStatus: string | null;
+    taskName: string | null;
   }[];
 };
 
@@ -243,7 +244,10 @@ export function ClientDetailPanel({
                 <ul className="flex flex-col gap-1">
                   {data.days.map((d) => (
                     <li key={d.shiftId} className="flex items-center justify-between border-b border-border/50 py-2 text-sm">
-                      <span>{d.date}</span>
+                      <span>
+                        {d.date}
+                        {d.taskName ? <span className="ml-1.5 text-xs text-muted">（{d.taskName}）</span> : null}
+                      </span>
                       <span>{d.staffName}</span>
                       <span className="text-muted">{timeLabel(d)}</span>
                       {d.approvalStatus ? (

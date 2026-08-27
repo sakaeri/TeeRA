@@ -110,6 +110,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
             date: shift?.date.toISOString().slice(0, 10) ?? "",
             computedHours: (r.computedMinutes / 60).toFixed(1),
             comment: r.comment,
+            taskName: r.taskName ?? shift?.taskName ?? null,
           };
         })}
       />

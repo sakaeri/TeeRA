@@ -54,6 +54,7 @@ export async function submitWorkReport(params: {
   staffUserId: string;
   outcome: "WORKED" | "ABSENT" | "CANCELLED_BY_EMPLOYER";
   comment?: string;
+  taskName?: string;
 }) {
   const existing = await prisma.workReport.findUnique({ where: { shiftId: params.shiftId } });
 
@@ -63,7 +64,7 @@ export async function submitWorkReport(params: {
     }
     return prisma.workReport.update({
       where: { shiftId: params.shiftId },
-      data: { outcome: "WORKED", comment: params.comment, approvalStatus: "PENDING" },
+      data: { outcome: "WORKED", comment: params.comment, taskName: params.taskName, approvalStatus: "PENDING" },
     });
   }
 

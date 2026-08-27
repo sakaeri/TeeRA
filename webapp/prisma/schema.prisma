@@ -544,6 +544,10 @@ model WorkReport {
   breakMinutes    Int               @default(0)
   computedMinutes Int               @default(0) // derived from clockIn/clockOut - breakMinutes; never manually edited
   comment         String?
+  // 提出時点で選び直した実際の業務内容。null=シフト作成時の予定
+  // （shift.taskName）のまま。単価解決はこちらを優先し、無ければ
+  // shift.taskNameにフォールバックする。
+  taskName        String?
   approvalStatus  ApprovalStatus    @default(PENDING)
   approverUserId  String?
   approvedAt      DateTime?

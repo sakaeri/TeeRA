@@ -13,6 +13,7 @@ type ShiftRow = {
   companyName: string;
   startTime: string | null;
   endTime: string | null;
+  taskName: string | null;
   clockIn: string | null;
   clockOut: string | null;
   outcome: string | null;
@@ -26,11 +27,13 @@ const APPROVAL_LABEL: Record<string, string> = {
   REJECTED: "差し戻し",
 };
 
-export function StaffTimecardView({ shifts }: { shifts: ShiftRow[] }) {
+const NEW_TASK_NAME_SENTINEL = "__new__";
+
+export function StaffTimecardView({ shifts, knownTaskNames }: { shifts: ShiftRow[]; knownTaskNames: string[] }) {
   return (
     <ul className="flex flex-col gap-4">
       {shifts.map((s) => (
-        <ShiftCard key={s.id} shift={s} />
+        <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNames} />
       ))}
       {shifts.length === 0 ? (
         <p className="text-sm text-muted">対象のシフトがありません。</p>
@@ -39,9 +42,13 @@ export function StaffTimecardView({ shifts }: { shifts: ShiftRow[] }) {
   );
 }
 
-function ShiftCard({ shift }: { shift: ShiftRow }) {
+function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTaskNames: string[] }) {
   const [pending, startTransition] = useTransition();
   const [comment, setComment] = useState("");
+  const [taskName, setTaskName] = useState(shift.taskName ?? "");
+  const [taskNameMode, setTaskNameMode] = useState<"pick" | "custom">(
+    knownTaskNames.length > 0 ? "pick" : "custom",
+  );
   const [error, setError] = useState<string | null>(null);
 
   const finalized = shift.outcome && shift.outcome !== "WORKED";
@@ -90,6 +97,53 @@ function ShiftCard({ shift }: { shift: ShiftRow }) {
           ) : (
             <div className="flex flex-col gap-2">
               <p className="text-sm text-muted">実働 {(shift.computedMinutes / 60).toFixed(1)} 時間</p>
+              <label className="flex flex-col gap-0.5 text-xs text-muted">
+                業務内容
+                {taskNameMode === "pick" ? (
+                  <select
+                    value={taskName}
+                    onChange={(e) => {
+                      if (e.target.value === NEW_TASK_NAME_SENTINEL) {
+                        setTaskNameMode("custom");
+                        setTaskName("");
+                      } else {
+                        setTaskName(e.target.value);
+                      }
+                    }}
+                    className="rounded-lg border border-border px-3 py-2 text-sm"
+                  >
+                    <option value="">未選択</option>
+                    {knownTaskNames.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                    <option value={NEW_TASK_NAME_SENTINEL}>＋ 新しい業務内容を追加する</option>
+                  </select>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    <input
+                      type="text"
+                      value={taskName}
+                      onChange={(e) => setTaskName(e.target.value)}
+                      placeholder="業務内容（例：キャディ業務）"
+                      className="rounded-lg border border-border px-3 py-2 text-sm"
+                    />
+                    {knownTaskNames.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTaskNameMode("pick");
+                          setTaskName(shift.taskName ?? "");
+                        }}
+                        className="self-start text-xs text-muted hover:text-primary"
+                      >
+                        ← 既存の業務内容から選ぶ
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+              </label>
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
@@ -108,6 +162,7 @@ function ShiftCard({ shift }: { shift: ShiftRow }) {
                         shiftId: shift.id,
                         outcome: "WORKED",
                         comment: comment || undefined,
+                        taskName: taskName.trim() || undefined,
                       });
                     } catch {
                       setError("提出に失敗しました。");

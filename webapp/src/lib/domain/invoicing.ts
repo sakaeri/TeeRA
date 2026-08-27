@@ -75,19 +75,22 @@ async function regenerateLines(invoiceId: string) {
       const workedHours = Math.round((report.computedMinutes / 60) * 100) / 100;
       if (workedHours <= 0) continue;
 
+      // 業務報告の時点で業務内容が選び直されていればそちらを優先し（提出時点
+      // で確定）、無ければシフト作成時の予定（shift.taskName）を使う。
+      const effectiveTaskName = report.taskName ?? s.taskName;
       // その業務内容の、シフトの日付時点で有効だった単価バージョンを使う
       // （単価は上書きせず履歴で積まれるため、後日単価を直しても過去の
       // 確定済みシフトの計算結果は変わらない）。
-      const versions = s.taskName ? ratesByTask.get(s.taskName) : undefined;
+      const versions = effectiveTaskName ? ratesByTask.get(effectiveTaskName) : undefined;
       const taskRate = versions ? resolveRateVersion(versions, s.date) : null;
       if (!taskRate || taskRate.wageType === "MONTHLY") {
-        unresolved.push({ shiftId: s.id, date: s.date.toISOString().slice(0, 10), staffName: s.staff.name, taskName: s.taskName });
+        unresolved.push({ shiftId: s.id, date: s.date.toISOString().slice(0, 10), staffName: s.staff.name, taskName: effectiveTaskName });
         continue;
       }
       const isHourly = taskRate.wageType === "HOURLY";
       const lineHours = isHourly ? workedHours : 1;
       const rate = taskRate.amount;
-      const taskLabel = s.taskName ? `（${s.taskName}）` : "";
+      const taskLabel = effectiveTaskName ? `（${effectiveTaskName}）` : "";
 
       await tx.invoiceLine.create({
         data: {

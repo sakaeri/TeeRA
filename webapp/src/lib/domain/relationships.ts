@@ -201,6 +201,7 @@ export async function getClientMonthDetail(params: {
       isAllDay: s.isAllDay,
       isUndecided: s.isUndecided,
       approvalStatus: s.workReport?.approvalStatus ?? null,
+      taskName: s.workReport?.taskName ?? s.taskName,
     })),
   };
 }

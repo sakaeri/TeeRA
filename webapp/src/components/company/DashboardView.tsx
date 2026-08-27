@@ -88,6 +88,7 @@ type PendingReportEntry = {
   breakMinutes: number;
   computedHours: string;
   comment: string | null;
+  taskName: string | null;
 };
 
 type PendingContractStaff = { userId: string; name: string };
@@ -705,6 +706,7 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
         </div>
         <p className="mb-4 text-xs text-muted">
           {entry.staffName}・{entry.teamName ?? "自社"}・{formatDateJa(entry.date)}
+          {entry.taskName ? `・${entry.taskName}` : ""}
         </p>
 
         {entry.outcome === "出勤した" ? (

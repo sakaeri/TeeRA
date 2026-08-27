@@ -10,6 +10,7 @@ type Row = {
   date: string;
   computedHours: string;
   comment: string | null;
+  taskName: string | null;
 };
 
 export function WorkReportsQueue({ reports }: { reports: Row[] }) {
@@ -26,6 +27,7 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
               <div className="mb-1 flex items-center justify-between">
                 <span className="font-medium">
                   {r.staffName} — {r.date}
+                  {r.taskName ? <span className="ml-1.5 font-normal text-muted">（{r.taskName}）</span> : null}
                 </span>
                 <span className="text-xs text-muted">{r.outcome}</span>
               </div>

@@ -110,6 +110,7 @@ export function computePendingReportEntries(data: DashboardData) {
     breakMinutes: r.breakMinutes,
     computedHours: (r.computedMinutes / 60).toFixed(2),
     comment: r.comment,
+    taskName: r.taskName ?? r.shift.taskName,
   }));
 }
 

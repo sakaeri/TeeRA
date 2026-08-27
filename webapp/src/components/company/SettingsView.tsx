@@ -65,6 +65,7 @@ type WorkReportRow = {
   date: string;
   computedHours: string;
   comment: string | null;
+  taskName: string | null;
 };
 
 const TABS = [

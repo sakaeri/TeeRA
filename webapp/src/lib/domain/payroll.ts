@@ -72,10 +72,13 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     for (const r of reports) {
       const workedHours = Math.round((r.computedMinutes / 60) * 100) / 100;
       if (workedHours <= 0) continue;
+      // 業務報告の時点で業務内容が選び直されていればそちらを優先し（提出時点
+      // で確定）、無ければシフト作成時の予定（shift.taskName）を使う。
+      const effectiveTaskName = r.taskName ?? r.shift.taskName;
       // その業務内容・その勤務先に、シフトの日付時点で有効なスタッフ個別の
       // 単価があればそれを優先し（勤務先限定＞勤務先を問わない、の順で
       // 探す）、無ければ雇用契約の基本単価にフォールバックする。
-      const candidateRows = r.shift.taskName ? taskRateRowsByName.get(r.shift.taskName) : undefined;
+      const candidateRows = effectiveTaskName ? taskRateRowsByName.get(effectiveTaskName) : undefined;
       const matchedRow = candidateRows ? pickStaffTaskRate(candidateRows, r.shift.companyRelationshipId) : null;
       const wage = (matchedRow ? resolveRateVersion(matchedRow.versions, r.shift.date) : null) ?? baseWage;
       // 月給は日々のシフト単位では自動計上しない（固定給のため、必要なら
@@ -87,7 +90,7 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
       const isHourly = wage.wageType === "HOURLY";
       const lineHours = isHourly ? workedHours : 1;
       const rate = wage.amount;
-      const taskLabel = r.shift.taskName ? `（${r.shift.taskName}）` : "";
+      const taskLabel = effectiveTaskName ? `（${effectiveTaskName}）` : "";
       await tx.salarySlipLine.create({
         data: {
           salarySlipId: slip.id,
