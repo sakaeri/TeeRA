@@ -44,6 +44,7 @@ type StaffMonthDetail = {
     approvalStatus: string | null;
     outcome: string | null;
     taskName: string | null;
+    workplaceLabel: string;
   }[];
 };
 
@@ -257,7 +258,10 @@ export function StaffDetailPanel({
                     <li key={d.shiftId} className="flex items-center justify-between border-b border-border/50 py-2 text-sm">
                       <span>
                         {d.date}
-                        {d.taskName ? <span className="ml-1.5 text-xs text-muted">（{d.taskName}）</span> : null}
+                        <span className="ml-1.5 text-xs text-muted">
+                          {d.workplaceLabel}
+                          {d.taskName ? `（${d.taskName}）` : ""}
+                        </span>
                       </span>
                       <span className="text-muted">{timeLabel(d)}</span>
                       {d.approvalStatus ? (

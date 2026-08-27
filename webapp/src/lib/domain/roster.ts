@@ -190,7 +190,7 @@ export async function getStaffMonthDetail(params: {
       date: { gte: start, lt: end },
       status: { notIn: ["SUPERSEDED", "CANCELLED"] },
     },
-    include: { workReport: true },
+    include: { workReport: true, companyRelationship: { include: { clientCompany: true } } },
     orderBy: { date: "asc" },
   });
 
@@ -262,6 +262,10 @@ export async function getStaffMonthDetail(params: {
       approvalStatus: s.workReport?.approvalStatus ?? null,
       outcome: s.workReport?.outcome ?? null,
       taskName: s.workReport?.taskName ?? s.taskName,
+      workplaceLabel:
+        s.source === "INHOUSE"
+          ? "自社"
+          : (s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? "取引先"),
     })),
   };
 }
