@@ -332,6 +332,9 @@ function PlacementRatesTab({
   const [newAmount, setNewAmount] = useState("");
   const [newEffectiveFrom, setNewEffectiveFrom] = useState(todayJst());
 
+  const amendingRate = rates.find((r) => r.id === amendingId) ?? null;
+  const endingRate = rates.find((r) => r.id === endingId) ?? null;
+
   function startAmend(r: PlacementRate) {
     setEndingId(null);
     setAmendingId(r.id);
@@ -458,88 +461,91 @@ function PlacementRatesTab({
                 </ul>
               ) : null}
 
-              {amendingId === r.id ? (
-                <div className="mt-2 flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-border p-2">
-                  <select
-                    value={amendWageType}
-                    onChange={(e) => setAmendWageType(e.target.value as "HOURLY" | "DAILY" | "MONTHLY")}
-                    className="rounded-lg border border-border px-2 py-1.5 text-xs"
-                  >
-                    {WAGE_TYPE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    value={amendAmount}
-                    onChange={(e) => setAmendAmount(e.target.value)}
-                    placeholder="金額"
-                    className="w-20 rounded-lg border border-border px-2 py-1.5 text-xs"
-                  />
-                  <label className="flex flex-col gap-0.5 text-[11px] text-muted">
-                    開始日
-                    <input
-                      type="date"
-                      value={amendEffectiveFrom}
-                      onChange={(e) => setAmendEffectiveFrom(e.target.value)}
-                      className="rounded-lg border border-border px-2 py-1.5 text-xs"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    disabled={pending || !amendAmount}
-                    onClick={() => submitAmend(r)}
-                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
-                  >
-                    保存
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAmendingId(null)}
-                    aria-label="キャンセル"
-                    className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-primary"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : null}
-
-              {endingId === r.id ? (
-                <div className="mt-2 flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-border p-2">
-                  <label className="flex flex-col gap-0.5 text-[11px] text-muted">
-                    終了日（この日から単価未設定に戻す）
-                    <input
-                      type="date"
-                      value={endEffectiveFrom}
-                      onChange={(e) => setEndEffectiveFrom(e.target.value)}
-                      className="rounded-lg border border-border px-2 py-1.5 text-xs"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => submitEnd(r)}
-                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                  >
-                    終了する
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEndingId(null)}
-                    aria-label="キャンセル"
-                    className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-primary"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : null}
             </li>
           );
         })}
         {rates.length === 0 ? <p className="py-6 text-center text-sm text-muted">業務内容が登録されていません。</p> : null}
       </ul>
+
+      {amendingRate ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setAmendingId(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="font-serif-jp text-base font-bold text-primary">単価を変更（{amendingRate.taskName}）</h4>
+              <button type="button" onClick={() => setAmendingId(null)} aria-label="閉じる" className="text-muted hover:text-primary">
+                ✕
+              </button>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <select
+                value={amendWageType}
+                onChange={(e) => setAmendWageType(e.target.value as "HOURLY" | "DAILY" | "MONTHLY")}
+                className="rounded-lg border border-border px-2 py-2 text-sm"
+              >
+                {WAGE_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                value={amendAmount}
+                onChange={(e) => setAmendAmount(e.target.value)}
+                placeholder="金額"
+                className="w-24 rounded-lg border border-border px-2 py-2 text-sm"
+              />
+              <label className="flex flex-col gap-0.5 text-xs text-muted">
+                開始日
+                <input
+                  type="date"
+                  value={amendEffectiveFrom}
+                  onChange={(e) => setAmendEffectiveFrom(e.target.value)}
+                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              disabled={pending || !amendAmount}
+              onClick={() => submitAmend(amendingRate)}
+              className="mt-3 self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              保存
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {endingRate ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setEndingId(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="font-serif-jp text-base font-bold text-primary">単価を終了（{endingRate.taskName}）</h4>
+              <button type="button" onClick={() => setEndingId(null)} aria-label="閉じる" className="text-muted hover:text-primary">
+                ✕
+              </button>
+            </div>
+            <label className="flex flex-col gap-0.5 text-xs text-muted">
+              終了日（この日から単価未設定に戻す）
+              <input
+                type="date"
+                value={endEffectiveFrom}
+                onChange={(e) => setEndEffectiveFrom(e.target.value)}
+                className="rounded-lg border border-border px-2 py-2 text-sm"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => submitEnd(endingRate)}
+              className="mt-3 self-start rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              終了する
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {showNewForm ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setShowNewForm(false)}>
