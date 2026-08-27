@@ -67,7 +67,10 @@ try {
   let modal = admin.locator("div.fixed.inset-0.z-20").last();
   await modal.getByRole("button", { name: "検証チーム" }).click();
   await modal.getByRole("button", { name: "テスト" }).click();
-  await modal.getByRole("button", { name: "選ばずに進む" }).click();
+  await modal.getByRole("button", { name: /新しい業務内容を追加する/ }).click();
+  await modal.locator('input[placeholder*="業務内容"]').fill("検証業務");
+  await modal.getByRole("button", { name: "この業務内容を追加して次へ" }).click();
+  await admin.waitForTimeout(400);
   await modal.getByRole("button", { name: "TESUTO" }).click();
   await modal.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);

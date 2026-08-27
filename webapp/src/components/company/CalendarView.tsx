@@ -2028,11 +2028,16 @@ function AssignShiftModal({
   const [taskName, setTaskName] = useState("");
   // このモーダル内で新しく追加した業務名（サーバー側のplacementRates propは
   // ページ全体のrevalidateを待たないと更新されないので、追加直後にその場で
-  // 選べるようローカルにも保持しておく）。
+  // 選べるようローカルにも保持しておく）。revalidate後はplacementRates側にも
+  // 同じ業務名が反映されるため、taskName単位でまとめて重複を除く。
   const [extraTaskNames, setExtraTaskNames] = useState<TaskNameRow[]>([]);
   const allTaskNames = [...placementRates, ...extraTaskNames];
   const clientTaskOptions = companyRelationshipId
-    ? allTaskNames.filter((r) => r.companyRelationshipId === companyRelationshipId)
+    ? Array.from(
+        new Map(
+          allTaskNames.filter((r) => r.companyRelationshipId === companyRelationshipId).map((r) => [r.taskName, r]),
+        ).values(),
+      )
     : [];
   const steps: AssignStep[] = [
     ...(teams.length > 0 ? (["team"] as const) : []),
@@ -2257,17 +2262,6 @@ function AssignShiftModal({
               ＋ 新しい業務内容を追加する
             </button>
           )}
-
-          <button
-            type="button"
-            onClick={() => {
-              setTaskName("");
-              goNext();
-            }}
-            className="self-start text-xs text-muted hover:text-primary"
-          >
-            選ばずに進む
-          </button>
         </div>
       </Modal>
     );
@@ -2278,7 +2272,10 @@ function AssignShiftModal({
       <Modal title="シフトを作成" onClose={onClose}>
         <div className="flex flex-col gap-3">
           {backButton}
-          <h3 className="font-serif-jp text-lg font-semibold">{workplaceName}・スタッフを選択</h3>
+          <h3 className="font-serif-jp text-lg font-semibold">
+            {workplaceName}
+            {taskName ? `・${taskName}` : ""}・スタッフを選択
+          </h3>
           <div className="flex max-h-96 flex-col gap-2 overflow-y-auto">
             {staffOptions.map((s) => (
               <WizardOptionButton
@@ -2302,7 +2299,8 @@ function AssignShiftModal({
         <div className="flex flex-col gap-3">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">
-            {workplaceName}・{staffName}
+            {workplaceName}
+            {taskName ? `・${taskName}` : ""}・{staffName}
           </h3>
 
           <label className="flex items-center gap-1 text-xs">
