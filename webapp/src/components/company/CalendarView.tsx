@@ -110,7 +110,7 @@ type TagEntry = { kind: "solid"; id: string; label: string; className: string };
 // 請求計算のたびにそちらを都度参照する）。
 type TaskNameRow = {
   id: string;
-  companyRelationshipId: string;
+  companyRelationshipId: string | null;
   taskName: string;
 };
 
@@ -2032,17 +2032,17 @@ function AssignShiftModal({
   // 同じ業務名が反映されるため、taskName単位でまとめて重複を除く。
   const [extraTaskNames, setExtraTaskNames] = useState<TaskNameRow[]>([]);
   const allTaskNames = [...placementRates, ...extraTaskNames];
-  const clientTaskOptions = companyRelationshipId
-    ? Array.from(
-        new Map(
-          allTaskNames.filter((r) => r.companyRelationshipId === companyRelationshipId).map((r) => [r.taskName, r]),
-        ).values(),
-      )
-    : [];
+  const clientTaskOptions = Array.from(
+    new Map(
+      allTaskNames
+        .filter((r) => r.companyRelationshipId === (companyRelationshipId || null))
+        .map((r) => [r.taskName, r]),
+    ).values(),
+  );
   const steps: AssignStep[] = [
     ...(teams.length > 0 ? (["team"] as const) : []),
     "workplace",
-    ...(companyRelationshipId ? (["task"] as const) : []),
+    "task",
     "staff",
     "datetime",
     "confirm",
@@ -2069,10 +2069,13 @@ function AssignShiftModal({
     if (!newTaskName.trim()) return;
     startNewTaskTransition(async () => {
       const rate = await registerPlacementTaskNameAction({
-        companyRelationshipId,
+        companyRelationshipId: companyRelationshipId || undefined,
         taskName: newTaskName.trim(),
       });
-      setExtraTaskNames((prev) => [...prev, { id: rate.id, companyRelationshipId, taskName: rate.taskName }]);
+      setExtraTaskNames((prev) => [
+        ...prev,
+        { id: rate.id, companyRelationshipId: companyRelationshipId || null, taskName: rate.taskName },
+      ]);
       setTaskName(rate.taskName);
       setShowNewTaskForm(false);
       setNewTaskName("");
@@ -2183,7 +2186,7 @@ function AssignShiftModal({
             onClick={() => {
               setCompanyRelationshipId("");
               setTaskName("");
-              setStep("staff");
+              setStep("task");
             }}
           />
           {clients.length > 0 ? (

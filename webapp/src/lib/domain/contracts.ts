@@ -164,6 +164,16 @@ export async function endStaffContract(staffContractId: string) {
   return contract;
 }
 
+// 基本給の改定 — 業務内容単価と同じ「上書き＋お知らせ」運用。契約書を
+// 結び直す（同意）フローは使わず、金額をその場で書き換えて即座に反映し、
+// スタッフには非ブロッキングのお知らせだけを送る。
+export async function updateStaffContractWage(params: { staffContractId: string; wageAmount: number }) {
+  return prisma.staffContract.update({
+    where: { id: params.staffContractId },
+    data: { wageAmountSnapshot: params.wageAmount },
+  });
+}
+
 export async function listStaffContracts(staffUserId: string) {
   return prisma.staffContract.findMany({
     where: { staffUserId },
@@ -227,16 +237,17 @@ export async function registerPlacementTaskName(params: {
   companyRelationshipId?: string;
   taskName: string;
 }) {
+  const companyRelationshipId = params.companyRelationshipId || null;
   const existing = await prisma.companyPlacementRate.findFirst({
     where: {
       companyId: params.companyId,
-      companyRelationshipId: params.companyRelationshipId ?? null,
+      companyRelationshipId,
       taskName: params.taskName,
     },
   });
   if (existing) return existing;
   return prisma.companyPlacementRate.create({
-    data: { companyId: params.companyId, companyRelationshipId: params.companyRelationshipId, taskName: params.taskName },
+    data: { companyId: params.companyId, companyRelationshipId, taskName: params.taskName },
   });
 }
 

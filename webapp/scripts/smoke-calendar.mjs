@@ -52,7 +52,7 @@ try {
 
   // --- staff: submit shift request for a date
   const targetDate = "2026-09-15";
-  await staff.click("text=＋シフト希望を出す");
+  await staff.locator("button.fixed.bottom-8.right-8").click();
   await staff.click("text=出勤希望");
   await staff.fill('input[type=date]', targetDate);
   await staff.click("text=追加");
@@ -90,6 +90,10 @@ try {
   await admin.getByText("シフトを作成").click();
   const assignModal = admin.locator("div.fixed.inset-0.z-20").last();
   await assignModal.getByRole("button", { name: "社内（自社スタッフとして勤務）" }).click();
+  await assignModal.getByRole("button", { name: "＋ 新しい業務内容を追加する" }).click();
+  await assignModal.locator('input[placeholder*="業務内容"]').fill("通常業務");
+  await assignModal.getByRole("button", { name: "この業務内容を追加して次へ" }).click();
+  await admin.waitForTimeout(300);
   await assignModal.getByRole("button", { name: "カレンダースタッフ" }).click();
   await assignModal.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);

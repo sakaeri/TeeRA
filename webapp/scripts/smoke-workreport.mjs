@@ -57,6 +57,10 @@ try {
   await admin.getByText("シフトを作成").click();
   const assignModal1 = admin.locator("div.fixed.inset-0.z-20").last();
   await assignModal1.getByRole("button", { name: "社内（自社スタッフとして勤務）" }).click();
+  await assignModal1.getByRole("button", { name: "＋ 新しい業務内容を追加する" }).click();
+  await assignModal1.locator('input[placeholder*="業務内容"]').fill("通常業務");
+  await assignModal1.getByRole("button", { name: "この業務内容を追加して次へ" }).click();
+  await admin.waitForTimeout(300);
   await assignModal1.getByRole("button", { name: "業務報告スタッフ" }).click();
   await assignModal1.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);

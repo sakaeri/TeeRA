@@ -42,7 +42,9 @@ export default async function CompanyCalendarPage({
   const affordable = await affordableMaxEntries(membership.companyId);
   const clients = company.agencyEnabled ? await listClients(membership.companyId) : [];
   const agencies = company.dispatchEnabled ? await listAgencies(membership.companyId) : [];
-  const placementRates = company.agencyEnabled ? await listPlacementRates(membership.companyId) : [];
+  // 自社(社内)勤務のシフトでも業務内容を選べるようにしたため、依頼主連携の
+  // 有無に関わらず常に取得する（companyRelationshipId=nullの登録もここに含む）。
+  const placementRates = await listPlacementRates(membership.companyId);
 
   // source=INHOUSEのシフトに立っているスタッフが、自社の名簿メンバーなのか
   // 配属記録のある派遣スタッフなのか公開募集経由なのかをまとめて解決する。
@@ -126,13 +128,11 @@ export default async function CompanyCalendarPage({
         teeBalance={company.teeBalance}
         affordableMaxEntries={affordable}
         clients={clients.map((c) => ({ id: c.id, name: c.clientCompany?.name ?? c.proxyName ?? "" }))}
-        placementRates={placementRates
-          .filter((r) => r.companyRelationshipId)
-          .map((r) => ({
-            id: r.id,
-            companyRelationshipId: r.companyRelationshipId!,
-            taskName: r.taskName,
-          }))}
+        placementRates={placementRates.map((r) => ({
+          id: r.id,
+          companyRelationshipId: r.companyRelationshipId,
+          taskName: r.taskName,
+        }))}
         agencies={agencies.map((a) => ({ id: a.id, name: a.agencyCompany?.name ?? a.proxyName ?? "" }))}
         selectedRelationshipId={relationshipId}
         companyName={company.name}

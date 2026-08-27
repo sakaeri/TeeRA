@@ -225,6 +225,8 @@ export async function getStaffMonthDetail(params: {
       id: c.id,
       title: c.template.title,
       status: c.status,
+      wageType: c.template.wageType,
+      wageAmount: c.wageAmountSnapshot,
       wageLabel: `${WAGE_TYPE_LABEL[c.template.wageType]}${c.wageAmountSnapshot}円`,
       workplaceName:
         c.template.workplaceType === "CLIENT"

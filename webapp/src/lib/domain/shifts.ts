@@ -130,7 +130,7 @@ export async function createAssignedShift(params: {
         staffUserId: params.staffUserId,
         source: params.companyRelationshipId ? "CLIENT" : "INHOUSE",
         companyRelationshipId: params.companyRelationshipId,
-        taskName: params.companyRelationshipId ? params.taskName : undefined,
+        taskName: params.taskName,
         date: params.date,
         startTime: params.startTime,
         endTime: params.endTime,

@@ -3,7 +3,11 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getStaffMonthDetailAction, updateStaffNoteAction, inviteProxyUpgradeAction } from "@/app/company/actions";
-import { addStaffTaskRateVersionAction, deleteStaffTaskRateAction } from "@/app/company/contracts/actions";
+import {
+  addStaffTaskRateVersionAction,
+  deleteStaffTaskRateAction,
+  updateStaffContractWageAction,
+} from "@/app/company/contracts/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
 
 type StaffTaskRate = {
@@ -29,6 +33,8 @@ type StaffMonthDetail = {
     id: string;
     title: string;
     status: string;
+    wageType: "HOURLY" | "DAILY" | "MONTHLY";
+    wageAmount: number;
     wageLabel: string;
     workplaceName: string;
     contractStartDate: string;
@@ -86,6 +92,22 @@ export function StaffDetailPanel({
   const [noteValue, setNoteValue] = useState("");
   const [pending, startTransition] = useTransition();
   const [upgradeUrl, setUpgradeUrl] = useState<string | null>(null);
+  const [editingContractId, setEditingContractId] = useState<string | null>(null);
+  const [editWageAmount, setEditWageAmount] = useState("");
+
+  function startEditWage(c: StaffMonthDetail["contracts"][number]) {
+    setEditingContractId(c.id);
+    setEditWageAmount(String(c.wageAmount));
+  }
+
+  function submitEditWage(c: StaffMonthDetail["contracts"][number]) {
+    if (!editWageAmount) return;
+    startTransition(async () => {
+      await updateStaffContractWageAction(c.id, Number(editWageAmount));
+      setEditingContractId(null);
+      await refresh();
+    });
+  }
 
   function handleUpgrade() {
     startTransition(async () => {
@@ -282,7 +304,14 @@ export function StaffDetailPanel({
               <ul className="flex flex-col gap-2">
                 {data.contracts.map((c) => (
                   <li key={c.id} className="rounded-lg border border-border p-3 text-sm">
-                    <p className="font-semibold">{c.title}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold">{c.title}</p>
+                      {c.status === "ACTIVE" ? (
+                        <button type="button" onClick={() => startEditWage(c)} className="text-xs text-primary hover:underline">
+                          基本給を改定
+                        </button>
+                      ) : null}
+                    </div>
                     <p className="text-muted">
                       {c.workplaceName} ／ {c.wageLabel}
                     </p>
@@ -326,6 +355,55 @@ export function StaffDetailPanel({
           </>
         )}
       </div>
+
+      {editingContractId && data ? (
+        (() => {
+          const editingContract = data.contracts.find((c) => c.id === editingContractId);
+          if (!editingContract) return null;
+          return (
+            <div
+              className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+              onClick={() => setEditingContractId(null)}
+            >
+              <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="font-serif-jp text-base font-bold text-primary">基本給を改定（{editingContract.title}）</h4>
+                  <button
+                    type="button"
+                    onClick={() => setEditingContractId(null)}
+                    aria-label="閉じる"
+                    className="text-muted hover:text-primary"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="mb-2 text-xs text-muted">
+                  同意の結び直しは不要です。保存すると即座に反映され、スタッフにはお知らせが届きます。
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">{WAGE_TYPE_OPTIONS.find((o) => o.value === editingContract.wageType)?.label}</span>
+                  <input
+                    type="number"
+                    value={editWageAmount}
+                    onChange={(e) => setEditWageAmount(e.target.value)}
+                    placeholder="金額"
+                    className="w-28 rounded-lg border border-border px-2 py-2 text-sm"
+                  />
+                  <span className="text-sm text-muted">円</span>
+                </div>
+                <button
+                  type="button"
+                  disabled={pending || !editWageAmount}
+                  onClick={() => submitEditWage(editingContract)}
+                  className="mt-3 self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                >
+                  保存
+                </button>
+              </div>
+            </div>
+          );
+        })()
+      ) : null}
     </div>
   );
 }

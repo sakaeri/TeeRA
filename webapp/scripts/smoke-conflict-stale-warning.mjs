@@ -62,6 +62,10 @@ try {
   await admin.getByText("シフトを作成").click();
   let modal = admin.locator("div.fixed.inset-0.z-20").last();
   await modal.getByRole("button", { name: "社内（自社スタッフとして勤務）" }).click();
+  await modal.getByRole("button", { name: "＋ 新しい業務内容を追加する" }).click();
+  await modal.locator('input[placeholder*="業務内容"]').fill("通常業務");
+  await modal.getByRole("button", { name: "この業務内容を追加して次へ" }).click();
+  await admin.waitForTimeout(300);
   await modal.getByRole("button", { name: "重複スタッフ" }).click();
   await modal.getByRole("button", { name: dayALabel, exact: true }).click();
   await modal.getByRole("button", { name: "次へ" }).click();
@@ -75,6 +79,10 @@ try {
   await admin.getByText("シフトを作成").click();
   modal = admin.locator("div.fixed.inset-0.z-20").last();
   await modal.getByRole("button", { name: "社内（自社スタッフとして勤務）" }).click();
+  await modal.getByRole("button", { name: "＋ 新しい業務内容を追加する" }).click();
+  await modal.locator('input[placeholder*="業務内容"]').fill("通常業務");
+  await modal.getByRole("button", { name: "この業務内容を追加して次へ" }).click();
+  await admin.waitForTimeout(300);
   await modal.getByRole("button", { name: "重複スタッフ" }).click();
   await modal.getByRole("button", { name: dayALabel, exact: true }).click();
   await modal.getByRole("button", { name: dayBLabel, exact: true }).click();
