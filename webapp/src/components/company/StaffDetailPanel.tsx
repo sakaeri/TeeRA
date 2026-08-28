@@ -258,15 +258,29 @@ export function StaffDetailPanel({
 
             {tab === "history" ? (
               <div>
-                <div className="mb-4 flex items-center justify-center gap-4">
-                  <button type="button" onClick={() => shiftMonth(-1)} className="text-muted">
-                    ‹
+                <div className="mb-4 flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => shiftMonth(-1)}
+                    aria-label="前の月"
+                    className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
+                  >
+                    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+                      <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   </button>
-                  <span className="font-serif-jp font-bold">
+                  <span className="font-serif-jp text-lg font-bold">
                     {year}年{month}月
                   </span>
-                  <button type="button" onClick={() => shiftMonth(1)} className="text-muted">
-                    ›
+                  <button
+                    type="button"
+                    onClick={() => shiftMonth(1)}
+                    aria-label="次の月"
+                    className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
+                  >
+                    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+                      <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   </button>
                 </div>
 
