@@ -6,11 +6,42 @@ import { submitShiftRequest } from "@/lib/domain/shifts";
 import { applyToRecruitment } from "@/lib/domain/recruitment";
 import { clockIn, clockOut, submitWorkReport, confirmCorrectedWorkReport } from "@/lib/domain/workReports";
 import { markStaffNoticeRead } from "@/lib/domain/notices";
+import { updateMembershipIdDocument, updateMembershipBankInfo } from "@/lib/domain/roster";
 import { prisma } from "@/lib/prisma";
 
 async function assertOwnShift(shiftId: string, staffUserId: string) {
   const shift = await prisma.shift.findUniqueOrThrow({ where: { id: shiftId } });
   if (shift.staffUserId !== staffUserId) throw new Error("forbidden");
+}
+
+// 自分自身のCompanyMembership.id — クライアントから渡させず、必ずサーバー側で
+// セッションのuserId/companyIdから引き直す（他人のmembershipIdを渡されて
+// 書き換えられることを防ぐ）。
+async function myMembershipId(userId: string, companyId: string) {
+  const membership = await prisma.companyMembership.findFirstOrThrow({
+    where: { userId, companyId, role: "STAFF" },
+  });
+  return membership.id;
+}
+
+export async function updateMyIdDocumentAction(side: "front" | "back", url: string) {
+  const { userId, membership } = await requireCompanyStaffRole();
+  const membershipId = await myMembershipId(userId, membership.companyId);
+  await updateMembershipIdDocument({ membershipId, side, url });
+  revalidatePath("/staff/contracts");
+}
+
+export async function updateMyBankInfoAction(input: {
+  bankName: string;
+  branchName: string;
+  accountType: string;
+  accountNumber: string;
+  accountHolderName: string;
+}) {
+  const { userId, membership } = await requireCompanyStaffRole();
+  const membershipId = await myMembershipId(userId, membership.companyId);
+  await updateMembershipBankInfo({ membershipId, ...input });
+  revalidatePath("/staff/contracts");
 }
 
 export async function clockInAction(shiftId: string) {

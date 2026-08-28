@@ -79,6 +79,7 @@ type Tab = "staff" | "clients" | "agencies";
 
 export function RosterView({
   staff,
+  companyName,
   clients,
   agencies,
   teams,
@@ -86,6 +87,7 @@ export function RosterView({
   knownTaskNames,
 }: {
   staff: StaffRow[];
+  companyName: string;
   clients: RelationshipRow[];
   agencies: RelationshipRow[];
   teams: Team[];
@@ -341,6 +343,7 @@ export function RosterView({
       {selectedStaffId ? (
         <StaffDetailPanel
           userId={selectedStaffId}
+          companyName={companyName}
           clients={clients.map((c) => ({ id: c.id, name: c.name }))}
           knownTaskNames={knownTaskNames}
           onClose={() => setSelectedStaffId(null)}

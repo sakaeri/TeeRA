@@ -238,6 +238,15 @@ export async function getStaffMonthDetail(params: {
     teams: teamMemberships.map((tm) => ({ teamId: tm.teamId, teamName: tm.team.name })),
     monthlyHours: Math.round(hours * 10) / 10,
     daysWorked,
+    idDocumentFrontUrl: membership.idDocumentFrontUrl,
+    idDocumentBackUrl: membership.idDocumentBackUrl,
+    bankInfo: {
+      bankName: membership.bankName ?? "",
+      branchName: membership.branchName ?? "",
+      accountType: membership.accountType ?? "",
+      accountNumber: membership.accountNumber ?? "",
+      accountHolderName: membership.accountHolderName ?? "",
+    },
     contracts: contracts.map((c) => {
       const currentWage = resolveContractWageVersion(c.wageVersions, today) ?? {
         wageAmount: c.wageAmountSnapshot,
@@ -265,6 +274,38 @@ export async function getStaffMonthDetail(params: {
           label: `${WAGE_TYPE_LABEL[c.template.wageType]}${v.wageAmount}円`,
           effectiveFrom: v.effectiveFrom.toISOString().slice(0, 10),
         })),
+        // 「詳細確認」ポップアップ用 — ContractsView.tsxのTemplateModalを
+        // readOnlyで開くための、Template型と同じ形。
+        templateDetail: {
+          id: c.template.id,
+          title: c.template.title,
+          employmentType: c.template.employmentType,
+          workplaceType: c.template.workplaceType,
+          workplaceNote: c.template.workplaceNote,
+          clientName: c.template.companyRelationship?.clientCompany?.name ?? c.template.companyRelationship?.proxyName ?? null,
+          jobDescription: c.template.jobDescription,
+          scheduleType: c.template.scheduleType,
+          workStartTime: c.template.workStartTime,
+          workEndTime: c.template.workEndTime,
+          actualWorkMinutes: c.template.actualWorkMinutes,
+          breakMinutes: c.template.breakMinutes,
+          hasOvertime: c.template.hasOvertime,
+          overtimeNote: c.template.overtimeNote,
+          fixedWeekdays: c.template.fixedWeekdays,
+          shiftPatternNote: c.template.shiftPatternNote,
+          restNote: c.template.restNote,
+          wageType: c.template.wageType,
+          wageAmount: c.template.wageAmount,
+          paymentClosingDay: c.template.paymentClosingDay,
+          paymentDay: c.template.paymentDay,
+          paymentMethod: c.template.paymentMethod,
+          contractPeriodType: c.template.contractPeriodType,
+          contractStartDate: c.template.contractStartDate.toISOString().slice(0, 10),
+          contractEndDate: c.template.contractEndDate?.toISOString().slice(0, 10) ?? null,
+          extraItems: c.template.extraItems as { label: string; value: string }[],
+          status: c.template.status,
+          contractedStaffNames: [] as string[],
+        },
       };
     }),
     taskRates: taskRates.map((r) => {
@@ -309,5 +350,40 @@ export async function updateStaffNote(params: { membershipId: string; note: stri
   return prisma.companyMembership.update({
     where: { id: params.membershipId },
     data: { note: params.note.trim() || null },
+  });
+}
+
+// 本人確認書類（表面・裏面）。契約ごとではなく所属（会社との関係）単位で
+// 1組だけ持つ。スタッフ本人・会社どちらのアクションからも呼ばれる。
+export async function updateMembershipIdDocument(params: {
+  membershipId: string;
+  side: "front" | "back";
+  url: string;
+}) {
+  return prisma.companyMembership.update({
+    where: { id: params.membershipId },
+    data: params.side === "front" ? { idDocumentFrontUrl: params.url } : { idDocumentBackUrl: params.url },
+  });
+}
+
+// 振込先情報 — 上書き式（履歴は持たない）。会社側・スタッフ側どちらからも
+// 更新できる。
+export async function updateMembershipBankInfo(params: {
+  membershipId: string;
+  bankName: string;
+  branchName: string;
+  accountType: string;
+  accountNumber: string;
+  accountHolderName: string;
+}) {
+  return prisma.companyMembership.update({
+    where: { id: params.membershipId },
+    data: {
+      bankName: params.bankName.trim() || null,
+      branchName: params.branchName.trim() || null,
+      accountType: params.accountType.trim() || null,
+      accountNumber: params.accountNumber.trim() || null,
+      accountHolderName: params.accountHolderName.trim() || null,
+    },
   });
 }

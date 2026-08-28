@@ -6,10 +6,13 @@ import { StaffContractsView } from "@/components/staff/StaffContractsView";
 export default async function StaffContractsPage() {
   const { userId, membership } = await requireCompanyStaffRole();
 
-  const [myContracts, availableTemplates] = await Promise.all([
+  const [myContracts, availableTemplates, myMembership] = await Promise.all([
     listStaffContracts(userId),
     prisma.contractTemplate.findMany({
       where: { companyId: membership.companyId, status: "ACTIVE" },
+    }),
+    prisma.companyMembership.findFirstOrThrow({
+      where: { userId, companyId: membership.companyId, role: "STAFF" },
     }),
   ]);
 
@@ -38,6 +41,15 @@ export default async function StaffContractsPage() {
             wageType: t.wageType,
             wageAmount: t.wageAmount,
           }))}
+        idDocumentFrontUrl={myMembership.idDocumentFrontUrl}
+        idDocumentBackUrl={myMembership.idDocumentBackUrl}
+        bankInfo={{
+          bankName: myMembership.bankName ?? "",
+          branchName: myMembership.branchName ?? "",
+          accountType: myMembership.accountType ?? "",
+          accountNumber: myMembership.accountNumber ?? "",
+          accountHolderName: myMembership.accountHolderName ?? "",
+        }}
       />
     </main>
   );

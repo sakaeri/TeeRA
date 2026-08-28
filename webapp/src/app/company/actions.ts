@@ -10,6 +10,8 @@ import {
   inviteProxyUpgrade,
   getStaffMonthDetail,
   updateStaffNote,
+  updateMembershipIdDocument,
+  updateMembershipBankInfo,
 } from "@/lib/domain/roster";
 import {
   activateAgencyModuleWithProxyClient,
@@ -261,6 +263,30 @@ export async function updateStaffNoteAction(membershipId: string, note: string) 
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
   await updateStaffNote({ membershipId, note });
+  revalidatePath("/company/roster");
+}
+
+async function assertMembershipOwnedByCompany(membershipId: string, companyId: string) {
+  const target = await prisma.companyMembership.findFirstOrThrow({ where: { id: membershipId, companyId } });
+  return target;
+}
+
+export async function updateStaffIdDocumentAction(membershipId: string, side: "front" | "back", url: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertMembershipOwnedByCompany(membershipId, membership.companyId);
+  await updateMembershipIdDocument({ membershipId, side, url });
+  revalidatePath("/company/roster");
+}
+
+export async function updateStaffBankInfoAction(
+  membershipId: string,
+  input: { bankName: string; branchName: string; accountType: string; accountNumber: string; accountHolderName: string },
+) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertMembershipOwnedByCompany(membershipId, membership.companyId);
+  await updateMembershipBankInfo({ membershipId, ...input });
   revalidatePath("/company/roster");
 }
 

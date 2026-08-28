@@ -125,6 +125,21 @@ model CompanyMembership {
   note      String? // 情報メモ (roster staff-detail panel)
   createdAt DateTime    @default(now())
 
+  // 本人確認書類（両面）。スタッフ本人・会社どちらからもアップロード可能。
+  // 契約ごとではなく所属（会社との関係）単位で1組だけ持つ — 契約を結び直す
+  // たびに再提出させる必要は無いため。
+  idDocumentFrontUrl String?
+  idDocumentBackUrl  String?
+
+  // 振込先情報。契約書とは別に、会社側・スタッフ側どちらからも編集可能
+  // （どちらが最新か揉めないよう、上書き式で履歴は持たない — 基本給等の
+  // 単価改定とは違い、本人の届出情報という性質のため）。
+  bankName          String?
+  branchName        String?
+  accountType       String? // 普通/当座 etc.
+  accountNumber     String?
+  accountHolderName String?
+
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
