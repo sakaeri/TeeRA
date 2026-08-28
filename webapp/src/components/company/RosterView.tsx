@@ -13,6 +13,7 @@ import {
 import { StaffDetailPanel } from "@/components/company/StaffDetailPanel";
 import { ClientDetailPanel } from "@/components/company/ClientDetailPanel";
 import { useClickOutside } from "@/lib/useClickOutside";
+import { CopyUrlField } from "@/components/CopyUrlField";
 
 type StaffRow = {
   membershipId: string;
@@ -456,25 +457,7 @@ function InviteStaffModal({
             招待URLを発行する
           </button>
         ) : (
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              readOnly
-              value={url}
-              className="flex-1 rounded-lg border border-border px-3 py-2 text-sm text-muted"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof navigator !== "undefined" && navigator.clipboard) {
-                  navigator.clipboard.writeText(url).catch(() => {});
-                }
-              }}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-            >
-              コピー
-            </button>
-          </div>
+          <CopyUrlField url={url} />
         )}
       </div>
     </div>
@@ -525,25 +508,7 @@ function InviteRelationshipModal({
             招待URLを発行する
           </button>
         ) : (
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              readOnly
-              value={url}
-              className="flex-1 rounded-lg border border-border px-3 py-2 text-sm text-muted"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof navigator !== "undefined" && navigator.clipboard) {
-                  navigator.clipboard.writeText(url).catch(() => {});
-                }
-              }}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-            >
-              コピー
-            </button>
-          </div>
+          <CopyUrlField url={url} />
         )}
       </div>
     </div>

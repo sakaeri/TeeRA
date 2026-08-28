@@ -10,6 +10,7 @@ import {
 } from "@/app/company/actions";
 import { addPlacementRateVersionAction, deletePlacementTaskNameAction } from "@/app/company/contracts/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
+import { CopyUrlField } from "@/components/CopyUrlField";
 
 type PlacementRate = {
   id: string;
@@ -130,25 +131,7 @@ export function ClientDetailPanel({
             {data.isProxy ? (
               <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 p-3 text-xs">
                 {upgradeUrl ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={upgradeUrl}
-                      className="flex-1 rounded-lg border border-border bg-white px-2 py-1.5 text-xs text-muted"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (typeof navigator !== "undefined" && navigator.clipboard) {
-                          navigator.clipboard.writeText(upgradeUrl).catch(() => {});
-                        }
-                      }}
-                      className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
-                    >
-                      コピー
-                    </button>
-                  </div>
+                  <CopyUrlField url={upgradeUrl} size="sm" />
                 ) : (
                   <div className="flex items-center justify-between gap-2">
                     <span>仮アカウントです。招待URLを送って本アカウントと連携できます。</span>
