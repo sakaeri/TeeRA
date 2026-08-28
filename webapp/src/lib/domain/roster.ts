@@ -307,6 +307,7 @@ export async function getStaffMonthDetail(params: {
       outcome: s.workReport?.outcome ?? null,
       actualStartTime: s.workReport?.clockIn ? formatJstTime(s.workReport.clockIn) : null,
       actualEndTime: s.workReport?.clockOut ? formatJstTime(s.workReport.clockOut) : null,
+      comment: s.workReport?.comment ?? null,
       taskName: s.workReport?.taskName ?? s.taskName,
       workplaceLabel:
         s.source === "INHOUSE"

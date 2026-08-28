@@ -54,6 +54,7 @@ type StaffMonthDetail = {
     outcome: string | null;
     actualStartTime: string | null;
     actualEndTime: string | null;
+    comment: string | null;
     taskName: string | null;
     workplaceLabel: string;
   }[];
@@ -328,6 +329,9 @@ export function StaffDetailPanel({
                           未提出
                         </span>
                       )}
+                      {d.comment ? (
+                        <p className="col-span-4 -mt-0.5 break-words text-[11px] text-muted">💬 {d.comment}</p>
+                      ) : null}
                     </li>
                   ))}
                   {data.days.length === 0 ? <p className="py-6 text-center text-sm text-muted">この月のシフトはありません。</p> : null}
