@@ -52,6 +52,8 @@ type StaffMonthDetail = {
     isUndecided: boolean;
     approvalStatus: string | null;
     outcome: string | null;
+    actualStartTime: string | null;
+    actualEndTime: string | null;
     taskName: string | null;
     workplaceLabel: string;
   }[];
@@ -68,11 +70,9 @@ const APPROVAL_LABEL: Record<string, string> = {
   REJECTED: "差戻し",
 };
 
-function timeLabel(d: StaffMonthDetail["days"][number]) {
-  if (!d.approvalStatus) return "未提出";
-  if (d.isUndecided) return "未定";
-  if (d.isAllDay) return "終日";
-  return `${d.startTime ?? "--:--"}〜${d.endTime ?? "--:--"}`;
+function actualTimeLabel(d: StaffMonthDetail["days"][number]) {
+  if (!d.actualStartTime && !d.actualEndTime) return "—";
+  return `${d.actualStartTime ?? "--:--"}〜${d.actualEndTime ?? "--:--"}`;
 }
 
 export function StaffDetailPanel({
@@ -293,21 +293,26 @@ export function StaffDetailPanel({
 
                 <ul className="flex flex-col gap-1">
                   {data.days.map((d) => (
-                    <li key={d.shiftId} className="flex items-center justify-between border-b border-border/50 py-2 text-sm">
-                      <span>
-                        {d.date}
-                        <span className="ml-1.5 text-xs text-muted">
-                          {d.workplaceLabel}
-                          {d.taskName ? `（${d.taskName}）` : ""}
-                        </span>
+                    <li
+                      key={d.shiftId}
+                      className="grid grid-cols-[62px_1fr_82px_68px] items-center gap-2 border-b border-border/50 py-2 text-xs"
+                    >
+                      <span>{d.date.slice(5)}</span>
+                      <span className="truncate text-muted" title={`${d.workplaceLabel}${d.taskName ? `（${d.taskName}）` : ""}`}>
+                        {d.workplaceLabel}
+                        {d.taskName ? `（${d.taskName}）` : ""}
                       </span>
-                      <span className="text-muted">{timeLabel(d)}</span>
+                      <span className="text-muted">{actualTimeLabel(d)}</span>
                       {d.approvalStatus ? (
-                        <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${APPROVAL_PILL[d.approvalStatus]}`}>
+                        <span
+                          className={`whitespace-nowrap rounded-md px-1.5 py-0.5 text-center font-semibold ${APPROVAL_PILL[d.approvalStatus]}`}
+                        >
                           {APPROVAL_LABEL[d.approvalStatus]}
                         </span>
                       ) : (
-                        <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">未提出</span>
+                        <span className="whitespace-nowrap rounded-md bg-gray-100 px-1.5 py-0.5 text-center font-semibold text-gray-600">
+                          未提出
+                        </span>
                       )}
                     </li>
                   ))}

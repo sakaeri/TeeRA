@@ -32,6 +32,15 @@ export async function listStaff(companyId: string) {
   }));
 }
 
+function formatJstTime(date: Date) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Tokyo",
+  }).format(date);
+}
+
 const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
 const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
   PART_TIME: "アルバイト",
@@ -292,6 +301,8 @@ export async function getStaffMonthDetail(params: {
       isUndecided: s.isUndecided,
       approvalStatus: s.workReport?.approvalStatus ?? null,
       outcome: s.workReport?.outcome ?? null,
+      actualStartTime: s.workReport?.clockIn ? formatJstTime(s.workReport.clockIn) : null,
+      actualEndTime: s.workReport?.clockOut ? formatJstTime(s.workReport.clockOut) : null,
       taskName: s.workReport?.taskName ?? s.taskName,
       workplaceLabel:
         s.source === "INHOUSE"
