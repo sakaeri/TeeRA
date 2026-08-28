@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { createInvite } from "@/lib/domain/invites";
 import { todayJstParts } from "@/lib/date";
-import { resolveRateVersion } from "@/lib/domain/contracts";
+import { resolveRateVersion, resolveContractWageVersion } from "@/lib/domain/contracts";
 
 export async function listStaff(companyId: string) {
   const memberships = await prisma.companyMembership.findMany({
@@ -56,11 +56,15 @@ export async function listStaffWithSummary(companyId: string) {
     }),
     prisma.staffContract.findMany({
       where: { staffUserId: { in: userIds }, status: { in: ["ACTIVE", "PENDING_CONSENT"] } },
-      include: { template: { include: { companyRelationship: { include: { clientCompany: true } } } } },
+      include: {
+        template: { include: { companyRelationship: { include: { clientCompany: true } } } },
+        wageVersions: true,
+      },
       orderBy: { createdAt: "desc" },
     }),
   ]);
 
+  const now = new Date();
   return staff.map((s) => {
     const hours = reports
       .filter((r) => r.staffUserId === s.userId)
@@ -74,9 +78,11 @@ export async function listStaffWithSummary(companyId: string) {
           contract.template.companyRelationship?.proxyName ??
           "配属先"
         : "自社";
-    const currentRateLabel = contract
-      ? `${workplaceName}：${WAGE_TYPE_LABEL[contract.template.wageType]}${contract.wageAmountSnapshot}円`
-      : "—";
+    const currentWage = contract ? resolveContractWageVersion(contract.wageVersions, now) : null;
+    const currentRateLabel =
+      contract && currentWage
+        ? `${workplaceName}：${WAGE_TYPE_LABEL[contract.template.wageType]}${currentWage.wageAmount}円`
+        : "—";
     const contractStatus = contract
       ? contract.status === "ACTIVE"
         ? ("確認済み" as const)
@@ -199,7 +205,10 @@ export async function getStaffMonthDetail(params: {
 
   const contracts = await prisma.staffContract.findMany({
     where: { staffUserId: params.userId, template: { companyId: params.companyId } },
-    include: { template: { include: { companyRelationship: { include: { clientCompany: true } } } } },
+    include: {
+      template: { include: { companyRelationship: { include: { clientCompany: true } } } },
+      wageVersions: { orderBy: { effectiveFrom: "desc" } },
+    },
     orderBy: { createdAt: "desc" },
   });
 
@@ -221,22 +230,33 @@ export async function getStaffMonthDetail(params: {
     teams: teamMemberships.map((tm) => ({ teamId: tm.teamId, teamName: tm.team.name })),
     monthlyHours: Math.round(hours * 10) / 10,
     daysWorked,
-    contracts: contracts.map((c) => ({
-      id: c.id,
-      title: c.template.title,
-      status: c.status,
-      wageType: c.template.wageType,
-      wageAmount: c.wageAmountSnapshot,
-      wageLabel: `${WAGE_TYPE_LABEL[c.template.wageType]}${c.wageAmountSnapshot}円`,
-      workplaceName:
-        c.template.workplaceType === "CLIENT"
-          ? c.template.workplaceNote ??
-            c.template.companyRelationship?.clientCompany?.name ??
-            c.template.companyRelationship?.proxyName ??
-            "配属先"
-          : "自社",
-      contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
-    })),
+    contracts: contracts.map((c) => {
+      const currentWage = resolveContractWageVersion(c.wageVersions, today) ?? {
+        wageAmount: c.wageAmountSnapshot,
+        effectiveFrom: c.contractStartDate ?? c.template.contractStartDate,
+      };
+      return {
+        id: c.id,
+        title: c.template.title,
+        status: c.status,
+        wageType: c.template.wageType,
+        wageAmount: currentWage.wageAmount,
+        wageLabel: `${WAGE_TYPE_LABEL[c.template.wageType]}${currentWage.wageAmount}円`,
+        workplaceName:
+          c.template.workplaceType === "CLIENT"
+            ? c.template.workplaceNote ??
+              c.template.companyRelationship?.clientCompany?.name ??
+              c.template.companyRelationship?.proxyName ??
+              "配属先"
+            : "自社",
+        contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
+        wageVersions: c.wageVersions.map((v) => ({
+          id: v.id,
+          label: `${WAGE_TYPE_LABEL[c.template.wageType]}${v.wageAmount}円`,
+          effectiveFrom: v.effectiveFrom.toISOString().slice(0, 10),
+        })),
+      };
+    }),
     taskRates: taskRates.map((r) => {
       const current = resolveRateVersion(r.versions, today);
       return {

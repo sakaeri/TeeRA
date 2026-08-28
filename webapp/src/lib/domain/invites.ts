@@ -101,6 +101,12 @@ export async function redeemInvite(token: string, userId: string) {
               contractEndDate: template.contractEndDate,
               status: "ACTIVE",
               consentedAt: new Date(),
+              wageVersions: {
+                create: {
+                  wageAmount: template.wageAmount,
+                  effectiveFrom: invite.contractStartDate ?? template.contractStartDate,
+                },
+              },
             },
           });
         }

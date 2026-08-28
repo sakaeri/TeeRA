@@ -38,6 +38,7 @@ type StaffMonthDetail = {
     wageLabel: string;
     workplaceName: string;
     contractStartDate: string;
+    wageVersions: { id: string; label: string; effectiveFrom: string }[];
   }[];
   taskRates: StaffTaskRate[];
   days: {
@@ -94,16 +95,29 @@ export function StaffDetailPanel({
   const [upgradeUrl, setUpgradeUrl] = useState<string | null>(null);
   const [editingContractId, setEditingContractId] = useState<string | null>(null);
   const [editWageAmount, setEditWageAmount] = useState("");
+  const [editWageEffectiveFrom, setEditWageEffectiveFrom] = useState(todayJst());
+  const [editWageError, setEditWageError] = useState<string | null>(null);
 
   function startEditWage(c: StaffMonthDetail["contracts"][number]) {
     setEditingContractId(c.id);
     setEditWageAmount(String(c.wageAmount));
+    setEditWageEffectiveFrom(todayJst());
+    setEditWageError(null);
   }
 
   function submitEditWage(c: StaffMonthDetail["contracts"][number]) {
     if (!editWageAmount) return;
+    setEditWageError(null);
     startTransition(async () => {
-      await updateStaffContractWageAction(c.id, Number(editWageAmount));
+      const result = await updateStaffContractWageAction(c.id, Number(editWageAmount), editWageEffectiveFrom);
+      if (result?.error) {
+        setEditWageError(
+          result.error === "monthly_wage_requires_month_start"
+            ? "月給は月初（1日）からのみ改定できます。"
+            : "保存に失敗しました。",
+        );
+        return;
+      }
       setEditingContractId(null);
       await refresh();
     });
@@ -375,17 +389,32 @@ export function StaffDetailPanel({
                 <p className="mb-2 text-xs text-muted">
                   同意の結び直しは不要です。保存すると即座に反映され、スタッフにはお知らせが届きます。
                 </p>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">{WAGE_TYPE_OPTIONS.find((o) => o.value === editingContract.wageType)?.label}</span>
-                  <input
-                    type="number"
-                    value={editWageAmount}
-                    onChange={(e) => setEditWageAmount(e.target.value)}
-                    placeholder="金額"
-                    className="w-28 rounded-lg border border-border px-2 py-2 text-sm"
-                  />
-                  <span className="text-sm text-muted">円</span>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{WAGE_TYPE_OPTIONS.find((o) => o.value === editingContract.wageType)?.label}</span>
+                    <input
+                      type="number"
+                      value={editWageAmount}
+                      onChange={(e) => setEditWageAmount(e.target.value)}
+                      placeholder="金額"
+                      className="w-28 rounded-lg border border-border px-2 py-2 text-sm"
+                    />
+                    <span className="text-sm text-muted">円</span>
+                  </div>
+                  <label className="flex flex-col gap-0.5 text-xs text-muted">
+                    開始日
+                    <input
+                      type="date"
+                      value={editWageEffectiveFrom}
+                      onChange={(e) => setEditWageEffectiveFrom(e.target.value)}
+                      className="rounded-lg border border-border px-2 py-2 text-sm"
+                    />
+                  </label>
                 </div>
+                {editingContract.wageType === "MONTHLY" ? (
+                  <p className="mt-1 text-xs text-muted">月給は月初（1日）からのみ改定できます。</p>
+                ) : null}
+                {editWageError ? <p className="mt-1 text-xs text-red-600">{editWageError}</p> : null}
                 <button
                   type="button"
                   disabled={pending || !editWageAmount}
@@ -433,6 +462,7 @@ function StaffTaskRatesTab({
 }) {
   const [pending, startTransition] = useTransition();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [baseHistoryOpen, setBaseHistoryOpen] = useState(false);
   const [amendingId, setAmendingId] = useState<string | null>(null);
   const [amendWageType, setAmendWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
   const [amendAmount, setAmendAmount] = useState("");
@@ -531,10 +561,27 @@ function StaffTaskRatesTab({
               <span className="text-muted">{baseContract.wageLabel}</span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+              <button
+                type="button"
+                onClick={() => setBaseHistoryOpen((v) => !v)}
+                className="text-muted hover:text-primary"
+              >
+                {baseHistoryOpen ? "▲ 履歴を閉じる" : `▼ 履歴（${baseContract.wageVersions.length}件）`}
+              </button>
               <button type="button" onClick={() => onEditBaseWage(baseContract)} className="text-primary hover:underline">
                 改定
               </button>
             </div>
+            {baseHistoryOpen ? (
+              <ul className="mt-2 flex flex-col text-xs text-muted">
+                {baseContract.wageVersions.map((v) => (
+                  <li key={v.id} className="flex items-center justify-between border-t border-border/50 py-1">
+                    <span>{v.effectiveFrom} 〜</span>
+                    <span>{v.label}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </li>
         ) : null}
         {rates.map((r) => (

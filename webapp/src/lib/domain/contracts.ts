@@ -118,10 +118,11 @@ export async function deleteTemplate(templateId: string) {
 
 // 契約を結ぶ: for v1 this collapses "publish" and "承諾する" into one action
 // (the prototype's preview -> optional hand-edit -> publish -> consent
-// sequence). The wage amount is snapshotted at the moment of consent so a
-// later rate change can be detected — but since a LOCKED template can never
-// be mutated in place, changing pay for already-contracted staff always goes
-// through duplicate-and-re-consent, not a silent amount change underneath.
+// sequence). wageAmountSnapshot records the amount the staff actually
+// consented to and is never touched again. The CURRENT wage (which can
+// later be revised without re-consent, see addStaffContractWageVersion) is
+// tracked separately in StaffContractWageVersion, seeded here with the same
+// starting amount.
 export async function startStaffContract(params: { templateId: string; staffUserId: string }) {
   const template = await prisma.contractTemplate.findUniqueOrThrow({ where: { id: params.templateId } });
 
@@ -134,6 +135,9 @@ export async function startStaffContract(params: { templateId: string; staffUser
       contractEndDate: template.contractEndDate,
       status: "ACTIVE",
       consentedAt: new Date(),
+      wageVersions: {
+        create: { wageAmount: template.wageAmount, effectiveFrom: template.contractStartDate },
+      },
     },
   });
 
@@ -164,20 +168,53 @@ export async function endStaffContract(staffContractId: string) {
   return contract;
 }
 
-// 基本給の改定 — 業務内容単価と同じ「上書き＋お知らせ」運用。契約書を
-// 結び直す（同意）フローは使わず、金額をその場で書き換えて即座に反映し、
-// スタッフには非ブロッキングのお知らせだけを送る。
-export async function updateStaffContractWage(params: { staffContractId: string; wageAmount: number }) {
-  return prisma.staffContract.update({
+// 業務内容単価と同じ「開始日付きバージョンを積む」方式で、指定日時点の
+// 金額を1つ選ぶ純粋関数。基本給は「単価未設定」に戻ることが無い（雇用契約に
+// は常に何らかの基本給がある）ため、resolveRateVersionと違ってnullマーカー
+// の考慮は不要 — 常に最新の該当バージョンを返す。
+export function resolveContractWageVersion<T extends { wageAmount: number; effectiveFrom: Date }>(
+  versions: T[],
+  asOf: Date,
+): T | null {
+  let best: T | null = null;
+  for (const v of versions) {
+    if (v.effectiveFrom > asOf) continue;
+    if (!best || v.effectiveFrom > best.effectiveFrom) best = v;
+  }
+  return best;
+}
+
+// 基本給の改定 — 業務内容単価と同じ「上書きせず開始日付きバージョンを積む
+// ＋お知らせ」運用。契約書を結び直す（同意）フローは使わず、指定日から
+// 新しい金額が有効になり、スタッフには非ブロッキングのお知らせだけを送る。
+// 月給は日単位で変動する意味が薄いため、月初（1日）からの改定のみ許可する。
+export async function addStaffContractWageVersion(params: {
+  staffContractId: string;
+  wageAmount: number;
+  effectiveFrom: Date;
+  createdByUserId: string;
+}) {
+  const contract = await prisma.staffContract.findUniqueOrThrow({
     where: { id: params.staffContractId },
-    data: { wageAmountSnapshot: params.wageAmount },
+    include: { template: true },
+  });
+  if (contract.template.wageType === "MONTHLY" && params.effectiveFrom.getUTCDate() !== 1) {
+    throw new Error("monthly_wage_requires_month_start");
+  }
+  return prisma.staffContractWageVersion.create({
+    data: {
+      staffContractId: params.staffContractId,
+      wageAmount: params.wageAmount,
+      effectiveFrom: params.effectiveFrom,
+      createdByUserId: params.createdByUserId,
+    },
   });
 }
 
 export async function listStaffContracts(staffUserId: string) {
   return prisma.staffContract.findMany({
     where: { staffUserId },
-    include: { template: true },
+    include: { template: true, wageVersions: true },
     orderBy: { createdAt: "desc" },
   });
 }

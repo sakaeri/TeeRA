@@ -1,5 +1,5 @@
 import { requireCompanyStaffRole } from "@/lib/auth/session";
-import { listStaffContracts } from "@/lib/domain/contracts";
+import { listStaffContracts, resolveContractWageVersion } from "@/lib/domain/contracts";
 import { prisma } from "@/lib/prisma";
 import { StaffContractsView } from "@/components/staff/StaffContractsView";
 
@@ -16,6 +16,7 @@ export default async function StaffContractsPage() {
   const contractedTemplateIds = new Set(
     myContracts.filter((c) => c.status !== "ENDED").map((c) => c.templateId),
   );
+  const today = new Date();
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-10">
@@ -25,7 +26,7 @@ export default async function StaffContractsPage() {
           id: c.id,
           title: c.template.title,
           status: c.status,
-          wageAmountSnapshot: c.wageAmountSnapshot,
+          wageAmountSnapshot: resolveContractWageVersion(c.wageVersions, today)?.wageAmount ?? c.wageAmountSnapshot,
           wageType: c.template.wageType,
           contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
         }))}

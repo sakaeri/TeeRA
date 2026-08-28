@@ -14,7 +14,7 @@ import {
   addStaffTaskRateVersion,
   deleteStaffTaskRate,
   generateStaffContractFromNewTemplate,
-  updateStaffContractWage,
+  addStaffContractWageVersion,
   type TemplateInput,
 } from "@/lib/domain/contracts";
 import { createStaffNotice } from "@/lib/domain/notices";
@@ -162,24 +162,34 @@ export async function deleteStaffTaskRateAction(staffTaskRateId: string) {
 
 // 基本給の改定 — 業務内容単価と同じ「上書き＋お知らせ」。契約を結び直す
 // （同意）操作は不要で、即座に反映してお知らせだけを送る。
-export async function updateStaffContractWageAction(staffContractId: string, wageAmount: number) {
-  const { membership } = await requireCompanyAdminOrEditor();
+export async function updateStaffContractWageAction(staffContractId: string, wageAmount: number, effectiveFrom: string) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
 
   const contract = await prisma.staffContract.findFirstOrThrow({
     where: { id: staffContractId, template: { companyId: membership.companyId } },
     include: { template: true },
   });
-  await updateStaffContractWage({ staffContractId: contract.id, wageAmount });
+  try {
+    await addStaffContractWageVersion({
+      staffContractId: contract.id,
+      wageAmount,
+      effectiveFrom: new Date(`${effectiveFrom}T00:00:00.000Z`),
+      createdByUserId: userId,
+    });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "unknown" };
+  }
 
   await createStaffNotice({
     companyId: membership.companyId,
     staffUserId: contract.staffUserId,
-    message: `基本給が${WAGE_TYPE_LABEL[contract.template.wageType]}${wageAmount}円に変更されました`,
+    message: `基本給が${WAGE_TYPE_LABEL[contract.template.wageType]}${wageAmount}円に変更されました（${effectiveFrom}から）`,
   });
 
   revalidatePath("/company/settings");
   revalidatePath("/company/roster");
+  return { error: null };
 }
 
 async function relationshipLabel(companyRelationshipId: string) {

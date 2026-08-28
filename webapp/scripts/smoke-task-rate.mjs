@@ -134,7 +134,10 @@ try {
   // from this script's local wall-clock date near JST midnight)
   const shift1DateStr = psql(`select to_char(date, 'YYYY-MM-DD') from "Shift" where id='${shift1Id}';`);
   const shift1Day = Number(shift1DateStr.slice(-2));
-  const day2Label = String(shift1Day < 28 ? shift1Day + 1 : shift1Day - 1);
+  const shift1DateObj = new Date(`${shift1DateStr}T00:00:00Z`);
+  const daysInMonth = new Date(Date.UTC(shift1DateObj.getUTCFullYear(), shift1DateObj.getUTCMonth() + 1, 0)).getUTCDate();
+  // must go FORWARD (shift1 defaults to today, so any earlier day is disabled as past)
+  const day2Label = String(shift1Day + 1 <= daysInMonth ? shift1Day + 1 : shift1Day - 1);
   await admin.locator("button", { hasText: "＋" }).last().click();
   await admin.getByText("シフトを作成").click();
   modal = admin.locator("div.fixed.inset-0.z-20").last();

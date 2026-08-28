@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
-import { resolveRateVersion, pickStaffTaskRate } from "@/lib/domain/contracts";
+import { resolveRateVersion, resolveContractWageVersion, pickStaffTaskRate } from "@/lib/domain/contracts";
 
 const FIXED_DEDUCTION_LABELS = ["社会保険料", "厚生年金", "雇用保険料", "所得税", "市県民税"];
 
@@ -14,14 +14,17 @@ function monthRange(targetMonth: string) {
   return { start, end };
 }
 
-async function defaultWageRate(companyId: string, staffUserId: string) {
+// シフトの日付時点で有効だった基本給バージョンを解決する必要があるため
+// （改定後に過去分を再計算しても金額が変わらないように）、契約と全バージョン
+// を返し、呼び出し側でシフトごとに日付解決する。
+async function activeContractWithWageVersions(companyId: string, staffUserId: string) {
   const contract = await prisma.staffContract.findFirst({
     where: { staffUserId, status: "ACTIVE", template: { companyId } },
-    include: { template: true },
+    include: { template: true, wageVersions: true },
     orderBy: { createdAt: "desc" },
   });
   if (!contract) return null;
-  return { wageType: contract.template.wageType, amount: contract.wageAmountSnapshot };
+  return contract;
 }
 
 // スタッフ×業務内容の単価テーブル。登録が無ければ雇用契約の基本単価
@@ -53,7 +56,7 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     include: { shift: true },
   });
 
-  const baseWage = await defaultWageRate(params.companyId, params.staffUserId);
+  const baseContract = await activeContractWithWageVersions(params.companyId, params.staffUserId);
   const taskRates = await prisma.staffTaskRate.findMany({
     where: { companyId: params.companyId, staffUserId: params.staffUserId },
     include: { versions: true },
@@ -68,7 +71,7 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
   await prisma.$transaction(async (tx) => {
     await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, kind: "SHIFT" } });
     // 雇用契約が無いスタッフは自動計上できない。
-    if (!baseWage) return;
+    if (!baseContract) return;
     for (const r of reports) {
       const workedHours = Math.round((r.computedMinutes / 60) * 100) / 100;
       if (workedHours <= 0) continue;
@@ -77,10 +80,17 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
       const effectiveTaskName = r.taskName ?? r.shift.taskName;
       // その業務内容・その勤務先に、シフトの日付時点で有効なスタッフ個別の
       // 単価があればそれを優先し（勤務先限定＞勤務先を問わない、の順で
-      // 探す）、無ければ雇用契約の基本単価にフォールバックする。
+      // 探す）、無ければ雇用契約の基本単価（こちらもシフトの日付時点で
+      // 有効だったバージョン）にフォールバックする。
       const candidateRows = effectiveTaskName ? taskRateRowsByName.get(effectiveTaskName) : undefined;
       const matchedRow = candidateRows ? pickStaffTaskRate(candidateRows, r.shift.companyRelationshipId) : null;
-      const wage = (matchedRow ? resolveRateVersion(matchedRow.versions, r.shift.date) : null) ?? baseWage;
+      const matchedWage = matchedRow ? resolveRateVersion(matchedRow.versions, r.shift.date) : null;
+      const baseWageVersion = resolveContractWageVersion(baseContract.wageVersions, r.shift.date);
+      if (!matchedWage && !baseWageVersion) continue;
+      const wage = matchedWage ?? {
+        wageType: baseContract.template.wageType,
+        amount: baseWageVersion!.wageAmount,
+      };
       // 月給は日々のシフト単位では自動計上しない（固定給のため、必要なら
       // 手動でカスタム行を追加する）。時給/日給のみ自動生成する。
       if (wage.wageType === "MONTHLY") continue;

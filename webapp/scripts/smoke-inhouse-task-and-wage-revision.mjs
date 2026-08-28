@@ -16,6 +16,7 @@ function psql(sql) {
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 const admin = await (await browser.newContext()).newPage();
 const staff = await (await browser.newContext()).newPage();
+const staff2 = await (await browser.newContext()).newPage();
 
 const adminEmail = `inhousetask-admin-${Date.now()}@example.com`;
 const staffEmail = `inhousetask-staff-${Date.now()}@example.com`;
@@ -110,15 +111,27 @@ try {
   const baseWageRow = panel.locator("li", { hasText: "基本給" });
   log("業務内容単価タブに「基本給」の行が他の単価と並んで表示される", (await baseWageRow.count()) === 1);
   log("基本給の行に勤務先ラベル（自社）が表示される", (await baseWageRow.textContent()).includes("自社"));
+  const wageAmountSnapshotBefore = psql(`select "wageAmountSnapshot" from "StaffContract" where id='${staffContractId}';`);
+
+  // 改定は翌日から有効、にして日付解決（過去日は旧単価のまま／改定日以降は新単価）を検証する
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
   await baseWageRow.getByRole("button", { name: "改定" }).click();
   await admin.waitForTimeout(150);
-  const wageInput = admin.locator("div.fixed.inset-0.z-40").last().locator('input[type=number]');
+  const wagePopup = admin.locator("div.fixed.inset-0.z-40").last();
+  const wageInput = wagePopup.locator('input[type=number]');
   await wageInput.fill("1200");
-  await admin.locator("div.fixed.inset-0.z-40").last().getByRole("button", { name: "保存" }).click();
+  await wagePopup.locator('input[type=date]').fill(tomorrow);
+  await wagePopup.getByRole("button", { name: "保存" }).click();
   await admin.waitForTimeout(500);
 
   const wageAfter = psql(`select "wageAmountSnapshot" from "StaffContract" where id='${staffContractId}';`);
-  log("同じ契約行のwageAmountSnapshotが上書きされる（結び直しなし）", wageAfter === "1200");
+  log("wageAmountSnapshot（同意時点の金額）は改定後も変わらない", wageAfter === wageAmountSnapshotBefore);
+
+  const newVersionCount = psql(
+    `select count(*) from "StaffContractWageVersion" where "staffContractId"='${staffContractId}' and "wageAmount"=1200 and "effectiveFrom"='${tomorrow}';`,
+  );
+  log("StaffContractWageVersionに新しいバージョンが上書きせず追加される", newVersionCount === "1");
 
   const contractStatusAfter = psql(`select status from "StaffContract" where id='${staffContractId}';`);
   log("契約ステータスはACTIVEのまま（再同意を求めない）", contractStatusAfter === "ACTIVE");
@@ -133,7 +146,22 @@ try {
   const staffBody = await staff.textContent("body");
   log("スタッフ画面のお知らせに基本給改定が表示される", staffBody.includes("基本給") && staffBody.includes("1200円"));
 
-  // shift with no task-rate override -> payroll should now use the REVISED base wage (1200)
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.locator("tbody tr", { hasText: "自社確認花子" }).click();
+  await admin.waitForTimeout(300);
+  const panelHistory = admin.locator("div.fixed.inset-0.z-30").last();
+  await panelHistory.getByRole("button", { name: "業務内容単価" }).click();
+  const baseWageRowAfter = panelHistory.locator("li", { hasText: "基本給" });
+  await baseWageRowAfter.getByRole("button", { name: /履歴/ }).click();
+  await admin.waitForTimeout(150);
+  const historyText = await baseWageRowAfter.textContent();
+  log(
+    "基本給の履歴に旧単価（1000円）と新単価（1200円）の両方が表示される",
+    historyText.includes("1000円") && historyText.includes("1200円"),
+  );
+
+  // shift with no task-rate override, dated TODAY (before the revision's effective date=tomorrow)
+  // -> payroll must still use the OLD base wage (改定前の過去分を再計算しても変わらない)
   const plainShiftId = psql(
     `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
       `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'INHOUSE', null, current_date, '09:00', '13:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
@@ -142,14 +170,116 @@ try {
     `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "clockIn", "clockOut", "computedMinutes", "createdAt", "updatedAt")` +
       ` values (gen_random_uuid()::text, '${plainShiftId}', '${staffUserId}', 'WORKED', 'APPROVED', now() - interval '4 hours', now(), 240, now(), now());`,
   );
-  const thisMonth = new Date().toISOString().slice(0, 7);
-  await admin.goto(`http://localhost:3000/company/payroll?month=${thisMonth}&staff=${staffUserId}`);
+
+  // shift dated TOMORROW (on/after the revision's effective date) -> must use the NEW base wage
+  const futureShiftId = psql(
+    `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'INHOUSE', null, current_date + 1, '09:00', '13:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
+  );
+  psql(
+    `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "clockIn", "clockOut", "computedMinutes", "createdAt", "updatedAt")` +
+      ` values (gen_random_uuid()::text, '${futureShiftId}', '${staffUserId}', 'WORKED', 'APPROVED', now() - interval '4 hours', now(), 240, now(), now());`,
+  );
+
+  const todayMonth = new Date().toISOString().slice(0, 7);
+  const tomorrowMonth = tomorrow.slice(0, 7);
+  await admin.goto(`http://localhost:3000/company/payroll?month=${todayMonth}&staff=${staffUserId}`);
   await admin.waitForTimeout(600);
-  const rawLine = psql(
+  if (tomorrowMonth !== todayMonth) {
+    await admin.goto(`http://localhost:3000/company/payroll?month=${tomorrowMonth}&staff=${staffUserId}`);
+    await admin.waitForTimeout(600);
+  }
+
+  const rawLineBefore = psql(
     `select json_agg(json_build_object('rate', rate, 'amount', amount))->0 from "SalarySlipLine" ssl join "SalarySlip" ss on ss.id=ssl."salarySlipId" where ss."staffUserId"='${staffUserId}' and ssl."shiftId"='${plainShiftId}';`,
   );
-  const line = rawLine ? JSON.parse(rawLine) : null;
-  log("改定後の基本給（時給1200円）が給与計算に反映される", line && Number(line.rate) === 1200 && Number(line.amount) === 4800);
+  const lineBefore = rawLineBefore ? JSON.parse(rawLineBefore) : null;
+  log(
+    "改定日より前のシフトは旧基本給（時給1000円）のまま給与計算される",
+    lineBefore && Number(lineBefore.rate) === 1000 && Number(lineBefore.amount) === 4000,
+  );
+
+  const rawLineAfter = psql(
+    `select json_agg(json_build_object('rate', rate, 'amount', amount))->0 from "SalarySlipLine" ssl join "SalarySlip" ss on ss.id=ssl."salarySlipId" where ss."staffUserId"='${staffUserId}' and ssl."shiftId"='${futureShiftId}';`,
+  );
+  const lineAfter = rawLineAfter ? JSON.parse(rawLineAfter) : null;
+  log(
+    "改定日以降のシフトは新基本給（時給1200円）で給与計算される",
+    lineAfter && Number(lineAfter.rate) === 1200 && Number(lineAfter.amount) === 4800,
+  );
+
+  // --- 月給は月初（1日）からのみ改定可能（他契約の影響を避けるため別スタッフで検証）
+  const staffEmail2 = `inhousetask-staff2-${Date.now()}@example.com`;
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=本アカウントを招待");
+  await admin.getByRole("button", { name: "招待URLを発行する" }).click();
+  await admin.waitForSelector("input[readonly]");
+  const inviteUrl2 = await admin.locator("input[readonly]").inputValue();
+  await staff2.goto(inviteUrl2);
+  await staff2.click("text=アカウントを作成して参加する");
+  await staff2.fill("#name", "月給確認次郎");
+  await staff2.fill("#email", staffEmail2);
+  await staff2.fill("#password", "password123");
+  await staff2.click("button[type=submit]");
+  await staff2.waitForURL(new RegExp("/invite/"));
+  await staff2.click("text=参加する");
+  await staff2.waitForURL("http://localhost:3000/staff");
+  const staffUserId2 = psql(`select id from "User" where email='${staffEmail2}';`);
+
+  await admin.goto("http://localhost:3000/company/settings?tab=contracts");
+  await admin.getByRole("button", { name: "＋テンプレートを作成" }).click();
+  await admin.getByText("業務内容", { exact: true }).locator("xpath=..").locator("input").fill("月給業務");
+  await admin.getByText("賃金", { exact: true }).locator("xpath=..").locator("select").selectOption("MONTHLY");
+  await admin.getByText("賃金", { exact: true }).locator("xpath=..").locator("input[type=number]").fill("250000");
+  await admin.getByRole("button", { name: "テンプレートを生成" }).click();
+  await admin.waitForTimeout(600);
+  await staff2.goto("http://localhost:3000/staff/contracts");
+  await staff2.reload();
+  await staff2.getByRole("button", { name: "契約を結ぶ" }).click();
+  await staff2.waitForTimeout(600);
+  const monthlyContractId = psql(
+    `select sc.id from "StaffContract" sc where sc."staffUserId"='${staffUserId2}' and sc.status='ACTIVE' order by sc."createdAt" desc limit 1;`,
+  );
+
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.locator("tbody tr", { hasText: "月給確認次郎" }).click();
+  await admin.waitForTimeout(300);
+  const panel2 = admin.locator("div.fixed.inset-0.z-30").last();
+  await panel2.getByRole("button", { name: "業務内容単価" }).click();
+  const monthlyBaseWageRow = panel2.locator("li", { hasText: "基本給" });
+  log("月給契約でも基本給の行が業務内容単価タブに表示される", (await monthlyBaseWageRow.count()) === 1);
+
+  const midMonth = new Date();
+  midMonth.setUTCDate(15);
+  const midMonthStr = midMonth.toISOString().slice(0, 10);
+
+  await monthlyBaseWageRow.getByRole("button", { name: "改定" }).click();
+  await admin.waitForTimeout(150);
+  const monthlyPopup = admin.locator("div.fixed.inset-0.z-40").last();
+  await monthlyPopup.locator('input[type=number]').fill("260000");
+  await monthlyPopup.locator('input[type=date]').fill(midMonthStr);
+  await monthlyPopup.getByRole("button", { name: "保存" }).click();
+  await admin.waitForTimeout(500);
+  const rejectedText = await monthlyPopup.textContent();
+  log("月給を月中の日付で改定しようとするとエラーになる", rejectedText.includes("月初（1日）"));
+
+  const monthlyVersionRejectedCount = psql(
+    `select count(*) from "StaffContractWageVersion" where "staffContractId"='${monthlyContractId}' and "wageAmount"=260000;`,
+  );
+  log("月中改定は実際にはバージョンが追加されない", monthlyVersionRejectedCount === "0");
+
+  const nextMonthStart = new Date(Date.UTC(midMonth.getUTCFullYear(), midMonth.getUTCMonth() + 1, 1))
+    .toISOString()
+    .slice(0, 10);
+  await monthlyPopup.locator('input[type=date]').fill(nextMonthStart);
+  await monthlyPopup.getByRole("button", { name: "保存" }).click();
+  await admin.waitForTimeout(500);
+
+  const monthlyVersionAcceptedCount = psql(
+    `select count(*) from "StaffContractWageVersion" where "staffContractId"='${monthlyContractId}' and "wageAmount"=260000 and "effectiveFrom"='${nextMonthStart}';`,
+  );
+  log("月初（1日）の改定は成功しバージョンが追加される", monthlyVersionAcceptedCount === "1");
 
   console.log(
     process.exitCode
@@ -160,6 +290,7 @@ try {
   console.error("INHOUSE TASK / WAGE REVISION SMOKE TEST FAILED", err);
   await admin.screenshot({ path: "/tmp/smoke-inhouse-task-wage-admin-failure.png" });
   await staff.screenshot({ path: "/tmp/smoke-inhouse-task-wage-staff-failure.png" });
+  await staff2.screenshot({ path: "/tmp/smoke-inhouse-task-wage-staff2-failure.png" }).catch(() => {});
   process.exitCode = 1;
 } finally {
   await browser.close();
