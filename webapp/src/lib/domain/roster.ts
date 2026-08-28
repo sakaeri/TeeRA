@@ -51,11 +51,11 @@ const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
 };
 
 // Roster table summary: 今月稼働 (hours worked this month from approved WORKED
-// reports), 現在の単価 (from the staff's active contract), 契約書 status pill.
+// reports), 契約内容 (from the staff's active contract), 契約書 status pill.
 export async function listStaffWithSummary(companyId: string) {
   const staff = await listStaff(companyId);
   const userIds = staff.map((s) => s.userId);
-  if (userIds.length === 0) return staff.map((s) => ({ ...s, monthlyHours: 0, currentRateLabel: "—", contractStatus: "未送付" as const }));
+  if (userIds.length === 0) return staff.map((s) => ({ ...s, monthlyHours: 0, contractLabel: "—", contractStatus: "未送付" as const }));
 
   const today = todayJstParts();
   const start = new Date(Date.UTC(today.year, today.month - 1, 1));
@@ -72,40 +72,28 @@ export async function listStaffWithSummary(companyId: string) {
     }),
     prisma.staffContract.findMany({
       where: { staffUserId: { in: userIds }, status: { in: ["ACTIVE", "PENDING_CONSENT"] } },
-      include: {
-        template: { include: { companyRelationship: { include: { clientCompany: true } } } },
-        wageVersions: true,
-      },
+      include: { template: true },
       orderBy: { createdAt: "desc" },
     }),
   ]);
 
-  const now = new Date();
   return staff.map((s) => {
     const hours = reports
       .filter((r) => r.staffUserId === s.userId)
       .reduce((sum, r) => sum + r.computedMinutes / 60, 0);
 
     const contract = contracts.find((c) => c.staffUserId === s.userId);
-    const workplaceName =
-      contract?.template.workplaceType === "CLIENT"
-        ? contract.template.workplaceNote ??
-          contract.template.companyRelationship?.clientCompany?.name ??
-          contract.template.companyRelationship?.proxyName ??
-          "配属先"
-        : "自社";
-    const currentWage = contract ? resolveContractWageVersion(contract.wageVersions, now) : null;
-    const currentRateLabel =
-      contract && currentWage
-        ? `${workplaceName}：${WAGE_TYPE_LABEL[contract.template.wageType]}${currentWage.wageAmount}円`
-        : "—";
+    // template.titleは「雇用形態・業務内容」（例：業務委託・キャディ業務）が
+    // 自動で入る内部向けタイトル。単価ではなく契約の中身が分かる方が名簿では
+    // 有用なため、こちらをそのまま契約内容として表示する。
+    const contractLabel = contract ? contract.template.title : "—";
     const contractStatus = contract
       ? contract.status === "ACTIVE"
         ? ("確認済み" as const)
         : ("確認待ち" as const)
       : ("未送付" as const);
 
-    return { ...s, monthlyHours: Math.round(hours * 10) / 10, currentRateLabel, contractStatus };
+    return { ...s, monthlyHours: Math.round(hours * 10) / 10, contractLabel, contractStatus };
   });
 }
 

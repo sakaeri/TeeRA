@@ -23,7 +23,7 @@ type StaffRow = {
   isProxy: boolean;
   teams: { teamId: string; teamName: string; role: string }[];
   monthlyHours: number;
-  currentRateLabel: string;
+  contractLabel: string;
   contractStatus: "確認済み" | "確認待ち" | "未送付";
 };
 
@@ -273,12 +273,12 @@ export function RosterView({
               <tr className="border-b border-border bg-background/60 text-left text-xs text-muted">
                 <th className="px-4 py-3 font-semibold">氏名</th>
                 <th className="px-4 py-3 font-semibold">今月稼働</th>
-                <th className="px-4 py-3 font-semibold">現在の単価</th>
+                <th className="px-4 py-3 font-semibold">契約内容</th>
                 <th className="px-4 py-3 font-semibold">チーム</th>
                 <th className="px-4 py-3 font-semibold">契約書</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="bg-white">
               {filteredStaff.map((s) => (
                 <tr
                   key={s.membershipId}
@@ -294,7 +294,7 @@ export function RosterView({
                     ) : null}
                   </td>
                   <td className="px-4 py-3.5 text-muted">{s.monthlyHours}h</td>
-                  <td className="px-4 py-3.5 text-muted">{s.currentRateLabel}</td>
+                  <td className="px-4 py-3.5 text-muted">{s.contractLabel}</td>
                   <td className="px-4 py-3.5">
                     <div className="flex flex-wrap gap-1">
                       {s.teams.length === 0 ? (
@@ -553,7 +553,7 @@ function RelationshipTable({
             <th className="px-4 py-3 font-semibold">状態</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="bg-white">
           {rows.map((r) => (
             <tr
               key={r.id}
