@@ -122,6 +122,7 @@ export function StaffDetailPanel({
   const [editWageEffectiveFrom, setEditWageEffectiveFrom] = useState(todayJst());
   const [editWageError, setEditWageError] = useState<string | null>(null);
   const [detailContractId, setDetailContractId] = useState<string | null>(null);
+  const [editingIdDocument, setEditingIdDocument] = useState(false);
   const [editingBankInfo, setEditingBankInfo] = useState(false);
   const [bankName, setBankName] = useState("");
   const [branchName, setBranchName] = useState("");
@@ -405,31 +406,28 @@ export function StaffDetailPanel({
                 </ul>
 
                 <div className="rounded-lg border border-border p-3 text-sm">
-                  <p className="mb-2 font-semibold">本人確認書類</p>
-                  <div className="flex gap-6">
+                  <div className="flex items-center justify-between">
+                    <p className="font-semibold">本人確認書類</p>
+                    <button
+                      type="button"
+                      onClick={() => setEditingIdDocument(true)}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      アップロード
+                    </button>
+                  </div>
+                  <div className="mt-1 flex flex-col gap-1">
                     {(["front", "back"] as const).map((side) => {
                       const url = side === "front" ? data.idDocumentFrontUrl : data.idDocumentBackUrl;
                       return (
-                        <div key={side} className="flex flex-col items-center gap-1">
-                          <ImageDropzone
-                            label={side === "front" ? "表面" : "裏面"}
-                            imageUrl={url ?? ""}
-                            size="sm"
-                            onChange={(newUrl) => uploadIdDocument(data.membershipId, side, newUrl)}
-                          />
+                        <div key={side} className="flex items-center justify-between text-xs">
+                          <span className="text-muted">{side === "front" ? "表面" : "裏面"}</span>
                           {url ? (
-                            <a
-                              href={url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs text-primary hover:underline"
-                            >
+                            <a href={url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
                               📎 画像を見る
                             </a>
                           ) : (
-                            <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-xs font-semibold text-gray-600">
-                              未提出
-                            </span>
+                            <span className="rounded-md bg-gray-100 px-1.5 py-0.5 font-semibold text-gray-600">未提出</span>
                           )}
                         </div>
                       );
@@ -577,6 +575,40 @@ export function StaffDetailPanel({
             );
           })()
         : null}
+
+      {editingIdDocument && data ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setEditingIdDocument(false)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="font-serif-jp text-base font-bold text-primary">本人確認書類をアップロード</h4>
+              <button
+                type="button"
+                onClick={() => setEditingIdDocument(false)}
+                aria-label="閉じる"
+                className="text-muted hover:text-primary"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex justify-center gap-6">
+              <div className="w-32">
+                <ImageDropzone
+                  label="表面"
+                  imageUrl={data.idDocumentFrontUrl ?? ""}
+                  onChange={(url) => uploadIdDocument(data.membershipId, "front", url)}
+                />
+              </div>
+              <div className="w-32">
+                <ImageDropzone
+                  label="裏面"
+                  imageUrl={data.idDocumentBackUrl ?? ""}
+                  onChange={(url) => uploadIdDocument(data.membershipId, "back", url)}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {editingBankInfo && data ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setEditingBankInfo(false)}>

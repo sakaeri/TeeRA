@@ -109,18 +109,22 @@ export function StaffContractsView({
         <h2 className="mb-2 font-serif-jp text-lg font-bold text-primary">本人確認書類</h2>
         <p className="mb-4 text-xs text-muted">運転免許証など、両面の写真を提出してください。</p>
         <div className="flex gap-6">
-          <ImageDropzone
-            label="表面"
-            required
-            imageUrl={idDocumentFrontUrl ?? ""}
-            onChange={(url) => startTransition(() => updateMyIdDocumentAction("front", url))}
-          />
-          <ImageDropzone
-            label="裏面"
-            required
-            imageUrl={idDocumentBackUrl ?? ""}
-            onChange={(url) => startTransition(() => updateMyIdDocumentAction("back", url))}
-          />
+          <div className="w-40">
+            <ImageDropzone
+              label="表面"
+              required
+              imageUrl={idDocumentFrontUrl ?? ""}
+              onChange={(url) => startTransition(() => updateMyIdDocumentAction("front", url))}
+            />
+          </div>
+          <div className="w-40">
+            <ImageDropzone
+              label="裏面"
+              required
+              imageUrl={idDocumentBackUrl ?? ""}
+              onChange={(url) => startTransition(() => updateMyIdDocumentAction("back", url))}
+            />
+          </div>
         </div>
       </section>
 
