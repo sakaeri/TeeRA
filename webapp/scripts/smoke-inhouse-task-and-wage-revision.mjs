@@ -110,7 +110,10 @@ try {
   await panel.getByRole("button", { name: "業務内容単価" }).click();
   const baseWageRow = panel.locator("li", { hasText: "基本給" });
   log("業務内容単価タブに「基本給」の行が他の単価と並んで表示される", (await baseWageRow.count()) === 1);
-  log("基本給の行に勤務先ラベル（自社）が表示される", (await baseWageRow.textContent()).includes("自社"));
+  log(
+    "基本給の行に雇用形態と業務内容が表示される（アルバイト・基本業務）",
+    (await baseWageRow.textContent()).includes("アルバイト") && (await baseWageRow.textContent()).includes("基本業務"),
+  );
   const wageAmountSnapshotBefore = psql(`select "wageAmountSnapshot" from "StaffContract" where id='${staffContractId}';`);
 
   // 改定は翌日から有効、にして日付解決（過去日は旧単価のまま／改定日以降は新単価）を検証する

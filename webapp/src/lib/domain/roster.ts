@@ -33,6 +33,13 @@ export async function listStaff(companyId: string) {
 }
 
 const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
+const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
+  PART_TIME: "アルバイト",
+  FIXED_TERM_EMPLOYEE: "契約社員",
+  FULL_TIME: "正社員",
+  CONTRACTOR: "業務委託",
+  DISPATCH_STAFF: "派遣社員",
+};
 
 // Roster table summary: 今月稼働 (hours worked this month from approved WORKED
 // reports), 現在の単価 (from the staff's active contract), 契約書 status pill.
@@ -242,6 +249,8 @@ export async function getStaffMonthDetail(params: {
         wageType: c.template.wageType,
         wageAmount: currentWage.wageAmount,
         wageLabel: `${WAGE_TYPE_LABEL[c.template.wageType]}${currentWage.wageAmount}円`,
+        employmentTypeLabel: EMPLOYMENT_TYPE_LABEL[c.template.employmentType] ?? c.template.employmentType,
+        jobDescription: c.template.jobDescription,
         workplaceName:
           c.template.workplaceType === "CLIENT"
             ? c.template.workplaceNote ??

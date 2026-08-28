@@ -36,6 +36,8 @@ type StaffMonthDetail = {
     wageType: "HOURLY" | "DAILY" | "MONTHLY";
     wageAmount: number;
     wageLabel: string;
+    employmentTypeLabel: string;
+    jobDescription: string;
     workplaceName: string;
     contractStartDate: string;
     wageVersions: { id: string; label: string; effectiveFrom: string }[];
@@ -556,7 +558,8 @@ function StaffTaskRatesTab({
           <li className="rounded-lg border border-border bg-background/40 p-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="font-medium">
-                基本給 <span className="text-xs font-normal text-muted">（{baseContract.workplaceName}）</span>
+                基本給・{baseContract.employmentTypeLabel}{" "}
+                <span className="text-xs font-normal text-muted">（{baseContract.jobDescription}）</span>
               </span>
               <span className="text-muted">{baseContract.wageLabel}</span>
             </div>
@@ -588,7 +591,7 @@ function StaffTaskRatesTab({
           <li key={r.id} className="rounded-lg border border-border p-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="font-medium">
-                {r.taskName} <span className="text-xs font-normal text-muted">（{r.workplaceLabel}）</span>
+                {r.workplaceLabel} <span className="text-xs font-normal text-muted">（{r.taskName}）</span>
               </span>
               <span className="text-muted">{r.currentLabel}</span>
             </div>
