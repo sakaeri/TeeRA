@@ -13,11 +13,12 @@ import {
   addStaffTaskRateVersionAction,
   deleteStaffTaskRateAction,
   updateStaffContractWageAction,
+  endStaffContractAction,
 } from "@/app/company/contracts/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
 import { CopyUrlField } from "@/components/CopyUrlField";
 import { ImageDropzone } from "@/components/ImageDropzone";
-import { TemplateModal, type Template } from "@/components/company/ContractsView";
+import { TemplateModal, ChooseBaseTemplateModal, type Template } from "@/components/company/ContractsView";
 
 type StaffTaskRate = {
   id: string;
@@ -89,6 +90,11 @@ const APPROVAL_LABEL: Record<string, string> = {
   APPROVED: "承認済み",
   REJECTED: "差戻し",
 };
+const CONTRACT_STATUS_LABEL: Record<string, string> = {
+  ACTIVE: "確認済み",
+  PENDING_CONSENT: "確認待ち",
+  ENDED: "終了",
+};
 
 function actualTimeLabel(d: StaffMonthDetail["days"][number]) {
   if (!d.actualStartTime && !d.actualEndTime) return "—";
@@ -99,12 +105,14 @@ export function StaffDetailPanel({
   userId,
   companyName,
   clients,
+  contractTemplates,
   knownTaskNames,
   onClose,
 }: {
   userId: string;
   companyName: string;
   clients: ClientOption[];
+  contractTemplates: Template[];
   knownTaskNames: string[];
   onClose: () => void;
 }) {
@@ -123,6 +131,22 @@ export function StaffDetailPanel({
   const [editWageError, setEditWageError] = useState<string | null>(null);
   const [detailContractId, setDetailContractId] = useState<string | null>(null);
   const [editingIdDocument, setEditingIdDocument] = useState(false);
+  const [showGenerateChoose, setShowGenerateChoose] = useState(false);
+  const [generateBaseTemplate, setGenerateBaseTemplate] = useState<Template | null>(null);
+  const [showContractHistory, setShowContractHistory] = useState(false);
+
+  function endGenerateFlow() {
+    setShowGenerateChoose(false);
+    setGenerateBaseTemplate(null);
+    refresh();
+  }
+
+  function endContract(staffContractId: string) {
+    startTransition(async () => {
+      await endStaffContractAction(staffContractId);
+      await refresh();
+    });
+  }
   const [editingBankInfo, setEditingBankInfo] = useState(false);
   const [bankName, setBankName] = useState("");
   const [branchName, setBranchName] = useState("");
@@ -382,28 +406,93 @@ export function StaffDetailPanel({
 
             {tab === "contracts" ? (
               <div className="flex flex-col gap-4">
-                <ul className="flex flex-col gap-2">
-                  {data.contracts.map((c) => (
-                    <li key={c.id} className="rounded-lg border border-border p-3 text-sm">
-                      <p className="font-semibold">{c.title}</p>
-                      <p className="text-muted">
-                        {c.workplaceName} ／ {c.wageLabel}
-                      </p>
-                      <p className="text-xs text-muted">雇用開始日: {c.contractStartDate}</p>
-                      <div className="mt-1 flex items-center justify-between">
-                        <p className="text-xs text-muted">{c.status === "ACTIVE" ? "確認済み" : "確認待ち"}</p>
+                {(() => {
+                  const currentContracts = data.contracts.filter((c) => c.status !== "ENDED");
+                  const pastContracts = data.contracts.filter((c) => c.status === "ENDED");
+                  return (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted">現在の契約</p>
                         <button
                           type="button"
-                          onClick={() => setDetailContractId(c.id)}
-                          className="text-xs text-primary hover:underline"
+                          onClick={() => setShowGenerateChoose(true)}
+                          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
                         >
-                          詳細確認
+                          ＋契約書を生成
                         </button>
                       </div>
-                    </li>
-                  ))}
-                  {data.contracts.length === 0 ? <p className="py-6 text-center text-sm text-muted">契約書はありません。</p> : null}
-                </ul>
+                      <ul className="flex flex-col gap-2">
+                        {currentContracts.map((c) => (
+                          <li key={c.id} className="rounded-lg border border-border p-3 text-sm">
+                            <p className="font-semibold">{c.title}</p>
+                            <p className="text-muted">
+                              {c.workplaceName} ／ {c.wageLabel}
+                            </p>
+                            <p className="text-xs text-muted">雇用開始日: {c.contractStartDate}</p>
+                            <div className="mt-1 flex items-center justify-between">
+                              <p className="text-xs text-muted">{CONTRACT_STATUS_LABEL[c.status] ?? c.status}</p>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setDetailContractId(c.id)}
+                                  className="text-xs text-primary hover:underline"
+                                >
+                                  詳細確認
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={pending}
+                                  onClick={() => endContract(c.id)}
+                                  className="text-xs text-muted hover:text-red-600 disabled:opacity-60"
+                                >
+                                  終了する
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                        {currentContracts.length === 0 ? (
+                          <p className="py-6 text-center text-sm text-muted">契約書はありません。</p>
+                        ) : null}
+                      </ul>
+
+                      {pastContracts.length > 0 ? (
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => setShowContractHistory((v) => !v)}
+                            className="text-xs text-muted hover:text-primary"
+                          >
+                            {showContractHistory ? "▲ 過去の契約を閉じる" : `▼ 過去の契約（${pastContracts.length}件）`}
+                          </button>
+                          {showContractHistory ? (
+                            <ul className="mt-2 flex flex-col gap-2">
+                              {pastContracts.map((c) => (
+                                <li key={c.id} className="rounded-lg border border-border/60 bg-background/40 p-3 text-sm">
+                                  <p className="font-semibold">{c.title}</p>
+                                  <p className="text-muted">
+                                    {c.workplaceName} ／ {c.wageLabel}
+                                  </p>
+                                  <p className="text-xs text-muted">雇用開始日: {c.contractStartDate}</p>
+                                  <div className="mt-1 flex items-center justify-between">
+                                    <p className="text-xs text-muted">{CONTRACT_STATUS_LABEL[c.status] ?? c.status}</p>
+                                    <button
+                                      type="button"
+                                      onClick={() => setDetailContractId(c.id)}
+                                      className="text-xs text-primary hover:underline"
+                                    >
+                                      詳細確認
+                                    </button>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })()}
 
                 <div className="rounded-lg border border-border p-3 text-sm">
                   <div className="flex items-center justify-between">
@@ -575,6 +664,24 @@ export function StaffDetailPanel({
             );
           })()
         : null}
+
+      {showGenerateChoose && !generateBaseTemplate && data ? (
+        <ChooseBaseTemplateModal
+          staffName={data.name}
+          templates={contractTemplates}
+          onNext={(t) => setGenerateBaseTemplate(t)}
+          onClose={() => setShowGenerateChoose(false)}
+        />
+      ) : null}
+      {showGenerateChoose && generateBaseTemplate && data ? (
+        <TemplateModal
+          companyName={companyName}
+          clients={clients}
+          editingTemplate={generateBaseTemplate}
+          generateForStaff={{ userId, name: data.name }}
+          onClose={endGenerateFlow}
+        />
+      ) : null}
 
       {editingIdDocument && data ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setEditingIdDocument(false)}>

@@ -14,6 +14,7 @@ import { StaffDetailPanel } from "@/components/company/StaffDetailPanel";
 import { ClientDetailPanel } from "@/components/company/ClientDetailPanel";
 import { useClickOutside } from "@/lib/useClickOutside";
 import { CopyUrlField } from "@/components/CopyUrlField";
+import type { Template } from "@/components/company/ContractsView";
 
 type StaffRow = {
   membershipId: string;
@@ -84,6 +85,7 @@ export function RosterView({
   agencies,
   teams,
   templates,
+  contractTemplates,
   knownTaskNames,
 }: {
   staff: StaffRow[];
@@ -92,6 +94,7 @@ export function RosterView({
   agencies: RelationshipRow[];
   teams: Team[];
   templates: ContractTemplateOption[];
+  contractTemplates: Template[];
   knownTaskNames: string[];
 }) {
   const [tab, setTab] = useState<Tab>("staff");
@@ -345,6 +348,7 @@ export function RosterView({
           userId={selectedStaffId}
           companyName={companyName}
           clients={clients.map((c) => ({ id: c.id, name: c.name }))}
+          contractTemplates={contractTemplates}
           knownTaskNames={knownTaskNames}
           onClose={() => setSelectedStaffId(null)}
         />

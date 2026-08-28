@@ -15,6 +15,7 @@ import {
   deleteStaffTaskRate,
   generateStaffContractFromNewTemplate,
   addStaffContractWageVersion,
+  endStaffContract,
   type TemplateInput,
 } from "@/lib/domain/contracts";
 import { createStaffNotice } from "@/lib/domain/notices";
@@ -216,4 +217,22 @@ export async function generateStaffContractAction(input: CreateTemplateInput, st
   });
   revalidatePath("/company/settings");
   revalidatePath("/company");
+  revalidatePath("/company/roster");
+}
+
+// 契約満了・退職などで契約を終了扱いにする。終了すると：
+// - 給料計算は「現在ACTIVEな契約」からしか基本給を拾わなくなるため、この
+//   契約はそれ以降の月次計算に使われなくなる（過去分はwageVersionsの
+//   実効日で解決するため終了しても変わらない — payroll.tsの日付ベース解決を参照）
+// - スタッフ側の「契約を結ぶ」一覧に、このテンプレートが再度候補として
+//   出るようになる（期間を空けての再雇用に対応）
+export async function endStaffContractAction(staffContractId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManage(membership)) throw new Error("forbidden");
+
+  await prisma.staffContract.findFirstOrThrow({
+    where: { id: staffContractId, template: { companyId: membership.companyId } },
+  });
+  await endStaffContract(staffContractId);
+  revalidatePath("/company/roster");
 }

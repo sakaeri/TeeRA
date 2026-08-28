@@ -14,17 +14,36 @@ function monthRange(targetMonth: string) {
   return { start, end };
 }
 
-// シフトの日付時点で有効だった基本給バージョンを解決する必要があるため
-// （改定後に過去分を再計算しても金額が変わらないように）、契約と全バージョン
-// を返し、呼び出し側でシフトごとに日付解決する。
-async function activeContractWithWageVersions(companyId: string, staffUserId: string) {
-  const contract = await prisma.staffContract.findFirst({
-    where: { staffUserId, status: "ACTIVE", template: { companyId } },
+// シフトの日付時点で有効だった契約（＝基本給バージョン）を解決する必要が
+// あるため、ステータスを問わず全契約を取得し、呼び出し側でシフトごとに
+// 日付解決する。「現在ACTIVEな契約」だけを見ると、契約満了→期間を空けて
+// 再雇用のように同じスタッフが時系列で複数の契約を持つケースで、過去分の
+// 再計算が別の契約の単価に化けたり（新しい契約がACTIVEな場合）、終了済み
+// 契約の期間の過去分が計算できなくなったり（ACTIVEな契約が無い場合）する。
+async function contractsWithWageVersions(companyId: string, staffUserId: string) {
+  return prisma.staffContract.findMany({
+    where: { staffUserId, template: { companyId } },
     include: { template: true, wageVersions: true },
     orderBy: { createdAt: "desc" },
   });
-  if (!contract) return null;
-  return contract;
+}
+
+type ContractWithWageVersions = Awaited<ReturnType<typeof contractsWithWageVersions>>[number];
+
+// 複数の契約の中から指定日時点で有効だったものを1つ選ぶ（契約期間の
+// start/endで判定）。期間が重複するデータ不整合がある場合は契約開始日が
+// 新しい方を優先する。
+function pickContractForDate(contracts: ContractWithWageVersions[], date: Date): ContractWithWageVersions | null {
+  let best: ContractWithWageVersions | null = null;
+  for (const c of contracts) {
+    const contractStart = c.contractStartDate ?? c.template.contractStartDate;
+    if (contractStart > date) continue;
+    const contractEnd = c.contractEndDate ?? c.template.contractEndDate;
+    if (contractEnd && contractEnd < date) continue;
+    const bestStart = best ? (best.contractStartDate ?? best.template.contractStartDate) : null;
+    if (!best || contractStart > bestStart!) best = c;
+  }
+  return best;
 }
 
 // スタッフ×業務内容の単価テーブル。登録が無ければ雇用契約の基本単価
@@ -56,7 +75,7 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     include: { shift: true },
   });
 
-  const baseContract = await activeContractWithWageVersions(params.companyId, params.staffUserId);
+  const contracts = await contractsWithWageVersions(params.companyId, params.staffUserId);
   const taskRates = await prisma.staffTaskRate.findMany({
     where: { companyId: params.companyId, staffUserId: params.staffUserId },
     include: { versions: true },
@@ -71,7 +90,7 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
   await prisma.$transaction(async (tx) => {
     await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, kind: "SHIFT" } });
     // 雇用契約が無いスタッフは自動計上できない。
-    if (!baseContract) return;
+    if (contracts.length === 0) return;
     for (const r of reports) {
       const workedHours = Math.round((r.computedMinutes / 60) * 100) / 100;
       if (workedHours <= 0) continue;
@@ -81,14 +100,15 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
       // その業務内容・その勤務先に、シフトの日付時点で有効なスタッフ個別の
       // 単価があればそれを優先し（勤務先限定＞勤務先を問わない、の順で
       // 探す）、無ければ雇用契約の基本単価（こちらもシフトの日付時点で
-      // 有効だったバージョン）にフォールバックする。
+      // 有効だった契約・バージョン）にフォールバックする。
       const candidateRows = effectiveTaskName ? taskRateRowsByName.get(effectiveTaskName) : undefined;
       const matchedRow = candidateRows ? pickStaffTaskRate(candidateRows, r.shift.companyRelationshipId) : null;
       const matchedWage = matchedRow ? resolveRateVersion(matchedRow.versions, r.shift.date) : null;
-      const baseWageVersion = resolveContractWageVersion(baseContract.wageVersions, r.shift.date);
+      const baseContract = pickContractForDate(contracts, r.shift.date);
+      const baseWageVersion = baseContract ? resolveContractWageVersion(baseContract.wageVersions, r.shift.date) : null;
       if (!matchedWage && !baseWageVersion) continue;
       const wage = matchedWage ?? {
-        wageType: baseContract.template.wageType,
+        wageType: baseContract!.template.wageType,
         amount: baseWageVersion!.wageAmount,
       };
       // 月給は日々のシフト単位では自動計上しない（固定給のため、必要なら

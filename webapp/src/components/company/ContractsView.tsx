@@ -237,6 +237,70 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 const fieldInput = "rounded-lg border border-border px-2 py-2 text-sm";
 
+// 「契約書を生成」フローの1段階目 — ベースにするテンプレートを選ぶ。ダッシュ
+// ボードの「契約書未確認」とスタッフ詳細の両方から使う共有モーダル。
+export function ChooseBaseTemplateModal({
+  staffName,
+  templates,
+  onNext,
+  onClose,
+}: {
+  staffName: string;
+  templates: Template[];
+  onNext: (template: Template) => void;
+  onClose: () => void;
+}) {
+  const [templateId, setTemplateId] = useState("");
+  const selected = templates.find((t) => t.id === templateId) ?? null;
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">契約書を生成</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-muted">
+          ベースにするテンプレートを選んでください。次の画面で複製した内容を{staffName}さん用に編集・プレビューできます
+        </p>
+
+        {templates.length === 0 ? (
+          <p className="text-sm text-muted">利用できる契約書テンプレートがありません。先にテンプレートを作成してください。</p>
+        ) : (
+          <label className="flex flex-col gap-1 text-xs">
+            <span>
+              テンプレート<span className="text-red-600"> *</span>
+            </span>
+            <select
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              className="rounded-lg border border-border px-2 py-2 text-sm"
+            >
+              <option value="">選択してください</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <button
+          type="button"
+          disabled={!selected}
+          onClick={() => selected && onNext(selected)}
+          className="mt-4 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        >
+          次へ
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function TemplateModal({
   clients,
   companyName,

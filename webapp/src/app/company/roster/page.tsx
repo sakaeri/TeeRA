@@ -63,6 +63,38 @@ export default async function RosterPage() {
                 : "自社",
             contractStartDate: t.contractStartDate.toISOString().slice(0, 10),
           }))}
+        contractTemplates={templates
+          .filter((t) => t.status === "ACTIVE")
+          .map((t) => ({
+            id: t.id,
+            title: t.title,
+            employmentType: t.employmentType,
+            workplaceType: t.workplaceType,
+            workplaceNote: t.workplaceNote,
+            clientName: t.workplaceNote ?? t.companyRelationship?.clientCompany?.name ?? t.companyRelationship?.proxyName ?? null,
+            jobDescription: t.jobDescription,
+            scheduleType: t.scheduleType,
+            workStartTime: t.workStartTime,
+            workEndTime: t.workEndTime,
+            actualWorkMinutes: t.actualWorkMinutes,
+            breakMinutes: t.breakMinutes,
+            hasOvertime: t.hasOvertime,
+            overtimeNote: t.overtimeNote,
+            fixedWeekdays: t.fixedWeekdays,
+            shiftPatternNote: t.shiftPatternNote,
+            restNote: t.restNote,
+            wageType: t.wageType,
+            wageAmount: t.wageAmount,
+            paymentClosingDay: t.paymentClosingDay,
+            paymentDay: t.paymentDay,
+            paymentMethod: t.paymentMethod,
+            contractPeriodType: t.contractPeriodType,
+            contractStartDate: t.contractStartDate.toISOString().slice(0, 10),
+            contractEndDate: t.contractEndDate ? t.contractEndDate.toISOString().slice(0, 10) : null,
+            extraItems: (t.extraItems as { label: string; value: string }[] | null) ?? [],
+            status: t.status,
+            contractedStaffNames: t.staffContracts.filter((sc) => sc.status !== "ENDED").map((sc) => sc.staff.name),
+          }))}
       />
     </main>
   );
