@@ -5,10 +5,12 @@ import {
   clockInAction,
   clockOutAction,
   submitWorkReportAction,
+  confirmCorrectedWorkReportAction,
 } from "@/app/staff/actions";
 
 type ShiftRow = {
   id: string;
+  workReportId: string | null;
   date: string;
   companyName: string;
   startTime: string | null;
@@ -16,6 +18,9 @@ type ShiftRow = {
   taskName: string | null;
   clockIn: string | null;
   clockOut: string | null;
+  clockInTime: string | null;
+  clockOutTime: string | null;
+  breakMinutes: number;
   outcome: string | null;
   approvalStatus: string | null;
   computedMinutes: number;
@@ -25,6 +30,7 @@ const APPROVAL_LABEL: Record<string, string> = {
   PENDING: "承認待ち",
   APPROVED: "承認済み",
   REJECTED: "差し戻し",
+  NEEDS_CONFIRMATION: "要確認",
 };
 
 const NEW_TASK_NAME_SENTINEL = "__new__";
@@ -50,6 +56,7 @@ function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTaskNames:
     knownTaskNames.length > 0 ? "pick" : "custom",
   );
   const [error, setError] = useState<string | null>(null);
+  const [breakMinutes, setBreakMinutes] = useState("0");
 
   const finalized = shift.outcome && shift.outcome !== "WORKED";
   const readyToSubmit = shift.clockIn && shift.clockOut;
@@ -70,7 +77,28 @@ function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTaskNames:
         {shift.startTime ? `${shift.startTime}〜${shift.endTime}` : "終日/未定"}
       </p>
 
-      {finalized ? (
+      {shift.approvalStatus === "NEEDS_CONFIRMATION" ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-accent/40 bg-accent/10 p-3">
+          <p className="text-sm">
+            企業が打刻内容を修正しました。内容を確認してください。
+          </p>
+          <p className="text-sm text-muted">
+            {shift.clockInTime ?? "--:--"}〜{shift.clockOutTime ?? "--:--"}（休憩{shift.breakMinutes}分／実働{" "}
+            {(shift.computedMinutes / 60).toFixed(1)} 時間）
+          </p>
+          <button
+            type="button"
+            disabled={pending || !shift.workReportId}
+            onClick={() => {
+              if (!shift.workReportId) return;
+              startTransition(() => confirmCorrectedWorkReportAction(shift.workReportId!));
+            }}
+            className="self-start rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            これで合っています
+          </button>
+        </div>
+      ) : finalized ? (
         <p className="text-sm text-muted">
           {shift.outcome === "ABSENT" ? "欠勤として報告済みです。" : "勤務先からのキャンセルとして報告済みです。"}
         </p>
@@ -86,14 +114,27 @@ function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTaskNames:
               出勤
             </button>
           ) : !shift.clockOut ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => startTransition(() => clockOutAction(shift.id))}
-              className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              退勤
-            </button>
+            <div className="flex items-end gap-2">
+              <label className="flex flex-col gap-0.5 text-xs text-muted">
+                休憩時間
+                <input
+                  type="number"
+                  min="0"
+                  value={breakMinutes}
+                  onChange={(e) => setBreakMinutes(e.target.value)}
+                  className="w-20 rounded-lg border border-border px-2 py-1.5 text-sm"
+                />
+              </label>
+              <span className="pb-1.5 text-xs text-muted">分</span>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => startTransition(() => clockOutAction(shift.id, Number(breakMinutes) || 0))}
+                className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                退勤
+              </button>
+            </div>
           ) : (
             <div className="flex flex-col gap-2">
               <p className="text-sm text-muted">実働 {(shift.computedMinutes / 60).toFixed(1)} 時間</p>

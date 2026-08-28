@@ -13,6 +13,15 @@ const OUTCOME_LABEL: Record<string, string> = {
   CANCELLED_BY_EMPLOYER: "勤務先からのキャンセル",
 };
 
+function formatJstTime(date: Date) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Tokyo",
+  }).format(date);
+}
+
 export default async function SettingsPage({ searchParams }: PageProps<"/company/settings">) {
   const { membership } = await requireCompanyAdminOrEditor();
   const sp = await searchParams;
@@ -111,6 +120,9 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
             computedHours: (r.computedMinutes / 60).toFixed(1),
             comment: r.comment,
             taskName: r.taskName ?? shift?.taskName ?? null,
+            clockInTime: r.clockIn ? formatJstTime(r.clockIn) : null,
+            clockOutTime: r.clockOut ? formatJstTime(r.clockOut) : null,
+            breakMinutes: r.breakMinutes,
           };
         })}
       />

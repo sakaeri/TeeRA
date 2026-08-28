@@ -1,6 +1,9 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { registerStaffTaskName, registerPlacementTaskName } from "@/lib/domain/contracts";
+import type { Prisma } from "@/generated/prisma/client";
+
+type Tx = Prisma.TransactionClient;
 
 // Approval routing (permission-rules-memo.md, bugfixed in chat29): approver
 // company is derived from the shift's source. INHOUSE -> the shift's own
@@ -146,6 +149,42 @@ export async function listOwnShiftsNeedingReport(staffUserId: string) {
   });
 }
 
+// Tiered staff points accrual on APPROVAL (not submission) — see
+// 開発指示書/permission-rules-memo.md ④: 1pt for the 1st-300th cumulative
+// approved report, 2pt for 301st-600th, 3pt for 601st+. Shared between
+// approveWorkReport and confirmCorrectedWorkReport (both are "this report
+// is now finalized as APPROVED" events).
+async function awardApprovalPoints(tx: Tx, report: { id: string; staffUserId: string; outcome: string }) {
+  if (report.outcome !== "WORKED") return;
+
+  const priorApprovedCount = await tx.workReport.count({
+    where: {
+      staffUserId: report.staffUserId,
+      outcome: "WORKED",
+      approvalStatus: "APPROVED",
+      id: { not: report.id },
+    },
+  });
+  const cumulativeIndex = priorApprovedCount + 1;
+  const points = cumulativeIndex <= 300 ? 1 : cumulativeIndex <= 600 ? 2 : 3;
+
+  const account = await tx.staffPointsLedgerEntry.findFirst({
+    where: { staffUserId: report.staffUserId },
+    orderBy: { createdAt: "desc" },
+  });
+  const balanceAfter = (account?.balanceAfter ?? 0) + points;
+
+  await tx.staffPointsLedgerEntry.create({
+    data: {
+      staffUserId: report.staffUserId,
+      type: "EARN_REPORT_APPROVAL",
+      points,
+      balanceAfter,
+      relatedWorkReportId: report.id,
+    },
+  });
+}
+
 export async function approveWorkReport(params: { workReportId: string; approverUserId: string }) {
   const report = await prisma.workReport.findUniqueOrThrow({ where: { id: params.workReportId } });
 
@@ -159,37 +198,7 @@ export async function approveWorkReport(params: { workReportId: string; approver
       },
     });
 
-    if (report.outcome === "WORKED") {
-      // Tiered staff points accrual on APPROVAL (not submission) — see
-      // 開発指示書/permission-rules-memo.md ④: 1pt for the 1st-300th
-      // cumulative approved report, 2pt for 301st-600th, 3pt for 601st+.
-      const priorApprovedCount = await tx.workReport.count({
-        where: {
-          staffUserId: report.staffUserId,
-          outcome: "WORKED",
-          approvalStatus: "APPROVED",
-          id: { not: report.id },
-        },
-      });
-      const cumulativeIndex = priorApprovedCount + 1;
-      const points = cumulativeIndex <= 300 ? 1 : cumulativeIndex <= 600 ? 2 : 3;
-
-      const account = await tx.staffPointsLedgerEntry.findFirst({
-        where: { staffUserId: report.staffUserId },
-        orderBy: { createdAt: "desc" },
-      });
-      const balanceAfter = (account?.balanceAfter ?? 0) + points;
-
-      await tx.staffPointsLedgerEntry.create({
-        data: {
-          staffUserId: report.staffUserId,
-          type: "EARN_REPORT_APPROVAL",
-          points,
-          balanceAfter,
-          relatedWorkReportId: report.id,
-        },
-      });
-    }
+    await awardApprovalPoints(tx, report);
 
     return report;
   });
@@ -203,5 +212,56 @@ export async function rejectWorkReport(params: { workReportId: string; approverU
       approverUserId: params.approverUserId,
       approvedAt: new Date(),
     },
+  });
+}
+
+// 差し戻し時に企業が打刻・休憩時間を手修正する。企業は直接APPROVEDには
+// できず、NEEDS_CONFIRMATIONに置いてスタッフの確認待ちにする——企業が
+// 一方的に数字を確定できてしまうと「差し戻し」の意味が無くなり、
+// スタッフに不利な方向へ勝手に書き換えられるリスクがあるため。
+export async function correctAndReturnWorkReport(params: {
+  workReportId: string;
+  correctedByUserId: string;
+  clockIn: Date;
+  clockOut: Date;
+  breakMinutes: number;
+}) {
+  const rawMinutes = Math.round((params.clockOut.getTime() - params.clockIn.getTime()) / 60000);
+  const computedMinutes = Math.max(rawMinutes - params.breakMinutes, 0);
+
+  return prisma.workReport.update({
+    where: { id: params.workReportId },
+    data: {
+      clockIn: params.clockIn,
+      clockOut: params.clockOut,
+      breakMinutes: params.breakMinutes,
+      computedMinutes,
+      approvalStatus: "NEEDS_CONFIRMATION",
+      correctedByUserId: params.correctedByUserId,
+      correctedAt: new Date(),
+    },
+  });
+}
+
+// スタッフが企業側の修正内容に「これで合っています」と確認する —
+// このタイミングで初めてAPPROVEDになる（企業の手修正だけでは確定しない）。
+export async function confirmCorrectedWorkReport(params: { workReportId: string; staffUserId: string }) {
+  const report = await prisma.workReport.findUniqueOrThrow({ where: { id: params.workReportId } });
+  if (report.staffUserId !== params.staffUserId) throw new Error("forbidden");
+  if (report.approvalStatus !== "NEEDS_CONFIRMATION") throw new Error("not_pending_confirmation");
+
+  return prisma.$transaction(async (tx) => {
+    await tx.workReport.update({
+      where: { id: report.id },
+      data: {
+        approvalStatus: "APPROVED",
+        approverUserId: report.correctedByUserId,
+        approvedAt: new Date(),
+      },
+    });
+
+    await awardApprovalPoints(tx, report);
+
+    return report;
   });
 }

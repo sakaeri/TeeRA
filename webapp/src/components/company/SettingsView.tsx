@@ -66,6 +66,9 @@ type WorkReportRow = {
   computedHours: string;
   comment: string | null;
   taskName: string | null;
+  clockInTime: string | null;
+  clockOutTime: string | null;
+  breakMinutes: number;
 };
 
 const TABS = [

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireCompanyStaffRole } from "@/lib/auth/session";
 import { submitShiftRequest } from "@/lib/domain/shifts";
 import { applyToRecruitment } from "@/lib/domain/recruitment";
-import { clockIn, clockOut, submitWorkReport } from "@/lib/domain/workReports";
+import { clockIn, clockOut, submitWorkReport, confirmCorrectedWorkReport } from "@/lib/domain/workReports";
 import { markStaffNoticeRead } from "@/lib/domain/notices";
 import { prisma } from "@/lib/prisma";
 
@@ -42,6 +42,12 @@ export async function submitWorkReportAction(input: {
     comment: input.comment,
     taskName: input.taskName,
   });
+  revalidatePath("/staff/timecard");
+}
+
+export async function confirmCorrectedWorkReportAction(workReportId: string) {
+  const { userId } = await requireCompanyStaffRole();
+  await confirmCorrectedWorkReport({ workReportId, staffUserId: userId });
   revalidatePath("/staff/timecard");
 }
 

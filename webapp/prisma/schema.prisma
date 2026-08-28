@@ -38,6 +38,7 @@ model User {
   todoComments                        TodoComment[]
   workReportsAsStaff                  WorkReport[]                  @relation("WorkReportStaff")
   approvedWorkReports                 WorkReport[]                  @relation("WorkReportApprover")
+  correctedWorkReports                WorkReport[]                  @relation("WorkReportCorrector")
   shiftsAsStaff                       Shift[]                       @relation("ShiftStaff")
   shiftRequests                       ShiftRequest[]
   recruitmentEntries                  RecruitmentEntry[]
@@ -530,33 +531,42 @@ enum ApprovalStatus {
   PENDING
   APPROVED
   REJECTED
+  // 企業が差し戻し時に打刻・休憩時間を手修正した状態。企業が直接
+  // APPROVEDにはできず、必ずスタッフの「これで合っています」確認を
+  // 経てAPPROVEDになる（企業が一方的に数字を確定できないようにするため）。
+  NEEDS_CONFIRMATION
 }
 
 // Absence from this table for a past Shift = unreported, defaults to 0 hours
 // for payroll/invoicing (business logic, not a stored row) — chat24/27.
 model WorkReport {
-  id              String            @id @default(cuid())
-  shiftId         String            @unique
-  staffUserId     String
-  outcome         WorkReportOutcome
-  clockIn         DateTime?
-  clockOut        DateTime?
-  breakMinutes    Int               @default(0)
-  computedMinutes Int               @default(0) // derived from clockIn/clockOut - breakMinutes; never manually edited
-  comment         String?
+  id                String            @id @default(cuid())
+  shiftId           String            @unique
+  staffUserId       String
+  outcome           WorkReportOutcome
+  clockIn           DateTime?
+  clockOut          DateTime?
+  breakMinutes      Int               @default(0)
+  computedMinutes   Int               @default(0) // derived from clockIn/clockOut - breakMinutes
+  comment           String?
   // 提出時点で選び直した実際の業務内容。null=シフト作成時の予定
   // （shift.taskName）のまま。単価解決はこちらを優先し、無ければ
   // shift.taskNameにフォールバックする。
-  taskName        String?
-  approvalStatus  ApprovalStatus    @default(PENDING)
-  approverUserId  String?
-  approvedAt      DateTime?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  taskName          String?
+  approvalStatus    ApprovalStatus    @default(PENDING)
+  approverUserId    String?
+  approvedAt        DateTime?
+  // 差し戻し時に企業が打刻・休憩時間を手修正した場合の記録（誰が・いつ）。
+  // NEEDS_CONFIRMATION状態のときのみ意味を持つ。
+  correctedByUserId String?
+  correctedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
-  shift    Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  staff    User  @relation("WorkReportStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
-  approver User? @relation("WorkReportApprover", fields: [approverUserId], references: [id])
+  shift     Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  staff     User  @relation("WorkReportStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
+  approver  User? @relation("WorkReportApprover", fields: [approverUserId], references: [id])
+  corrector User? @relation("WorkReportCorrector", fields: [correctedByUserId], references: [id])
 
   @@index([staffUserId])
   @@index([approvalStatus])

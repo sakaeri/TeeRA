@@ -216,8 +216,12 @@ export async function getStaffMonthDetail(params: {
     orderBy: { date: "asc" },
   });
 
-  const hours = shifts.reduce((sum, s) => sum + (s.workReport?.computedMinutes ?? 0) / 60, 0);
-  const daysWorked = new Set(shifts.filter((s) => s.workReport).map((s) => s.date.toISOString().slice(0, 10))).size;
+  // 承認済みの実績のみを集計する（スタッフ名簿の「今月稼働」列・実際の給料
+  // 計算と同じ基準）。未承認・差戻しの申告分をここで合算してしまうと、
+  // 承認前の自己申告がそのまま数字として確定しているように見えてしまう。
+  const approvedReports = shifts.filter((s) => s.workReport?.approvalStatus === "APPROVED");
+  const hours = approvedReports.reduce((sum, s) => sum + (s.workReport?.computedMinutes ?? 0) / 60, 0);
+  const daysWorked = new Set(approvedReports.map((s) => s.date.toISOString().slice(0, 10))).size;
 
   const contracts = await prisma.staffContract.findMany({
     where: { staffUserId: params.userId, template: { companyId: params.companyId } },
