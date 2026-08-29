@@ -59,6 +59,8 @@ type StaffMonthDetail = {
     jobDescription: string;
     workplaceName: string;
     contractStartDate: string;
+    contractEndDate: string | null;
+    noticeGivenAt: string | null;
     wageVersions: { id: string; label: string; effectiveFrom: string }[];
     templateDetail: Template;
   }[];
@@ -107,6 +109,7 @@ export function StaffDetailPanel({
   clients,
   contractTemplates,
   knownTaskNames,
+  initialTab,
   onClose,
 }: {
   userId: string;
@@ -114,13 +117,14 @@ export function StaffDetailPanel({
   clients: ClientOption[];
   contractTemplates: Template[];
   knownTaskNames: string[];
+  initialTab?: "contracts";
   onClose: () => void;
 }) {
   const router = useRouter();
   const initToday = todayJstParts();
   const [year, setYear] = useState(initToday.year);
   const [month, setMonth] = useState(initToday.month);
-  const [tab, setTab] = useState<"history" | "contracts" | "rates" | "note">("history");
+  const [tab, setTab] = useState<"history" | "contracts" | "rates" | "note">(initialTab ?? "history");
   const [data, setData] = useState<StaffMonthDetail | null>(null);
   const [noteValue, setNoteValue] = useState("");
   const [pending, startTransition] = useTransition();
@@ -141,9 +145,15 @@ export function StaffDetailPanel({
     refresh();
   }
 
-  function endContract(staffContractId: string) {
+  const [endingContract, setEndingContract] = useState<{ id: string; title: string } | null>(null);
+  const [endNoticeDate, setEndNoticeDate] = useState(todayJst());
+
+  function submitEndContract() {
+    if (!endingContract) return;
+    const staffContractId = endingContract.id;
     startTransition(async () => {
-      await endStaffContractAction(staffContractId);
+      await endStaffContractAction(staffContractId, endNoticeDate || null);
+      setEndingContract(null);
       await refresh();
     });
   }
@@ -428,7 +438,9 @@ export function StaffDetailPanel({
                             <p className="text-muted">
                               {c.workplaceName} ／ {c.wageLabel}
                             </p>
-                            <p className="text-xs text-muted">雇用開始日: {c.contractStartDate}</p>
+                            <p className="text-xs text-muted">
+                              契約期間: {c.contractStartDate} 〜 {c.contractEndDate ?? "期間の定めなし"}
+                            </p>
                             <div className="mt-1 flex items-center justify-between">
                               <p className="text-xs text-muted">{CONTRACT_STATUS_LABEL[c.status] ?? c.status}</p>
                               <div className="flex items-center gap-3">
@@ -442,7 +454,10 @@ export function StaffDetailPanel({
                                 <button
                                   type="button"
                                   disabled={pending}
-                                  onClick={() => endContract(c.id)}
+                                  onClick={() => {
+                                    setEndNoticeDate(todayJst());
+                                    setEndingContract({ id: c.id, title: c.title });
+                                  }}
                                   className="text-xs text-muted hover:text-red-600 disabled:opacity-60"
                                 >
                                   終了する
@@ -473,7 +488,12 @@ export function StaffDetailPanel({
                                   <p className="text-muted">
                                     {c.workplaceName} ／ {c.wageLabel}
                                   </p>
-                                  <p className="text-xs text-muted">雇用開始日: {c.contractStartDate}</p>
+                                  <p className="text-xs text-muted">
+                                    契約期間: {c.contractStartDate} 〜 {c.contractEndDate ?? "期間の定めなし"}
+                                  </p>
+                                  {c.noticeGivenAt ? (
+                                    <p className="text-xs text-muted">予告日: {c.noticeGivenAt}</p>
+                                  ) : null}
                                   <div className="mt-1 flex items-center justify-between">
                                     <p className="text-xs text-muted">{CONTRACT_STATUS_LABEL[c.status] ?? c.status}</p>
                                     <button
@@ -664,6 +684,57 @@ export function StaffDetailPanel({
             );
           })()
         : null}
+
+      {endingContract ? (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+          onClick={() => setEndingContract(null)}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="font-serif-jp text-base font-bold text-primary">契約を終了する</h4>
+              <button
+                type="button"
+                onClick={() => setEndingContract(null)}
+                aria-label="閉じる"
+                className="text-muted hover:text-primary"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-sm">「{endingContract.title}」を終了します。</p>
+            <p className="mt-1 text-xs text-muted">
+              解雇・雇止め・業務委託契約の中途解除などは、契約の種類によって法律上30日前の予告が必要になる場合があります（本アプリは法律要件の判定は行いません。要件については社労士・弁護士等にご確認ください）。
+            </p>
+            <label className="mt-3 flex flex-col gap-0.5 text-xs text-muted">
+              本人へ通知した日
+              <input
+                type="date"
+                value={endNoticeDate}
+                onChange={(e) => setEndNoticeDate(e.target.value)}
+                className="rounded-lg border border-border px-2 py-2 text-sm"
+              />
+            </label>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEndingContract(null)}
+                className="rounded-lg border border-border px-4 py-2 text-sm"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={submitEndContract}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                終了する
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showGenerateChoose && !generateBaseTemplate && data ? (
         <ChooseBaseTemplateModal

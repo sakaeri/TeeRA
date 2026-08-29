@@ -159,10 +159,19 @@ export async function generateStaffContractFromNewTemplate(params: {
   return startStaffContract({ templateId: template.id, staffUserId: params.staffUserId });
 }
 
-export async function endStaffContract(staffContractId: string) {
+// 終了する: 本来の契約終了日より前に手動終了した場合、記録上の契約期間が
+// 実態とズレたままにならないよう、終了日を「今日」に前倒しする（元の終了日
+// が今日より前ならそのまま。給与計算はcontractEndDateで日付ごとに契約を
+// 解決するため、ここがズレると過去分の計算に影響する）。
+export async function endStaffContract(params: { staffContractId: string; noticeGivenAt: Date | null }) {
+  const existing = await prisma.staffContract.findUniqueOrThrow({ where: { id: params.staffContractId } });
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const contractEndDate = existing.contractEndDate && existing.contractEndDate < today ? existing.contractEndDate : today;
+
   const contract = await prisma.staffContract.update({
-    where: { id: staffContractId },
-    data: { status: "ENDED" },
+    where: { id: params.staffContractId },
+    data: { status: "ENDED", noticeGivenAt: params.noticeGivenAt, contractEndDate },
   });
   await recomputeTemplateLock(contract.templateId);
   return contract;

@@ -15,8 +15,11 @@ const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
 };
 const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
 
-export default async function RosterPage() {
+export default async function RosterPage({ searchParams }: PageProps<"/company/roster">) {
   const { membership } = await requireCompanyAdminOrEditor();
+  const sp = await searchParams;
+  const initialStaffId = typeof sp.staff === "string" ? sp.staff : undefined;
+  const initialStaffTab = sp.tab === "contracts" ? ("contracts" as const) : undefined;
 
   // 依頼主一覧/派遣会社一覧タブは常時表示する（スタッフ一覧と同じく、0件でも
   // 「追加する」ボタン付きの空状態を出す）ので、agencyEnabled/dispatchEnabled
@@ -36,6 +39,8 @@ export default async function RosterPage() {
       <RosterView
         staff={staff}
         companyName={company.name}
+        initialStaffId={initialStaffId}
+        initialStaffTab={initialStaffTab}
         knownTaskNames={knownTaskNames}
         clients={clients.map((c) => ({
           id: c.id,

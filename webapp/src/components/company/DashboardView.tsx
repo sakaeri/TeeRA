@@ -38,6 +38,7 @@ type Kpis = {
   unconfirmedShiftCount: number;
   pendingReportCount: number;
   pendingContractCount: number;
+  expiringContractCount: number;
   promoItemCount: number;
   pendingShipmentCount: number;
 };
@@ -97,6 +98,13 @@ type PendingReportEntry = {
 };
 
 type PendingContractStaff = { userId: string; name: string };
+type ExpiringContractStaff = {
+  staffContractId: string;
+  staffUserId: string;
+  staffName: string;
+  contractTitle: string;
+  contractEndDate: string;
+};
 
 type PromoItem = {
   id: string;
@@ -118,13 +126,14 @@ type PromoOrder = {
 
 type DashboardTab = "active" | "resolved" | "promoList" | "promoOrders";
 
-type PopupKind = "shortage" | "unconfirmed" | "reports" | "contracts";
+type PopupKind = "shortage" | "unconfirmed" | "reports" | "contracts" | "expiring";
 
 const KPI_CARDS: { key: keyof Kpis; label: string; href?: string; tab?: DashboardTab; popup?: PopupKind }[] = [
   { key: "shortageCount", label: "欠員件数", popup: "shortage" },
   { key: "unconfirmedShiftCount", label: "未確定シフト", popup: "unconfirmed" },
   { key: "pendingReportCount", label: "業務報告未承認", popup: "reports" },
   { key: "pendingContractCount", label: "契約書未確認", popup: "contracts" },
+  { key: "expiringContractCount", label: "契約満了間近", popup: "expiring" },
   { key: "promoItemCount", label: "販促品登録数", tab: "promoList" },
   { key: "pendingShipmentCount", label: "発送待ち", tab: "promoOrders" },
 ];
@@ -135,6 +144,7 @@ const TAG_STYLE: Record<string, string> = {
   欠員: "bg-rose-100 text-rose-800",
   シフト: "bg-pink-100 text-pink-800",
   契約書: "bg-gray-200 text-gray-700",
+  契約満了: "bg-orange-100 text-orange-800",
   販促品: "bg-amber-100 text-amber-800",
 };
 
@@ -159,6 +169,7 @@ export function DashboardView({
   unconfirmedShiftEntries,
   pendingReportEntries,
   pendingContractStaff,
+  expiringContractStaff,
   contractTemplates,
   companyName,
   contractClients,
@@ -178,6 +189,7 @@ export function DashboardView({
   unconfirmedShiftEntries: UnconfirmedShiftEntry[];
   pendingReportEntries: PendingReportEntry[];
   pendingContractStaff: PendingContractStaff[];
+  expiringContractStaff: ExpiringContractStaff[];
   contractTemplates: ContractTemplate[];
   companyName: string;
   contractClients: ClientOption[];
@@ -300,6 +312,9 @@ export function DashboardView({
           }}
           onClose={() => setOpenPopup(null)}
         />
+      ) : null}
+      {openPopup === "expiring" ? (
+        <ExpiringContractPopup entries={expiringContractStaff} onClose={() => setOpenPopup(null)} />
       ) : null}
       {generateTarget && !generateBaseTemplate ? (
         <ChooseBaseTemplateModal
@@ -805,6 +820,33 @@ function PendingContractPopup({
         </div>
       ))}
       {staff.length === 0 ? <p className="text-center text-muted">未締結の契約書はありません。</p> : null}
+    </PopupShell>
+  );
+}
+
+function ExpiringContractPopup({ entries, onClose }: { entries: ExpiringContractStaff[]; onClose: () => void }) {
+  return (
+    <PopupShell title="契約満了間近" subtitle="10日以内に契約期間が満了します" onClose={onClose}>
+      {entries.map((e) => (
+        <div key={e.staffContractId} className="flex items-center justify-between rounded-xl border border-border/60 p-4 text-sm">
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="font-medium">{e.staffName}</p>
+              <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs text-orange-800">
+                {e.contractEndDate}まで
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-muted">{e.contractTitle}</p>
+          </div>
+          <Link
+            href={`/company/roster?staff=${e.staffUserId}&tab=contracts`}
+            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+          >
+            契約内容を確認
+          </Link>
+        </div>
+      ))}
+      {entries.length === 0 ? <p className="text-center text-muted">満了間近の契約はありません。</p> : null}
     </PopupShell>
   );
 }

@@ -680,6 +680,10 @@ model StaffContract {
   contractEndDate    DateTime?           @db.Date
   consentedAt        DateTime?
   status             StaffContractStatus @default(PENDING_CONSENT)
+  // 手動で「終了する」を押した際に本人へ通知した日（任意入力）。解雇予告・
+  // 雇止め予告・フリーランス新法などの事前通知義務の確認補助として記録する
+  // だけで、システム側で法律要件の充足を判定するものではない。
+  noticeGivenAt      DateTime?           @db.Date
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 

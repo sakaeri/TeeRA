@@ -226,13 +226,14 @@ export async function generateStaffContractAction(input: CreateTemplateInput, st
 //   実効日で解決するため終了しても変わらない — payroll.tsの日付ベース解決を参照）
 // - スタッフ側の「契約を結ぶ」一覧に、このテンプレートが再度候補として
 //   出るようになる（期間を空けての再雇用に対応）
-export async function endStaffContractAction(staffContractId: string) {
+export async function endStaffContractAction(staffContractId: string, noticeGivenAt: string | null) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
 
   await prisma.staffContract.findFirstOrThrow({
     where: { id: staffContractId, template: { companyId: membership.companyId } },
   });
-  await endStaffContract(staffContractId);
+  await endStaffContract({ staffContractId, noticeGivenAt: noticeGivenAt ? new Date(noticeGivenAt) : null });
   revalidatePath("/company/roster");
+  revalidatePath("/company");
 }

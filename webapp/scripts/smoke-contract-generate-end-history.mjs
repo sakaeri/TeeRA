@@ -112,10 +112,21 @@ try {
   log("契約書を生成すると現在の契約に表示される", panelText.includes("キャディ業務"));
 
   await panel.getByRole("button", { name: "終了する" }).click();
+  await admin.waitForTimeout(200);
+  const endModal = admin.locator("div.fixed.inset-0.z-40").last();
+  await endModal.getByRole("button", { name: "終了する" }).click();
   await admin.waitForTimeout(600);
 
   const statusAfterEnd = psql(`select status from "StaffContract" where id='${firstContractId}';`);
   log("終了するを押すとENDEDになる", statusAfterEnd === "ENDED");
+
+  const noticeGivenAtAfterEnd = psql(`select "noticeGivenAt" from "StaffContract" where id='${firstContractId}';`);
+  log("終了時に本人への通知日（デフォルトは今日）が記録される", noticeGivenAtAfterEnd !== "");
+
+  const contractEndDateAfterEnd = psql(
+    `select ("contractEndDate" <= current_date) from "StaffContract" where id='${firstContractId}';`,
+  );
+  log("終了時に契約終了日が今日以前に更新される", contractEndDateAfterEnd === "t");
 
   panelText = await panel.textContent();
   log("終了後は「終了する」ボタンが無くなる（現在の契約から消える）", (await panel.getByRole("button", { name: "終了する" }).count()) === 0);

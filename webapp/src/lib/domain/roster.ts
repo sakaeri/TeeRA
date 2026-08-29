@@ -269,6 +269,8 @@ export async function getStaffMonthDetail(params: {
               "配属先"
             : "自社",
         contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
+        contractEndDate: (c.contractEndDate ?? c.template.contractEndDate)?.toISOString().slice(0, 10) ?? null,
+        noticeGivenAt: c.noticeGivenAt?.toISOString().slice(0, 10) ?? null,
         wageVersions: c.wageVersions.map((v) => ({
           id: v.id,
           label: `${WAGE_TYPE_LABEL[c.template.wageType]}${v.wageAmount}円`,

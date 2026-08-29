@@ -55,10 +55,12 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
   const unconfirmedShiftEntries = computeUnconfirmedShiftEntries(dashboardData);
   const pendingReportEntries = computePendingReportEntries(dashboardData);
   const pendingContractStaff = dashboardData.pendingContractStaff;
+  const expiringContractStaff = dashboardData.expiringContractStaff;
 
   const currentUserName = admins.find((a) => a.userId === userId)?.user.name ?? "";
   const initialTab = open === "promoOrders" ? ("promoOrders" as const) : undefined;
-  const initialOpenPopup = open === "contracts" ? ("contracts" as const) : undefined;
+  const initialOpenPopup =
+    open === "contracts" ? ("contracts" as const) : open === "expiring" ? ("expiring" as const) : undefined;
   const initialReportDetailId = open === "reports" ? reportId : undefined;
 
   return (
@@ -106,6 +108,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
         unconfirmedShiftEntries={unconfirmedShiftEntries}
         pendingReportEntries={pendingReportEntries}
         pendingContractStaff={pendingContractStaff}
+        expiringContractStaff={expiringContractStaff}
         companyName={company.name}
         contractClients={clients.map((c) => ({
           id: c.id,

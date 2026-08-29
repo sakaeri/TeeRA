@@ -13,6 +13,38 @@ export async function listPendingContractStaff(companyId: string) {
     .map((s) => ({ userId: s.userId, name: s.name }));
 }
 
+// 契約満了間近: 終了していない契約のうち、契約終了日が「今日〜10日後」の
+// 範囲に入っているもの（=まだ間に合ううちに気づけるようにするアラート）。
+// 終了日を過ぎたものは対象から外れる（満了したらこの一覧からは消える —
+// 実際に終了させる操作はスタッフ詳細の「終了する」で別途行う）。期間の定め
+// が無い契約（終了日null）は対象外。
+const EXPIRING_CONTRACT_WINDOW_DAYS = 10;
+
+export async function listExpiringContractStaff(companyId: string) {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const horizon = new Date(today);
+  horizon.setUTCDate(horizon.getUTCDate() + EXPIRING_CONTRACT_WINDOW_DAYS);
+
+  const contracts = await prisma.staffContract.findMany({
+    where: { status: { not: "ENDED" }, template: { companyId } },
+    include: { template: true, staff: true },
+  });
+
+  return contracts
+    .map((c) => ({ c, endDate: c.contractEndDate ?? c.template.contractEndDate }))
+    .filter((x): x is { c: (typeof contracts)[number]; endDate: Date } => x.endDate !== null)
+    .filter((x) => x.endDate >= today && x.endDate <= horizon)
+    .sort((a, b) => a.endDate.getTime() - b.endDate.getTime())
+    .map(({ c, endDate }) => ({
+      staffContractId: c.id,
+      staffUserId: c.staffUserId,
+      staffName: c.staff.name,
+      contractTitle: c.template.title,
+      contractEndDate: endDate.toISOString().slice(0, 10),
+    }));
+}
+
 // The dashboard needs the same underlying queues (shortage recruitments,
 // shift requests, pending reports, pending contracts) for several different
 // views (KPI counts, the auto-generated to-do rows, and each KPI card's own
@@ -21,18 +53,20 @@ export async function listPendingContractStaff(companyId: string) {
 // is what keeps the dashboard's page load to a handful of round trips
 // instead of the same handful of queries repeated 3-4x over.
 export async function loadDashboardData(companyId: string) {
-  const [shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff] = await Promise.all([
-    prisma.publicRecruitment.findMany({
-      where: { companyId, status: "PUBLISHED" },
-      include: { entries: true },
-      orderBy: { date: "asc" },
-    }),
-    prisma.shiftRequest.findMany({ where: { companyId, status: "PENDING" }, include: { staff: true }, orderBy: { createdAt: "asc" } }),
-    listPendingReportsForCompany(companyId),
-    listPendingContractStaff(companyId),
-  ]);
+  const [shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff] =
+    await Promise.all([
+      prisma.publicRecruitment.findMany({
+        where: { companyId, status: "PUBLISHED" },
+        include: { entries: true },
+        orderBy: { date: "asc" },
+      }),
+      prisma.shiftRequest.findMany({ where: { companyId, status: "PENDING" }, include: { staff: true }, orderBy: { createdAt: "asc" } }),
+      listPendingReportsForCompany(companyId),
+      listPendingContractStaff(companyId),
+      listExpiringContractStaff(companyId),
+    ]);
 
-  return { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff };
+  return { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff };
 }
 
 export type DashboardData = Awaited<ReturnType<typeof loadDashboardData>>;
@@ -52,6 +86,7 @@ export function computeKpis(
     unconfirmedShiftCount: data.shiftRequests.length,
     pendingReportCount: data.pendingReports.length,
     pendingContractCount: data.pendingContractStaff.length,
+    expiringContractCount: data.expiringContractStaff.length,
     promoItemCount,
     pendingShipmentCount,
   };
@@ -116,7 +151,7 @@ export function computePendingReportEntries(data: DashboardData) {
 
 export type AutoTodoItem = {
   id: string;
-  kind: "業務報告" | "欠員" | "シフト" | "契約書" | "販促品";
+  kind: "業務報告" | "欠員" | "シフト" | "契約書" | "契約満了" | "販促品";
   text: string;
   actionLabel: string;
   actionHref: string;
@@ -130,7 +165,7 @@ export type AutoTodoItem = {
 // the 契約を結ぶ flow is self-service and immediate (see startStaffContract),
 // so there is no separate 確認待ち state.
 export function computeAutoTodoItems(data: DashboardData, pendingShipments: PendingShipment[]): AutoTodoItem[] {
-  const { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff } = data;
+  const { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff } = data;
   const items: AutoTodoItem[] = [];
 
   for (const r of shortageRecruitments) {
@@ -179,6 +214,16 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
       text: `${staff.name}さんの契約書が未送付です`,
       actionLabel: "確認する",
       actionHref: "/company?open=contracts",
+    });
+  }
+
+  for (const c of expiringContractStaff) {
+    items.push({
+      id: `expiring-${c.staffContractId}`,
+      kind: "契約満了",
+      text: `${c.staffName}さんの契約（${c.contractTitle}）が${c.contractEndDate}に満了します`,
+      actionLabel: "確認する",
+      actionHref: "/company?open=expiring",
     });
   }
 

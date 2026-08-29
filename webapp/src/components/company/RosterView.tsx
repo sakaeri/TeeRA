@@ -87,6 +87,8 @@ export function RosterView({
   templates,
   contractTemplates,
   knownTaskNames,
+  initialStaffId,
+  initialStaffTab,
 }: {
   staff: StaffRow[];
   companyName: string;
@@ -96,9 +98,11 @@ export function RosterView({
   templates: ContractTemplateOption[];
   contractTemplates: Template[];
   knownTaskNames: string[];
+  initialStaffId?: string;
+  initialStaffTab?: "contracts";
 }) {
   const [tab, setTab] = useState<Tab>("staff");
-  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(initialStaffId ?? null);
   const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(null);
   const [selectedRelationshipKind, setSelectedRelationshipKind] = useState<"client" | "agency" | null>(null);
   const [showInviteStaffModal, setShowInviteStaffModal] = useState(false);
@@ -350,6 +354,7 @@ export function RosterView({
           clients={clients.map((c) => ({ id: c.id, name: c.name }))}
           contractTemplates={contractTemplates}
           knownTaskNames={knownTaskNames}
+          initialTab={selectedStaffId === initialStaffId ? initialStaffTab : undefined}
           onClose={() => setSelectedStaffId(null)}
         />
       ) : null}
