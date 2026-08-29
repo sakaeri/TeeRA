@@ -134,7 +134,6 @@ const KPI_CARDS: { key: keyof Kpis; label: string; href?: string; tab?: Dashboar
   { key: "pendingReportCount", label: "業務報告未承認", popup: "reports" },
   { key: "pendingContractCount", label: "契約書未確認", popup: "contracts" },
   { key: "expiringContractCount", label: "契約満了間近", popup: "expiring" },
-  { key: "promoItemCount", label: "販促品登録数", tab: "promoList" },
   { key: "pendingShipmentCount", label: "発送待ち", tab: "promoOrders" },
 ];
 
