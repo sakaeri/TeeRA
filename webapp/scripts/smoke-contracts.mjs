@@ -52,18 +52,37 @@ try {
   let body = await admin.textContent("body");
   log("template created and editable", body.includes("アルバイト・倉庫内軽作業") && body.includes("編集可能"));
 
-  // staff: consent to the contract
+  // admin: generate a contract for this specific staff (self-service picking
+  // was removed — staff can only consent to a contract an admin prepared)
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.reload();
+  await admin.waitForTimeout(500);
+  await admin.locator("tbody tr", { hasText: "契約スタッフ" }).click();
+  await admin.waitForTimeout(300);
+  const panel = admin.locator("div.fixed.inset-0.z-30").first();
+  await panel.getByRole("button", { name: "契約書管理" }).click();
+  await panel.getByRole("button", { name: "＋契約書を生成" }).click();
+  await admin.waitForTimeout(200);
+  const choose = admin.locator("div.fixed.inset-0.z-30").last();
+  await choose.locator("select").selectOption({ index: 1 });
+  await choose.getByRole("button", { name: "次へ" }).click();
+  await admin.waitForTimeout(300);
+  const gen = admin.locator("div.fixed.inset-0.z-30").last();
+  await gen.getByRole("button", { name: "生成する" }).click();
+  await admin.waitForTimeout(700);
+
+  // staff: review and consent to the contract
   await staff.goto("http://localhost:3000/staff/contracts");
   body = await staff.textContent("body");
-  log("staff sees available template", body.includes("アルバイト・倉庫内軽作業"));
+  log("staff sees the contract prepared for them, awaiting consent", body.includes("新しい契約書があります") && body.includes("1200円"));
 
-  await staff.getByRole("button", { name: "契約を結ぶ" }).click();
+  await staff.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
   await staff.waitForTimeout(600);
   body = await staff.textContent("body");
   log("staff now shows contract as 契約中", body.includes("契約中") && body.includes("1200円"));
 
   // admin: template should now be locked
-  await admin.reload();
+  await admin.goto("http://localhost:3000/company/settings?tab=contracts");
   body = await admin.textContent("body");
   log("template locked after staff contracted", body.includes("使用中（編集は複製されます）") && body.includes("契約中: 契約スタッフ"));
 

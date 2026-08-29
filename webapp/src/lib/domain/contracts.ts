@@ -116,13 +116,14 @@ export async function deleteTemplate(templateId: string) {
   await prisma.contractTemplate.delete({ where: { id: templateId } });
 }
 
-// 契約を結ぶ: for v1 this collapses "publish" and "承諾する" into one action
-// (the prototype's preview -> optional hand-edit -> publish -> consent
-// sequence). wageAmountSnapshot records the amount the staff actually
-// consented to and is never touched again. The CURRENT wage (which can
-// later be revised without re-consent, see addStaffContractWageVersion) is
-// tracked separately in StaffContractWageVersion, seeded here with the same
-// starting amount.
+// 管理者が契約書を用意する: スタッフが自由にテンプレートを選んで即時契約
+// できてしまうと、エリアごとに単価が違うようなケースで誤ったテンプレートを
+// 選んでも取り消せない、という事故につながるため、スタッフの自己選択は廃止
+// した。契約はここで「確認待ち（PENDING_CONSENT）」として作成し、本人が
+// 内容を確認して同意するまではACTIVEにしない（consentStaffContract参照）。
+// wageAmountSnapshotは同意時点ではなく生成時点の金額を記録するが、テンプ
+// レートは生成と同時にLOCKEDになり以後編集できないため、本人が実際に見て
+// 同意する内容と乖離することはない。
 export async function startStaffContract(params: { templateId: string; staffUserId: string }) {
   const template = await prisma.contractTemplate.findUniqueOrThrow({ where: { id: params.templateId } });
 
@@ -133,8 +134,7 @@ export async function startStaffContract(params: { templateId: string; staffUser
       wageAmountSnapshot: template.wageAmount,
       contractStartDate: template.contractStartDate,
       contractEndDate: template.contractEndDate,
-      status: "ACTIVE",
-      consentedAt: new Date(),
+      status: "PENDING_CONSENT",
       wageVersions: {
         create: { wageAmount: template.wageAmount, effectiveFrom: template.contractStartDate },
       },
@@ -143,6 +143,19 @@ export async function startStaffContract(params: { templateId: string; staffUser
 
   await recomputeTemplateLock(template.id);
   return contract;
+}
+
+// スタッフ本人が確認待ちの契約書の内容を確認し、同意する。ここで初めて
+// ACTIVEになり、稼働・給与計算の対象になる（payroll.tsはPENDING_CONSENTの
+// 契約を計算に使わない）。
+export async function consentStaffContract(params: { staffContractId: string; staffUserId: string }) {
+  const contract = await prisma.staffContract.findFirstOrThrow({
+    where: { id: params.staffContractId, staffUserId: params.staffUserId, status: "PENDING_CONSENT" },
+  });
+  return prisma.staffContract.update({
+    where: { id: contract.id },
+    data: { status: "ACTIVE", consentedAt: new Date() },
+  });
 }
 
 // ダッシュボードの「契約書を生成」: an admin duplicates a template (pre-filled

@@ -104,9 +104,12 @@ try {
 
   const contract = psql(
     `select sc."wageAmountSnapshot", ct.title from "StaffContract" sc join "ContractTemplate" ct on sc."templateId"=ct.id ` +
-      `where sc."staffUserId"='${staffUserId}' and sc.status='ACTIVE';`,
+      `where sc."staffUserId"='${staffUserId}' and sc.status='PENDING_CONSENT';`,
   );
-  log("StaffContract created as ACTIVE with the edited wage (1500)", contract.startsWith("1500|"));
+  log(
+    "StaffContract created as PENDING_CONSENT (本人の同意待ち) with the edited wage (1500)",
+    contract.startsWith("1500|"),
+  );
   log("a new duplicate template was created (not the original)", contract.includes("未契約スタッフ様"));
 
   const templateCount = psql(`select count(*) from "ContractTemplate" where "companyId"='${companyId}';`);

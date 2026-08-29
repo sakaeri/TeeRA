@@ -15,14 +15,16 @@ function monthRange(targetMonth: string) {
 }
 
 // シフトの日付時点で有効だった契約（＝基本給バージョン）を解決する必要が
-// あるため、ステータスを問わず全契約を取得し、呼び出し側でシフトごとに
+// あるため、ACTIVE/ENDEDを問わず全契約を取得し、呼び出し側でシフトごとに
 // 日付解決する。「現在ACTIVEな契約」だけを見ると、契約満了→期間を空けて
 // 再雇用のように同じスタッフが時系列で複数の契約を持つケースで、過去分の
 // 再計算が別の契約の単価に化けたり（新しい契約がACTIVEな場合）、終了済み
 // 契約の期間の過去分が計算できなくなったり（ACTIVEな契約が無い場合）する。
+// PENDING_CONSENT（本人がまだ同意していない契約）は対象外— 同意前の契約
+// 内容で給与が計算されてしまわないようにする。
 async function contractsWithWageVersions(companyId: string, staffUserId: string) {
   return prisma.staffContract.findMany({
-    where: { staffUserId, template: { companyId } },
+    where: { staffUserId, template: { companyId }, status: { not: "PENDING_CONSENT" } },
     include: { template: true, wageVersions: true },
     orderBy: { createdAt: "desc" },
   });

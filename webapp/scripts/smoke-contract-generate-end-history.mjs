@@ -69,7 +69,7 @@ try {
   const proxyContractStatus = psql(
     `select status from "StaffContract" where "staffUserId"='${proxyUserId}' order by "createdAt" desc limit 1;`,
   );
-  log("仮アカウントでもスタッフ詳細から契約書を生成できる", proxyContractStatus === "ACTIVE");
+  log("仮アカウントでもスタッフ詳細から契約書を生成できる（本人の同意待ち＝PENDING_CONSENT）", proxyContractStatus === "PENDING_CONSENT");
 
   // --- ② real staff: generate + end + re-generate (re-hire after gap)
   await admin.goto("http://localhost:3000/company/roster");
@@ -151,10 +151,21 @@ try {
   const contractCount = psql(`select count(*) from "StaffContract" where "staffUserId"='${staffUserId}';`);
   log("期間が空いても同じテンプレートで再度契約書を生成できる（再雇用）", contractCount === "2");
 
+  const pendingAfterRehire = psql(
+    `select status from "StaffContract" where "staffUserId"='${staffUserId}' order by "createdAt" desc limit 1;`,
+  );
+  log("再雇用の新しい契約もまずPENDING_CONSENT（本人の同意待ち）で作られる", pendingAfterRehire === "PENDING_CONSENT");
+
+  // 本人が同意して初めてACTIVEになる
+  await staff.goto("http://localhost:3000/staff/contracts");
+  await staff.waitForTimeout(500);
+  await staff.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
+  await staff.waitForTimeout(600);
+
   const activeCount = psql(
     `select count(*) from "StaffContract" where "staffUserId"='${staffUserId}' and status='ACTIVE';`,
   );
-  log("新しい契約だけがACTIVEになる", activeCount === "1");
+  log("本人が同意すると新しい契約だけがACTIVEになる", activeCount === "1");
 
   // --- ③ payroll date resolution across a real contract-ended gap
   // seed an OLD (ENDED) contract covering a past period, and a NEW (ACTIVE)

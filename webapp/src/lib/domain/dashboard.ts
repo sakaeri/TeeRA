@@ -161,9 +161,12 @@ export type AutoTodoItem = {
 // elsewhere (work-report approvals, shift requests, recruitment shortfall,
 // pending shipments) rather than materialized by a background job — see
 // loadDashboardData for why they're fetched once and shared. Contract items
-// are staff with no live StaffContract yet (see listPendingContractStaff) —
-// the 契約を結ぶ flow is self-service and immediate (see startStaffContract),
-// so there is no separate 確認待ち state.
+// here are staff with NO StaffContract at all yet (see listPendingContractStaff)
+// — i.e. "an admin still needs to generate something for this person". A
+// staff who already has a PENDING_CONSENT contract (generated, awaiting their
+// own consent) is a different kind of to-do — waiting on the staff, not the
+// admin — and is intentionally not surfaced here; see the roster's 確認待ち
+// label (listStaffWithSummary) for that state instead.
 export function computeAutoTodoItems(data: DashboardData, pendingShipments: PendingShipment[]): AutoTodoItem[] {
   const { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff } = data;
   const items: AutoTodoItem[] = [];

@@ -59,9 +59,24 @@ try {
   await admin.getByText("賃金", { exact: true }).locator("xpath=..").locator("input[type=number]").fill("14000");
   await admin.getByRole("button", { name: "テンプレートを生成" }).click();
   await admin.waitForTimeout(600);
+
+  // スタッフの自由選択は廃止済み — 直接ACTIVEな契約として投入する。契約
+  // 開始日はテンプレートの日付（todayJst()由来）に合わせず確実に過去日に
+  // する（JST/UTCの「今日」がずれる時間帯対策）。
+  const detailCompanyId = psql(`select id from "Company" where name='詳細確認株式会社' order by "createdAt" desc limit 1;`);
+  const detailTemplateId = psql(`select id from "ContractTemplate" where "companyId"='${detailCompanyId}' order by "createdAt" desc limit 1;`);
+  const detailWageAmount = psql(`select "wageAmount" from "ContractTemplate" where id='${detailTemplateId}';`);
+  const detailStaffContractId = psql(
+    `with ins as (insert into "StaffContract" (id, "templateId", "staffUserId", "wageAmountSnapshot", "contractStartDate", status, "consentedAt", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${detailTemplateId}', '${staffUserId}', ${detailWageAmount}, current_date - interval '7 day', 'ACTIVE', now(), now(), now()) returning id) select id from ins;`,
+  );
+  psql(
+    `insert into "StaffContractWageVersion" (id, "staffContractId", "wageAmount", "effectiveFrom", "createdAt") ` +
+      `values (gen_random_uuid()::text, '${detailStaffContractId}', ${detailWageAmount}, current_date - interval '7 day', now());`,
+  );
+  psql(`update "ContractTemplate" set status='LOCKED' where id='${detailTemplateId}';`);
   await staff.goto("http://localhost:3000/staff/contracts");
   await staff.reload();
-  await staff.getByRole("button", { name: "契約を結ぶ" }).click();
   await staff.waitForTimeout(600);
 
   // --- ① 詳細確認: read-only popup, no edit/save buttons

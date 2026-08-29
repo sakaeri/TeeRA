@@ -104,10 +104,14 @@ try {
   await page.getByRole("button", { name: "生成する" }).click();
   await page.waitForTimeout(700);
 
-  const activeCount = psql(
-    `select count(*) from "StaffContract" where "staffUserId"='${soonUserId}' and status='ACTIVE';`,
+  const totalCount = psql(`select count(*) from "StaffContract" where "staffUserId"='${soonUserId}';`);
+  const newOnePending = psql(
+    `select status from "StaffContract" where "staffUserId"='${soonUserId}' order by "createdAt" desc limit 1;`,
   );
-  log("そこから通常通り契約書を生成できる（新しい契約が追加される）", activeCount === "2");
+  log(
+    "そこから通常通り契約書を生成できる（新しい契約が追加される、本人の同意待ち）",
+    totalCount === "2" && newOnePending === "PENDING_CONSENT",
+  );
 
   console.log(process.exitCode ? "CONTRACT EXPIRY ALERT SMOKE TEST HAD FAILURES" : "CONTRACT EXPIRY ALERT SMOKE TEST PASSED");
 } catch (err) {

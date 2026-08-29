@@ -75,9 +75,25 @@ try {
   await admin.getByText("賃金", { exact: true }).locator("xpath=..").locator("input[type=number]").fill("1500");
   await admin.getByRole("button", { name: "テンプレートを生成" }).click();
   await admin.waitForTimeout(600);
-  await staff.goto("http://localhost:3000/staff/contracts");
-  await staff.getByRole("button", { name: "契約を結ぶ" }).click();
-  await staff.waitForTimeout(600);
+
+  // スタッフの自由選択は廃止済み（契約書は管理者が用意し本人が同意する形）
+  // なので、このテストの本題（単価改定履歴の日付解決）とは無関係な契約締結
+  // 手順はUIを通さず直接ACTIVEな契約として投入する。
+  // 契約開始日はテンプレートのcontractStartDate（UI側でtodayJst()由来）に
+  // 合わせず、確実に過去日にしておく — 実行タイミング次第でJSTとUTCの「今日」
+  // がずれる時間帯があり、テンプレートの日付をそのまま使うとシフト日付が
+  // 契約開始日より前と判定されてしまうことがあるため。
+  const baseTemplateId = psql(`select id from "ContractTemplate" where "companyId"='${companyId}' order by "createdAt" desc limit 1;`);
+  const baseWageAmount = psql(`select "wageAmount" from "ContractTemplate" where id='${baseTemplateId}';`);
+  const baseStaffContractId = psql(
+    `with ins as (insert into "StaffContract" (id, "templateId", "staffUserId", "wageAmountSnapshot", "contractStartDate", status, "consentedAt", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${baseTemplateId}', '${staffUserId}', ${baseWageAmount}, current_date - interval '7 day', 'ACTIVE', now(), now(), now()) returning id) select id from ins;`,
+  );
+  psql(
+    `insert into "StaffContractWageVersion" (id, "staffContractId", "wageAmount", "effectiveFrom", "createdAt") ` +
+      `values (gen_random_uuid()::text, '${baseStaffContractId}', ${baseWageAmount}, current_date - interval '7 day', now());`,
+  );
+  psql(`update "ContractTemplate" set status='LOCKED' where id='${baseTemplateId}';`);
 
   const today = psql(`select to_char(now() at time zone 'Asia/Tokyo', 'YYYY-MM-DD');`);
   const oldShiftDate = addDays(today, -10);

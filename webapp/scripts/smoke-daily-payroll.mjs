@@ -59,9 +59,24 @@ try {
   await admin.getByRole("button", { name: "テンプレートを生成" }).click();
   await admin.waitForTimeout(600);
 
-  await staff.goto("http://localhost:3000/staff/contracts");
-  await staff.getByRole("button", { name: "契約を結ぶ" }).click();
-  await staff.waitForTimeout(600);
+  // スタッフの自由選択は廃止済み（契約書は管理者が用意し本人が同意する形）
+  // なので、このテストの本題（日給の給与計算）とは無関係な契約締結手順は
+  // UIを通さず直接ACTIVEな契約として投入する。
+  const companyId = psql(`select id from "Company" where name='日給テスト株式会社' order by "createdAt" desc limit 1;`);
+  const templateId = psql(`select id from "ContractTemplate" where "companyId"='${companyId}' order by "createdAt" desc limit 1;`);
+  const wageAmount = psql(`select "wageAmount" from "ContractTemplate" where id='${templateId}';`);
+  // 契約開始日はテンプレートの日付（todayJst()由来）に合わせず確実に過去日に
+  // する — JSTとUTCの「今日」がずれる時間帯にシフト日付が契約開始日より
+  // 前と誤判定されるのを避けるため。
+  const staffContractId = psql(
+    `with ins as (insert into "StaffContract" (id, "templateId", "staffUserId", "wageAmountSnapshot", "contractStartDate", status, "consentedAt", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${templateId}', '${staffUserId}', ${wageAmount}, current_date - interval '7 day', 'ACTIVE', now(), now(), now()) returning id) select id from ins;`,
+  );
+  psql(
+    `insert into "StaffContractWageVersion" (id, "staffContractId", "wageAmount", "effectiveFrom", "createdAt") ` +
+      `values (gen_random_uuid()::text, '${staffContractId}', ${wageAmount}, current_date - interval '7 day', now());`,
+  );
+  psql(`update "ContractTemplate" set status='LOCKED' where id='${templateId}';`);
 
   // assign + report a shift with a LONG duration (10 hours) — if the bug were
   // still present (hours*dailyRate), this would wildly overpay; correct
