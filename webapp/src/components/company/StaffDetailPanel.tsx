@@ -816,7 +816,7 @@ export function StaffDetailPanel({
                   type="text"
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
-                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                  className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                 />
               </label>
               <label className="flex flex-col gap-0.5 text-xs text-muted">
@@ -825,7 +825,7 @@ export function StaffDetailPanel({
                   type="text"
                   value={branchName}
                   onChange={(e) => setBranchName(e.target.value)}
-                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                  className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                 />
               </label>
               <label className="flex flex-col gap-0.5 text-xs text-muted">
@@ -833,7 +833,7 @@ export function StaffDetailPanel({
                 <select
                   value={accountType}
                   onChange={(e) => setAccountType(e.target.value)}
-                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                  className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                 >
                   <option value="">未選択</option>
                   <option value="普通">普通</option>
@@ -846,7 +846,7 @@ export function StaffDetailPanel({
                   type="text"
                   value={accountNumber}
                   onChange={(e) => setAccountNumber(e.target.value)}
-                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                  className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                 />
               </label>
               <label className="flex flex-col gap-0.5 text-xs text-muted">
@@ -855,7 +855,7 @@ export function StaffDetailPanel({
                   type="text"
                   value={accountHolderName}
                   onChange={(e) => setAccountHolderName(e.target.value)}
-                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                  className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                 />
               </label>
             </div>

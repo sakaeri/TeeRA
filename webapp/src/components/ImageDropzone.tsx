@@ -84,6 +84,9 @@ export function ImageDropzone({
           if (file) handleFile(file);
         }}
       />
+      {imageUrl && size === "lg" ? (
+        <p className="mt-1 text-xs text-muted">再アップロードする場合のみ画像をクリックしてください</p>
+      ) : null}
       {uploading ? <p className="mt-1 text-xs text-muted">アップロード中...</p> : null}
       {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
     </div>
