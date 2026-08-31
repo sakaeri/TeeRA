@@ -136,8 +136,11 @@ try {
   const shift1Day = Number(shift1DateStr.slice(-2));
   const shift1DateObj = new Date(`${shift1DateStr}T00:00:00Z`);
   const daysInMonth = new Date(Date.UTC(shift1DateObj.getUTCFullYear(), shift1DateObj.getUTCMonth() + 1, 0)).getUTCDate();
-  // must go FORWARD (shift1 defaults to today, so any earlier day is disabled as past)
-  const day2Label = String(shift1Day + 1 <= daysInMonth ? shift1Day + 1 : shift1Day - 1);
+  // must go FORWARD (shift1 defaults to today, so any earlier day is disabled as
+  // past). If today is the last day of the month there's no later day left in
+  // this month's view, so move to next month and pick day 1 instead of
+  // wrapping back to shift1Day-1, which would itself be a disabled past date.
+  const needsNextMonth = shift1Day + 1 > daysInMonth;
   await admin.locator("button", { hasText: "＋" }).last().click();
   await admin.getByText("シフトを作成").click();
   modal = admin.locator("div.fixed.inset-0.z-20").last();
@@ -145,7 +148,13 @@ try {
   await modal.getByRole("button", { name: /^作業/ }).click();
   await modal.getByRole("button", { name: "単価スタッフ" }).click();
   await modal.getByRole("button", { name: String(shift1Day), exact: true }).click(); // deselect shift 1's date (the default)
-  await modal.getByRole("button", { name: day2Label, exact: true }).click(); // select day2 instead
+  if (needsNextMonth) {
+    await modal.getByRole("button", { name: "次の月" }).click();
+    await admin.waitForTimeout(200);
+    await modal.getByRole("button", { name: "1", exact: true }).click();
+  } else {
+    await modal.getByRole("button", { name: String(shift1Day + 1), exact: true }).click();
+  }
   await modal.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);
   await modal.getByRole("button", { name: /件のシフトを作成/ }).click();
@@ -167,11 +176,22 @@ try {
   const companyRelationshipId = psql(
     `select id from "CompanyRelationship" where "ownerCompanyId"='${companyId}' order by "createdAt" desc limit 1;`,
   );
-  const thisMonth = new Date().toISOString().slice(0, 7);
-  await admin.goto(`http://localhost:3000/company/invoices?month=${thisMonth}&client=${companyRelationshipId}`);
+  // shift1 and shift2 can land in different calendar months (e.g. when "today"
+  // is the last day of the month, shift2 is forced into next month by the
+  // date picker), so visit each shift's own month to make sure both invoices
+  // actually get generated before checking for their lines.
+  const shift2DateStr = psql(`select to_char(date, 'YYYY-MM-DD') from "Shift" where id='${shift2Id}';`);
+  const shift1Month = shift1DateStr.slice(0, 7);
+  const shift2Month = shift2DateStr.slice(0, 7);
+  await admin.goto(`http://localhost:3000/company/invoices?month=${shift1Month}&client=${companyRelationshipId}`);
   await admin.waitForTimeout(500);
   bodyText = await admin.textContent("body");
   log("invoice shows キャディ業務 line", bodyText.includes("キャディ業務"));
+  if (shift2Month !== shift1Month) {
+    await admin.goto(`http://localhost:3000/company/invoices?month=${shift2Month}&client=${companyRelationshipId}`);
+    await admin.waitForTimeout(500);
+    bodyText = await admin.textContent("body");
+  }
   log("invoice shows 作業 line", bodyText.includes("作業"));
 
   const lines = JSON.parse(

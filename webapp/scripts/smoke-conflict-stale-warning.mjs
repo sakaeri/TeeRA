@@ -43,18 +43,18 @@ try {
   await staff.click("text=参加する");
   await staff.waitForURL("http://localhost:3000/staff");
 
-  // pick two other dates in the current month (same month as "today" so no
-  // mini-calendar navigation is needed, and neither collides with "today"'s
-  // default-selected date): dayA gets booked first, dayB stays free. Days
-  // before today are disabled in the picker, so this must always step
-  // forward — clamped to the real last day of the month, not a hardcoded one.
+  // pick two other dates after "today": dayA gets booked first, dayB stays
+  // free. Days before today are disabled in the picker, so this must always
+  // step forward. If today is near/at the end of the month there may not be
+  // two distinct later days left in the current month view — in that case
+  // navigate to the next month (via "次の月") and use early days there so
+  // dayA and dayB are always genuinely distinct, valid, selectable dates.
   const now = new Date();
   const todayDate = now.getDate();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const dayANum = Math.min(todayDate + 1, daysInMonth);
-  const dayBNum = Math.min(todayDate + 2, daysInMonth);
-  const dayALabel = String(dayANum);
-  const dayBLabel = String(dayBNum);
+  const needsNextMonth = todayDate + 2 > daysInMonth;
+  const dayALabel = needsNextMonth ? "1" : String(todayDate + 1);
+  const dayBLabel = needsNextMonth ? "2" : String(todayDate + 2);
 
   // existing shift on dayA only (via the assign wizard itself, so no team setup needed)
   await admin.goto("http://localhost:3000/company/calendar");
@@ -67,6 +67,10 @@ try {
   await modal.getByRole("button", { name: "この業務内容を追加して次へ" }).click();
   await admin.waitForTimeout(300);
   await modal.getByRole("button", { name: "重複スタッフ" }).click();
+  if (needsNextMonth) {
+    await modal.getByRole("button", { name: "次の月" }).click();
+    await admin.waitForTimeout(200);
+  }
   await modal.getByRole("button", { name: dayALabel, exact: true }).click();
   await modal.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);
@@ -84,6 +88,10 @@ try {
   await modal.getByRole("button", { name: "この業務内容を追加して次へ" }).click();
   await admin.waitForTimeout(300);
   await modal.getByRole("button", { name: "重複スタッフ" }).click();
+  if (needsNextMonth) {
+    await modal.getByRole("button", { name: "次の月" }).click();
+    await admin.waitForTimeout(200);
+  }
   await modal.getByRole("button", { name: dayALabel, exact: true }).click();
   await modal.getByRole("button", { name: dayBLabel, exact: true }).click();
   await modal.getByRole("button", { name: "次へ" }).click();
@@ -95,6 +103,12 @@ try {
 
   await admin.click("text=＜ 戻る");
   await admin.waitForTimeout(200);
+  if (needsNextMonth) {
+    // going back resets the calendar view to the current month, so navigate
+    // forward again before touching the day buttons
+    await modal.getByRole("button", { name: "次の月" }).click();
+    await admin.waitForTimeout(200);
+  }
   await modal.getByRole("button", { name: dayALabel, exact: true }).click(); // deselect the conflicting date
   await modal.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);
