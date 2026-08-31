@@ -362,7 +362,9 @@ export function AssignOrCustomizeModal({
         </div>
 
         <label className="flex flex-col gap-1 text-xs">
-          契約開始日<span className="text-red-600"> *</span>
+          <span>
+            契約開始日<span className="text-red-600"> *</span>
+          </span>
           <input
             type="date"
             value={contractStartDate}
