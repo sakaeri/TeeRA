@@ -780,6 +780,9 @@ export function StaffDetailPanel({
                 ✕
               </button>
             </div>
+            {data.idDocumentFrontUrl || data.idDocumentBackUrl ? (
+              <p className="mb-3 text-xs text-muted">再アップロードする場合のみ画像をクリックしてください</p>
+            ) : null}
             <div className="flex justify-center gap-6">
               <div className="w-32">
                 <ImageDropzone

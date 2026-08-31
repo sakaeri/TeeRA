@@ -287,6 +287,9 @@ export function StaffContractsView({
       <section className="rounded-2xl border border-border bg-white/60 p-6">
         <h2 className="mb-2 font-serif-jp text-lg font-bold text-primary">本人確認書類</h2>
         <p className="mb-4 text-xs text-muted">運転免許証など、両面の写真を提出してください。</p>
+        {frontUrl || backUrl ? (
+          <p className="mb-3 text-xs text-muted">再アップロードする場合のみ画像をクリックしてください</p>
+        ) : null}
         <div className="flex gap-6">
           <div className="w-40">
             <ImageDropzone label="表面" required imageUrl={frontUrl} onChange={(url) => uploadIdDocument("front", url)} />
