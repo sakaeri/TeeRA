@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { listPendingReportsForCompany } from "@/lib/domain/workReports";
 import { listStaffWithSummary } from "@/lib/domain/roster";
+import { todayJst } from "@/lib/date";
 
 // 仮アカウント（isProxy）は本人ログインができず自己サービスの同意フローに
 // 乗れない一時的なプレースホルダーなので、本アカウント連携されるまで
@@ -21,8 +22,7 @@ export async function listPendingContractStaff(companyId: string) {
 const EXPIRING_CONTRACT_WINDOW_DAYS = 10;
 
 export async function listExpiringContractStaff(companyId: string) {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  const today = new Date(`${todayJst()}T00:00:00.000Z`);
   const horizon = new Date(today);
   horizon.setUTCDate(horizon.getUTCDate() + EXPIRING_CONTRACT_WINDOW_DAYS);
 

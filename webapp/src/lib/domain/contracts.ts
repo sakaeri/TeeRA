@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { todayJst } from "@/lib/date";
 import type {
   EmploymentType,
   WorkplaceType,
@@ -178,8 +179,7 @@ export async function generateStaffContractFromNewTemplate(params: {
 // 解決するため、ここがズレると過去分の計算に影響する）。
 export async function endStaffContract(params: { staffContractId: string; noticeGivenAt: Date | null }) {
   const existing = await prisma.staffContract.findUniqueOrThrow({ where: { id: params.staffContractId } });
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  const today = new Date(`${todayJst()}T00:00:00.000Z`);
   const contractEndDate = existing.contractEndDate && existing.contractEndDate < today ? existing.contractEndDate : today;
 
   const contract = await prisma.staffContract.update({

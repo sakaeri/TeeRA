@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { registerStaffTaskName, registerPlacementTaskName } from "@/lib/domain/contracts";
+import { todayJst } from "@/lib/date";
 import type { Prisma } from "@/generated/prisma/client";
 
 type Tx = Prisma.TransactionClient;
@@ -134,8 +135,11 @@ export async function listPendingReportsForCompany(companyId: string) {
 }
 
 export async function listOwnShiftsNeedingReport(staffUserId: string) {
-  const today = new Date();
-  today.setUTCHours(23, 59, 59, 999);
+  // 「今日」はJSTの暦日で判定する（date.tsの方針参照）。UTC基準のDate/
+  // setUTCHours(23,59,59,999)だと、JSTの深夜0時〜朝9時台（UTC前日15〜23時
+  // 台）は「今日」が前日扱いになり、今日の（JSTでの）シフトが一時的に一覧
+  // から消えてしまっていた。
+  const today = new Date(`${todayJst()}T23:59:59.999Z`);
 
   return prisma.shift.findMany({
     where: {
