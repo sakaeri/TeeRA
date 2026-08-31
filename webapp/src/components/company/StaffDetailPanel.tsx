@@ -742,6 +742,7 @@ export function StaffDetailPanel({
         <ChooseBaseTemplateModal
           staffName={data.name}
           templates={contractTemplates}
+          existingContractCount={data.contracts.filter((c) => c.status !== "ENDED").length}
           onNext={(t) => setGenerateBaseTemplate(t)}
           onClose={() => setShowGenerateChoose(false)}
         />

@@ -257,16 +257,20 @@ const fieldInput = "rounded-lg border border-border px-2 py-2 text-sm";
 export function ChooseBaseTemplateModal({
   staffName,
   templates,
+  existingContractCount = 0,
   onNext,
   onClose,
 }: {
   staffName: string;
   templates: Template[];
+  existingContractCount?: number;
   onNext: (template: Template) => void;
   onClose: () => void;
 }) {
   const [templateId, setTemplateId] = useState("");
+  const [acknowledged, setAcknowledged] = useState(false);
   const selected = templates.find((t) => t.id === templateId) ?? null;
+  const needsAcknowledgement = existingContractCount > 0;
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
@@ -280,6 +284,16 @@ export function ChooseBaseTemplateModal({
         <p className="mb-4 text-xs text-muted">
           テンプレートを選んでください。そのまま{staffName}さんに割り当てるか、内容を編集して専用の契約書を作るか次の画面で選べます
         </p>
+
+        {needsAcknowledgement ? (
+          <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+            ⚠️ {staffName}さんには既に有効な契約が{existingContractCount}件あります。同じスタッフに複数の契約が同時に有効だと、給与計算で意図しない方の単価が使われる場合があります。通常は先に既存の契約を終了してから新しい契約を作成してください。
+            <label className="mt-2 flex items-center gap-2">
+              <input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} />
+              内容を理解した上で続ける
+            </label>
+          </div>
+        ) : null}
 
         {templates.length === 0 ? (
           <p className="text-sm text-muted">利用できる契約書テンプレートがありません。先にテンプレートを作成してください。</p>
@@ -305,7 +319,7 @@ export function ChooseBaseTemplateModal({
 
         <button
           type="button"
-          disabled={!selected}
+          disabled={!selected || (needsAcknowledgement && !acknowledged)}
           onClick={() => selected && onNext(selected)}
           className="mt-4 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >

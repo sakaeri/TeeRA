@@ -103,6 +103,10 @@ try {
 
   await page.getByRole("button", { name: "＋契約書を生成" }).click();
   await page.waitForTimeout(200);
+  const chooseModal = page.locator("div.fixed.inset-0.z-30").last();
+  body = await chooseModal.textContent();
+  log("既に有効な契約がある場合は重複契約の警告が出る", body.includes("既に有効な契約が"));
+  await chooseModal.locator('input[type=checkbox]').check();
   await page.locator("select").last().selectOption({ label: "アルバイト・キャディ業務" });
   await page.getByRole("button", { name: "次へ" }).click();
   await page.waitForTimeout(300);
