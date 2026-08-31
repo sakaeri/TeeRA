@@ -14,6 +14,7 @@ import {
   addStaffTaskRateVersion,
   deleteStaffTaskRate,
   generateStaffContractFromNewTemplate,
+  assignExistingTemplate,
   addStaffContractWageVersion,
   endStaffContract,
   type TemplateInput,
@@ -220,12 +221,34 @@ export async function generateStaffContractAction(input: CreateTemplateInput, st
   revalidatePath("/company/roster");
 }
 
+// 「そのまま契約する」: 内容を複製せず、既存テンプレート（LOCKEDでも可）を
+// そのまま別のスタッフにも割り当てる。契約開始日だけ個別に指定できる。
+export async function assignExistingTemplateAction(templateId: string, staffUserId: string, contractStartDate: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManage(membership)) throw new Error("forbidden");
+
+  await prisma.contractTemplate.findFirstOrThrow({ where: { id: templateId, companyId: membership.companyId } });
+  const staffMembership = await prisma.companyMembership.findFirst({
+    where: { userId: staffUserId, companyId: membership.companyId, role: "STAFF" },
+  });
+  if (!staffMembership) throw new Error("forbidden");
+
+  await assignExistingTemplate({
+    templateId,
+    staffUserId,
+    contractStartDate: new Date(`${contractStartDate}T00:00:00.000Z`),
+  });
+  revalidatePath("/company/settings");
+  revalidatePath("/company");
+  revalidatePath("/company/roster");
+}
+
 // 契約満了・退職などで契約を終了扱いにする。終了すると：
 // - 給料計算は「現在ACTIVEな契約」からしか基本給を拾わなくなるため、この
 //   契約はそれ以降の月次計算に使われなくなる（過去分はwageVersionsの
 //   実効日で解決するため終了しても変わらない — payroll.tsの日付ベース解決を参照）
-// - スタッフ側の「契約を結ぶ」一覧に、このテンプレートが再度候補として
-//   出るようになる（期間を空けての再雇用に対応）
+// - 期間を空けての再雇用時は、改めて契約書を生成/割り当てて本人に同意して
+//   もらう（スタッフ本人による自由選択は廃止済み — contracts.tsのコメント参照）
 export async function endStaffContractAction(staffContractId: string, noticeGivenAt: string | null) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");

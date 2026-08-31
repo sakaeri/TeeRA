@@ -115,7 +115,9 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
           name: c.clientCompany?.name ?? c.proxyName ?? "(名称未設定)",
         }))}
         contractTemplates={templates
-          .filter((t) => t.status === "ACTIVE")
+          // LOCKED（既に誰か契約中）でも「そのまま契約する」で複数人に
+          // 割り当てられるようにするため、ARCHIVED以外は選択肢に含める。
+          .filter((t) => t.status !== "ARCHIVED")
           .map((t) => ({
             id: t.id,
             title: t.title,

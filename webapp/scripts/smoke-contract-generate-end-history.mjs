@@ -61,9 +61,9 @@ try {
   await chooseModal.locator("select").selectOption({ label: "アルバイト・キャディ業務" });
   await chooseModal.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);
-  const genModal = admin.locator("div.fixed.inset-0.z-30").last();
-  await genModal.getByRole("button", { name: "生成する" }).click();
-  await admin.waitForTimeout(600);
+  const assignModal = admin.locator("div.fixed.inset-0.z-30").last();
+  await assignModal.getByRole("button", { name: "このテンプレートのまま契約する" }).click();
+  await admin.waitForTimeout(700);
 
   const proxyUserId = psql(`select id from "User" where name='契約管理仮太郎';`);
   const proxyContractStatus = psql(
@@ -100,9 +100,9 @@ try {
   await chooseModal2.locator("select").selectOption({ label: "アルバイト・キャディ業務" });
   await chooseModal2.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);
-  const genModal2 = admin.locator("div.fixed.inset-0.z-30").last();
-  await genModal2.getByRole("button", { name: "生成する" }).click();
-  await admin.waitForTimeout(600);
+  const assignModal2 = admin.locator("div.fixed.inset-0.z-30").last();
+  await assignModal2.getByRole("button", { name: "このテンプレートのまま契約する" }).click();
+  await admin.waitForTimeout(700);
 
   const firstContractId = psql(
     `select id from "StaffContract" where "staffUserId"='${staffUserId}' order by "createdAt" desc limit 1;`,
@@ -144,9 +144,9 @@ try {
   await chooseModal3.locator("select").selectOption({ label: "アルバイト・キャディ業務" });
   await chooseModal3.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);
-  const genModal3 = admin.locator("div.fixed.inset-0.z-30").last();
-  await genModal3.getByRole("button", { name: "生成する" }).click();
-  await admin.waitForTimeout(600);
+  const assignModal3 = admin.locator("div.fixed.inset-0.z-30").last();
+  await assignModal3.getByRole("button", { name: "このテンプレートのまま契約する" }).click();
+  await admin.waitForTimeout(700);
 
   const contractCount = psql(`select count(*) from "StaffContract" where "staffUserId"='${staffUserId}';`);
   log("期間が空いても同じテンプレートで再度契約書を生成できる（再雇用）", contractCount === "2");

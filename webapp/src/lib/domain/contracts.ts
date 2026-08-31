@@ -125,25 +125,37 @@ export async function deleteTemplate(templateId: string) {
 // wageAmountSnapshotは同意時点ではなく生成時点の金額を記録するが、テンプ
 // レートは生成と同時にLOCKEDになり以後編集できないため、本人が実際に見て
 // 同意する内容と乖離することはない。
-export async function startStaffContract(params: { templateId: string; staffUserId: string }) {
+// contractStartDateを省略するとテンプレート自身の契約開始日を使う。同じ
+// テンプレートを複数人で共有する場合（assignExistingTemplate参照）は人に
+// よって開始日が違うことがあるため、個別に指定できるようにしてある。
+export async function startStaffContract(params: { templateId: string; staffUserId: string; contractStartDate?: Date }) {
   const template = await prisma.contractTemplate.findUniqueOrThrow({ where: { id: params.templateId } });
+  const contractStartDate = params.contractStartDate ?? template.contractStartDate;
 
   const contract = await prisma.staffContract.create({
     data: {
       templateId: template.id,
       staffUserId: params.staffUserId,
       wageAmountSnapshot: template.wageAmount,
-      contractStartDate: template.contractStartDate,
+      contractStartDate,
       contractEndDate: template.contractEndDate,
       status: "PENDING_CONSENT",
       wageVersions: {
-        create: { wageAmount: template.wageAmount, effectiveFrom: template.contractStartDate },
+        create: { wageAmount: template.wageAmount, effectiveFrom: contractStartDate },
       },
     },
   });
 
   await recomputeTemplateLock(template.id);
   return contract;
+}
+
+// 「そのまま契約する」経路: 内容を複製・編集せず、既存のテンプレートを
+// そのまま別のスタッフにも割り当てる。LOCKED（既に誰か契約中）でも使える
+// — 内容を変えないなら複製する必要が無く、1つのテンプレートを複数人で
+// 共有できる（設定画面の「契約中」欄に複数名が並ぶ）。
+export async function assignExistingTemplate(params: { templateId: string; staffUserId: string; contractStartDate: Date }) {
+  return startStaffContract(params);
 }
 
 // スタッフ本人が確認待ちの契約書の内容を確認し、同意する。ここで初めて

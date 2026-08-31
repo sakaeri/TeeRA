@@ -67,8 +67,8 @@ try {
   await choose.locator("select").selectOption({ index: 1 });
   await choose.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);
-  const gen = admin.locator("div.fixed.inset-0.z-30").last();
-  await gen.getByRole("button", { name: "生成する" }).click();
+  const assign = admin.locator("div.fixed.inset-0.z-30").last();
+  await assign.getByRole("button", { name: "このテンプレートのまま契約する" }).click();
   await admin.waitForTimeout(700);
 
   // staff: review and consent to the contract
@@ -84,7 +84,11 @@ try {
   // admin: template should now be locked
   await admin.goto("http://localhost:3000/company/settings?tab=contracts");
   body = await admin.textContent("body");
-  log("template locked after staff contracted", body.includes("使用中（編集は複製されます）") && body.includes("契約中: 契約スタッフ"));
+  log("template locked after staff contracted", body.includes("使用中（編集は複製されます）") && body.includes("契約中（1件）"));
+  await admin.getByRole("button", { name: /契約中（1件）/ }).click();
+  await admin.waitForTimeout(150);
+  body = await admin.textContent("body");
+  log("契約中の▼を開くと契約したスタッフ名が見える", body.includes("契約スタッフ"));
 
   console.log(process.exitCode ? "CONTRACTS SMOKE TEST HAD FAILURES" : "CONTRACTS SMOKE TEST PASSED");
 } catch (err) {

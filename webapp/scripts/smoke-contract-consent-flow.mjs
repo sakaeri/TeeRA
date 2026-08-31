@@ -55,8 +55,8 @@ async function generateContract(staffName) {
   await choose.locator("select").selectOption({ label: "アルバイト・キャディ業務" });
   await choose.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);
-  const gen = admin.locator("div.fixed.inset-0.z-30").last();
-  await gen.getByRole("button", { name: "生成する" }).click();
+  const assign = admin.locator("div.fixed.inset-0.z-30").last();
+  await assign.getByRole("button", { name: "このテンプレートのまま契約する" }).click();
   await admin.waitForTimeout(700);
 }
 

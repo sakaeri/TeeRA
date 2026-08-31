@@ -7,6 +7,7 @@ import {
   updateTemplateAction,
   deleteTemplateAction,
   generateStaffContractAction,
+  assignExistingTemplateAction,
 } from "@/app/company/contracts/actions";
 
 export type Template = {
@@ -90,6 +91,15 @@ function TemplatesSection({
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [expandedStaffListIds, setExpandedStaffListIds] = useState<Set<string>>(new Set());
+  function toggleStaffList(templateId: string) {
+    setExpandedStaffListIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(templateId)) next.delete(templateId);
+      else next.add(templateId);
+      return next;
+    });
+  }
 
   return (
     <SectionCard title="雇用契約書テンプレート">
@@ -132,7 +142,12 @@ function TemplatesSection({
               {WAGE_TYPE_LABEL[t.wageType]} {t.wageAmount}円
             </p>
             {t.contractedStaffNames.length > 0 ? (
-              <p className="text-xs text-muted">契約中: {t.contractedStaffNames.join("、")}</p>
+              <div className="text-xs text-muted">
+                <button type="button" onClick={() => toggleStaffList(t.id)} className="hover:text-primary">
+                  {expandedStaffListIds.has(t.id) ? "▲" : "▼"} 契約中（{t.contractedStaffNames.length}件）
+                </button>
+                {expandedStaffListIds.has(t.id) ? <p className="mt-1">{t.contractedStaffNames.join("、")}</p> : null}
+              </div>
             ) : null}
 
             {confirmDeleteId === t.id ? (
@@ -263,7 +278,7 @@ export function ChooseBaseTemplateModal({
           </button>
         </div>
         <p className="mb-4 text-xs text-muted">
-          ベースにするテンプレートを選んでください。次の画面で複製した内容を{staffName}さん用に編集・プレビューできます
+          テンプレートを選んでください。そのまま{staffName}さんに割り当てるか、内容を編集して専用の契約書を作るか次の画面で選べます
         </p>
 
         {templates.length === 0 ? (
@@ -296,6 +311,83 @@ export function ChooseBaseTemplateModal({
         >
           次へ
         </button>
+      </div>
+    </div>
+  );
+}
+
+// テンプレートを選んだ後の分岐: 内容を変えないなら複製せずそのまま割り当て
+// る（同じテンプレートを複数人で共有できる — 設定画面の「契約中」欄に
+// 名前が並ぶ）。内容を変えたい場合だけ、従来通り複製して編集する。
+export function AssignOrCustomizeModal({
+  staffName,
+  staffUserId,
+  template,
+  onAssigned,
+  onCustomize,
+  onClose,
+}: {
+  staffName: string;
+  staffUserId: string;
+  template: Template;
+  onAssigned: () => void;
+  onCustomize: () => void;
+  onClose: () => void;
+}) {
+  const [contractStartDate, setContractStartDate] = useState(todayJst());
+  const [pending, startTransition] = useTransition();
+
+  function submit() {
+    startTransition(async () => {
+      await assignExistingTemplateAction(template.id, staffUserId, contractStartDate);
+      onAssigned();
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">{staffName}さんとの契約</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <div className="mb-4 rounded-lg border border-border/60 p-3 text-sm">
+          <p className="font-medium">{template.title}</p>
+          <p className="text-muted">
+            {WAGE_TYPE_LABEL[template.wageType]}
+            {template.wageAmount}円
+          </p>
+        </div>
+
+        <label className="flex flex-col gap-1 text-xs">
+          契約開始日<span className="text-red-600"> *</span>
+          <input
+            type="date"
+            value={contractStartDate}
+            onChange={(e) => setContractStartDate(e.target.value)}
+            className="rounded-lg border border-border px-2 py-2 text-sm"
+          />
+        </label>
+        <button
+          type="button"
+          disabled={pending || !contractStartDate}
+          onClick={submit}
+          className="mt-3 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        >
+          このテンプレートのまま契約する
+        </button>
+        <button
+          type="button"
+          onClick={onCustomize}
+          className="mt-2 w-full rounded-lg border border-border px-4 py-2 text-sm font-semibold text-primary"
+        >
+          内容を編集して専用の契約書を作る
+        </button>
+        <p className="mt-2 text-xs text-muted">
+          「このテンプレートのまま」を選ぶと、他の人と同じテンプレートを共有します（設定画面の契約書テンプレート一覧の「契約中」欄に追加されます）。内容を変えたい場合は編集を選んでください。
+        </p>
       </div>
     </div>
   );

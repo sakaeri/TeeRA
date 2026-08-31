@@ -83,11 +83,16 @@ try {
 
   await page.getByText("契約満了間近", { exact: true }).click();
   await page.waitForTimeout(400);
-  body = await page.textContent("body");
-  log("ポップアップに対象スタッフ名と満了日が表示される", body.includes("満了５日後太郎"));
-  log("20日後に満了する契約は対象外", !body.includes("満了２０日後花子"));
-  log("既に満了日を過ぎた契約は一覧から消える", !body.includes("満了済み次郎"));
-  log("期間の定めが無い契約は対象外", !body.includes("無期限三郎"));
+  // ページ全体のbody.textContent()には、他のstate用にクライアントへ送られる
+  // contractTemplates（他スタッフの契約書テンプレートのタイトルにも本人の
+  // 名前が入っている）のハイドレーション用JSONも含まれてしまうため、
+  // ポップアップの表示領域だけに絞って確認する。
+  const popup = page.locator("div.fixed.inset-0.z-30").last();
+  const popupText = await popup.textContent();
+  log("ポップアップに対象スタッフ名と満了日が表示される", popupText.includes("満了５日後太郎"));
+  log("20日後に満了する契約は対象外", !popupText.includes("満了２０日後花子"));
+  log("既に満了日を過ぎた契約は一覧から消える", !popupText.includes("満了済み次郎"));
+  log("期間の定めが無い契約は対象外", !popupText.includes("無期限三郎"));
 
   await page.getByRole("link", { name: "契約内容を確認" }).click();
   await page.waitForURL(new RegExp(`/company/roster\\?staff=${soonUserId}&tab=contracts`));
@@ -101,7 +106,7 @@ try {
   await page.locator("select").last().selectOption({ label: "アルバイト・キャディ業務" });
   await page.getByRole("button", { name: "次へ" }).click();
   await page.waitForTimeout(300);
-  await page.getByRole("button", { name: "生成する" }).click();
+  await page.getByRole("button", { name: "このテンプレートのまま契約する" }).click();
   await page.waitForTimeout(700);
 
   const totalCount = psql(`select count(*) from "StaffContract" where "staffUserId"='${soonUserId}';`);

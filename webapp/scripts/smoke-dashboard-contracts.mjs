@@ -86,6 +86,14 @@ try {
   await page.getByRole("button", { name: "次へ" }).click();
   await page.waitForTimeout(400);
   body = await page.textContent("body");
+  log(
+    "テンプレートのまま契約するか内容を編集するかの選択画面が出る",
+    body.includes("このテンプレートのまま契約する") && body.includes("内容を編集して専用の契約書を作る"),
+  );
+
+  await page.getByRole("button", { name: "内容を編集して専用の契約書を作る" }).click();
+  await page.waitForTimeout(300);
+  body = await page.textContent("body");
   log("full edit form opens, pre-filled from the base template, addressed to the staff", body.includes("未契約スタッフ様"));
 
   // edit the wage amount for this specific staff before generating

@@ -18,7 +18,7 @@ import {
 import { todayJstParts, todayJst } from "@/lib/date";
 import { CopyUrlField } from "@/components/CopyUrlField";
 import { ImageDropzone } from "@/components/ImageDropzone";
-import { TemplateModal, ChooseBaseTemplateModal, type Template } from "@/components/company/ContractsView";
+import { TemplateModal, ChooseBaseTemplateModal, AssignOrCustomizeModal, type Template } from "@/components/company/ContractsView";
 
 type StaffTaskRate = {
   id: string;
@@ -137,11 +137,13 @@ export function StaffDetailPanel({
   const [editingIdDocument, setEditingIdDocument] = useState(false);
   const [showGenerateChoose, setShowGenerateChoose] = useState(false);
   const [generateBaseTemplate, setGenerateBaseTemplate] = useState<Template | null>(null);
+  const [generateCustomize, setGenerateCustomize] = useState(false);
   const [showContractHistory, setShowContractHistory] = useState(false);
 
   function endGenerateFlow() {
     setShowGenerateChoose(false);
     setGenerateBaseTemplate(null);
+    setGenerateCustomize(false);
     refresh();
   }
 
@@ -744,7 +746,17 @@ export function StaffDetailPanel({
           onClose={() => setShowGenerateChoose(false)}
         />
       ) : null}
-      {showGenerateChoose && generateBaseTemplate && data ? (
+      {showGenerateChoose && generateBaseTemplate && !generateCustomize && data ? (
+        <AssignOrCustomizeModal
+          staffName={data.name}
+          staffUserId={userId}
+          template={generateBaseTemplate}
+          onAssigned={endGenerateFlow}
+          onCustomize={() => setGenerateCustomize(true)}
+          onClose={endGenerateFlow}
+        />
+      ) : null}
+      {showGenerateChoose && generateBaseTemplate && generateCustomize && data ? (
         <TemplateModal
           companyName={companyName}
           clients={clients}

@@ -69,7 +69,9 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
             contractStartDate: t.contractStartDate.toISOString().slice(0, 10),
           }))}
         contractTemplates={templates
-          .filter((t) => t.status === "ACTIVE")
+          // LOCKED（既に誰か契約中）でも「そのまま契約する」で複数人に
+          // 割り当てられるようにするため、ARCHIVED以外は選択肢に含める。
+          .filter((t) => t.status !== "ARCHIVED")
           .map((t) => ({
             id: t.id,
             title: t.title,

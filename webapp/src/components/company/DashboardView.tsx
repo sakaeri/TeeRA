@@ -17,6 +17,7 @@ import { approveWorkReportAction, rejectWorkReportAction } from "@/app/company/w
 import {
   TemplateModal,
   ChooseBaseTemplateModal,
+  AssignOrCustomizeModal,
   type Template as ContractTemplate,
   type ClientOption,
 } from "@/components/company/ContractsView";
@@ -206,6 +207,13 @@ export function DashboardView({
   );
   const [generateTarget, setGenerateTarget] = useState<PendingContractStaff | null>(null);
   const [generateBaseTemplate, setGenerateBaseTemplate] = useState<ContractTemplate | null>(null);
+  const [generateCustomize, setGenerateCustomize] = useState(false);
+
+  function endGenerateFlow() {
+    setGenerateTarget(null);
+    setGenerateBaseTemplate(null);
+    setGenerateCustomize(false);
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -323,16 +331,23 @@ export function DashboardView({
           onClose={() => setGenerateTarget(null)}
         />
       ) : null}
-      {generateTarget && generateBaseTemplate ? (
+      {generateTarget && generateBaseTemplate && !generateCustomize ? (
+        <AssignOrCustomizeModal
+          staffName={generateTarget.name}
+          staffUserId={generateTarget.userId}
+          template={generateBaseTemplate}
+          onAssigned={endGenerateFlow}
+          onCustomize={() => setGenerateCustomize(true)}
+          onClose={endGenerateFlow}
+        />
+      ) : null}
+      {generateTarget && generateBaseTemplate && generateCustomize ? (
         <TemplateModal
           clients={contractClients}
           companyName={companyName}
           editingTemplate={generateBaseTemplate}
           generateForStaff={{ userId: generateTarget.userId, name: generateTarget.name }}
-          onClose={() => {
-            setGenerateTarget(null);
-            setGenerateBaseTemplate(null);
-          }}
+          onClose={endGenerateFlow}
         />
       ) : null}
     </div>
