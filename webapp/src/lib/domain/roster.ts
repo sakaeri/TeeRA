@@ -230,6 +230,19 @@ export async function getStaffMonthDetail(params: {
   });
   const today = new Date();
 
+  // 全期間で実際にシフト実績のある依頼主 — 業務内容単価タブの「勤務先」
+  // 選択肢を、よく使う依頼主が上に来るよう並び替えるためだけに使う
+  // （絞り込みはしない。まだ一度も働いていない依頼主向けに先回りで単価を
+  // 登録しておきたい場面もあるため）。
+  const workedRelationships = await prisma.shift.findMany({
+    where: { companyId: params.companyId, staffUserId: params.userId, companyRelationshipId: { not: null } },
+    select: { companyRelationshipId: true },
+    distinct: ["companyRelationshipId"],
+  });
+  const workedClientIds = workedRelationships
+    .map((s) => s.companyRelationshipId)
+    .filter((id): id is string => id !== null);
+
   return {
     membershipId: membership.id,
     name: membership.user.name,
@@ -238,6 +251,7 @@ export async function getStaffMonthDetail(params: {
     teams: teamMemberships.map((tm) => ({ teamId: tm.teamId, teamName: tm.team.name })),
     monthlyHours: Math.round(hours * 10) / 10,
     daysWorked,
+    workedClientIds,
     idDocumentFrontUrl: membership.idDocumentFrontUrl,
     idDocumentBackUrl: membership.idDocumentBackUrl,
     bankInfo: {

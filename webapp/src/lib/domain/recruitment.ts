@@ -366,9 +366,13 @@ async function isStaffEligibleForRecruitment(params: {
 // shift FOR someone else needs the same double-booking guard, and a
 // two-phase confirm (conflicts -> explicit overrideShiftId) as the caller.
 // No 配属 eligibility gate here (unlike applyToRecruitment) — an admin can
-// freely assign any of their own staff regardless of visibility/配属状態;
-// a cross-company assign auto-registers a 配属記録 so that staff can
-// self-apply to this client's future オーダー without the admin's help.
+// freely assign any of their own staff regardless of visibility/配属状態.
+// This does NOT register a 配属記録 (StaffPlacement) — a single order fill
+// is not the same as formally placing someone with a client, and doing so
+// silently would let one assignment auto-unlock that client's future
+// オーダー for self-apply without anyone deciding that on purpose. If a
+// staff should be able to self-apply to a client's オーダー going forward,
+// invite them as actual staff of that client instead.
 export async function assignStaffToRecruitment(params: {
   recruitmentId: string;
   staffUserId: string;
@@ -482,14 +486,6 @@ export async function assignStaffToRecruitment(params: {
       where: { id: entry.id },
       data: { resultingShiftId: shift.id },
     });
-
-    if (companyRelationshipId) {
-      await tx.staffPlacement.upsert({
-        where: { staffUserId_companyRelationshipId: { staffUserId: params.staffUserId, companyRelationshipId } },
-        create: { staffUserId: params.staffUserId, companyRelationshipId },
-        update: {},
-      });
-    }
 
     for (const overriddenId of params.overrideShiftIds ?? []) {
       await supersedeShift(tx, {

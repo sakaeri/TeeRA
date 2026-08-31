@@ -39,6 +39,7 @@ type StaffMonthDetail = {
   teams: { teamId: string; teamName: string }[];
   monthlyHours: number;
   daysWorked: number;
+  workedClientIds: string[];
   idDocumentFrontUrl: string | null;
   idDocumentBackUrl: string | null;
   bankInfo: {
@@ -101,6 +102,14 @@ const CONTRACT_STATUS_LABEL: Record<string, string> = {
 function actualTimeLabel(d: StaffMonthDetail["days"][number]) {
   if (!d.actualStartTime && !d.actualEndTime) return "—";
   return `${d.actualStartTime ?? "--:--"}〜${d.actualEndTime ?? "--:--"}`;
+}
+
+// 業務内容単価タブの「勤務先」選択肢を、このスタッフが実際にシフト実績の
+// ある依頼主が上に来るよう並び替える（絞り込みはしない — まだ一度も
+// 働いていない依頼主向けに先回りで単価を登録しておきたい場面もあるため）。
+function sortClientsByWorkedFirst(clients: ClientOption[], workedClientIds: string[]): ClientOption[] {
+  const worked = new Set(workedClientIds);
+  return [...clients].sort((a, b) => Number(worked.has(b.id)) - Number(worked.has(a.id)));
 }
 
 export function StaffDetailPanel({
@@ -576,7 +585,7 @@ export function StaffDetailPanel({
               <StaffTaskRatesTab
                 userId={userId}
                 rates={data.taskRates}
-                clients={clients}
+                clients={sortClientsByWorkedFirst(clients, data.workedClientIds)}
                 knownTaskNames={knownTaskNames}
                 onChanged={refresh}
                 baseContract={data.contracts.find((c) => c.status === "ACTIVE") ?? null}
