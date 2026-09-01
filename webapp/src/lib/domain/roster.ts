@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { createInvite } from "@/lib/domain/invites";
-import { todayJstParts } from "@/lib/date";
+import { todayJst, todayJstParts } from "@/lib/date";
 import { resolveRateVersion, resolveContractWageVersion } from "@/lib/domain/contracts";
 
 export async function listStaff(companyId: string) {
@@ -228,7 +228,11 @@ export async function getStaffMonthDetail(params: {
     },
     orderBy: { createdAt: "asc" },
   });
-  const today = new Date();
+  // effectiveFromはJST日付を"YYYY-MM-DDT00:00:00.000Z"として保存している
+  // ため、比較対象の「今日」もJST日付の終わり(23:59:59.999Z)にしないと、
+  // サーバーのUTC時刻がまだ前日のうちは「今日」から始まる単価が未来日
+  // 扱いになり、設定した直後でも反映されない（JST 00:00〜09:00に発生）。
+  const today = new Date(`${todayJst()}T23:59:59.999Z`);
 
   // 全期間で実際にシフト実績のある依頼主 — 業務内容単価タブの「勤務先」
   // 選択肢を、よく使う依頼主が上に来るよう並び替えるためだけに使う

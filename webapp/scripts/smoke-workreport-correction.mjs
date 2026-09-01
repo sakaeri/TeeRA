@@ -30,7 +30,7 @@ try {
   await admin.fill("#name", "修正確認株式会社");
   await admin.click("button[type=submit]");
   await admin.waitForURL("http://localhost:3000/company");
-  const companyId = psql(`select id from "Company" where name='修正確認株式会社';`);
+  const companyId = psql(`select id from "Company" where name='修正確認株式会社' order by "createdAt" desc limit 1;`);
 
   await admin.click("text=スタッフ名簿");
   await admin.click("text=＋スタッフを追加する");

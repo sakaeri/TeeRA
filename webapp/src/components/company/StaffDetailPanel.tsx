@@ -18,6 +18,7 @@ import {
 import { todayJstParts, todayJst } from "@/lib/date";
 import { CopyUrlField } from "@/components/CopyUrlField";
 import { ImageDropzone } from "@/components/ImageDropzone";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { TemplateModal, ChooseBaseTemplateModal, AssignOrCustomizeModal, type Template } from "@/components/company/ContractsView";
 
 type StaffTaskRate = {
@@ -923,6 +924,7 @@ function StaffTaskRatesTab({
   const [amendAmount, setAmendAmount] = useState("");
   const [amendEffectiveFrom, setAmendEffectiveFrom] = useState(todayJst());
   const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null);
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<StaffTaskRate | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
   const [newTaskNameMode, setNewTaskNameMode] = useState<"pick" | "custom">("custom");
   const [newTaskName, setNewTaskName] = useState("");
@@ -1063,7 +1065,7 @@ function StaffTaskRatesTab({
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => submitDelete(r)}
+                onClick={() => setDeleteConfirmTarget(r)}
                 className="text-muted hover:text-red-600 disabled:opacity-60"
               >
                 削除
@@ -1086,6 +1088,19 @@ function StaffTaskRatesTab({
         ))}
         {rates.length === 0 ? <p className="py-6 text-center text-sm text-muted">個別の単価は登録されていません。</p> : null}
       </ul>
+
+      {deleteConfirmTarget ? (
+        <ConfirmDialog
+          message={`「${deleteConfirmTarget.workplaceLabel}（${deleteConfirmTarget.taskName}）」の単価を削除します。よろしいですか？`}
+          confirmLabel="削除する"
+          pending={pending}
+          onConfirm={() => {
+            submitDelete(deleteConfirmTarget);
+            setDeleteConfirmTarget(null);
+          }}
+          onCancel={() => setDeleteConfirmTarget(null)}
+        />
+      ) : null}
 
       {amendingRate ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setAmendingId(null)}>

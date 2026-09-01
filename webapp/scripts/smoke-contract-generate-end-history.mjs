@@ -30,7 +30,7 @@ try {
   await admin.fill("#name", "契約管理株式会社");
   await admin.click("button[type=submit]");
   await admin.waitForURL("http://localhost:3000/company");
-  const companyId = psql(`select id from "Company" where name='契約管理株式会社';`);
+  const companyId = psql(`select id from "Company" where name='契約管理株式会社' order by "createdAt" desc limit 1;`);
 
   // base ACTIVE template to generate from
   await admin.goto("http://localhost:3000/company/settings?tab=contracts");
@@ -65,7 +65,7 @@ try {
   await assignModal.getByRole("button", { name: "このテンプレートのまま契約する" }).click();
   await admin.waitForTimeout(700);
 
-  const proxyUserId = psql(`select id from "User" where name='契約管理仮太郎';`);
+  const proxyUserId = psql(`select id from "User" where name='契約管理仮太郎' order by "createdAt" desc limit 1;`);
   const proxyContractStatus = psql(
     `select status from "StaffContract" where "staffUserId"='${proxyUserId}' order by "createdAt" desc limit 1;`,
   );
