@@ -52,6 +52,7 @@ model User {
   staffNotices                        StaffNotice[]
   companyPlacementRateVersionsCreated CompanyPlacementRateVersion[]
   staffTaskRateVersionsCreated        StaffTaskRateVersion[]
+  staffNotesAuthored                  StaffNote[]
 
   @@index([email])
 }
@@ -122,7 +123,6 @@ model CompanyMembership {
   userId    String
   companyId String
   role      CompanyRole
-  note      String? // 情報メモ (roster staff-detail panel)
   createdAt DateTime    @default(now())
 
   // 本人確認書類（両面）。スタッフ本人・会社どちらからもアップロード可能。
@@ -143,8 +143,26 @@ model CompanyMembership {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  staffNotes StaffNote[]
+
   @@unique([userId, companyId])
   @@index([companyId, role])
+}
+
+// 情報メモ (roster staff-detail panel) — いつ・誰が書いたか分かるよう、単一
+// の自由入力欄ではなく追記式のエントリ一覧にしている。編集はできず、削除
+// のみ（誤記は削除して書き直す）。
+model StaffNote {
+  id           String   @id @default(cuid())
+  membershipId String
+  content      String
+  authorUserId String
+  createdAt    DateTime @default(now())
+
+  membership CompanyMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  author     User              @relation(fields: [authorUserId], references: [id])
+
+  @@index([membershipId])
 }
 
 enum TeamRole {

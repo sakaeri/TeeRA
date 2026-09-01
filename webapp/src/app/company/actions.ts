@@ -9,7 +9,8 @@ import {
   createProxyStaff,
   inviteProxyUpgrade,
   getStaffMonthDetail,
-  updateStaffNote,
+  addStaffNote,
+  deleteStaffNote,
   updateMembershipIdDocument,
   updateMembershipBankInfo,
 } from "@/lib/domain/roster";
@@ -259,16 +260,29 @@ export async function getStaffMonthDetailAction(userId: string, year: number, mo
   return getStaffMonthDetail({ companyId: membership.companyId, userId, year, month });
 }
 
-export async function updateStaffNoteAction(membershipId: string, note: string) {
-  const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
-  await updateStaffNote({ membershipId, note });
-  revalidatePath("/company/roster");
-}
-
 async function assertMembershipOwnedByCompany(membershipId: string, companyId: string) {
   const target = await prisma.companyMembership.findFirstOrThrow({ where: { id: membershipId, companyId } });
   return target;
+}
+
+export async function addStaffNoteAction(membershipId: string, content: string) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertMembershipOwnedByCompany(membershipId, membership.companyId);
+  await addStaffNote({ membershipId, authorUserId: userId, content });
+  revalidatePath("/company/roster");
+}
+
+export async function deleteStaffNoteAction(noteId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  const note = await prisma.staffNote.findFirstOrThrow({
+    where: { id: noteId },
+    include: { membership: true },
+  });
+  if (note.membership.companyId !== membership.companyId) throw new Error("forbidden");
+  await deleteStaffNote(noteId);
+  revalidatePath("/company/roster");
 }
 
 export async function updateStaffIdDocumentAction(membershipId: string, side: "front" | "back", url: string) {

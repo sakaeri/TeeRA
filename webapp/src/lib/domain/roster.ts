@@ -247,11 +247,18 @@ export async function getStaffMonthDetail(params: {
     .map((s) => s.companyRelationshipId)
     .filter((id): id is string => id !== null);
 
+  const staffNotes = await listStaffNotes(membership.id);
+
   return {
     membershipId: membership.id,
     name: membership.user.name,
     isProxy: membership.user.isProxy,
-    note: membership.note ?? "",
+    staffNotes: staffNotes.map((n) => ({
+      id: n.id,
+      content: n.content,
+      authorName: n.author.name,
+      createdAt: n.createdAt.toISOString().slice(0, 10),
+    })),
     teams: teamMemberships.map((tm) => ({ teamId: tm.teamId, teamName: tm.team.name })),
     monthlyHours: Math.round(hours * 10) / 10,
     daysWorked,
@@ -366,11 +373,26 @@ export async function getStaffMonthDetail(params: {
   };
 }
 
-export async function updateStaffNote(params: { membershipId: string; note: string }) {
-  return prisma.companyMembership.update({
-    where: { id: params.membershipId },
-    data: { note: params.note.trim() || null },
+// 情報メモ: 誰がいつ書いたか分かるよう追記式の一覧で持つ。更新はなく、
+// 削除のみ（誤記は削除して書き直す）。
+export async function listStaffNotes(membershipId: string) {
+  return prisma.staffNote.findMany({
+    where: { membershipId },
+    include: { author: true },
+    orderBy: { createdAt: "desc" },
   });
+}
+
+export async function addStaffNote(params: { membershipId: string; authorUserId: string; content: string }) {
+  const content = params.content.trim();
+  if (!content) throw new Error("empty_content");
+  return prisma.staffNote.create({
+    data: { membershipId: params.membershipId, authorUserId: params.authorUserId, content },
+  });
+}
+
+export async function deleteStaffNote(id: string) {
+  return prisma.staffNote.delete({ where: { id } });
 }
 
 // 本人確認書類（表面・裏面）。契約ごとではなく所属（会社との関係）単位で
