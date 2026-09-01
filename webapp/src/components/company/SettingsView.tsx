@@ -11,6 +11,9 @@ import {
   inviteCompanyAdminAction,
   createTeamAction,
   setTeamMemberRoleAction,
+  removeTeamMemberAction,
+  addTeamClientAction,
+  removeTeamClientAction,
 } from "@/app/company/actions";
 import { ContractsView } from "@/components/company/ContractsView";
 import { WorkReportsQueue } from "@/components/company/WorkReportsQueue";
@@ -23,7 +26,7 @@ type Admin = {
 };
 
 type TeamMember = { userId: string; name: string; role: string };
-type Team = { id: string; name: string; members: TeamMember[] };
+type Team = { id: string; name: string; members: TeamMember[]; clientIds: string[] };
 type StaffOption = { userId: string; name: string };
 
 type ContractTemplate = {
@@ -133,7 +136,7 @@ export function SettingsView({
             phoneNumber={phoneNumber}
           />
           <AdminsSection admins={admins} />
-          <TeamsSection teams={teams} staff={staff} />
+          <TeamsSection teams={teams} staff={staff} clients={contractClients} />
         </div>
       ) : null}
 
@@ -353,12 +356,15 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
 function TeamsSection({
   teams,
   staff,
+  clients,
 }: {
   teams: Team[];
   staff: StaffOption[];
+  clients: ContractClientOption[];
 }) {
   const [pending, startTransition] = useTransition();
   const [newTeamName, setNewTeamName] = useState("");
+  const [expandedClientsTeamId, setExpandedClientsTeamId] = useState<string | null>(null);
 
   return (
     <SectionCard title="チーム管理">
@@ -399,16 +405,14 @@ function TeamsSection({
                       defaultValue={current?.role ?? ""}
                       disabled={pending}
                       onChange={(e) =>
-                        startTransition(() =>
-                          setTeamMemberRoleAction(
+                        startTransition(() => {
+                          if (!e.target.value) return removeTeamMemberAction(team.id, s.userId);
+                          return setTeamMemberRoleAction(
                             team.id,
                             s.userId,
-                            (e.target.value || "TEAM_MEMBER") as
-                              | "TEAM_MANAGER"
-                              | "TEAM_LEADER"
-                              | "TEAM_MEMBER",
-                          ),
-                        )
+                            e.target.value as "TEAM_MANAGER" | "TEAM_LEADER" | "TEAM_MEMBER",
+                          );
+                        })
                       }
                       className="rounded-lg border border-border px-2 py-1 text-xs"
                     >
@@ -426,6 +430,44 @@ function TeamsSection({
                 </p>
               ) : null}
             </div>
+
+            {clients.length > 0 ? (
+              <div className="mt-3 border-t border-border pt-3">
+                <button
+                  type="button"
+                  onClick={() => setExpandedClientsTeamId(expandedClientsTeamId === team.id ? null : team.id)}
+                  className="text-xs text-muted hover:text-primary"
+                >
+                  {expandedClientsTeamId === team.id
+                    ? "▲ 主な取引先を閉じる"
+                    : `▼ 主な取引先（${team.clientIds.length}件） — シフト作成時に上に出す依頼主`}
+                </button>
+                {expandedClientsTeamId === team.id ? (
+                  <div className="mt-2 flex max-h-48 flex-col gap-1 overflow-y-auto">
+                    {clients.map((c) => {
+                      const checked = team.clientIds.includes(c.id);
+                      return (
+                        <label key={c.id} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            defaultChecked={checked}
+                            disabled={pending}
+                            onChange={(e) =>
+                              startTransition(() =>
+                                e.target.checked
+                                  ? addTeamClientAction(team.id, c.id)
+                                  : removeTeamClientAction(team.id, c.id),
+                              )
+                            }
+                          />
+                          {c.name}
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ))}
         {teams.length === 0 ? (

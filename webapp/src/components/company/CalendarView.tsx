@@ -64,7 +64,7 @@ const APPROVAL_LABEL: Record<string, string> = {
 };
 
 type StaffOption = { id: string; name: string };
-type Team = { id: string; name: string };
+type Team = { id: string; name: string; clientIds: string[] };
 
 type ShiftRequestRow = {
   id: string;
@@ -2144,7 +2144,13 @@ function AssignShiftModal({
     const dt = new Date(d + "T00:00:00Z");
     return `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
   });
-  const filteredClients = clients.filter((c) => c.name.includes(clientSearch));
+  // 選んだチームの主な取引先を上に出す（絞り込みはしない — チーム外の
+  // 依頼主向けに単発でシフトを作ることもあるため、検索すれば全依頼主に
+  // 引き続きアクセスできる）。
+  const teamClientIds = teams.find((t) => t.id === teamId)?.clientIds ?? [];
+  const filteredClients = clients
+    .filter((c) => c.name.includes(clientSearch))
+    .sort((a, b) => Number(teamClientIds.includes(b.id)) - Number(teamClientIds.includes(a.id)));
 
   const backButton =
     steps.indexOf(step) > 0 ? (

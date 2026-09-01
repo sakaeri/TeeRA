@@ -90,7 +90,7 @@ export default async function CompanyCalendarPage({
           originLabel: s.publicRecruitment ? `${s.publicRecruitment.company.name}／${s.publicRecruitment.title}` : null,
         }))}
         staffOptions={staff.map((s) => ({ id: s.userId, name: s.name }))}
-        teams={teams.map((t) => ({ id: t.id, name: t.name }))}
+        teams={teams.map((t) => ({ id: t.id, name: t.name, clientIds: t.clientLinks.map((l) => l.companyRelationshipId) }))}
         shiftRequests={shiftRequests.map((r) => ({
           id: r.id,
           staffName: r.staff.name,

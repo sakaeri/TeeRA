@@ -5,8 +5,25 @@ import type { TeamRole } from "@/generated/prisma/enums";
 export async function listTeams(companyId: string) {
   return prisma.team.findMany({
     where: { companyId },
-    include: { memberships: { include: { user: true } } },
+    include: { memberships: { include: { user: true } }, clientLinks: true },
     orderBy: { createdAt: "asc" },
+  });
+}
+
+// チームの主な取引先の紐付け — 絞り込みには使わず、シフト作成時の依頼主
+// 選択で上に出すための並び替え専用（addStaffTaskRateVersionと同じ理由で、
+// 削除ではなく紐付けの有無だけを切り替える）。
+export async function addTeamClient(params: { teamId: string; companyRelationshipId: string }) {
+  return prisma.teamClientRelationship.upsert({
+    where: { teamId_companyRelationshipId: { teamId: params.teamId, companyRelationshipId: params.companyRelationshipId } },
+    create: { teamId: params.teamId, companyRelationshipId: params.companyRelationshipId },
+    update: {},
+  });
+}
+
+export async function removeTeamClient(params: { teamId: string; companyRelationshipId: string }) {
+  return prisma.teamClientRelationship.deleteMany({
+    where: { teamId: params.teamId, companyRelationshipId: params.companyRelationshipId },
   });
 }
 

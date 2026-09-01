@@ -24,7 +24,14 @@ import {
   addRelationshipNote,
   deleteRelationshipNote,
 } from "@/lib/domain/relationships";
-import { createTeam, setTeamMemberRole, setCompanyMemberRole } from "@/lib/domain/teams";
+import {
+  createTeam,
+  setTeamMemberRole,
+  removeTeamMember,
+  setCompanyMemberRole,
+  addTeamClient,
+  removeTeamClient,
+} from "@/lib/domain/teams";
 
 function absoluteInviteUrl(token: string) {
   const base = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
@@ -179,6 +186,34 @@ export async function setTeamMemberRoleAction(
 
   await setTeamMemberRole({ teamId, userId, role });
   revalidatePath("/company/settings");
+}
+
+export async function removeTeamMemberAction(teamId: string, userId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  await removeTeamMember({ teamId, userId });
+  revalidatePath("/company/settings");
+}
+
+export async function addTeamClientAction(teamId: string, companyRelationshipId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertRelationshipOwnedByCompany(companyRelationshipId, membership.companyId);
+
+  await addTeamClient({ teamId, companyRelationshipId });
+  revalidatePath("/company/settings");
+  revalidatePath("/company/calendar");
+}
+
+export async function removeTeamClientAction(teamId: string, companyRelationshipId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertRelationshipOwnedByCompany(companyRelationshipId, membership.companyId);
+
+  await removeTeamClient({ teamId, companyRelationshipId });
+  revalidatePath("/company/settings");
+  revalidatePath("/company/calendar");
 }
 
 export async function updateCompanyNameAction(name: string) {

@@ -72,6 +72,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
             name: m.user.name,
             role: m.role,
           })),
+          clientIds: t.clientLinks.map((l) => l.companyRelationshipId),
         }))}
         staff={staff.map((s) => ({ userId: s.userId, name: s.name }))}
         contractTemplates={templates.map((t) => ({

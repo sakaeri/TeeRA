@@ -106,15 +106,34 @@ model Team {
   name      String
   createdAt DateTime @default(now())
 
-  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company            Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
   memberships        TeamMembership[]
   shifts             Shift[]
   publicRecruitments PublicRecruitment[]
   shiftRequests      ShiftRequest[]
   todoItems          TodoItem[]
   inviteTokens       InviteToken[]
+  clientLinks        TeamClientRelationship[]
 
   @@index([companyId])
+}
+
+// チームの主な取引先（依頼主）— シフト作成時、依頼主が多い会社でも毎回
+// 全依頼主から探さずに済むよう、そのチームでよく使う依頼主を上に出す
+// ための紐付けだけの軽量な関連（絞り込みはしない — 紐付けていない依頼主
+// も引き続き選べる。単発でチーム外の依頼主向けにシフトを作ることもある
+// ため）。
+model TeamClientRelationship {
+  id                     String   @id @default(cuid())
+  teamId                 String
+  companyRelationshipId  String
+  createdAt              DateTime @default(now())
+
+  team                Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  companyRelationship CompanyRelationship @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, companyRelationshipId])
+  @@index([companyRelationshipId])
 }
 
 // A user's relationship to a company: company-scope admin/editor, or staff
@@ -219,6 +238,7 @@ model CompanyRelationship {
   inviteTokens      InviteToken[]
   staffPlacements   StaffPlacement[]
   relationshipNotes RelationshipNote[]
+  teamLinks         TeamClientRelationship[]
 
   @@index([ownerCompanyId])
   @@index([agencyCompanyId])

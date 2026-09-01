@@ -1015,6 +1015,10 @@ function StaffTaskRatesTab({
     setShowNewForm(true);
     setNewTaskName("");
     setNewTaskNameMode(knownTaskNames.length > 0 ? "pick" : "custom");
+    setNewCompanyRelationshipId("");
+    setNewWageType("HOURLY");
+    setNewAmount("");
+    setNewEffectiveFrom(todayJst());
   }
 
   const amendingRate = rates.find((r) => r.id === amendingId) ?? null;
