@@ -170,12 +170,18 @@ export async function getClientMonthDetail(params: {
   for (const s of shifts) staffMap.set(s.staffUserId, s.staff.name);
   const unapprovedCount = shifts.filter((s) => s.workReport && s.workReport.approvalStatus !== "APPROVED").length;
   const today = new Date();
+  const relationshipNotes = await listRelationshipNotes(params.companyRelationshipId);
 
   return {
     relationshipId: relationship.id,
     name: counterpartCompany?.name ?? relationship.proxyName ?? "",
     isProxy: !counterpartCompany,
-    note: relationship.note ?? "",
+    relationshipNotes: relationshipNotes.map((n) => ({
+      id: n.id,
+      content: n.content,
+      authorName: n.author.name,
+      createdAt: n.createdAt.toISOString().slice(0, 10),
+    })),
     shiftCount: shifts.length,
     unapprovedCount,
     staff: Array.from(staffMap.entries()).map(([userId, name]) => ({ userId, name })),
@@ -206,9 +212,24 @@ export async function getClientMonthDetail(params: {
   };
 }
 
-export async function updateClientNote(params: { companyRelationshipId: string; note: string }) {
-  return prisma.companyRelationship.update({
-    where: { id: params.companyRelationshipId },
-    data: { note: params.note.trim() || null },
+// 情報メモ: StaffNoteと同じく、誰がいつ書いたか分かるよう追記式の一覧で
+// 持つ。更新はなく、削除のみ（誤記は削除して書き直す）。
+export async function listRelationshipNotes(companyRelationshipId: string) {
+  return prisma.relationshipNote.findMany({
+    where: { companyRelationshipId },
+    include: { author: true },
+    orderBy: { createdAt: "desc" },
   });
+}
+
+export async function addRelationshipNote(params: { companyRelationshipId: string; authorUserId: string; content: string }) {
+  const content = params.content.trim();
+  if (!content) throw new Error("empty_content");
+  return prisma.relationshipNote.create({
+    data: { companyRelationshipId: params.companyRelationshipId, authorUserId: params.authorUserId, content },
+  });
+}
+
+export async function deleteRelationshipNote(id: string) {
+  return prisma.relationshipNote.delete({ where: { id } });
 }

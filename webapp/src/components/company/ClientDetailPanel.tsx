@@ -4,13 +4,15 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   getClientMonthDetailAction,
-  updateClientNoteAction,
+  addRelationshipNoteAction,
+  deleteRelationshipNoteAction,
   inviteClientUpgradeAction,
   inviteAgencyUpgradeAction,
 } from "@/app/company/actions";
 import { addPlacementRateVersionAction, deletePlacementTaskNameAction } from "@/app/company/contracts/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
 import { CopyUrlField } from "@/components/CopyUrlField";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type PlacementRate = {
   id: string;
@@ -19,11 +21,18 @@ type PlacementRate = {
   versions: { id: string; label: string; effectiveFrom: string }[];
 };
 
+type RelationshipNote = {
+  id: string;
+  content: string;
+  authorName: string;
+  createdAt: string;
+};
+
 type ClientMonthDetail = {
   relationshipId: string;
   name: string;
   isProxy: boolean;
-  note: string;
+  relationshipNotes: RelationshipNote[];
   shiftCount: number;
   unapprovedCount: number;
   staff: { userId: string; name: string }[];
@@ -76,9 +85,11 @@ export function ClientDetailPanel({
   const [month, setMonth] = useState(initToday.month);
   const [tab, setTab] = useState<"history" | "staff" | "rates" | "note">("history");
   const [data, setData] = useState<ClientMonthDetail | null>(null);
-  const [noteValue, setNoteValue] = useState("");
   const [pending, startTransition] = useTransition();
   const [upgradeUrl, setUpgradeUrl] = useState<string | null>(null);
+  const [showNoteForm, setShowNoteForm] = useState(false);
+  const [newNoteContent, setNewNoteContent] = useState("");
+  const [deleteNoteConfirmTarget, setDeleteNoteConfirmTarget] = useState<RelationshipNote | null>(null);
 
   function handleUpgrade() {
     startTransition(async () => {
@@ -90,7 +101,6 @@ export function ClientDetailPanel({
   function refresh() {
     return getClientMonthDetailAction(relationshipId, year, month).then((d) => {
       setData(d);
-      setNoteValue(d.note);
     });
   }
 
@@ -99,7 +109,6 @@ export function ClientDetailPanel({
     getClientMonthDetailAction(relationshipId, year, month).then((d) => {
       if (cancelled) return;
       setData(d);
-      setNoteValue(d.note);
     });
     return () => {
       cancelled = true;
@@ -278,27 +287,97 @@ export function ClientDetailPanel({
             ) : null}
 
             {tab === "note" ? (
-              <div className="flex flex-col gap-3">
-                <textarea
-                  value={noteValue}
-                  onChange={(e) => setNoteValue(e.target.value)}
-                  rows={8}
-                  placeholder="この取引先に関するメモを入力"
-                  className="rounded-lg border border-border px-3 py-2 text-sm"
-                />
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => startTransition(() => updateClientNoteAction(data.relationshipId, noteValue))}
-                  className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-                >
-                  保存
-                </button>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowNoteForm(true)}
+                    className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+                  >
+                    ＋メモ作成
+                  </button>
+                </div>
+                <ul className="flex flex-col gap-2">
+                  {data.relationshipNotes.map((n) => (
+                    <li key={n.id} className="rounded-lg border border-border p-3 text-sm">
+                      <p className="whitespace-pre-wrap">{n.content}</p>
+                      <div className="mt-2 flex items-center justify-between text-xs text-muted">
+                        <span>
+                          {n.createdAt} {n.authorName}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => setDeleteNoteConfirmTarget(n)}
+                          aria-label="削除"
+                          className="hover:text-red-600 disabled:opacity-60"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                  {data.relationshipNotes.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted">メモはまだありません。</p>
+                  ) : null}
+                </ul>
               </div>
             ) : null}
           </>
         )}
       </div>
+
+      {deleteNoteConfirmTarget ? (
+        <ConfirmDialog
+          message="このメモを削除します。よろしいですか？"
+          confirmLabel="削除する"
+          pending={pending}
+          onConfirm={() => {
+            const target = deleteNoteConfirmTarget;
+            startTransition(async () => {
+              await deleteRelationshipNoteAction(target.id);
+              await refresh();
+            });
+            setDeleteNoteConfirmTarget(null);
+          }}
+          onCancel={() => setDeleteNoteConfirmTarget(null)}
+        />
+      ) : null}
+
+      {showNoteForm && data ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setShowNoteForm(false)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="font-serif-jp text-base font-bold text-primary">メモを作成</h4>
+              <button type="button" onClick={() => setShowNoteForm(false)} aria-label="閉じる" className="text-muted hover:text-primary">
+                ✕
+              </button>
+            </div>
+            <textarea
+              value={newNoteContent}
+              onChange={(e) => setNewNoteContent(e.target.value)}
+              rows={5}
+              placeholder="この取引先に関するメモを入力"
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+            />
+            <button
+              type="button"
+              disabled={pending || !newNoteContent.trim()}
+              onClick={() =>
+                startTransition(async () => {
+                  await addRelationshipNoteAction(data.relationshipId, newNoteContent);
+                  setNewNoteContent("");
+                  setShowNoteForm(false);
+                  await refresh();
+                })
+              }
+              className="mt-3 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              作成
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

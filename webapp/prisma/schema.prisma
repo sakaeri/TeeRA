@@ -53,6 +53,7 @@ model User {
   companyPlacementRateVersionsCreated CompanyPlacementRateVersion[]
   staffTaskRateVersionsCreated        StaffTaskRateVersion[]
   staffNotesAuthored                  StaffNote[]
+  relationshipNotesAuthored           RelationshipNote[]
 
   @@index([email])
 }
@@ -203,7 +204,6 @@ model CompanyRelationship {
   agencyCompanyId String?
   clientCompanyId String?
   proxyName       String?
-  note            String? // 情報メモ (roster client-detail panel)
   status          RelationshipStatus @default(ACTIVE)
   createdAt       DateTime           @default(now())
 
@@ -218,17 +218,33 @@ model CompanyRelationship {
   invoices          Invoice[]
   inviteTokens      InviteToken[]
   staffPlacements   StaffPlacement[]
+  relationshipNotes RelationshipNote[]
 
   @@index([ownerCompanyId])
   @@index([agencyCompanyId])
   @@index([clientCompanyId])
 }
 
+// 情報メモ (roster client-detail panel) — StaffNoteと同じ考え方。誰がいつ
+// 書いたか分かるよう追記式のエントリ一覧にしている。更新はなく削除のみ。
+model RelationshipNote {
+  id                     String   @id @default(cuid())
+  companyRelationshipId  String
+  content                String
+  authorUserId           String
+  createdAt              DateTime @default(now())
+
+  companyRelationship CompanyRelationship @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
+  author              User                @relation(fields: [authorUserId], references: [id])
+
+  @@index([companyRelationshipId])
+}
+
 // 配属記録 — 契約(StaffContract)とは無関係の軽量な事実の記録。「このスタッフは
 // この派遣関係(CompanyRelationship)に配属済み」というだけを表す。契約は
 // あくまで任意の雇用条件書面であり、配属＝就業可否のゲートには使わない。
-// 管理者がオーダーへ自由にアサインした時点で自動生成され、以降そのスタッフは
-// 同じ配属先のオーダーへ自分でエントリーできるようになる。
+// 現状これを自動生成する経路は無い（1回オーダーに割り当てただけで以後の
+// 限定募集に自己エントリーできるようになるのは意図しない権限拡大のため）。
 model StaffPlacement {
   id                    String   @id @default(cuid())
   staffUserId           String

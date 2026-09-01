@@ -21,7 +21,8 @@ import {
   addRealAgency,
   inviteRelationshipUpgrade,
   getClientMonthDetail,
-  updateClientNote,
+  addRelationshipNote,
+  deleteRelationshipNote,
 } from "@/lib/domain/relationships";
 import { createTeam, setTeamMemberRole, setCompanyMemberRole } from "@/lib/domain/teams";
 
@@ -309,9 +310,29 @@ export async function getClientMonthDetailAction(companyRelationshipId: string, 
   return getClientMonthDetail({ companyId: membership.companyId, companyRelationshipId, year, month });
 }
 
-export async function updateClientNoteAction(companyRelationshipId: string, note: string) {
+async function assertRelationshipOwnedByCompany(companyRelationshipId: string, companyId: string) {
+  const target = await prisma.companyRelationship.findFirstOrThrow({
+    where: { id: companyRelationshipId, ownerCompanyId: companyId },
+  });
+  return target;
+}
+
+export async function addRelationshipNoteAction(companyRelationshipId: string, content: string) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertRelationshipOwnedByCompany(companyRelationshipId, membership.companyId);
+  await addRelationshipNote({ companyRelationshipId, authorUserId: userId, content });
+  revalidatePath("/company/roster");
+}
+
+export async function deleteRelationshipNoteAction(noteId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
-  await updateClientNote({ companyRelationshipId, note });
+  const note = await prisma.relationshipNote.findFirstOrThrow({
+    where: { id: noteId },
+    include: { companyRelationship: true },
+  });
+  if (note.companyRelationship.ownerCompanyId !== membership.companyId) throw new Error("forbidden");
+  await deleteRelationshipNote(noteId);
   revalidatePath("/company/roster");
 }
