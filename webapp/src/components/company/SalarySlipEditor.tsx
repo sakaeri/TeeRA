@@ -9,12 +9,13 @@ import {
   updatePaidLeaveAction,
   finalizeSalarySlipAction,
   issueSalarySlipAction,
+  renameUnresolvedTaskNamesAction,
 } from "@/app/company/payroll/actions";
 
 type Line = { id: string; kind: string; description: string; hours: number; rate: number; amount: number };
 type Deduction = { id: string; label: string; amount: number };
 type Totals = { grossFromShifts: number; paidLeaveAmount: number; gross: number; totalDeductions: number; net: number };
-type UnresolvedShift = { shiftId: string; date: string; taskName: string };
+type UnresolvedShift = { shiftId: string; workReportId: string; date: string; taskName: string; source: "workReport" | "shift" };
 
 export function SalarySlipEditor({
   slip,
@@ -41,19 +42,7 @@ export function SalarySlipEditor({
 
   return (
     <div className="flex flex-col gap-6">
-      {slip.unresolved.length > 0 ? (
-        <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-          <p className="mb-2 font-semibold">業務内容専用の単価が未設定のため、基本給で計算されているシフトがあります</p>
-          <ul className="flex flex-col gap-1">
-            {slip.unresolved.map((u) => (
-              <li key={u.shiftId}>
-                {u.date} ／ {u.taskName}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-xs">スタッフ詳細の「業務内容単価」で該当の業務内容に単価を設定すると、次回の編集画面表示時に自動で反映されます。</p>
-        </section>
-      ) : null}
+      {slip.unresolved.length > 0 ? <UnresolvedWarning salarySlipId={slip.id} unresolved={slip.unresolved} /> : null}
 
       <section className="rounded-2xl border border-border bg-white/60 p-6">
         <div className="mb-3 flex items-center justify-between">
@@ -244,6 +233,101 @@ export function SalarySlipEditor({
         ) : null}
       </section>
     </div>
+  );
+}
+
+function UnresolvedWarning({ salarySlipId, unresolved }: { salarySlipId: string; unresolved: UnresolvedShift[] }) {
+  const [pending, startTransition] = useTransition();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showRenameForm, setShowRenameForm] = useState(false);
+  const [newTaskName, setNewTaskName] = useState("");
+
+  function toggle(shiftId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(shiftId)) next.delete(shiftId);
+      else next.add(shiftId);
+      return next;
+    });
+  }
+
+  function submitRename() {
+    if (!newTaskName.trim() || selectedIds.size === 0) return;
+    const items = unresolved
+      .filter((u) => selectedIds.has(u.shiftId))
+      .map((u) => ({ shiftId: u.shiftId, workReportId: u.workReportId, source: u.source }));
+    startTransition(async () => {
+      await renameUnresolvedTaskNamesAction(salarySlipId, items, newTaskName);
+      setSelectedIds(new Set());
+      setShowRenameForm(false);
+      setNewTaskName("");
+    });
+  }
+
+  return (
+    <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+      <p className="mb-2 font-semibold">業務内容専用の単価が未設定のため、基本給で計算されているシフトがあります</p>
+      <ul className="flex flex-col gap-1">
+        {unresolved.map((u) => (
+          <li key={u.shiftId} className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={selectedIds.has(u.shiftId)}
+              onChange={() => toggle(u.shiftId)}
+              disabled={pending}
+            />
+            <span>
+              {u.date} ／ {u.taskName}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-xs">
+        スタッフ詳細の「業務内容単価」で該当の業務内容に単価を設定するか、表記ゆれ（例：「キャディ」と「キャディ業務」）が原因の場合は下でまとめて業務内容名を直せます。次回の編集画面表示時に自動で反映されます。
+      </p>
+
+      {!showRenameForm ? (
+        <button
+          type="button"
+          disabled={selectedIds.size === 0}
+          onClick={() => setShowRenameForm(true)}
+          className="mt-3 rounded-lg border border-amber-400 px-3 py-1.5 text-xs text-amber-900 disabled:opacity-60"
+        >
+          選択した{selectedIds.size}件の業務内容名をまとめて変更
+        </button>
+      ) : (
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-0.5 text-xs">
+            正しい業務内容名
+            <input
+              type="text"
+              value={newTaskName}
+              onChange={(e) => setNewTaskName(e.target.value)}
+              placeholder="例：キャディ業務"
+              className="rounded-lg border border-amber-400 bg-white px-2 py-1.5 text-sm text-foreground"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={pending || !newTaskName.trim()}
+            onClick={submitRename}
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            {selectedIds.size}件を変更する
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowRenameForm(false);
+              setNewTaskName("");
+            }}
+            className="rounded-lg border border-border px-3 py-1.5 text-xs"
+          >
+            キャンセル
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 

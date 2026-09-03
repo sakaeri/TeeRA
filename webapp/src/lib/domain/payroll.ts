@@ -51,7 +51,16 @@ function pickContractForDate(contracts: ContractWithWageVersions[], date: Date):
 // スタッフ×業務内容の単価テーブル。登録が無ければ雇用契約の基本単価
 // （defaultWageRate）にフォールバックする。
 
-export type UnresolvedSalaryShift = { shiftId: string; date: string; taskName: string };
+// source: 業務内容名を一括変更するとき、どちらのフィールドを直せば計算に
+// 反映されるかを示す（業務報告で選び直されていればworkReport側、なければ
+// shift側 — effectiveTaskNameの解決ロジックと対応）。
+export type UnresolvedSalaryShift = {
+  shiftId: string;
+  workReportId: string;
+  date: string;
+  taskName: string;
+  source: "workReport" | "shift";
+};
 
 // 稼働支給額 always recalculates fresh from that month's approved shifts —
 // unfinalized months regenerate their SHIFT lines each time this runs, but
@@ -119,8 +128,10 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
       if (!matchedWage && baseWageVersion && effectiveTaskName) {
         unresolved.push({
           shiftId: r.shiftId,
+          workReportId: r.id,
           date: r.shift.date.toISOString().slice(0, 10),
           taskName: effectiveTaskName,
+          source: r.taskName ? "workReport" : "shift",
         });
       }
       const wage = matchedWage ?? {
@@ -152,6 +163,41 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
   });
 
   return { slip, unresolved };
+}
+
+// 給与計算画面の「単価未設定」警告から、対象のシフトをまとめて選んで
+// 業務内容名を書き換える（表記ゆれの手直し用）。業務報告で選び直し済みなら
+// WorkReport.taskName、まだならShift.taskNameを直す — どちらを直せば
+// effectiveTaskNameの解決に反映されるかはunresolvedの各行が持つsourceで
+// 判定済み（regenerateShiftLines参照）。companyId/staffUserIdで所有権も
+// 確認し、他スタッフ・他社のレコードを書き換えられないようにする。
+export async function renameUnresolvedTaskNames(params: {
+  companyId: string;
+  staffUserId: string;
+  items: { shiftId: string; workReportId: string; source: "workReport" | "shift" }[];
+  newTaskName: string;
+}) {
+  const workReportIds = params.items.filter((i) => i.source === "workReport").map((i) => i.workReportId);
+  const shiftIds = params.items.filter((i) => i.source === "shift").map((i) => i.shiftId);
+
+  await prisma.$transaction([
+    ...(workReportIds.length > 0
+      ? [
+          prisma.workReport.updateMany({
+            where: { id: { in: workReportIds }, staffUserId: params.staffUserId, shift: { companyId: params.companyId } },
+            data: { taskName: params.newTaskName },
+          }),
+        ]
+      : []),
+    ...(shiftIds.length > 0
+      ? [
+          prisma.shift.updateMany({
+            where: { id: { in: shiftIds }, staffUserId: params.staffUserId, companyId: params.companyId },
+            data: { taskName: params.newTaskName },
+          }),
+        ]
+      : []),
+  ]);
 }
 
 export async function getOrCreateSalarySlip(params: {

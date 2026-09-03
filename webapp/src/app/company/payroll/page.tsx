@@ -37,7 +37,7 @@ export default async function PayrollPage({
     paidLeaveGrantDays: number;
     totals: ReturnType<typeof getTotals>;
     issues: { id: string; issuedAt: string; chargedTee: boolean }[];
-    unresolved: { shiftId: string; date: string; taskName: string }[];
+    unresolved: { shiftId: string; workReportId: string; date: string; taskName: string; source: "workReport" | "shift" }[];
   };
 
   let slipData: SlipData | null = null;

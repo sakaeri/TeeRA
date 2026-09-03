@@ -14,6 +14,7 @@ import {
   updatePaidLeave,
   finalizeSalarySlip,
   issueSalarySlip,
+  renameUnresolvedTaskNames,
   type DeductionItem,
 } from "@/lib/domain/payroll";
 
@@ -86,5 +87,24 @@ export async function issueSalarySlipAction(salarySlipId: string) {
   const { userId } = await requireCompanyAdminOrEditor();
   await assertAccess(salarySlipId);
   await issueSalarySlip({ salarySlipId, issuedByUserId: userId });
+  revalidatePath("/company/payroll");
+}
+
+// 給与計算画面の「単価未設定」警告に出ている表記ゆれを、まとめて選んで
+// 正しい業務内容名に直す（直した結果、次回の再計算で単価が解決すれば
+// 警告は消える）。
+export async function renameUnresolvedTaskNamesAction(
+  salarySlipId: string,
+  items: { shiftId: string; workReportId: string; source: "workReport" | "shift" }[],
+  newTaskName: string,
+) {
+  const { slip } = await assertAccess(salarySlipId);
+  if (!newTaskName.trim()) throw new Error("invalid_task_name");
+  await renameUnresolvedTaskNames({
+    companyId: slip.companyId,
+    staffUserId: slip.staffUserId,
+    items,
+    newTaskName: newTaskName.trim(),
+  });
   revalidatePath("/company/payroll");
 }
