@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { canManage } from "@/lib/auth/permissions";
+import { canManageAny } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
+import { getClientTeamIds } from "@/lib/domain/teams";
 import {
   getOrCreateInvoice,
   addCustomLine,
@@ -20,7 +21,8 @@ import {
 async function assertAccess(invoiceId: string) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
-  if (invoice.issuingCompanyId !== membership.companyId || !canManage(membership)) {
+  const clientTeamIds = await getClientTeamIds(invoice.companyRelationshipId);
+  if (invoice.issuingCompanyId !== membership.companyId || !canManageAny(membership, clientTeamIds)) {
     throw new Error("forbidden");
   }
   return { userId, membership, invoice };
@@ -28,7 +30,8 @@ async function assertAccess(invoiceId: string) {
 
 export async function openInvoiceAction(companyRelationshipId: string, periodLabel: string) {
   const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
+  const clientTeamIds = await getClientTeamIds(companyRelationshipId);
+  if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
 
   const invoice = await getOrCreateInvoice({
     issuingCompanyId: membership.companyId,

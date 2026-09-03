@@ -10,9 +10,10 @@ export async function listTeams(companyId: string) {
   });
 }
 
-// チームの主な取引先の紐付け — 絞り込みには使わず、シフト作成時の依頼主
-// 選択で上に出すための並び替え専用（addStaffTaskRateVersionと同じ理由で、
-// 削除ではなく紐付けの有無だけを切り替える）。
+// チームの主な取引先の紐付け。当初はシフト作成時の依頼主選択で上に出す
+// ための並び替え専用として作ったが、「チームに所属する企業＝そのチームが
+// 主に取引がある企業」という位置づけ通り、請求書のチームスコープ権限判定
+// （canManageAny/canViewAny）にもそのまま使う — 別テーブルは持たない。
 export async function addTeamClient(params: { teamId: string; companyRelationshipId: string }) {
   return prisma.teamClientRelationship.upsert({
     where: { teamId_companyRelationshipId: { teamId: params.teamId, companyRelationshipId: params.companyRelationshipId } },
@@ -47,6 +48,25 @@ export async function removeTeamMember(params: { teamId: string; userId: string 
   return prisma.teamMembership.delete({
     where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
   });
+}
+
+// 給与計算・契約書などのチームスコープ権限判定用 — 対象スタッフが所属する
+// チームID一覧（複数チーム所属もあり得る）。
+export async function getStaffTeamIds(staffUserId: string) {
+  const rows = await prisma.teamMembership.findMany({
+    where: { userId: staffUserId },
+    select: { teamId: true },
+  });
+  return rows.map((r) => r.teamId);
+}
+
+// 請求書のチームスコープ権限判定用 — 対象取引先が紐づくチームID一覧。
+export async function getClientTeamIds(companyRelationshipId: string) {
+  const rows = await prisma.teamClientRelationship.findMany({
+    where: { companyRelationshipId },
+    select: { teamId: true },
+  });
+  return rows.map((r) => r.teamId);
 }
 
 export async function setCompanyMemberRole(params: {

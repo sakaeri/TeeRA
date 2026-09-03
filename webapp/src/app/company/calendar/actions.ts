@@ -104,7 +104,8 @@ export async function matchShiftRequestAction(input: {
 
 export async function dismissShiftRequestAction(shiftRequestId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
+  const shiftRequest = await prisma.shiftRequest.findUniqueOrThrow({ where: { id: shiftRequestId } });
+  if (!canManage(membership, shiftRequest.teamId)) throw new Error("forbidden");
 
   await dismissShiftRequest(shiftRequestId);
   revalidatePath("/company/calendar");
@@ -150,7 +151,8 @@ export async function openRecruitmentToPublicAction(input: {
   extraItems: { label: string; value: string }[];
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
+  const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: input.recruitmentId } });
+  if (!canManage(membership, recruitment.teamId)) throw new Error("forbidden");
 
   const affordable = await affordableMaxEntries(membership.companyId);
   if (input.remaining > affordable) {
@@ -176,7 +178,8 @@ export async function saveRecruitmentPublicDraftAction(input: {
   extraItems: { label: string; value: string }[];
 }) {
   const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
+  const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: input.recruitmentId } });
+  if (!canManage(membership, recruitment.teamId)) throw new Error("forbidden");
 
   await saveRecruitmentPublicDraft(input);
   revalidatePath("/company/calendar");
@@ -184,11 +187,10 @@ export async function saveRecruitmentPublicDraftAction(input: {
 
 export async function updateMaxEntriesAction(recruitmentId: string, newMaxEntries: number) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
-
   // オーダー(visibility=ORDER)は無課金なのでTee残高の上限チェックは不要
   // （公開募集化済みのものだけ、上限を上げる分のTeeが払えるか確認する）。
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: recruitmentId } });
+  if (!canManage(membership, recruitment.teamId)) throw new Error("forbidden");
   if (recruitment.visibility === "PUBLIC") {
     const affordable = await affordableMaxEntries(membership.companyId);
     if (newMaxEntries > affordable) {
@@ -202,7 +204,8 @@ export async function updateMaxEntriesAction(recruitmentId: string, newMaxEntrie
 
 export async function deleteRecruitmentAction(recruitmentId: string) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
+  const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: recruitmentId } });
+  if (!canManage(membership, recruitment.teamId)) throw new Error("forbidden");
 
   await deleteRecruitment({ recruitmentId, updatedByUserId: userId });
   revalidatePath("/company/calendar");
@@ -214,7 +217,8 @@ export async function assignStaffToRecruitmentAction(input: {
   overrideShiftIds?: string[];
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
+  const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: input.recruitmentId } });
+  if (!canManage(membership, recruitment.teamId)) throw new Error("forbidden");
 
   const result = await assignStaffToRecruitment({
     recruitmentId: input.recruitmentId,
@@ -231,7 +235,8 @@ export async function assignStaffToRecruitmentAction(input: {
 
 export async function cancelShiftAction(shiftId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
+  const shift = await prisma.shift.findUniqueOrThrow({ where: { id: shiftId } });
+  if (!canManage(membership, shift.teamId)) throw new Error("forbidden");
 
   await cancelShift({ shiftId, actorCompanyId: membership.companyId });
   revalidatePath("/company/calendar");

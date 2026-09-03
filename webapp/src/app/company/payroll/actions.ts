@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { canManage } from "@/lib/auth/permissions";
+import { canManageAny } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
+import { getStaffTeamIds } from "@/lib/domain/teams";
 import {
   getOrCreateSalarySlip,
   addCustomLine,
@@ -19,7 +20,8 @@ import {
 async function assertAccess(salarySlipId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   const slip = await prisma.salarySlip.findUniqueOrThrow({ where: { id: salarySlipId } });
-  if (slip.companyId !== membership.companyId || !canManage(membership)) {
+  const staffTeamIds = await getStaffTeamIds(slip.staffUserId);
+  if (slip.companyId !== membership.companyId || !canManageAny(membership, staffTeamIds)) {
     throw new Error("forbidden");
   }
   return { membership, slip };
@@ -27,7 +29,8 @@ async function assertAccess(salarySlipId: string) {
 
 export async function openSalarySlipAction(staffUserId: string, targetMonth: string) {
   const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
+  const staffTeamIds = await getStaffTeamIds(staffUserId);
+  if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
 
   const slip = await getOrCreateSalarySlip({
     companyId: membership.companyId,

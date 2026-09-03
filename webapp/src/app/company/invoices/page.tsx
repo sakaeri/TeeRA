@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { canManage } from "@/lib/auth/permissions";
+import { canManageAny, isCompanyScopeAdmin } from "@/lib/auth/permissions";
 import { listClients } from "@/lib/domain/relationships";
 import { getOrCreateInvoice, computeInvoiceTotals } from "@/lib/domain/invoicing";
 import { prisma } from "@/lib/prisma";
@@ -26,7 +26,19 @@ export default async function InvoicesPage({
   const periodLabel = typeof sp.month === "string" ? sp.month : currentMonth();
   const companyRelationshipId = typeof sp.client === "string" ? sp.client : undefined;
 
-  const clients = await listClients(membership.companyId);
+  const allClients = await listClients(membership.companyId);
+  // チームマネージャー/リーダーは自チームに紐づく取引先しか選べない（本部
+  // 管理者/編集者は全社分）。
+  let clients = allClients;
+  if (!isCompanyScopeAdmin(membership)) {
+    const myTeamIds = membership.teamMemberships.map((tm) => tm.teamId);
+    const links = await prisma.teamClientRelationship.findMany({
+      where: { teamId: { in: myTeamIds }, companyRelationshipId: { in: allClients.map((c) => c.id) } },
+      select: { companyRelationshipId: true },
+    });
+    const allowedIds = new Set(links.map((l) => l.companyRelationshipId));
+    clients = allClients.filter((c) => allowedIds.has(c.id));
+  }
 
   type InvoiceData = {
     id: string;
@@ -42,7 +54,10 @@ export default async function InvoicesPage({
   };
 
   let invoiceData: InvoiceData | null = null;
-  if (companyRelationshipId && canManage(membership)) {
+  const targetClientTeamIds = companyRelationshipId
+    ? (await prisma.teamClientRelationship.findMany({ where: { companyRelationshipId }, select: { teamId: true } })).map((r) => r.teamId)
+    : [];
+  if (companyRelationshipId && canManageAny(membership, targetClientTeamIds)) {
     const invoice = await getOrCreateInvoice({
       issuingCompanyId: membership.companyId,
       companyRelationshipId,

@@ -164,6 +164,11 @@ export async function listShiftsForMonth(params: {
   year: number;
   month: number; // 1-12
   teamId?: string;
+  // チームマネージャー/リーダーが会社側の管理画面を見るとき、自分が
+  // 所属しないチームのシフトは見えないようにする絞り込み（本部管理者/
+  // 編集者はundefinedのまま渡され、無制限）。teamIdによる単一チームの
+  // 絞り込みと共存できるよう別パラメータにしている。
+  restrictToTeamIds?: string[];
   companyRelationshipId?: string;
 }) {
   const start = new Date(Date.UTC(params.year, params.month - 1, 1));
@@ -171,7 +176,7 @@ export async function listShiftsForMonth(params: {
 
   const where: Prisma.ShiftWhereInput = {
     companyId: params.companyId,
-    teamId: params.teamId,
+    teamId: params.teamId ?? (params.restrictToTeamIds ? { in: params.restrictToTeamIds } : undefined),
     date: { gte: start, lt: end },
     status: { notIn: ["SUPERSEDED", "CANCELLED"] },
   };
@@ -211,6 +216,7 @@ export async function listShiftHistoryForMonth(params: {
   year: number;
   month: number;
   teamId?: string;
+  restrictToTeamIds?: string[];
 }) {
   const start = new Date(Date.UTC(params.year, params.month - 1, 1));
   const end = new Date(Date.UTC(params.year, params.month, 1));
@@ -218,7 +224,7 @@ export async function listShiftHistoryForMonth(params: {
   return prisma.shift.findMany({
     where: {
       companyId: params.companyId,
-      teamId: params.teamId,
+      teamId: params.teamId ?? (params.restrictToTeamIds ? { in: params.restrictToTeamIds } : undefined),
       date: { gte: start, lt: end },
       status: { in: ["SUPERSEDED", "CANCELLED"] },
     },

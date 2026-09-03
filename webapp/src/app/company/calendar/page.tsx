@@ -1,5 +1,6 @@
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { listShiftsForMonth, listShiftRequests, listShiftHistoryForMonth } from "@/lib/domain/shifts";
+import { isCompanyScopeAdmin, myManagedOrLedTeamIds } from "@/lib/auth/permissions";
 import {
   listPublicRecruitments,
   listClientRecruitments,
@@ -25,12 +26,21 @@ export default async function CompanyCalendarPage({
   const [dateYear, dateMonth] = dateParam ? dateParam.split("-").map(Number) : [];
   const year = Number(sp.y) || dateYear || today.year;
   const month = Number(sp.m) || dateMonth || today.month;
-  const teamId = typeof sp.team === "string" && sp.team ? sp.team : undefined;
   const relationshipId = typeof sp.rel === "string" && sp.rel ? sp.rel : undefined;
 
+  // 会社スコープの管理者/編集者は全社のシフトを見られる。チームマネージャー/
+  // リーダーは自分が所属するチームのシフトしか見えない — sp.teamは「その中で
+  // さらに1チームに絞る」ための任意フィルターであり、所属外のチームIDが来ても
+  // 無視する（restrictToTeamIdsで最終的にDB側でも弾かれる）。
+  const isAdmin = isCompanyScopeAdmin(membership);
+  const myTeamIds = myManagedOrLedTeamIds(membership);
+  const requestedTeamId = typeof sp.team === "string" && sp.team ? sp.team : undefined;
+  const teamId = isAdmin || (requestedTeamId && myTeamIds.includes(requestedTeamId)) ? requestedTeamId : undefined;
+  const restrictToTeamIds = isAdmin ? undefined : myTeamIds;
+
   const [shifts, shiftHistory, staff, teams, shiftRequests, recruitments, clientRecruitments, company] = await Promise.all([
-    listShiftsForMonth({ companyId: membership.companyId, year, month, teamId, companyRelationshipId: relationshipId }),
-    listShiftHistoryForMonth({ companyId: membership.companyId, year, month, teamId }),
+    listShiftsForMonth({ companyId: membership.companyId, year, month, teamId, restrictToTeamIds, companyRelationshipId: relationshipId }),
+    listShiftHistoryForMonth({ companyId: membership.companyId, year, month, teamId, restrictToTeamIds }),
     listStaff(membership.companyId),
     listTeams(membership.companyId),
     listShiftRequests({ companyId: membership.companyId, status: "PENDING" }),
@@ -90,7 +100,9 @@ export default async function CompanyCalendarPage({
           originLabel: s.publicRecruitment ? `${s.publicRecruitment.company.name}／${s.publicRecruitment.title}` : null,
         }))}
         staffOptions={staff.map((s) => ({ id: s.userId, name: s.name }))}
-        teams={teams.map((t) => ({ id: t.id, name: t.name, clientIds: t.clientLinks.map((l) => l.companyRelationshipId) }))}
+        teams={teams
+          .filter((t) => isAdmin || myTeamIds.includes(t.id))
+          .map((t) => ({ id: t.id, name: t.name, clientIds: t.clientLinks.map((l) => l.companyRelationshipId) }))}
         shiftRequests={shiftRequests.map((r) => ({
           id: r.id,
           staffName: r.staff.name,

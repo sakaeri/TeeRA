@@ -14,6 +14,7 @@ import {
 type Line = { id: string; kind: string; description: string; hours: number; rate: number; amount: number };
 type Deduction = { id: string; label: string; amount: number };
 type Totals = { grossFromShifts: number; paidLeaveAmount: number; gross: number; totalDeductions: number; net: number };
+type UnresolvedShift = { shiftId: string; date: string; taskName: string };
 
 export function SalarySlipEditor({
   slip,
@@ -27,6 +28,7 @@ export function SalarySlipEditor({
     paidLeaveDailyRate: number;
     paidLeaveGrantDays: number;
     totals: Totals;
+    unresolved: UnresolvedShift[];
   };
 }) {
   const [pending, startTransition] = useTransition();
@@ -39,6 +41,20 @@ export function SalarySlipEditor({
 
   return (
     <div className="flex flex-col gap-6">
+      {slip.unresolved.length > 0 ? (
+        <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="mb-2 font-semibold">業務内容専用の単価が未設定のため、基本給で計算されているシフトがあります</p>
+          <ul className="flex flex-col gap-1">
+            {slip.unresolved.map((u) => (
+              <li key={u.shiftId}>
+                {u.date} ／ {u.taskName}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs">スタッフ詳細の「業務内容単価」で該当の業務内容に単価を設定すると、次回の編集画面表示時に自動で反映されます。</p>
+        </section>
+      ) : null}
+
       <section className="rounded-2xl border border-border bg-white/60 p-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-serif-jp text-lg font-bold text-primary">勤務内訳</h2>

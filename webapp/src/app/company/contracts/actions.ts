@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { canManage } from "@/lib/auth/permissions";
+import { canManage, canManageAny } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
+import { getStaffTeamIds, getClientTeamIds } from "@/lib/domain/teams";
 import {
   createTemplate,
   updateOrDuplicateTemplate,
@@ -65,7 +66,8 @@ async function assertRelationshipOwned(companyId: string, companyRelationshipId?
 // から呼ばれる。単価は依頼主詳細で別途設定する。
 export async function registerPlacementTaskNameAction(input: { companyRelationshipId?: string; taskName: string }) {
   const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
+  const clientTeamIds = input.companyRelationshipId ? await getClientTeamIds(input.companyRelationshipId) : [];
+  if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
   await assertRelationshipOwned(membership.companyId, input.companyRelationshipId);
 
   const rate = await registerPlacementTaskName({ ...input, companyId: membership.companyId });
@@ -83,7 +85,8 @@ export async function addPlacementRateVersionAction(input: {
   effectiveFrom: string; // YYYY-MM-DD
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
+  const clientTeamIds = input.companyRelationshipId ? await getClientTeamIds(input.companyRelationshipId) : [];
+  if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
   await assertRelationshipOwned(membership.companyId, input.companyRelationshipId);
 
   const version = await addPlacementRateVersion({
@@ -101,11 +104,12 @@ export async function addPlacementRateVersionAction(input: {
 
 export async function deletePlacementTaskNameAction(placementRateId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
 
   const rate = await prisma.companyPlacementRate.findFirstOrThrow({
     where: { id: placementRateId, companyId: membership.companyId },
   });
+  const clientTeamIds = rate.companyRelationshipId ? await getClientTeamIds(rate.companyRelationshipId) : [];
+  if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
   await deletePlacementTaskName(rate.id);
   revalidatePath("/company/settings");
   revalidatePath("/company/roster");
@@ -121,7 +125,8 @@ export async function addStaffTaskRateVersionAction(input: {
   effectiveFrom: string; // YYYY-MM-DD
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
+  const staffTeamIds = await getStaffTeamIds(input.staffUserId);
+  if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
 
   const staffMembership = await prisma.companyMembership.findFirst({
     where: { userId: input.staffUserId, companyId: membership.companyId, role: "STAFF" },
@@ -152,11 +157,12 @@ export async function addStaffTaskRateVersionAction(input: {
 
 export async function deleteStaffTaskRateAction(staffTaskRateId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
 
   const rate = await prisma.staffTaskRate.findFirstOrThrow({
     where: { id: staffTaskRateId, companyId: membership.companyId },
   });
+  const staffTeamIds = await getStaffTeamIds(rate.staffUserId);
+  if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
   await deleteStaffTaskRate(rate.id);
   revalidatePath("/company/settings");
   revalidatePath("/company/roster");
@@ -166,12 +172,13 @@ export async function deleteStaffTaskRateAction(staffTaskRateId: string) {
 // （同意）操作は不要で、即座に反映してお知らせだけを送る。
 export async function updateStaffContractWageAction(staffContractId: string, wageAmount: number, effectiveFrom: string) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
 
   const contract = await prisma.staffContract.findFirstOrThrow({
     where: { id: staffContractId, template: { companyId: membership.companyId } },
     include: { template: true },
   });
+  const staffTeamIds = await getStaffTeamIds(contract.staffUserId);
+  if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
   try {
     await addStaffContractWageVersion({
       staffContractId: contract.id,
@@ -204,7 +211,8 @@ async function relationshipLabel(companyRelationshipId: string) {
 
 export async function generateStaffContractAction(input: CreateTemplateInput, staffUserId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
+  const staffTeamIds = await getStaffTeamIds(staffUserId);
+  if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
 
   const staffMembership = await prisma.companyMembership.findFirst({
     where: { userId: staffUserId, companyId: membership.companyId, role: "STAFF" },
@@ -225,7 +233,8 @@ export async function generateStaffContractAction(input: CreateTemplateInput, st
 // そのまま別のスタッフにも割り当てる。契約開始日だけ個別に指定できる。
 export async function assignExistingTemplateAction(templateId: string, staffUserId: string, contractStartDate: string) {
   const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
+  const staffTeamIds = await getStaffTeamIds(staffUserId);
+  if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
 
   await prisma.contractTemplate.findFirstOrThrow({ where: { id: templateId, companyId: membership.companyId } });
   const staffMembership = await prisma.companyMembership.findFirst({
@@ -251,11 +260,12 @@ export async function assignExistingTemplateAction(templateId: string, staffUser
 //   もらう（スタッフ本人による自由選択は廃止済み — contracts.tsのコメント参照）
 export async function endStaffContractAction(staffContractId: string, noticeGivenAt: string | null) {
   const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
 
-  await prisma.staffContract.findFirstOrThrow({
+  const contract = await prisma.staffContract.findFirstOrThrow({
     where: { id: staffContractId, template: { companyId: membership.companyId } },
   });
+  const staffTeamIds = await getStaffTeamIds(contract.staffUserId);
+  if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
   await endStaffContract({ staffContractId, noticeGivenAt: noticeGivenAt ? new Date(noticeGivenAt) : null });
   revalidatePath("/company/roster");
   revalidatePath("/company");

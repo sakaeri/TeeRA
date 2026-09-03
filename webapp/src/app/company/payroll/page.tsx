@@ -1,5 +1,5 @@
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { canManage } from "@/lib/auth/permissions";
+import { canManageAny, isCompanyScopeAdmin } from "@/lib/auth/permissions";
 import { listStaff } from "@/lib/domain/roster";
 import { getOrCreateSalarySlip, getTotals } from "@/lib/domain/payroll";
 import { prisma } from "@/lib/prisma";
@@ -20,7 +20,12 @@ export default async function PayrollPage({
   const targetMonth = typeof sp.month === "string" ? sp.month : currentMonth();
   const staffUserId = typeof sp.staff === "string" ? sp.staff : undefined;
 
-  const staff = await listStaff(membership.companyId);
+  const allStaff = await listStaff(membership.companyId);
+  // チームマネージャー/リーダーは自チームのスタッフしか選べない（本部管理者/
+  // 編集者は全社分）。
+  const staff = isCompanyScopeAdmin(membership)
+    ? allStaff
+    : allStaff.filter((s) => s.teams.some((t) => membership.teamMemberships.some((tm) => tm.teamId === t.teamId)));
 
   type SlipData = {
     id: string;
@@ -32,10 +37,14 @@ export default async function PayrollPage({
     paidLeaveGrantDays: number;
     totals: ReturnType<typeof getTotals>;
     issues: { id: string; issuedAt: string; chargedTee: boolean }[];
+    unresolved: { shiftId: string; date: string; taskName: string }[];
   };
 
   let slipData: SlipData | null = null;
-  if (staffUserId && canManage(membership)) {
+  const targetStaffTeamIds = staffUserId
+    ? (await prisma.teamMembership.findMany({ where: { userId: staffUserId }, select: { teamId: true } })).map((r) => r.teamId)
+    : [];
+  if (staffUserId && canManageAny(membership, targetStaffTeamIds)) {
     const slip = await getOrCreateSalarySlip({
       companyId: membership.companyId,
       staffUserId,
@@ -63,6 +72,7 @@ export default async function PayrollPage({
       paidLeaveGrantDays: slip.paidLeaveGrantDays,
       totals,
       issues: issues.map((i) => ({ id: i.id, issuedAt: i.issuedAt.toISOString(), chargedTee: i.chargedTee })),
+      unresolved: slip.unresolved,
     };
   }
 

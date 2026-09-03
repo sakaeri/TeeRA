@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import type { CompanyRole } from "@/generated/prisma/enums";
+import { hasAnyTeamManagementRole } from "@/lib/auth/permissions";
 
 export const verifySession = cache(async () => {
   const session = await auth();
@@ -74,9 +75,15 @@ export async function requireCompanyStaffRole() {
   return { userId, membership };
 }
 
+// 会社側の管理画面（/company/*）に入れるかどうかの入口ゲート。会社スコープの
+// 管理者/編集者に加えて、チームマネージャー/リーダー（会社スコープ上は
+// role=STAFFのまま、TeamMembership側の役職として持つ）も通す。関数名は元の
+// 「本部管理者/編集者のみ」時代のまま残しているが、実際にどの操作ができる
+// かは各画面・各アクション側のcanManage/canView/canManageCompanySettingsが
+// 個別に判定する（会社スコープ限定の操作はそちらで引き続き弾かれる）。
 export async function requireCompanyAdminOrEditor() {
   const { userId, membership } = await requireActiveMembership();
-  if (membership.role === "STAFF") {
+  if (membership.role === "STAFF" && !hasAnyTeamManagementRole(membership)) {
     redirect("/staff");
   }
   return { userId, membership };

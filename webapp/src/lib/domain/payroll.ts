@@ -51,6 +51,8 @@ function pickContractForDate(contracts: ContractWithWageVersions[], date: Date):
 // スタッフ×業務内容の単価テーブル。登録が無ければ雇用契約の基本単価
 // （defaultWageRate）にフォールバックする。
 
+export type UnresolvedSalaryShift = { shiftId: string; date: string; taskName: string };
+
 // 稼働支給額 always recalculates fresh from that month's approved shifts —
 // unfinalized months regenerate their SHIFT lines each time this runs, but
 // CUSTOM lines and deductions/leave settings are left untouched.
@@ -64,7 +66,7 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
       },
     },
   });
-  if (slip.status !== "DRAFT") return slip;
+  if (slip.status !== "DRAFT") return { slip, unresolved: [] as UnresolvedSalaryShift[] };
 
   const { start, end } = monthRange(params.targetMonth);
   const reports = await prisma.workReport.findMany({
@@ -89,6 +91,8 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     taskRateRowsByName.set(r.taskName, list);
   }
 
+  const unresolved: UnresolvedSalaryShift[] = [];
+
   await prisma.$transaction(async (tx) => {
     await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, kind: "SHIFT" } });
     // 雇用契約が無いスタッフは自動計上できない。
@@ -109,6 +113,16 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
       const baseContract = pickContractForDate(contracts, r.shift.date);
       const baseWageVersion = baseContract ? resolveContractWageVersion(baseContract.wageVersions, r.shift.date) : null;
       if (!matchedWage && !baseWageVersion) continue;
+      // 業務内容は指定されているのに、その業務内容専用のスタッフ単価が
+      // 無くて基本給にフォールバックしたケースは、単価の設定漏れの可能性が
+      // あるため警告対象として記録する（計算自体は基本給で続行する）。
+      if (!matchedWage && baseWageVersion && effectiveTaskName) {
+        unresolved.push({
+          shiftId: r.shiftId,
+          date: r.shift.date.toISOString().slice(0, 10),
+          taskName: effectiveTaskName,
+        });
+      }
       const wage = matchedWage ?? {
         wageType: baseContract!.template.wageType,
         amount: baseWageVersion!.wageAmount,
@@ -137,7 +151,7 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     }
   });
 
-  return slip;
+  return { slip, unresolved };
 }
 
 export async function getOrCreateSalarySlip(params: {
@@ -171,11 +185,12 @@ export async function getOrCreateSalarySlip(params: {
     });
   }
 
-  await regenerateShiftLines(params);
-  return prisma.salarySlip.findUniqueOrThrow({
+  const { unresolved } = await regenerateShiftLines(params);
+  const full = await prisma.salarySlip.findUniqueOrThrow({
     where: { id: slip.id },
     include: { lines: { orderBy: { sortOrder: "asc" } } },
   });
+  return { ...full, unresolved };
 }
 
 export async function addCustomLine(params: {

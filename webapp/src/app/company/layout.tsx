@@ -7,6 +7,21 @@ const ROLE_LABEL: Record<string, string> = {
   COMPANY_EDITOR: "本部：編集者として表示",
 };
 
+const TEAM_ROLE_LABEL: Record<string, string> = {
+  TEAM_MANAGER: "マネージャー",
+  TEAM_LEADER: "リーダー",
+};
+
+function resolveRoleLabel(membership: Awaited<ReturnType<typeof requireCompanyAdminOrEditor>>["membership"]) {
+  const companyLabel = ROLE_LABEL[membership.role];
+  if (companyLabel) return companyLabel;
+  // 会社スコープの役職を持たない（role=STAFF）が、チームマネージャー/
+  // リーダーとして会社側の管理画面に入ってきたケース。
+  const teamRole = membership.teamMemberships.find((tm) => tm.role === "TEAM_MANAGER" || tm.role === "TEAM_LEADER");
+  if (teamRole) return `${teamRole.teamName}：${TEAM_ROLE_LABEL[teamRole.role] ?? teamRole.role}として表示`;
+  return membership.role;
+}
+
 export default async function CompanyLayout({
   children,
 }: {
@@ -23,7 +38,7 @@ export default async function CompanyLayout({
       companyName={company.name}
       userName={user.name}
       userEmail={user.email}
-      roleLabel={ROLE_LABEL[membership.role] ?? membership.role}
+      roleLabel={resolveRoleLabel(membership)}
       teeBalance={company.teeBalance}
     >
       {children}
