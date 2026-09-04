@@ -354,6 +354,7 @@ export function RosterView({
           clients={clients.map((c) => ({ id: c.id, name: c.name }))}
           contractTemplates={contractTemplates}
           knownTaskNames={knownTaskNames}
+          allTeams={teams}
           initialTab={selectedStaffId === initialStaffId ? initialStaffTab : undefined}
           onClose={() => setSelectedStaffId(null)}
         />

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { createInvite } from "@/lib/domain/invites";
 import { todayJst, todayJstParts } from "@/lib/date";
 import { resolveRateVersion, resolveContractWageVersion } from "@/lib/domain/contracts";
+import type { TeamRole } from "@/generated/prisma/enums";
 
 export async function listStaff(companyId: string) {
   const memberships = await prisma.companyMembership.findMany({
@@ -112,6 +113,25 @@ export async function inviteStaff(params: {
     contractTemplateId: params.contractTemplateId,
     contractStartDate: params.contractStartDate,
     targetRole: "STAFF",
+  });
+}
+
+// チームマネージャー/リーダーとして新規に招待する（設定＞チーム管理の
+// 「＋招待」専用）。通常のinviteStaffと違い、参加した時点でチームの
+// 役職を持つ状態になる。
+export async function inviteTeamManager(params: {
+  companyId: string;
+  createdByUserId: string;
+  teamId: string;
+  teamRole: TeamRole;
+}) {
+  return createInvite({
+    kind: "STAFF",
+    companyId: params.companyId,
+    createdByUserId: params.createdByUserId,
+    teamId: params.teamId,
+    targetRole: "STAFF",
+    targetTeamRole: params.teamRole,
   });
 }
 
@@ -259,7 +279,7 @@ export async function getStaffMonthDetail(params: {
       authorName: n.author.name,
       createdAt: n.createdAt.toISOString().slice(0, 10),
     })),
-    teams: teamMemberships.map((tm) => ({ teamId: tm.teamId, teamName: tm.team.name })),
+    teams: teamMemberships.map((tm) => ({ teamId: tm.teamId, teamName: tm.team.name, role: tm.role })),
     monthlyHours: Math.round(hours * 10) / 10,
     daysWorked,
     workedClientIds,

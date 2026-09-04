@@ -9,6 +9,7 @@ import {
   inviteProxyUpgradeAction,
   updateStaffIdDocumentAction,
   updateStaffBankInfoAction,
+  setStaffTeamsAction,
 } from "@/app/company/actions";
 import {
   addStaffTaskRateVersionAction,
@@ -45,7 +46,7 @@ type StaffMonthDetail = {
   name: string;
   isProxy: boolean;
   staffNotes: StaffNote[];
-  teams: { teamId: string; teamName: string }[];
+  teams: { teamId: string; teamName: string; role: "TEAM_MANAGER" | "TEAM_LEADER" | "TEAM_MEMBER" }[];
   monthlyHours: number;
   daysWorked: number;
   workedClientIds: string[];
@@ -127,6 +128,7 @@ export function StaffDetailPanel({
   clients,
   contractTemplates,
   knownTaskNames,
+  allTeams,
   initialTab,
   onClose,
 }: {
@@ -135,6 +137,7 @@ export function StaffDetailPanel({
   clients: ClientOption[];
   contractTemplates: Template[];
   knownTaskNames: string[];
+  allTeams: { id: string; name: string }[];
   initialTab?: "contracts";
   onClose: () => void;
 }) {
@@ -159,6 +162,8 @@ export function StaffDetailPanel({
   const [generateBaseTemplate, setGenerateBaseTemplate] = useState<Template | null>(null);
   const [generateCustomize, setGenerateCustomize] = useState(false);
   const [showContractHistory, setShowContractHistory] = useState(false);
+  const [editingTeams, setEditingTeams] = useState(false);
+  const [teamSelection, setTeamSelection] = useState<Set<string>>(new Set());
 
   function endGenerateFlow() {
     setShowGenerateChoose(false);
@@ -248,6 +253,21 @@ export function StaffDetailPanel({
     });
   }
 
+  // マネージャー/リーダーの役職を持つチームはここでは編集不可（チェック
+  // 済み・操作不可で表示 — 権限の付け外しは設定＞チーム管理で行う）。
+  function startEditTeams(teams: StaffMonthDetail["teams"]) {
+    setTeamSelection(new Set(teams.map((t) => t.teamId)));
+    setEditingTeams(true);
+  }
+
+  function submitTeams() {
+    startTransition(async () => {
+      await setStaffTeamsAction(userId, Array.from(teamSelection));
+      setEditingTeams(false);
+      await refresh();
+    });
+  }
+
   function refresh() {
     return getStaffMonthDetailAction(userId, year, month).then((d) => {
       setData(d);
@@ -309,17 +329,82 @@ export function StaffDetailPanel({
               </div>
             ) : null}
 
-            <div className="mb-4 flex flex-wrap gap-1">
-              {data.teams.length === 0 ? (
-                <span className="text-xs text-muted">チーム未所属</span>
-              ) : (
-                data.teams.map((t) => (
-                  <span key={t.teamId} className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-900">
-                    {t.teamName}
-                  </span>
-                ))
-              )}
-            </div>
+            {!editingTeams ? (
+              <div className="mb-4 flex flex-wrap items-center gap-1">
+                {data.teams.length === 0 ? (
+                  <span className="text-xs text-muted">チーム未所属</span>
+                ) : (
+                  data.teams.map((t) => (
+                    <span key={t.teamId} className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-900">
+                      {t.teamName}
+                      {t.role !== "TEAM_MEMBER" ? (t.role === "TEAM_MANAGER" ? "（マネージャー）" : "（リーダー）") : ""}
+                    </span>
+                  ))
+                )}
+                <button
+                  type="button"
+                  onClick={() => startEditTeams(data.teams)}
+                  aria-label="チーム所属を編集"
+                  className="ml-1 text-xs text-muted hover:text-primary"
+                >
+                  ✎ 編集
+                </button>
+              </div>
+            ) : (
+              <div className="mb-4 rounded-lg border border-border bg-background/40 p-3">
+                <p className="mb-2 text-xs text-muted">
+                  氏名：{data.name}（変更不可）
+                </p>
+                <p className="mb-1 text-xs font-medium">所属チーム（複数選択可）</p>
+                <div className="mb-3 flex flex-col gap-1">
+                  {allTeams.map((team) => {
+                    const current = data.teams.find((t) => t.teamId === team.id);
+                    const locked = current ? current.role !== "TEAM_MEMBER" : false;
+                    return (
+                      <label key={team.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={teamSelection.has(team.id)}
+                          disabled={pending || locked}
+                          onChange={(e) =>
+                            setTeamSelection((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(team.id);
+                              else next.delete(team.id);
+                              return next;
+                            })
+                          }
+                        />
+                        {team.name}
+                        {locked ? (
+                          <span className="text-xs text-muted">
+                            （{current!.role === "TEAM_MANAGER" ? "マネージャー" : "リーダー"}・設定＞チーム管理で変更）
+                          </span>
+                        ) : null}
+                      </label>
+                    );
+                  })}
+                  {allTeams.length === 0 ? <p className="text-xs text-muted">チームがまだありません。</p> : null}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={submitTeams}
+                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                  >
+                    保存
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingTeams(false)}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="mb-4 flex gap-4 border-b border-border text-sm">
               <button

@@ -1,7 +1,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import type { InviteKind, CompanyRole } from "@/generated/prisma/enums";
+import type { InviteKind, CompanyRole, TeamRole } from "@/generated/prisma/enums";
 
 const INVITE_TTL_DAYS = 14;
 
@@ -18,6 +18,7 @@ export async function createInvite(params: {
   contractTemplateId?: string;
   contractStartDate?: Date;
   targetRole?: CompanyRole;
+  targetTeamRole?: TeamRole;
 }) {
   const token = generateInviteTokenString();
   const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
@@ -32,6 +33,7 @@ export async function createInvite(params: {
       contractTemplateId: params.contractTemplateId,
       contractStartDate: params.contractStartDate,
       targetRole: params.targetRole,
+      targetTeamRole: params.targetTeamRole,
       createdByUserId: params.createdByUserId,
       expiresAt,
     },
@@ -87,7 +89,7 @@ export async function redeemInvite(token: string, userId: string) {
         });
         if (invite.teamId) {
           await tx.teamMembership.create({
-            data: { userId, teamId: invite.teamId, role: "TEAM_MEMBER" },
+            data: { userId, teamId: invite.teamId, role: invite.targetTeamRole ?? "TEAM_MEMBER" },
           });
         }
         if (invite.contractTemplateId) {

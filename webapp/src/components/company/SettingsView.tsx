@@ -11,9 +11,10 @@ import {
   inviteCompanyAdminAction,
   createTeamAction,
   setTeamMemberRoleAction,
-  removeTeamMemberAction,
   addTeamClientAction,
   removeTeamClientAction,
+  inviteTeamManagerAction,
+  promoteExistingStaffToTeamRoleAction,
 } from "@/app/company/actions";
 import { ContractsView } from "@/components/company/ContractsView";
 import { WorkReportsQueue } from "@/components/company/WorkReportsQueue";
@@ -365,9 +366,13 @@ function TeamsSection({
   const [pending, startTransition] = useTransition();
   const [newTeamName, setNewTeamName] = useState("");
   const [expandedClientsTeamId, setExpandedClientsTeamId] = useState<string | null>(null);
+  const [inviteFormTeamId, setInviteFormTeamId] = useState<string | null>(null);
 
   return (
     <SectionCard title="チーム管理">
+      <p className="mb-4 text-xs text-muted">
+        ここに載るのはチームのマネージャー/リーダーだけです。一般スタッフのチーム所属は、スタッフ名簿の各スタッフ詳細から変更できます。
+      </p>
       <div className="mb-6 flex items-center gap-3">
         <input
           type="text"
@@ -392,43 +397,65 @@ function TeamsSection({
       </div>
 
       <div className="flex flex-col gap-6">
-        {teams.map((team) => (
+        {teams.map((team) => {
+          const managers = team.members.filter((m) => m.role === "TEAM_MANAGER" || m.role === "TEAM_LEADER");
+          return (
           <div key={team.id} className="rounded-xl border border-border p-4">
             <div className="mb-3 font-semibold">{team.name}</div>
             <div className="flex flex-col gap-2">
-              {staff.map((s) => {
-                const current = team.members.find((m) => m.userId === s.userId);
-                return (
-                  <div key={s.userId} className="flex items-center justify-between text-sm">
-                    <span>{s.name}</span>
+              {managers.map((m) => (
+                <div key={m.userId} className="flex items-center justify-between text-sm">
+                  <span>{m.name}</span>
+                  <div className="flex items-center gap-2">
                     <select
-                      defaultValue={current?.role ?? ""}
+                      defaultValue={m.role}
                       disabled={pending}
                       onChange={(e) =>
-                        startTransition(() => {
-                          if (!e.target.value) return removeTeamMemberAction(team.id, s.userId);
-                          return setTeamMemberRoleAction(
+                        startTransition(() =>
+                          setTeamMemberRoleAction(
                             team.id,
-                            s.userId,
-                            e.target.value as "TEAM_MANAGER" | "TEAM_LEADER" | "TEAM_MEMBER",
-                          );
-                        })
+                            m.userId,
+                            e.target.value as "TEAM_MANAGER" | "TEAM_LEADER",
+                          ),
+                        )
                       }
                       className="rounded-lg border border-border px-2 py-1 text-xs"
                     >
-                      <option value="">未所属</option>
-                      <option value="TEAM_MEMBER">メンバー</option>
-                      <option value="TEAM_LEADER">チームリーダー</option>
-                      <option value="TEAM_MANAGER">チームマネージャー</option>
+                      <option value="TEAM_MANAGER">マネージャー</option>
+                      <option value="TEAM_LEADER">リーダー</option>
                     </select>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => startTransition(() => setTeamMemberRoleAction(team.id, m.userId, "TEAM_MEMBER"))}
+                      className="text-xs text-muted hover:text-red-600 disabled:opacity-60"
+                    >
+                      権限を外す
+                    </button>
                   </div>
-                );
-              })}
-              {staff.length === 0 ? (
-                <p className="text-xs text-muted">
-                  会社にスタッフがいません。スタッフ名簿から招待すると、ここでチームへの割り当てができます。
-                </p>
+                </div>
+              ))}
+              {managers.length === 0 ? (
+                <p className="text-xs text-muted">まだマネージャー/リーダーがいません。</p>
               ) : null}
+            </div>
+
+            <div className="mt-3 border-t border-border pt-3">
+              {inviteFormTeamId === team.id ? (
+                <TeamInviteForm
+                  teamId={team.id}
+                  staffOptions={staff.filter((s) => !team.members.some((m) => m.userId === s.userId))}
+                  onDone={() => setInviteFormTeamId(null)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setInviteFormTeamId(team.id)}
+                  className="rounded-lg border border-primary px-3 py-1.5 text-xs text-primary"
+                >
+                  ＋招待
+                </button>
+              )}
             </div>
 
             {clients.length > 0 ? (
@@ -469,11 +496,121 @@ function TeamsSection({
               </div>
             ) : null}
           </div>
-        ))}
+          );
+        })}
         {teams.length === 0 ? (
           <p className="text-xs text-muted">チームはまだありません。</p>
         ) : null}
       </div>
     </SectionCard>
+  );
+}
+
+function TeamInviteForm({
+  teamId,
+  staffOptions,
+  onDone,
+}: {
+  teamId: string;
+  staffOptions: StaffOption[];
+  onDone: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [mode, setMode] = useState<"new" | "existing">("new");
+  const [role, setRole] = useState<"TEAM_MANAGER" | "TEAM_LEADER">("TEAM_MANAGER");
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [selectedStaffId, setSelectedStaffId] = useState(staffOptions[0]?.userId ?? "");
+
+  return (
+    <div className="rounded-lg border border-border bg-background/40 p-3 text-sm">
+      <div className="mb-2 flex gap-3 text-xs">
+        <button
+          type="button"
+          onClick={() => setMode("new")}
+          className={mode === "new" ? "font-semibold text-primary" : "text-muted"}
+        >
+          新しく招待する
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("existing")}
+          className={mode === "existing" ? "font-semibold text-primary" : "text-muted"}
+        >
+          既存スタッフから選ぶ
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        {mode === "existing" ? (
+          staffOptions.length === 0 ? (
+            <p className="text-xs text-muted">追加できる既存スタッフがいません。</p>
+          ) : (
+            <label className="flex flex-col gap-0.5 text-xs text-muted">
+              スタッフ
+              <select
+                value={selectedStaffId}
+                onChange={(e) => setSelectedStaffId(e.target.value)}
+                className="rounded-lg border border-border px-2 py-1.5 text-sm"
+              >
+                {staffOptions.map((s) => (
+                  <option key={s.userId} value={s.userId}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )
+        ) : null}
+
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          権限
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as "TEAM_MANAGER" | "TEAM_LEADER")}
+            className="rounded-lg border border-border px-2 py-1.5 text-sm"
+          >
+            <option value="TEAM_MANAGER">マネージャー</option>
+            <option value="TEAM_LEADER">リーダー</option>
+          </select>
+        </label>
+
+        {mode === "new" ? (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                const url = await inviteTeamManagerAction(teamId, role);
+                setInviteUrl(url);
+              })
+            }
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            招待URLを発行する
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={pending || !selectedStaffId}
+            onClick={() =>
+              startTransition(async () => {
+                await promoteExistingStaffToTeamRoleAction(teamId, selectedStaffId, role);
+                onDone();
+              })
+            }
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            追加する
+          </button>
+        )}
+        <button type="button" onClick={onDone} className="rounded-lg border border-border px-3 py-1.5 text-xs">
+          キャンセル
+        </button>
+      </div>
+
+      {inviteUrl ? (
+        <p className="mt-2 truncate rounded-lg border border-accent bg-accent/10 px-3 py-2 text-xs">招待URL: {inviteUrl}</p>
+      ) : null}
+    </div>
   );
 }

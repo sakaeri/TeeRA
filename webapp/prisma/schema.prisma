@@ -392,6 +392,7 @@ model InviteToken {
   contractTemplateId    String? // STAFF invite: issue this contract to the invitee on join
   contractStartDate     DateTime?    @db.Date // overrides the template's default start date for this specific invite
   targetRole            CompanyRole? // role granted on redemption (STAFF invites etc.)
+  targetTeamRole        TeamRole? // set when this STAFF invite is specifically for a team manager/leader (teamId必須); null = default TEAM_MEMBER
   upgradeProxyUserId    String? // 本アカウントと連携する: reassigns this proxy User's membership to the real account instead of creating a new one
   createdByUserId       String
   expiresAt             DateTime

@@ -6,6 +6,7 @@ import { canManage, canManageCompanySettings } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import {
   inviteStaff,
+  inviteTeamManager,
   createProxyStaff,
   inviteProxyUpgrade,
   getStaffMonthDetail,
@@ -31,6 +32,7 @@ import {
   setCompanyMemberRole,
   addTeamClient,
   removeTeamClient,
+  setStaffPlainTeamMemberships,
 } from "@/lib/domain/teams";
 
 function absoluteInviteUrl(token: string) {
@@ -194,6 +196,48 @@ export async function removeTeamMemberAction(teamId: string, userId: string) {
 
   await removeTeamMember({ teamId, userId });
   revalidatePath("/company/settings");
+}
+
+// 設定＞チーム管理の「＋招待」（新しく招待する）専用 — 参加した瞬間から
+// 指定した役職（マネージャー/リーダー）を持つ招待URLを発行する。
+export async function inviteTeamManagerAction(teamId: string, teamRole: "TEAM_MANAGER" | "TEAM_LEADER") {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  const invite = await inviteTeamManager({
+    companyId: membership.companyId,
+    createdByUserId: userId,
+    teamId,
+    teamRole,
+  });
+  return absoluteInviteUrl(invite.token);
+}
+
+// 設定＞チーム管理の「＋招待」（既存スタッフから選ぶ）専用 — 招待URLを
+// 発行し直さず、既に名簿にいるスタッフへその場で役職を付与する。
+// 中身はsetTeamMemberRoleActionと同じだが、役職をマネージャー/リーダーに
+// 限定する（設定画面からの「メンバーに戻す」操作と混同しないよう分ける）。
+export async function promoteExistingStaffToTeamRoleAction(
+  teamId: string,
+  targetUserId: string,
+  teamRole: "TEAM_MANAGER" | "TEAM_LEADER",
+) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  await setTeamMemberRole({ teamId, userId: targetUserId, role: teamRole });
+  revalidatePath("/company/settings");
+}
+
+// スタッフ詳細＞編集パネル専用 — 一般所属（TEAM_MEMBER）としてのチーム
+// 所属だけを一括で入れ替える。マネージャー/リーダーの役職には触れない
+// （setStaffPlainTeamMembershipsのコメント参照）。
+export async function setStaffTeamsAction(staffUserId: string, teamIds: string[]) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  await setStaffPlainTeamMemberships({ companyId: membership.companyId, staffUserId, teamIds });
+  revalidatePath("/company/roster");
 }
 
 export async function addTeamClientAction(teamId: string, companyRelationshipId: string) {

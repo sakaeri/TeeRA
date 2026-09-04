@@ -69,6 +69,32 @@ export async function getClientTeamIds(companyRelationshipId: string) {
   return rows.map((r) => r.teamId);
 }
 
+// スタッフ詳細の「編集」パネル用 — 一般所属（TEAM_MEMBER）としてのチーム
+// 所属を、渡されたteamIds通りに揃える。マネージャー/リーダーの役職を持つ
+// チームはここでは一切触らない（昇格・降格は設定＞チーム管理側の専用操作
+// で行う — このパネルは「どのチームの一般スタッフか」だけを扱う）。
+export async function setStaffPlainTeamMemberships(params: {
+  companyId: string;
+  staffUserId: string;
+  teamIds: string[];
+}) {
+  const current = await prisma.teamMembership.findMany({
+    where: { userId: params.staffUserId, team: { companyId: params.companyId } },
+  });
+  const desired = new Set(params.teamIds);
+  const toAdd = params.teamIds.filter((id) => !current.some((tm) => tm.teamId === id));
+  const toRemove = current.filter((tm) => tm.role === "TEAM_MEMBER" && !desired.has(tm.teamId)).map((tm) => tm.teamId);
+
+  await prisma.$transaction([
+    ...toAdd.map((teamId) =>
+      prisma.teamMembership.create({ data: { teamId, userId: params.staffUserId, role: "TEAM_MEMBER" } }),
+    ),
+    ...(toRemove.length > 0
+      ? [prisma.teamMembership.deleteMany({ where: { userId: params.staffUserId, teamId: { in: toRemove } } })]
+      : []),
+  ]);
+}
+
 export async function setCompanyMemberRole(params: {
   companyId: string;
   userId: string;
