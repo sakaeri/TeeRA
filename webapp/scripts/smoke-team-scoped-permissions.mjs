@@ -117,13 +117,16 @@ try {
   await admin.waitForTimeout(500);
   const relBId = psql(`select id from "CompanyRelationship" where "ownerCompanyId"='${companyId}' order by "createdAt" desc limit 1;`);
 
-  await admin.goto("http://localhost:3000/company/settings?tab=teams");
-  const teamBCard = admin
-    .locator("div.rounded-xl.border.border-border.p-4")
-    .filter({ has: admin.locator("div.mb-3.font-semibold", { hasText: /^Bチーム$/ }) });
-  await teamBCard.getByText(/主な取引先/).first().click();
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.click("text=依頼主一覧");
+  await admin.waitForTimeout(300);
+  await admin.click("text=Bチーム取引先");
+  await admin.waitForTimeout(300);
+  const clientPanel = admin.locator("div.fixed.inset-0.z-30").last();
+  await clientPanel.getByRole("button", { name: "チームとの紐付けを編集" }).click();
   await admin.waitForTimeout(200);
-  await teamBCard.locator("label", { hasText: "Bチーム取引先" }).locator("input").check();
+  await clientPanel.locator("label", { hasText: "Bチーム" }).locator("input[type=checkbox]").check();
+  await clientPanel.getByRole("button", { name: "保存", exact: true }).click();
   await admin.waitForTimeout(500);
   const linkCount = psql(`select count(*) from "TeamClientRelationship" where "teamId"='${teamBId}' and "companyRelationshipId"='${relBId}';`);
   log("setup: Bチーム取引先 linked to Bチーム", linkCount === "1");

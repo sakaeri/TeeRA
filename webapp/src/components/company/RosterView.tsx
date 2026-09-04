@@ -364,6 +364,7 @@ export function RosterView({
           relationshipId={selectedRelationshipId}
           kind={selectedRelationshipKind}
           knownTaskNames={knownTaskNames}
+          allTeams={teams}
           onClose={() => {
             setSelectedRelationshipId(null);
             setSelectedRelationshipKind(null);

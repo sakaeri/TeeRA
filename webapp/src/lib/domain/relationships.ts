@@ -171,11 +171,16 @@ export async function getClientMonthDetail(params: {
   const unapprovedCount = shifts.filter((s) => s.workReport && s.workReport.approvalStatus !== "APPROVED").length;
   const today = new Date();
   const relationshipNotes = await listRelationshipNotes(params.companyRelationshipId);
+  const teamLinks = await prisma.teamClientRelationship.findMany({
+    where: { companyRelationshipId: params.companyRelationshipId, team: { companyId: params.companyId } },
+    include: { team: true },
+  });
 
   return {
     relationshipId: relationship.id,
     name: counterpartCompany?.name ?? relationship.proxyName ?? "",
     isProxy: !counterpartCompany,
+    teams: teamLinks.map((l) => ({ teamId: l.teamId, teamName: l.team.name })),
     relationshipNotes: relationshipNotes.map((n) => ({
       id: n.id,
       content: n.content,

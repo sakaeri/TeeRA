@@ -34,6 +34,7 @@ import {
   addTeamClient,
   removeTeamClient,
   setStaffPlainTeamMemberships,
+  setClientTeams,
 } from "@/lib/domain/teams";
 
 function absoluteInviteUrl(token: string) {
@@ -254,6 +255,19 @@ export async function setStaffTeamsAction(staffUserId: string, teamIds: string[]
 
   await setStaffPlainTeamMemberships({ companyId: membership.companyId, staffUserId, teamIds });
   revalidatePath("/company/roster");
+}
+
+// 依頼主/派遣会社詳細＞編集パネル専用 — その取引先が紐づくチームを一括で
+// 入れ替える。
+export async function setClientTeamsAction(companyRelationshipId: string, teamIds: string[]) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertRelationshipOwnedByCompany(companyRelationshipId, membership.companyId);
+
+  await setClientTeams({ companyId: membership.companyId, companyRelationshipId, teamIds });
+  revalidatePath("/company/roster");
+  revalidatePath("/company/settings");
+  revalidatePath("/company/calendar");
 }
 
 export async function addTeamClientAction(teamId: string, companyRelationshipId: string) {

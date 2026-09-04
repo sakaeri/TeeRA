@@ -11,8 +11,6 @@ import {
   inviteCompanyAdminAction,
   createTeamAction,
   setTeamMemberRoleAction,
-  addTeamClientAction,
-  removeTeamClientAction,
   inviteTeamManagerAction,
   promoteExistingStaffToTeamRoleAction,
 } from "@/app/company/actions";
@@ -27,7 +25,7 @@ type Admin = {
 };
 
 type TeamMember = { userId: string; name: string; role: string };
-type Team = { id: string; name: string; members: TeamMember[]; clientIds: string[] };
+type Team = { id: string; name: string; members: TeamMember[] };
 type StaffOption = { userId: string; name: string };
 
 type ContractTemplate = {
@@ -137,7 +135,7 @@ export function SettingsView({
             phoneNumber={phoneNumber}
           />
           <AdminsSection admins={admins} />
-          <TeamsSection teams={teams} staff={staff} clients={contractClients} />
+          <TeamsSection teams={teams} staff={staff} />
         </div>
       ) : null}
 
@@ -212,7 +210,7 @@ function CompanyInfoSection({
             onClick={() => setEditing(true)}
             className="rounded-lg border border-accent bg-accent/20 px-4 py-2 text-sm font-semibold text-primary"
           >
-            ✎ 変更
+            <span className="inline-block scale-x-[-1]">✎</span> 変更
           </button>
         </div>
       </SectionCard>
@@ -357,21 +355,18 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
 function TeamsSection({
   teams,
   staff,
-  clients,
 }: {
   teams: Team[];
   staff: StaffOption[];
-  clients: ContractClientOption[];
 }) {
   const [pending, startTransition] = useTransition();
   const [newTeamName, setNewTeamName] = useState("");
-  const [expandedClientsTeamId, setExpandedClientsTeamId] = useState<string | null>(null);
   const [inviteFormTeamId, setInviteFormTeamId] = useState<string | null>(null);
 
   return (
     <SectionCard title="チーム管理">
       <p className="mb-4 text-xs text-muted">
-        ここに載るのはチームのマネージャー/リーダーだけです。一般スタッフのチーム所属は、スタッフ名簿の各スタッフ詳細から変更できます。
+        ここに載るのはチームのマネージャー/リーダーだけです。一般スタッフのチーム所属はスタッフ名簿の各スタッフ詳細から、依頼主/派遣会社との紐付けは各企業詳細から変更できます。
       </p>
       <div className="mb-6 flex items-center gap-3">
         <input
@@ -458,43 +453,6 @@ function TeamsSection({
               )}
             </div>
 
-            {clients.length > 0 ? (
-              <div className="mt-3 border-t border-border pt-3">
-                <button
-                  type="button"
-                  onClick={() => setExpandedClientsTeamId(expandedClientsTeamId === team.id ? null : team.id)}
-                  className="text-xs text-muted hover:text-primary"
-                >
-                  {expandedClientsTeamId === team.id
-                    ? "▲ 主な取引先を閉じる"
-                    : `▼ 主な取引先（${team.clientIds.length}件） — シフト作成時に上に出す依頼主`}
-                </button>
-                {expandedClientsTeamId === team.id ? (
-                  <div className="mt-2 flex max-h-48 flex-col gap-1 overflow-y-auto">
-                    {clients.map((c) => {
-                      const checked = team.clientIds.includes(c.id);
-                      return (
-                        <label key={c.id} className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            defaultChecked={checked}
-                            disabled={pending}
-                            onChange={(e) =>
-                              startTransition(() =>
-                                e.target.checked
-                                  ? addTeamClientAction(team.id, c.id)
-                                  : removeTeamClientAction(team.id, c.id),
-                              )
-                            }
-                          />
-                          {c.name}
-                        </label>
-                      );
-                    })}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
           </div>
           );
         })}

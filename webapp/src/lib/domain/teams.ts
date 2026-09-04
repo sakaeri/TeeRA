@@ -95,6 +95,37 @@ export async function setStaffPlainTeamMemberships(params: {
   ]);
 }
 
+// 依頼主/派遣会社詳細の「編集」パネル用 — その取引先が紐づくチームを、
+// 渡されたteamIds通りに揃える（スタッフと違い役職の概念が無いので単純な
+// 差分反映でよい）。
+export async function setClientTeams(params: {
+  companyId: string;
+  companyRelationshipId: string;
+  teamIds: string[];
+}) {
+  const current = await prisma.teamClientRelationship.findMany({
+    where: { companyRelationshipId: params.companyRelationshipId, team: { companyId: params.companyId } },
+  });
+  const desired = new Set(params.teamIds);
+  const toAdd = params.teamIds.filter((id) => !current.some((c) => c.teamId === id));
+  const toRemove = current.filter((c) => !desired.has(c.teamId)).map((c) => c.teamId);
+
+  await prisma.$transaction([
+    ...toAdd.map((teamId) =>
+      prisma.teamClientRelationship.create({
+        data: { teamId, companyRelationshipId: params.companyRelationshipId },
+      }),
+    ),
+    ...(toRemove.length > 0
+      ? [
+          prisma.teamClientRelationship.deleteMany({
+            where: { companyRelationshipId: params.companyRelationshipId, teamId: { in: toRemove } },
+          }),
+        ]
+      : []),
+  ]);
+}
+
 export async function setCompanyMemberRole(params: {
   companyId: string;
   userId: string;
