@@ -79,8 +79,8 @@ export async function requireCompanyStaffRole() {
 // 管理者/編集者に加えて、チームマネージャー/リーダー（会社スコープ上は
 // role=STAFFのまま、TeamMembership側の役職として持つ）も通す。関数名は元の
 // 「本部管理者/編集者のみ」時代のまま残しているが、実際にどの操作ができる
-// かは各画面・各アクション側のcanManage/canView/canManageCompanySettingsが
-// 個別に判定する（会社スコープ限定の操作はそちらで引き続き弾かれる）。
+// かは各画面・各アクション側のcanManage/canManageShifts/canManageCompanySettings
+// が個別に判定する（会社スコープ限定の操作はそちらで引き続き弾かれる）。
 export async function requireCompanyAdminOrEditor() {
   const { userId, membership } = await requireActiveMembership();
   if (membership.role === "STAFF" && !hasAnyTeamManagementRole(membership)) {

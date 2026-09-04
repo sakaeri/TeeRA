@@ -1,11 +1,12 @@
 import "server-only";
 import type { ActiveMembership } from "@/lib/auth/session";
 
-// 決定事項（permission-rules-memo.md, reconfirmed chat21/chat29）:
+// 決定事項（permission-rules-memo.md, reconfirmed chat21/chat29/このチャット）:
 // - 会社スコープ 管理者/編集者: 全社に対してフル権限。
 // - チームスコープ マネージャー: 自チーム内では会社管理者/編集者と同等の権限
-//   （請求書発行・給与計算を含む — 当初案の「全社スコープのみ」から明示的に拡張された）。
-// - チームスコープ リーダー: 契約書・請求関連は閲覧のみ、発行・作成は不可。
+//   （シフト作成・給与計算・請求書発行・契約書を含む）。
+// - チームスコープ リーダー: シフト作成・管理のみ可能。給与計算・請求書・
+//   契約書は閲覧も含めて一切触れない（本部管理者/編集者とマネージャーのみ）。
 // - スタッフ: 管理権限なし。
 
 function isTeamManagerOf(membership: ActiveMembership, teamId: string) {
@@ -24,18 +25,21 @@ export function isCompanyScopeAdmin(membership: ActiveMembership) {
   return membership.role === "COMPANY_ADMIN" || membership.role === "COMPANY_EDITOR";
 }
 
-// Can create/edit/issue: roster, shifts, teams, contracts, payroll, invoices —
-// within the given team if teamId is provided, or company-wide if omitted.
+// Can create/edit/issue: roster, teams, contracts, payroll, invoices — within
+// the given team if teamId is provided, or company-wide if omitted. リーダーは
+// 含まない（給与・請求書・契約書はマネージャーと本部のみ）。
 export function canManage(membership: ActiveMembership, teamId?: string | null) {
   if (isCompanyScopeAdmin(membership)) return true;
   if (teamId && isTeamManagerOf(membership, teamId)) return true;
   return false;
 }
 
-// Can view (but not create/edit/issue) contracts and billing documents.
-export function canView(membership: ActiveMembership, teamId?: string | null) {
-  if (canManage(membership, teamId)) return true;
-  if (teamId && isTeamLeaderOf(membership, teamId)) return true;
+// シフト作成・管理専用 — こちらはリーダーも含む（リーダーの権限はシフト
+// 作成のみ、というのが決定事項）。canManageと違いcontracts/payroll/invoices
+// では使わないこと。
+export function canManageShifts(membership: ActiveMembership, teamId?: string | null) {
+  if (isCompanyScopeAdmin(membership)) return true;
+  if (teamId && (isTeamManagerOf(membership, teamId) || isTeamLeaderOf(membership, teamId))) return true;
   return false;
 }
 
@@ -45,11 +49,6 @@ export function canView(membership: ActiveMembership, teamId?: string | null) {
 export function canManageAny(membership: ActiveMembership, teamIds: string[]) {
   if (isCompanyScopeAdmin(membership)) return true;
   return teamIds.some((teamId) => canManage(membership, teamId));
-}
-
-export function canViewAny(membership: ActiveMembership, teamIds: string[]) {
-  if (isCompanyScopeAdmin(membership)) return true;
-  return teamIds.some((teamId) => canView(membership, teamId));
 }
 
 // 会社スコープの管理者/編集者ではないが、いずれかのチームでマネージャー/

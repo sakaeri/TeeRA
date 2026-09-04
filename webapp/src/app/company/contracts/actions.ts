@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { canManage, canManageAny } from "@/lib/auth/permissions";
+import { canManage, canManageAny, canManageShifts } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { getStaffTeamIds, getClientTeamIds } from "@/lib/domain/teams";
 import {
@@ -63,11 +63,15 @@ async function assertRelationshipOwned(companyId: string, companyRelationshipId?
 }
 
 // 業務内容の登録のみ行う（単価は付けない）— シフト作成モーダルのその場追加
-// から呼ばれる。単価は依頼主詳細で別途設定する。
-export async function registerPlacementTaskNameAction(input: { companyRelationshipId?: string; taskName: string }) {
+// から呼ばれる。単価は依頼主詳細で別途設定する。自社(INHOUSE)シフトでは
+// companyRelationshipIdが無いので、その場合はシフト作成中のteamIdで
+// 判定する（マネージャーだけでなくリーダーもシフト作成の一環として
+// ここを通れる必要がある）。
+export async function registerPlacementTaskNameAction(input: { teamId?: string; companyRelationshipId?: string; taskName: string }) {
   const { membership } = await requireCompanyAdminOrEditor();
   const clientTeamIds = input.companyRelationshipId ? await getClientTeamIds(input.companyRelationshipId) : [];
-  if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
+  const allowed = canManageAny(membership, clientTeamIds) || canManageShifts(membership, input.teamId);
+  if (!allowed) throw new Error("forbidden");
   await assertRelationshipOwned(membership.companyId, input.companyRelationshipId);
 
   const rate = await registerPlacementTaskName({ ...input, companyId: membership.companyId });

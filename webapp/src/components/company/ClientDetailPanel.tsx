@@ -156,69 +156,71 @@ export function ClientDetailPanel({
           <>
             <h2 className="mb-3 font-serif-jp text-xl font-bold">{data.name}</h2>
 
-            {!editingTeams ? (
-              <div className="mb-4 flex flex-wrap items-center gap-1">
-                {data.teams.length === 0 ? (
-                  <span className="text-xs text-muted">紐づくチームなし</span>
-                ) : (
-                  data.teams.map((t) => (
-                    <span key={t.teamId} className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-900">
-                      {t.teamName}
-                    </span>
-                  ))
-                )}
-                <button
-                  type="button"
-                  onClick={() => startEditTeams(data.teams)}
-                  aria-label="チームとの紐付けを編集"
-                  className="ml-1 text-xs text-muted hover:text-primary"
-                >
-                  <span className="inline-block scale-x-[-1]">✎</span> 編集
-                </button>
-              </div>
-            ) : (
-              <div className="mb-4 rounded-lg border border-border bg-background/40 p-3">
-                <p className="mb-1 text-xs font-medium">紐づくチーム（複数選択可・シフト作成時に上に出す依頼主）</p>
-                <div className="mb-3 flex flex-col gap-1">
-                  {allTeams.map((team) => (
-                    <label key={team.id} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={teamSelection.has(team.id)}
-                        disabled={pending}
-                        onChange={(e) =>
-                          setTeamSelection((prev) => {
-                            const next = new Set(prev);
-                            if (e.target.checked) next.add(team.id);
-                            else next.delete(team.id);
-                            return next;
-                          })
-                        }
-                      />
-                      {team.name}
-                    </label>
-                  ))}
-                  {allTeams.length === 0 ? <p className="text-xs text-muted">チームがまだありません。</p> : null}
-                </div>
-                <div className="flex gap-2">
+            {kind === "client" ? (
+              !editingTeams ? (
+                <div className="mb-4 flex flex-wrap items-center gap-1">
+                  {data.teams.length === 0 ? (
+                    <span className="text-xs text-muted">紐づくチームなし</span>
+                  ) : (
+                    data.teams.map((t) => (
+                      <span key={t.teamId} className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-900">
+                        {t.teamName}
+                      </span>
+                    ))
+                  )}
                   <button
                     type="button"
-                    disabled={pending}
-                    onClick={submitTeams}
-                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                    onClick={() => startEditTeams(data.teams)}
+                    aria-label="チームとの紐付けを編集"
+                    className="ml-1 text-xs text-muted hover:text-primary"
                   >
-                    保存
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingTeams(false)}
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs"
-                  >
-                    キャンセル
+                    <span className="inline-block scale-x-[-1]">✎</span> 編集
                   </button>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="mb-4 rounded-lg border border-border bg-background/40 p-3">
+                  <p className="mb-1 text-xs font-medium">紐づくチーム（複数選択可・シフト作成時に上に出す依頼主）</p>
+                  <div className="mb-3 flex flex-col gap-1">
+                    {allTeams.map((team) => (
+                      <label key={team.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={teamSelection.has(team.id)}
+                          disabled={pending}
+                          onChange={(e) =>
+                            setTeamSelection((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(team.id);
+                              else next.delete(team.id);
+                              return next;
+                            })
+                          }
+                        />
+                        {team.name}
+                      </label>
+                    ))}
+                    {allTeams.length === 0 ? <p className="text-xs text-muted">チームがまだありません。</p> : null}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={submitTeams}
+                      className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                    >
+                      保存
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingTeams(false)}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs"
+                    >
+                      キャンセル
+                    </button>
+                  </div>
+                </div>
+              )
+            ) : null}
 
             {data.isProxy ? (
               <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 p-3 text-xs">

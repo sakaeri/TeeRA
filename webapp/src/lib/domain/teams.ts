@@ -13,7 +13,7 @@ export async function listTeams(companyId: string) {
 // チームの主な取引先の紐付け。当初はシフト作成時の依頼主選択で上に出す
 // ための並び替え専用として作ったが、「チームに所属する企業＝そのチームが
 // 主に取引がある企業」という位置づけ通り、請求書のチームスコープ権限判定
-// （canManageAny/canViewAny）にもそのまま使う — 別テーブルは持たない。
+// （canManageAny）にもそのまま使う — 別テーブルは持たない。
 export async function addTeamClient(params: { teamId: string; companyRelationshipId: string }) {
   return prisma.teamClientRelationship.upsert({
     where: { teamId_companyRelationshipId: { teamId: params.teamId, companyRelationshipId: params.companyRelationshipId } },

@@ -2069,6 +2069,7 @@ function AssignShiftModal({
     if (!newTaskName.trim()) return;
     startNewTaskTransition(async () => {
       const rate = await registerPlacementTaskNameAction({
+        teamId: teamId || undefined,
         companyRelationshipId: companyRelationshipId || undefined,
         taskName: newTaskName.trim(),
       });
