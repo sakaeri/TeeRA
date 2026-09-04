@@ -141,7 +141,10 @@ try {
   await wageInput.fill("1200");
   await wagePopup.locator('input[type=date]').fill(tomorrow);
   await wagePopup.getByRole("button", { name: "保存" }).click();
-  await admin.waitForTimeout(500);
+  // 保存が成功するとポップアップが閉じる（submitEditWageのsetEditingContractId(null)）
+  // ので、それを保存完了の合図として待つ — 固定タイムアウトだと環境の
+  // 負荷次第でDB反映前にクエリしてしまうことがある。
+  await wagePopup.waitFor({ state: "detached" });
 
   const wageAfter = psql(`select "wageAmountSnapshot" from "StaffContract" where id='${staffContractId}';`);
   log("wageAmountSnapshot（同意時点の金額）は改定後も変わらない", wageAfter === wageAmountSnapshotBefore);
@@ -301,7 +304,7 @@ try {
     .slice(0, 10);
   await monthlyPopup.locator('input[type=date]').fill(nextMonthStart);
   await monthlyPopup.getByRole("button", { name: "保存" }).click();
-  await admin.waitForTimeout(500);
+  await monthlyPopup.waitFor({ state: "detached" });
 
   const monthlyVersionAcceptedCount = psql(
     `select count(*) from "StaffContractWageVersion" where "staffContractId"='${monthlyContractId}' and "wageAmount"=260000 and "effectiveFrom"='${nextMonthStart}';`,

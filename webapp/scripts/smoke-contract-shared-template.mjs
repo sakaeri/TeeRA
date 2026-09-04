@@ -80,7 +80,10 @@ try {
   log("「そのまま契約する」ではテンプレートが複製されない（1件のまま）", templateCountAfter1 === "1");
 
   const contract1TemplateId = psql(
-    `select sc."templateId" from "StaffContract" sc join "User" u on u.id=sc."staffUserId" where u.name='共有太郎';`,
+    `select sc."templateId" from "StaffContract" sc ` +
+      `join "User" u on u.id=sc."staffUserId" ` +
+      `join "CompanyMembership" cm on cm."userId"=u.id ` +
+      `where u.name='共有太郎' and cm."companyId"='${companyId}' order by sc."createdAt" desc limit 1;`,
   );
   log("生成された契約が元のテンプレートを直接参照している", contract1TemplateId === templateId);
 
@@ -119,7 +122,10 @@ try {
   log("「内容を編集して」を選んだ場合だけ複製が作られる（テンプレート2件に）", templateCountAfter3 === "2");
 
   const contract3TemplateId = psql(
-    `select sc."templateId" from "StaffContract" sc join "User" u on u.id=sc."staffUserId" where u.name='編集次郎';`,
+    `select sc."templateId" from "StaffContract" sc ` +
+      `join "User" u on u.id=sc."staffUserId" ` +
+      `join "CompanyMembership" cm on cm."userId"=u.id ` +
+      `where u.name='編集次郎' and cm."companyId"='${companyId}' order by sc."createdAt" desc limit 1;`,
   );
   log("編集次郎の契約は元のテンプレートとは別の複製を参照している", contract3TemplateId !== templateId);
 

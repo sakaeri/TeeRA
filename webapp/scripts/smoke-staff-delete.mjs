@@ -19,8 +19,9 @@ const admin = await adminCtx.newPage();
 const staffCtx = await browser.newContext();
 const staff = await staffCtx.newPage();
 
-const adminEmail = `sdel-admin-${Date.now()}@example.com`;
-const staffEmail = `sdel-staff-${Date.now()}@example.com`;
+const runId = Date.now();
+const adminEmail = `sdel-admin-${runId}@example.com`;
+const staffEmail = `sdel-staff-${runId}@example.com`;
 
 try {
   await admin.goto("http://localhost:3000/register");
@@ -137,11 +138,11 @@ try {
   await admin.getByRole("button", { name: "作成", exact: true }).click();
   await admin.waitForTimeout(600);
   const placedProxyId = psql(`select id from "User" where name='配属あり仮太郎' order by "createdAt" desc limit 1;`);
+  const placedRelId = `sdel-placed-rel-${runId}`;
   psql(
     `insert into "CompanyRelationship" (id, "ownerCompanyId", "agencyCompanyId", "proxyName", "createdAt") ` +
-      `values ('reldel-placed-rel-id', '${companyId}', '${companyId}', '配属確認取引先', now());`,
+      `values ('${placedRelId}', '${companyId}', '${companyId}', '配属確認取引先', now());`,
   );
-  const placedRelId = "reldel-placed-rel-id";
   psql(
     `insert into "StaffPlacement" (id, "staffUserId", "companyRelationshipId", "createdAt") ` +
       `values (gen_random_uuid()::text, '${placedProxyId}', '${placedRelId}', now());`,
