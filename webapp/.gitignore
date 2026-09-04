@@ -47,3 +47,7 @@ next-env.d.ts
 /.claude/
 /.windsurf/
 /.cursor/
+
+# local dev-server run artifacts (not app code)
+/nextdev.log
+/devserver.pid
