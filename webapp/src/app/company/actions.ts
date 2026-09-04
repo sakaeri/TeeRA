@@ -8,6 +8,7 @@ import {
   inviteStaff,
   inviteTeamManager,
   createProxyStaff,
+  deleteStaff,
   inviteProxyUpgrade,
   getStaffMonthDetail,
   addStaffNote,
@@ -70,6 +71,21 @@ export async function createProxyStaffAction(name: string, teamId?: string) {
     teamId,
   });
   revalidatePath("/company/roster");
+}
+
+// 仮アカウントの二重作成など、間違って作ってしまったスタッフ情報の削除。
+// 本アカウント・稼働実績のある仮アカウントはdeleteStaff側で弾かれる。
+export async function deleteStaffAction(staffUserId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  try {
+    await deleteStaff({ companyId: membership.companyId, staffUserId });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "unknown" };
+  }
+  revalidatePath("/company/roster");
+  return { error: null };
 }
 
 export async function inviteProxyUpgradeAction(proxyUserId: string) {

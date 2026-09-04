@@ -10,6 +10,7 @@ import {
   updateStaffIdDocumentAction,
   updateStaffBankInfoAction,
   setStaffTeamsAction,
+  deleteStaffAction,
 } from "@/app/company/actions";
 import {
   addStaffTaskRateVersionAction,
@@ -164,6 +165,8 @@ export function StaffDetailPanel({
   const [showContractHistory, setShowContractHistory] = useState(false);
   const [editingTeams, setEditingTeams] = useState(false);
   const [teamSelection, setTeamSelection] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   function endGenerateFlow() {
     setShowGenerateChoose(false);
@@ -268,6 +271,25 @@ export function StaffDetailPanel({
     });
   }
 
+  function submitDeleteStaff() {
+    setDeleteError(null);
+    startTransition(async () => {
+      const result = await deleteStaffAction(userId);
+      if (result?.error) {
+        setDeleteError(
+          result.error === "has_shifts"
+            ? "稼働実績があるため削除できません。"
+            : "削除できませんでした。",
+        );
+        setShowDeleteConfirm(false);
+        return;
+      }
+      setShowDeleteConfirm(false);
+      onClose();
+      router.refresh();
+    });
+  }
+
   function refresh() {
     return getStaffMonthDetailAction(userId, year, month).then((d) => {
       setData(d);
@@ -307,7 +329,18 @@ export function StaffDetailPanel({
           <>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-serif-jp text-xl font-bold">{data.name}</h2>
+              {data.isProxy ? (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="text-xs text-muted hover:text-red-600"
+                >
+                  スタッフ情報を削除
+                </button>
+              ) : null}
             </div>
+
+            {deleteError ? <p className="mb-3 text-xs text-red-600">{deleteError}</p> : null}
 
             {data.isProxy ? (
               <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 p-3 text-xs">
@@ -347,7 +380,7 @@ export function StaffDetailPanel({
                   aria-label="チーム所属を編集"
                   className="ml-1 text-xs text-muted hover:text-primary"
                 >
-                  ✎ 編集
+                  <span className="inline-block scale-x-[-1]">✎</span> 編集
                 </button>
               </div>
             ) : (
@@ -742,6 +775,16 @@ export function StaffDetailPanel({
             setDeleteNoteConfirmTarget(null);
           }}
           onCancel={() => setDeleteNoteConfirmTarget(null)}
+        />
+      ) : null}
+
+      {showDeleteConfirm ? (
+        <ConfirmDialog
+          message="このスタッフ情報を削除します。元に戻せません。よろしいですか？"
+          confirmLabel="削除する"
+          pending={pending}
+          onConfirm={submitDeleteStaff}
+          onCancel={() => setShowDeleteConfirm(false)}
         />
       ) : null}
 

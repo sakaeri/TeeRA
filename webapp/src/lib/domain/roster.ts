@@ -168,6 +168,25 @@ export async function createProxyStaff(params: {
   });
 }
 
+// スタッフ情報の削除 — 間違えて仮アカウントを二重作成してしまった場合の
+// 取り消し用。本アカウント（実際にログインする本人のアカウント）と、
+// 稼働実績（シフト）が一件でもある仮アカウントは対象外— 給与・請求の
+// 実績データを巻き込んで消してしまわないようにする。cascadeで所属・
+// 契約・単価・メモ等も一緒に消える（Userに対する全リレーションが
+// onDelete: Cascade — schema.prisma参照）。
+export async function deleteStaff(params: { companyId: string; staffUserId: string }) {
+  const membership = await prisma.companyMembership.findFirstOrThrow({
+    where: { userId: params.staffUserId, companyId: params.companyId, role: "STAFF" },
+    include: { user: true },
+  });
+  if (!membership.user.isProxy) throw new Error("not_proxy");
+
+  const shiftCount = await prisma.shift.count({ where: { staffUserId: params.staffUserId } });
+  if (shiftCount > 0) throw new Error("has_shifts");
+
+  await prisma.user.delete({ where: { id: params.staffUserId } });
+}
+
 export async function inviteProxyUpgrade(params: {
   proxyUserId: string;
   companyId: string;
