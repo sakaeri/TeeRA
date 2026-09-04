@@ -54,10 +54,15 @@ export async function deleteTemplateAction(templateId: string) {
   revalidatePath("/company/settings");
 }
 
+// 単価は「請求する側＝派遣会社(agencyCompanyId)」だけが設定できる。
+// ownerCompanyId（関係を最初に作った側）とは限らない — 依頼主が先に相手を
+// 登録した場合でも、単価を設定すべきなのは常に派遣会社側であるべきなので
+// agencyCompanyIdで見る（company/actions.tsのassertRelationshipAgencySide
+// と同じ考え方）。
 async function assertRelationshipOwned(companyId: string, companyRelationshipId?: string) {
   if (!companyRelationshipId) return;
   const rel = await prisma.companyRelationship.findFirst({
-    where: { id: companyRelationshipId, ownerCompanyId: companyId },
+    where: { id: companyRelationshipId, agencyCompanyId: companyId },
   });
   if (!rel) throw new Error("forbidden");
 }

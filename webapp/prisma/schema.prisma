@@ -81,6 +81,7 @@ model Company {
   ownedRelationships   CompanyRelationship[]  @relation("OwnerSide") // relationships this company created
   agencyRelationships  CompanyRelationship[]  @relation("AgencySide") // this company sends staff out
   clientRelationships  CompanyRelationship[]  @relation("ClientSide") // this company receives staff
+  relationshipNotes    RelationshipNote[]
   placementRates       CompanyPlacementRate[]
   staffTaskRates       StaffTaskRate[]
   staffNotices         StaffNotice[]
@@ -247,17 +248,23 @@ model CompanyRelationship {
 
 // 情報メモ (roster client-detail panel) — StaffNoteと同じ考え方。誰がいつ
 // 書いたか分かるよう追記式のエントリ一覧にしている。更新はなく削除のみ。
+// あくまで自社内共有用（緊急連絡先・振込先・担当者の癖など）で、相手企業と
+// 共有するものではない — companyIdで書いた側の会社に紐づけ、読み書きとも
+// 自社のメモしか扱えないようにする（双方向可視化とは別軸。共有していい
+// のは配属状況・稼働実績だけ、という決定）。
 model RelationshipNote {
   id                     String   @id @default(cuid())
   companyRelationshipId  String
+  companyId              String
   content                String
   authorUserId           String
   createdAt              DateTime @default(now())
 
   companyRelationship CompanyRelationship @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
+  company             Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   author              User                @relation(fields: [authorUserId], references: [id])
 
-  @@index([companyRelationshipId])
+  @@index([companyRelationshipId, companyId])
 }
 
 // 配属記録 — 契約(StaffContract)とは無関係の軽量な事実の記録。「このスタッフは

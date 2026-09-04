@@ -265,7 +265,7 @@ export async function setStaffTeamsAction(staffUserId: string, teamIds: string[]
 export async function setClientTeamsAction(companyRelationshipId: string, teamIds: string[]) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
-  await assertRelationshipOwnedByCompany(companyRelationshipId, membership.companyId);
+  await assertRelationshipAgencySide(companyRelationshipId, membership.companyId);
 
   await setClientTeams({ companyId: membership.companyId, companyRelationshipId, teamIds });
   revalidatePath("/company/roster");
@@ -289,9 +289,10 @@ export async function deleteCompanyRelationshipAction(companyRelationshipId: str
   return { error: null };
 }
 
-// 配属解除（出禁）— 関係のオーナーでなくても、本アカウント連携済みの相手
-// 側（依頼主自身）からも操作できる。単価設定やチーム紐付け・関係の削除は
-// 引き続きオーナー限定（assertRelationshipOwnedByCompany）のまま。
+// 配属解除（出禁）— 関係の当事者であれば双方向どちらからでも操作できる。
+// 単価設定・チーム紐付けは引き続き派遣会社側限定（assertRelationshipAgencySide）
+// のまま。関係の削除は引き続きオーナー（deleteCompanyRelationship側の
+// ownerCompanyIdチェック）限定のまま。
 export async function unplaceStaffAction(companyRelationshipId: string, staffUserId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
@@ -304,7 +305,7 @@ export async function unplaceStaffAction(companyRelationshipId: string, staffUse
 export async function addTeamClientAction(teamId: string, companyRelationshipId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
-  await assertRelationshipOwnedByCompany(companyRelationshipId, membership.companyId);
+  await assertRelationshipAgencySide(companyRelationshipId, membership.companyId);
 
   await addTeamClient({ teamId, companyRelationshipId });
   revalidatePath("/company/settings");
@@ -314,7 +315,7 @@ export async function addTeamClientAction(teamId: string, companyRelationshipId:
 export async function removeTeamClientAction(teamId: string, companyRelationshipId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
-  await assertRelationshipOwnedByCompany(companyRelationshipId, membership.companyId);
+  await assertRelationshipAgencySide(companyRelationshipId, membership.companyId);
 
   await removeTeamClient({ teamId, companyRelationshipId });
   revalidatePath("/company/settings");
@@ -450,29 +451,33 @@ export async function getClientMonthDetailAction(companyRelationshipId: string, 
   return getClientMonthDetail({ companyId: membership.companyId, companyRelationshipId, year, month });
 }
 
-async function assertRelationshipOwnedByCompany(companyRelationshipId: string, companyId: string) {
+// 単価設定・チーム紐付けは「請求する側＝派遣会社(agencyCompanyId)」限定。
+// ownerCompanyId（＝関係のレコードを最初に作った側）とは限らない —
+// 依頼主が先に相手を登録した場合はownerCompanyIdが依頼主側になるが、
+// それでも単価を設定すべきなのは常に派遣会社側であるべきなので、
+// agencyCompanyIdで見る。
+async function assertRelationshipAgencySide(companyRelationshipId: string, companyId: string) {
   const target = await prisma.companyRelationship.findFirstOrThrow({
-    where: { id: companyRelationshipId, ownerCompanyId: companyId },
+    where: { id: companyRelationshipId, agencyCompanyId: companyId },
   });
   return target;
 }
 
+// 情報メモは完全に自社内共有用（緊急連絡先・振込先・担当者の癖など）で、
+// 相手企業とは共有しない。関係の当事者であれば双方向どちらからでも
+// 書き込める（domain層のlistRelationshipNotes/addRelationshipNote/
+// deleteRelationshipNoteが自社のメモしか扱わないよう絞り込んでいる）。
 export async function addRelationshipNoteAction(companyRelationshipId: string, content: string) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
-  await assertRelationshipOwnedByCompany(companyRelationshipId, membership.companyId);
-  await addRelationshipNote({ companyRelationshipId, authorUserId: userId, content });
+  await assertRelationshipParty(companyRelationshipId, membership.companyId);
+  await addRelationshipNote({ companyRelationshipId, companyId: membership.companyId, authorUserId: userId, content });
   revalidatePath("/company/roster");
 }
 
 export async function deleteRelationshipNoteAction(noteId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
-  const note = await prisma.relationshipNote.findFirstOrThrow({
-    where: { id: noteId },
-    include: { companyRelationship: true },
-  });
-  if (note.companyRelationship.ownerCompanyId !== membership.companyId) throw new Error("forbidden");
-  await deleteRelationshipNote(noteId);
+  await deleteRelationshipNote(noteId, membership.companyId);
   revalidatePath("/company/roster");
 }

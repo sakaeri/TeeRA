@@ -246,7 +246,7 @@ export async function getClientMonthDetail(params: {
   for (const s of shifts) staffMap.set(s.staffUserId, s.staff.name);
   const unapprovedCount = shifts.filter((s) => s.workReport && s.workReport.approvalStatus !== "APPROVED").length;
   const today = new Date();
-  const relationshipNotes = await listRelationshipNotes(params.companyRelationshipId);
+  const relationshipNotes = await listRelationshipNotes(params.companyRelationshipId, params.companyId);
   const teamLinks = await prisma.teamClientRelationship.findMany({
     where: { companyRelationshipId: params.companyRelationshipId, team: { companyId: params.companyId } },
     include: { team: true },
@@ -301,23 +301,36 @@ export async function getClientMonthDetail(params: {
 }
 
 // 情報メモ: StaffNoteと同じく、誰がいつ書いたか分かるよう追記式の一覧で
-// 持つ。更新はなく、削除のみ（誤記は削除して書き直す）。
-export async function listRelationshipNotes(companyRelationshipId: string) {
+// 持つ。更新はなく、削除のみ（誤記は削除して書き直す）。あくまで自社内
+// 共有用（緊急連絡先・振込先・担当者の癖など）なので、companyIdで書いた側
+// の会社に絞り込む — 相手企業には一切見えない（双方向可視化とは別軸）。
+export async function listRelationshipNotes(companyRelationshipId: string, companyId: string) {
   return prisma.relationshipNote.findMany({
-    where: { companyRelationshipId },
+    where: { companyRelationshipId, companyId },
     include: { author: true },
     orderBy: { createdAt: "desc" },
   });
 }
 
-export async function addRelationshipNote(params: { companyRelationshipId: string; authorUserId: string; content: string }) {
+export async function addRelationshipNote(params: {
+  companyRelationshipId: string;
+  companyId: string;
+  authorUserId: string;
+  content: string;
+}) {
   const content = params.content.trim();
   if (!content) throw new Error("empty_content");
   return prisma.relationshipNote.create({
-    data: { companyRelationshipId: params.companyRelationshipId, authorUserId: params.authorUserId, content },
+    data: {
+      companyRelationshipId: params.companyRelationshipId,
+      companyId: params.companyId,
+      authorUserId: params.authorUserId,
+      content,
+    },
   });
 }
 
-export async function deleteRelationshipNote(id: string) {
-  return prisma.relationshipNote.delete({ where: { id } });
+export async function deleteRelationshipNote(id: string, companyId: string) {
+  const note = await prisma.relationshipNote.findFirstOrThrow({ where: { id, companyId } });
+  return prisma.relationshipNote.delete({ where: { id: note.id } });
 }
