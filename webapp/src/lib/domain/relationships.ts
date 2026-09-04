@@ -126,6 +126,32 @@ export async function setRelationshipStatus(params: {
   });
 }
 
+// 取引先/派遣会社情報の削除 — 間違えて仮アカウントを二重作成してしまった
+// 場合の取り消し用（deleteStaffと同じ考え方）。本アカウントと連携済み
+// （相手企業が紐づいている）関係、および稼働実績（シフト・請求書・配属）が
+// 一件でもある関係は対象外。単価テーブルや契約書テンプレート、チームとの
+// 紐付けは単なる設定情報なのでブロックせずcascadeで一緒に消える
+// （schema.prisma参照）。
+export async function deleteCompanyRelationship(params: { companyId: string; companyRelationshipId: string }) {
+  const relationship = await prisma.companyRelationship.findFirstOrThrow({
+    where: { id: params.companyRelationshipId, ownerCompanyId: params.companyId },
+  });
+  // 依頼主一覧なら自社がagencyCompanyId側、相手はclientCompanyId — その逆が
+  // 派遣会社一覧。getClientMonthDetailのisProxy判定と同じ考え方。
+  const isClientDirection = relationship.agencyCompanyId === params.companyId;
+  const counterpartCompanyId = isClientDirection ? relationship.clientCompanyId : relationship.agencyCompanyId;
+  if (counterpartCompanyId) throw new Error("not_proxy");
+
+  const [shiftCount, invoiceCount, placementCount] = await Promise.all([
+    prisma.shift.count({ where: { companyRelationshipId: params.companyRelationshipId } }),
+    prisma.invoice.count({ where: { companyRelationshipId: params.companyRelationshipId } }),
+    prisma.staffPlacement.count({ where: { companyRelationshipId: params.companyRelationshipId } }),
+  ]);
+  if (shiftCount > 0 || invoiceCount > 0 || placementCount > 0) throw new Error("has_activity");
+
+  await prisma.companyRelationship.delete({ where: { id: params.companyRelationshipId } });
+}
+
 const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
 
 // 依頼主詳細パネルの稼働履歴タブ: 対象月のこの取引先向けシフト×業務報告を日付ごとにまとめる。

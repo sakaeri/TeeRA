@@ -9,6 +9,7 @@ import {
   inviteClientUpgradeAction,
   inviteAgencyUpgradeAction,
   setClientTeamsAction,
+  deleteCompanyRelationshipAction,
 } from "@/app/company/actions";
 import { addPlacementRateVersionAction, deletePlacementTaskNameAction } from "@/app/company/contracts/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
@@ -96,11 +97,32 @@ export function ClientDetailPanel({
   const [deleteNoteConfirmTarget, setDeleteNoteConfirmTarget] = useState<RelationshipNote | null>(null);
   const [editingTeams, setEditingTeams] = useState(false);
   const [teamSelection, setTeamSelection] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   function handleUpgrade() {
     startTransition(async () => {
       const url = kind === "client" ? await inviteClientUpgradeAction(relationshipId) : await inviteAgencyUpgradeAction(relationshipId);
       setUpgradeUrl(url);
+    });
+  }
+
+  function submitDeleteRelationship() {
+    setDeleteError(null);
+    startTransition(async () => {
+      const result = await deleteCompanyRelationshipAction(relationshipId);
+      if (result?.error) {
+        setDeleteError(
+          result.error === "has_activity"
+            ? "稼働実績があるため削除できません。"
+            : "削除できませんでした。",
+        );
+        setShowDeleteConfirm(false);
+        return;
+      }
+      setShowDeleteConfirm(false);
+      onClose();
+      router.refresh();
     });
   }
 
@@ -154,7 +176,40 @@ export function ClientDetailPanel({
           <p className="text-sm text-muted">読み込み中…</p>
         ) : (
           <>
-            <h2 className="mb-3 font-serif-jp text-xl font-bold">{data.name}</h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-serif-jp text-xl font-bold">{data.name}</h2>
+              {data.isProxy ? (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="text-xs text-muted hover:text-red-600"
+                >
+                  取引先情報を削除
+                </button>
+              ) : null}
+            </div>
+
+            {deleteError ? <p className="mb-3 text-xs text-red-600">{deleteError}</p> : null}
+
+            {data.isProxy ? (
+              <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 p-3 text-xs">
+                {upgradeUrl ? (
+                  <CopyUrlField url={upgradeUrl} size="sm" />
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <span>仮アカウントです。招待URLを送って本アカウントと連携できます。</span>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={handleUpgrade}
+                      className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                    >
+                      本アカウントと連携する
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : null}
 
             {kind === "client" ? (
               !editingTeams ? (
@@ -220,26 +275,6 @@ export function ClientDetailPanel({
                   </div>
                 </div>
               )
-            ) : null}
-
-            {data.isProxy ? (
-              <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 p-3 text-xs">
-                {upgradeUrl ? (
-                  <CopyUrlField url={upgradeUrl} size="sm" />
-                ) : (
-                  <div className="flex items-center justify-between gap-2">
-                    <span>仮アカウントです。招待URLを送って本アカウントと連携できます。</span>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={handleUpgrade}
-                      className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
-                    >
-                      本アカウントと連携する
-                    </button>
-                  </div>
-                )}
-              </div>
             ) : null}
 
             <div className="mb-4 flex gap-4 border-b border-border text-sm">
@@ -411,6 +446,16 @@ export function ClientDetailPanel({
           </>
         )}
       </div>
+
+      {showDeleteConfirm ? (
+        <ConfirmDialog
+          message="この取引先情報を削除します。元に戻せません。よろしいですか？"
+          confirmLabel="削除する"
+          pending={pending}
+          onConfirm={submitDeleteRelationship}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+      ) : null}
 
       {deleteNoteConfirmTarget ? (
         <ConfirmDialog

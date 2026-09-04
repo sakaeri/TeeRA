@@ -25,6 +25,7 @@ import {
   getClientMonthDetail,
   addRelationshipNote,
   deleteRelationshipNote,
+  deleteCompanyRelationship,
 } from "@/lib/domain/relationships";
 import {
   createTeam,
@@ -268,6 +269,22 @@ export async function setClientTeamsAction(companyRelationshipId: string, teamId
   revalidatePath("/company/roster");
   revalidatePath("/company/settings");
   revalidatePath("/company/calendar");
+}
+
+// 取引先/派遣会社情報の削除 — 間違えて仮アカウントを二重作成してしまった
+// 場合の取り消し用（deleteStaffActionと同じ考え方）。本アカウント連携済み・
+// 稼働実績のある関係はdeleteCompanyRelationship側で弾かれる。
+export async function deleteCompanyRelationshipAction(companyRelationshipId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  try {
+    await deleteCompanyRelationship({ companyId: membership.companyId, companyRelationshipId });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "unknown" };
+  }
+  revalidatePath("/company/roster");
+  return { error: null };
 }
 
 export async function addTeamClientAction(teamId: string, companyRelationshipId: string) {

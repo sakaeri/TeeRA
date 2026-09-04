@@ -129,6 +129,38 @@ try {
   const errorBody = await panel.textContent();
   log("エラーメッセージが表示される", errorBody.includes("稼働実績があるため削除できません"));
 
+  // --- シフトはまだ無くても、配属（StaffPlacement）実績があれば削除できない ---
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=仮アカウントを作成");
+  await admin.fill('input[placeholder="名称を入力"]', "配属あり仮太郎");
+  await admin.getByRole("button", { name: "作成", exact: true }).click();
+  await admin.waitForTimeout(600);
+  const placedProxyId = psql(`select id from "User" where name='配属あり仮太郎' order by "createdAt" desc limit 1;`);
+  psql(
+    `insert into "CompanyRelationship" (id, "ownerCompanyId", "agencyCompanyId", "proxyName", "createdAt") ` +
+      `values ('reldel-placed-rel-id', '${companyId}', '${companyId}', '配属確認取引先', now());`,
+  );
+  const placedRelId = "reldel-placed-rel-id";
+  psql(
+    `insert into "StaffPlacement" (id, "staffUserId", "companyRelationshipId", "createdAt") ` +
+      `values (gen_random_uuid()::text, '${placedProxyId}', '${placedRelId}', now());`,
+  );
+
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.click("text=配属あり仮太郎");
+  await admin.waitForTimeout(300);
+  panel = admin.locator("div.fixed.inset-0.z-30").last();
+  await panel.getByRole("button", { name: "スタッフ情報を削除" }).click();
+  await admin.waitForTimeout(200);
+  await admin.getByRole("button", { name: "削除する" }).click();
+  await admin.waitForTimeout(600);
+
+  const placedStillThere = psql(`select count(*) from "User" where id='${placedProxyId}';`);
+  log("配属実績のみ（シフト無し）の仮アカウントもサーバー側で削除が拒否される", placedStillThere === "1");
+  const placedErrorBody = await panel.textContent();
+  log("配属実績のエラーメッセージが表示される", placedErrorBody.includes("稼働実績があるため削除できません"));
+
   console.log(process.exitCode ? "STAFF DELETE SMOKE TEST HAD FAILURES" : "STAFF DELETE SMOKE TEST PASSED");
 } catch (err) {
   console.error("STAFF DELETE SMOKE TEST FAILED", err);
