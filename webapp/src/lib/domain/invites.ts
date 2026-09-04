@@ -181,6 +181,16 @@ export async function redeemCompanyRelationshipInvite(
       });
     }
 
+    // 招待元側のフラグは上（既存のプロキシ作成時 or 上のnew-relationship分岐）
+    // で立つが、受諾する側（redeemingCompanyId）は今まさに初めてこの方向の
+    // 当事者になるので、その場でも同様に立てる。どちらが招待したかで
+    // シフト作成の依頼主ピッカー等が使えたり使えなかったりするのはおかしい
+    // — 繋がった時点で両方とも自分の役割としてすぐ機能すべき。
+    await tx.company.update({
+      where: { id: redeemingCompanyId },
+      data: invite.kind === "CLIENT_UPGRADE" ? { dispatchEnabled: true } : { agencyEnabled: true },
+    });
+
     await tx.inviteToken.update({
       where: { id: invite.id },
       data: { usedAt: new Date() },

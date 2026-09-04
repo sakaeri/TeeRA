@@ -162,10 +162,14 @@ try {
   // 既にあるので重複扱いになる — 今日を選択解除して翌日を選択する。
   await modal2.getByRole("button", { name: "両方向確認スタッフ" }).click();
   await agency.waitForTimeout(300);
-  const today = new Date();
-  const tomorrow = new Date(Date.now() + 86400000);
-  await modal2.getByRole("button", { name: String(today.getDate()), exact: true }).click();
-  await modal2.getByRole("button", { name: String(tomorrow.getDate()), exact: true }).click();
+  // アプリの「今日」はJST基準（date.tsのtodayJst参照）。実行環境のローカル
+  // 時刻でnew Date().getDate()すると、UTC 15〜23時台はJSTと日付がずれて
+  // 「今日」ボタンが無効(過去)扱いになることがあるので、JST基準で計算する。
+  const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  const todayJst = new Date(Date.now() + JST_OFFSET_MS);
+  const tomorrowJst = new Date(Date.now() + JST_OFFSET_MS + 86400000);
+  await modal2.getByRole("button", { name: String(todayJst.getUTCDate()), exact: true }).click();
+  await modal2.getByRole("button", { name: String(tomorrowJst.getUTCDate()), exact: true }).click();
   await agency.waitForTimeout(200);
   await modal2.getByRole("button", { name: "次へ" }).click();
   await agency.waitForTimeout(300);

@@ -67,10 +67,11 @@ try {
   const ownerCheck = psql(`select "ownerCompanyId", "agencyCompanyId", "clientCompanyId" from "CompanyRelationship" where id='${relId}';`);
   log("① オーナーは依頼主側（派遣会社側ではない）というケースを再現できた", ownerCheck === `${clientCompanyId}|${agencyCompanyId}|${clientCompanyId}`);
 
-  // 招待「される」側の会社は、redeemCompanyRelationshipInvite側でagencyEnabled
-  // が立たない（別の既知の問題・今回のスコープ外）ため、シフト作成モーダルの
-  // 依頼主ピッカーを使うにはここで直接有効化しておく。
-  psql(`update "Company" set "agencyEnabled" = true where id='${agencyCompanyId}';`);
+  // 招待「される」側（派遣会社）も、招待した側とは関係なく自分の役割の
+  // フラグ(agencyEnabled)がredeemCompanyRelationshipInvite側で自動的に
+  // 立っているはず — シフト作成の依頼主ピッカーがすぐ使える。
+  const agencyEnabledAfterRedeem = psql(`select "agencyEnabled" from "Company" where id='${agencyCompanyId}';`);
+  log("① 招待された側の派遣会社もagencyEnabledが自動で立つ（招待した側とは無関係）", agencyEnabledAfterRedeem === "t");
 
   // --- ② the agency (non-owner) can still register a new 業務内容 via シフト作成 ---
   await agency.goto("http://localhost:3000/company/roster");
