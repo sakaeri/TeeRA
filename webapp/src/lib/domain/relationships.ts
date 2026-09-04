@@ -4,20 +4,22 @@ import { prisma } from "@/lib/prisma";
 import { resolveRateVersion } from "@/lib/domain/contracts";
 
 // 依頼主一覧 (from this company's perspective as the sending/agency side):
-// companies this company sends staff to.
+// companies this company sends staff to. ownerCompanyIdでは絞らない —
+// 関係を作った側でなくても、自分がagencyCompanyId側として紐づいて
+// いれば見える（本アカウント連携の意味を持たせるための双方向可視化）。
 export async function listClients(companyId: string) {
   return prisma.companyRelationship.findMany({
-    where: { ownerCompanyId: companyId, agencyCompanyId: companyId },
+    where: { agencyCompanyId: companyId },
     include: { clientCompany: true },
     orderBy: { createdAt: "asc" },
   });
 }
 
 // 派遣会社一覧 (from this company's perspective as the receiving/client side):
-// companies that send staff to this company.
+// companies that send staff to this company. 同上、ownerCompanyIdでは絞らない。
 export async function listAgencies(companyId: string) {
   return prisma.companyRelationship.findMany({
-    where: { ownerCompanyId: companyId, clientCompanyId: companyId },
+    where: { clientCompanyId: companyId },
     include: { agencyCompany: true },
     orderBy: { createdAt: "asc" },
   });
@@ -152,9 +154,39 @@ export async function deleteCompanyRelationship(params: { companyId: string; com
   await prisma.companyRelationship.delete({ where: { id: params.companyRelationshipId } });
 }
 
+// 関係の当事者（オーナー or 本アカウント連携済みの相手）かどうかを確認する
+// — 双方向可視化に伴い、オーナー限定にすべきでない操作（配属解除など）は
+// こちらを使う。オーナー限定の操作（単価設定・チーム紐付け・関係の削除）は
+// 引き続きownerCompanyIdでのチェックを使うこと。
+export async function assertRelationshipParty(companyRelationshipId: string, companyId: string) {
+  const relationship = await prisma.companyRelationship.findFirst({
+    where: {
+      id: companyRelationshipId,
+      OR: [{ agencyCompanyId: companyId }, { clientCompanyId: companyId }],
+    },
+  });
+  if (!relationship) throw new Error("forbidden");
+  return relationship;
+}
+
+// 配属解除（出禁）— 行は消さずactive=false・endedAtを記録するだけ。オーダー
+// への再エントリー不可はisStaffEligibleForRecruitment等の読み取り側が
+// active=trueだけを見ることで自然に成立する。再配属（シフト作成/オーダー
+// アサインでの自動配属）は同じ行をactive=trueに戻すので、説得して出禁を
+// 解除する運用も特別な操作なしでそのまま成立する。
+export async function unplaceStaff(params: { companyRelationshipId: string; staffUserId: string }) {
+  await prisma.staffPlacement.updateMany({
+    where: { companyRelationshipId: params.companyRelationshipId, staffUserId: params.staffUserId, active: true },
+    data: { active: false, endedAt: new Date() },
+  });
+}
+
 const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
 
 // 依頼主詳細パネルの稼働履歴タブ: 対象月のこの取引先向けシフト×業務報告を日付ごとにまとめる。
+// companyIdは「自社」であればよく、関係を作った側(ownerCompanyId)である
+// 必要はない — 本アカウント連携済みの相手側からも同じ関係が見える
+// （listClients/listAgenciesの双方向可視化と対になる仕様）。
 export async function getClientMonthDetail(params: {
   companyId: string;
   companyRelationshipId: string;
@@ -162,7 +194,10 @@ export async function getClientMonthDetail(params: {
   month: number;
 }) {
   const relationship = await prisma.companyRelationship.findFirstOrThrow({
-    where: { id: params.companyRelationshipId, ownerCompanyId: params.companyId },
+    where: {
+      id: params.companyRelationshipId,
+      OR: [{ agencyCompanyId: params.companyId }, { clientCompanyId: params.companyId }],
+    },
     include: { clientCompany: true, agencyCompany: true },
   });
   // 依頼主一覧（自社がagencyCompanyId側）なら相手はclientCompany、派遣会社
@@ -170,25 +205,40 @@ export async function getClientMonthDetail(params: {
   // ラベルの向き判定と同じ考え方。
   const isClientDirection = relationship.agencyCompanyId === params.companyId;
   const counterpartCompany = isClientDirection ? relationship.clientCompany : relationship.agencyCompany;
+  // シフト・単価は常に派遣元（agencyCompanyId）が作成する — 依頼主側の
+  // 本アカウントから見ている場合はparams.companyIdと一致しないので、
+  // 関係自体が持つagencyCompanyIdで絞る（自社/相手を問わず正しく引ける）。
+  const shiftOwnerCompanyId = relationship.agencyCompanyId;
 
   const start = new Date(Date.UTC(params.year, params.month - 1, 1));
   const end = new Date(Date.UTC(params.year, params.month, 1));
 
-  const [shifts, placementRates] = await Promise.all([
-    prisma.shift.findMany({
-      where: {
-        companyId: params.companyId,
-        companyRelationshipId: params.companyRelationshipId,
-        date: { gte: start, lt: end },
-        status: { notIn: ["SUPERSEDED", "CANCELLED"] },
-      },
-      include: { workReport: true, staff: true },
-      orderBy: { date: "asc" },
-    }),
-    prisma.companyPlacementRate.findMany({
-      where: { companyId: params.companyId, companyRelationshipId: params.companyRelationshipId },
-      include: { versions: { orderBy: { effectiveFrom: "desc" } } },
-      orderBy: { createdAt: "asc" },
+  // shiftOwnerCompanyId未リンク（相手がまだ仮アカウントのまま）だと
+  // シフト・単価はまだ一件も存在し得ないので、クエリせず空のまま返す。
+  const [shifts, placementRates, placements] = await Promise.all([
+    shiftOwnerCompanyId
+      ? prisma.shift.findMany({
+          where: {
+            companyId: shiftOwnerCompanyId,
+            companyRelationshipId: params.companyRelationshipId,
+            date: { gte: start, lt: end },
+            status: { notIn: ["SUPERSEDED", "CANCELLED"] },
+          },
+          include: { workReport: true, staff: true },
+          orderBy: { date: "asc" },
+        })
+      : [],
+    shiftOwnerCompanyId
+      ? prisma.companyPlacementRate.findMany({
+          where: { companyId: shiftOwnerCompanyId, companyRelationshipId: params.companyRelationshipId },
+          include: { versions: { orderBy: { effectiveFrom: "desc" } } },
+          orderBy: { createdAt: "asc" },
+        })
+      : [],
+    prisma.staffPlacement.findMany({
+      where: { companyRelationshipId: params.companyRelationshipId },
+      include: { staff: true },
+      orderBy: { createdAt: "desc" },
     }),
   ]);
 
@@ -207,6 +257,13 @@ export async function getClientMonthDetail(params: {
     name: counterpartCompany?.name ?? relationship.proxyName ?? "",
     isProxy: !counterpartCompany,
     teams: teamLinks.map((l) => ({ teamId: l.teamId, teamName: l.team.name })),
+    placements: placements.map((p) => ({
+      staffUserId: p.staffUserId,
+      staffName: p.staff.name,
+      active: p.active,
+      startedAt: p.createdAt.toISOString().slice(0, 10),
+      endedAt: p.endedAt ? p.endedAt.toISOString().slice(0, 10) : null,
+    })),
     relationshipNotes: relationshipNotes.map((n) => ({
       id: n.id,
       content: n.content,

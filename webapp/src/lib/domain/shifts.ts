@@ -154,7 +154,8 @@ export async function createAssignedShift(params: {
           },
         },
         create: { staffUserId: params.staffUserId, companyRelationshipId: params.companyRelationshipId },
-        update: {},
+        // 配属解除(active=false)されていても、能動的なアサインで再配属される
+        update: { active: true, endedAt: null },
       });
     }
 

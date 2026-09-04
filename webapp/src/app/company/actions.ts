@@ -26,6 +26,8 @@ import {
   addRelationshipNote,
   deleteRelationshipNote,
   deleteCompanyRelationship,
+  assertRelationshipParty,
+  unplaceStaff,
 } from "@/lib/domain/relationships";
 import {
   createTeam,
@@ -285,6 +287,18 @@ export async function deleteCompanyRelationshipAction(companyRelationshipId: str
   }
   revalidatePath("/company/roster");
   return { error: null };
+}
+
+// 配属解除（出禁）— 関係のオーナーでなくても、本アカウント連携済みの相手
+// 側（依頼主自身）からも操作できる。単価設定やチーム紐付け・関係の削除は
+// 引き続きオーナー限定（assertRelationshipOwnedByCompany）のまま。
+export async function unplaceStaffAction(companyRelationshipId: string, staffUserId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertRelationshipParty(companyRelationshipId, membership.companyId);
+
+  await unplaceStaff({ companyRelationshipId, staffUserId });
+  revalidatePath("/company/roster");
 }
 
 export async function addTeamClientAction(teamId: string, companyRelationshipId: string) {

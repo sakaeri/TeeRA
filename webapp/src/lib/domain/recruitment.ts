@@ -299,6 +299,7 @@ async function placedClientCompanyIds(companyId: string, staffUserId: string) {
   const placements = await prisma.staffPlacement.findMany({
     where: {
       staffUserId,
+      active: true,
       companyRelationship: { agencyCompanyId: companyId, status: "ACTIVE" },
     },
     select: { companyRelationship: { select: { clientCompanyId: true } } },
@@ -349,6 +350,7 @@ async function isStaffEligibleForRecruitment(params: {
   const placement = await prisma.staffPlacement.findFirst({
     where: {
       staffUserId: params.staffUserId,
+      active: true,
       companyRelationship: { clientCompanyId: params.recruitmentCompanyId, status: "ACTIVE" },
     },
   });
@@ -488,7 +490,8 @@ export async function assignStaffToRecruitment(params: {
       await tx.staffPlacement.upsert({
         where: { staffUserId_companyRelationshipId: { staffUserId: params.staffUserId, companyRelationshipId } },
         create: { staffUserId: params.staffUserId, companyRelationshipId },
-        update: {},
+        // 配属解除(active=false)されていても、能動的なアサインで再配属される
+        update: { active: true, endedAt: null },
       });
     }
 
@@ -602,6 +605,7 @@ export async function resolveStaffOrigins(params: {
     ? await prisma.staffPlacement.findMany({
         where: {
           staffUserId: { in: remainingIds },
+          active: true,
           companyRelationship: { clientCompanyId: params.companyId, status: "ACTIVE" },
         },
         select: { staffUserId: true, companyRelationship: { select: { agencyCompany: { select: { name: true } } } } },

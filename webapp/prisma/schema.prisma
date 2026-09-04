@@ -265,11 +265,17 @@ model RelationshipNote {
 // あくまで任意の雇用条件書面であり、配属＝就業可否のゲートには使わない。
 // 現状これを自動生成する経路は無い（1回オーダーに割り当てただけで以後の
 // 限定募集に自己エントリーできるようになるのは意図しない権限拡大のため）。
+// active=falseは「配属解除（出禁）」— オーダーへの再エントリー不可になるが、
+// 行自体は消さず配属日(createdAt)・解除日(endedAt)がそのまま履歴になる。
+// 再配属（シフト作成/オーダーアサインでの自動配属）は同じ行をactive=true・
+// endedAt=nullに戻すだけ（deleteはしない — schema.prismaのdomain層参照）。
 model StaffPlacement {
-  id                    String   @id @default(cuid())
+  id                    String    @id @default(cuid())
   staffUserId           String
   companyRelationshipId String
-  createdAt             DateTime @default(now())
+  active                Boolean   @default(true)
+  endedAt               DateTime?
+  createdAt             DateTime  @default(now())
 
   staff               User                @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
   companyRelationship CompanyRelationship @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
