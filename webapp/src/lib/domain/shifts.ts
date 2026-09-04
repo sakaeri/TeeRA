@@ -94,6 +94,10 @@ export async function findConflictingShifts(params: {
 // this check is intentionally NOT applied to staff self-apply flows
 // (applyToRecruitment / matchShiftRequestToShift), which is a known,
 // deliberately-unresolved gap carried over from the design (chat27/31).
+// companyRelationshipIdが指定された場合（＝依頼主へのアサイン）、配属記録
+// (StaffPlacement)も一緒に登録する — 派遣会社が能動的にアサインする操作
+// （このシフト作成とオーダーへのアサイン）は配属になる、というルール。
+// 公開募集への自己応募(applyToRecruitment)はこの対象外（フリーのまま）。
 export async function createAssignedShift(params: {
   companyId: string;
   teamId?: string;
@@ -140,6 +144,19 @@ export async function createAssignedShift(params: {
         createdVia: "ASSIGN",
       },
     });
+
+    if (params.companyRelationshipId) {
+      await tx.staffPlacement.upsert({
+        where: {
+          staffUserId_companyRelationshipId: {
+            staffUserId: params.staffUserId,
+            companyRelationshipId: params.companyRelationshipId,
+          },
+        },
+        create: { staffUserId: params.staffUserId, companyRelationshipId: params.companyRelationshipId },
+        update: {},
+      });
+    }
 
     for (const overriddenId of params.overrideShiftIds ?? []) {
       await supersedeShift(tx, {
