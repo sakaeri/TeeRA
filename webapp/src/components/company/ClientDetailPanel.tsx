@@ -362,7 +362,7 @@ export function ClientDetailPanel({
                 <div className={`mb-4 grid gap-2 text-center ${kind === "client" ? "grid-cols-3" : "grid-cols-2"}`}>
                   <div className="rounded-lg border border-border p-3">
                     <p className="text-xs text-muted">稼働時間</p>
-                    <p className="text-lg font-bold">{data.workedHours}時間</p>
+                    <p className="text-lg font-bold">{data.workedHours}h</p>
                   </div>
                   <div className="rounded-lg border border-border p-3">
                     <p className="text-xs text-muted">未承認数</p>

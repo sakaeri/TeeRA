@@ -173,7 +173,7 @@ try {
   await agency.waitForTimeout(300);
   const clientPanel = agency.locator("div.fixed.inset-0.z-30").last();
   let clientPanelBody = await clientPanel.textContent();
-  log("③ 稼働時間は実働分(300分=5時間)を反映する", clientPanelBody.includes("稼働時間") && clientPanelBody.includes("5時間"));
+  log("③ 稼働時間は実働分(300分=5h)を反映する", clientPanelBody.includes("稼働時間") && clientPanelBody.includes("5h"));
   await clientPanel.getByRole("button", { name: "単価", exact: true }).click();
   await clientPanel.getByRole("button", { name: "単価を変更" }).click();
   await clientPanel.locator('input[type=number]').fill("3000");
