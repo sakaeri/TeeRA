@@ -8,9 +8,9 @@ export async function createStaffNotice(params: { companyId: string; staffUserId
   return prisma.staffNotice.create({ data: params });
 }
 
-export async function listStaffNotices(staffUserId: string) {
+export async function listStaffNotices(staffUserId: string, companyId: string) {
   return prisma.staffNotice.findMany({
-    where: { staffUserId },
+    where: { staffUserId, companyId },
     orderBy: { createdAt: "desc" },
     take: 20,
   });

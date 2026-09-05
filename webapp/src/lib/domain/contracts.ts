@@ -245,9 +245,9 @@ export async function addStaffContractWageVersion(params: {
   });
 }
 
-export async function listStaffContracts(staffUserId: string) {
+export async function listStaffContracts(staffUserId: string, companyId: string) {
   return prisma.staffContract.findMany({
-    where: { staffUserId },
+    where: { staffUserId, template: { companyId } },
     include: { template: true, wageVersions: true },
     orderBy: { createdAt: "desc" },
   });

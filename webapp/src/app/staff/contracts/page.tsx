@@ -7,7 +7,7 @@ export default async function StaffContractsPage() {
   const { userId, membership } = await requireCompanyStaffRole();
 
   const [allContracts, myMembership, company] = await Promise.all([
-    listStaffContracts(userId),
+    listStaffContracts(userId, membership.companyId),
     prisma.companyMembership.findFirstOrThrow({
       where: { userId, companyId: membership.companyId, role: "STAFF" },
     }),

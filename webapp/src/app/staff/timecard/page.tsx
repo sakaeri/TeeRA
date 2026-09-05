@@ -15,7 +15,7 @@ function formatJstTime(date: Date) {
 export default async function StaffTimecardPage() {
   const { userId, membership } = await requireCompanyStaffRole();
   const [shifts, knownTaskNames] = await Promise.all([
-    listOwnShiftsNeedingReport(userId),
+    listOwnShiftsNeedingReport(userId, membership.companyId),
     listKnownTaskNames(membership.companyId),
   ]);
 

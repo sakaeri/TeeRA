@@ -258,6 +258,7 @@ export async function listShiftHistoryForMonth(params: {
 
 export async function listStaffShiftsForMonth(params: {
   staffUserId: string;
+  companyId: string;
   year: number;
   month: number;
 }) {
@@ -267,6 +268,7 @@ export async function listStaffShiftsForMonth(params: {
   return prisma.shift.findMany({
     where: {
       staffUserId: params.staffUserId,
+      companyId: params.companyId,
       date: { gte: start, lt: end },
       status: { notIn: ["SUPERSEDED", "CANCELLED"] },
     },

@@ -8,7 +8,7 @@ import { StaffNoticesSection } from "@/components/staff/StaffNoticesSection";
 export default async function StaffHomePage({
   searchParams,
 }: PageProps<"/staff">) {
-  const { userId } = await requireCompanyStaffRole();
+  const { userId, membership } = await requireCompanyStaffRole();
   const sp = await searchParams;
 
   const today = todayJstParts();
@@ -16,8 +16,8 @@ export default async function StaffHomePage({
   const month = Number(sp.m) || today.month;
 
   const [shifts, notices] = await Promise.all([
-    listStaffShiftsForMonth({ staffUserId: userId, year, month }),
-    listStaffNotices(userId),
+    listStaffShiftsForMonth({ staffUserId: userId, companyId: membership.companyId, year, month }),
+    listStaffNotices(userId, membership.companyId),
   ]);
   const unreadNotices = notices.filter((n) => !n.readAt);
 
