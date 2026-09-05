@@ -8,6 +8,7 @@ import {
   updateCompanyAddressAction,
   updateCompanyPhoneNumberAction,
   setCompanyMemberRoleAction,
+  setMemberCanWorkShiftsAction,
   inviteCompanyAdminAction,
   createTeamAction,
   setTeamMemberRoleAction,
@@ -22,6 +23,7 @@ type Admin = {
   name: string;
   email: string;
   role: "COMPANY_ADMIN" | "COMPANY_EDITOR";
+  canWorkShifts: boolean;
 };
 
 type TeamMember = { userId: string; name: string; role: string };
@@ -298,6 +300,7 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
             <th className="py-2">氏名</th>
             <th className="py-2">メール</th>
             <th className="py-2">権限</th>
+            <th className="py-2">兼務</th>
           </tr>
         </thead>
         <tbody>
@@ -322,6 +325,19 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
                   <option value="COMPANY_ADMIN">本部管理者</option>
                   <option value="COMPANY_EDITOR">本部編集者</option>
                 </select>
+              </td>
+              <td className="py-2">
+                <label className="flex items-center gap-1.5 text-xs text-muted">
+                  <input
+                    type="checkbox"
+                    defaultChecked={a.canWorkShifts}
+                    disabled={pending}
+                    onChange={(e) =>
+                      startTransition(() => setMemberCanWorkShiftsAction(a.userId, e.target.checked))
+                    }
+                  />
+                  このメンバーはシフトにも入れる
+                </label>
               </td>
             </tr>
           ))}

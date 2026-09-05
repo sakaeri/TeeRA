@@ -136,3 +136,16 @@ export async function setCompanyMemberRole(params: {
     data: { role: params.role },
   });
 }
+
+// 兼務フラグ — 管理者/編集者が自分自身もシフトに入って稼働する場合にtrue
+// にする。/staff/*への入場とシフト割当候補への表示が変わる。
+export async function setMemberCanWorkShifts(params: {
+  companyId: string;
+  userId: string;
+  canWorkShifts: boolean;
+}) {
+  return prisma.companyMembership.updateMany({
+    where: { companyId: params.companyId, userId: params.userId },
+    data: { canWorkShifts: params.canWorkShifts },
+  });
+}

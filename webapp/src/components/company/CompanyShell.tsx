@@ -24,6 +24,7 @@ export function CompanyShell({
   roleLabel,
   teeBalance,
   hasMultipleCompanies,
+  canWorkShifts,
   children,
 }: {
   companyName: string;
@@ -32,6 +33,7 @@ export function CompanyShell({
   roleLabel: string;
   teeBalance: number;
   hasMultipleCompanies: boolean;
+  canWorkShifts: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -82,6 +84,14 @@ export function CompanyShell({
                   <span className="rounded-full bg-primary px-2 py-0.5 text-primary-foreground">{roleLabel}</span>
                   <span>{companyName}</span>
                 </div>
+                {canWorkShifts ? (
+                  <Link
+                    href="/staff"
+                    className="mb-3 block rounded-lg border border-border px-4 py-2 text-center text-sm text-foreground hover:border-primary"
+                  >
+                    スタッフ画面へ
+                  </Link>
+                ) : null}
                 {hasMultipleCompanies ? (
                   <Link
                     href="/home?switch=1"

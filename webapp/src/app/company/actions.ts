@@ -34,6 +34,7 @@ import {
   setTeamMemberRole,
   removeTeamMember,
   setCompanyMemberRole,
+  setMemberCanWorkShifts,
   addTeamClient,
   removeTeamClient,
   setStaffPlainTeamMemberships,
@@ -379,6 +380,19 @@ export async function setCompanyMemberRoleAction(
     companyId: membership.companyId,
     userId: targetUserId,
     role,
+  });
+  revalidatePath("/company/settings");
+}
+
+// 兼務フラグの切り替え（管理者/編集者が自分もシフトに入って稼働するか）。
+export async function setMemberCanWorkShiftsAction(targetUserId: string, canWorkShifts: boolean) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  await setMemberCanWorkShifts({
+    companyId: membership.companyId,
+    userId: targetUserId,
+    canWorkShifts,
   });
   revalidatePath("/company/settings");
 }

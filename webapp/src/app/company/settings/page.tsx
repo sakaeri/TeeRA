@@ -63,6 +63,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
           name: a.user.name,
           email: a.user.email,
           role: a.role as "COMPANY_ADMIN" | "COMPANY_EDITOR",
+          canWorkShifts: a.canWorkShifts,
         }))}
         teams={teams.map((t) => ({
           id: t.id,

@@ -42,6 +42,7 @@ export default async function CompanyLayout({
       roleLabel={resolveRoleLabel(membership)}
       teeBalance={company.teeBalance}
       hasMultipleCompanies={myMemberships.length > 1}
+      canWorkShifts={membership.canWorkShifts}
     >
       {children}
     </CompanyShell>

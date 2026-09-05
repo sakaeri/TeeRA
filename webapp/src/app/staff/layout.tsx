@@ -22,6 +22,7 @@ export default async function StaffLayout({
       userEmail={user.email}
       pointsBalance={pointsBalance}
       hasMultipleCompanies={myMemberships.length > 1}
+      canReturnToCompany={membership.role !== "STAFF"}
     >
       {children}
     </StaffShell>

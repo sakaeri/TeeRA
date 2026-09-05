@@ -7,9 +7,12 @@ import { todayJst, todayJstParts } from "@/lib/date";
 import { resolveRateVersion, resolveContractWageVersion } from "@/lib/domain/contracts";
 import type { TeamRole } from "@/generated/prisma/enums";
 
+// role=STAFFの人に加え、兼務でcanWorkShifts=trueの管理者/編集者も含む —
+// シフト割当の選択肢に出す・稼働実績を記録する対象という意味では両者は
+// 同じ扱いになる。
 export async function listStaff(companyId: string) {
   const memberships = await prisma.companyMembership.findMany({
-    where: { companyId, role: "STAFF" },
+    where: { companyId, OR: [{ role: "STAFF" }, { canWorkShifts: true }] },
     include: { user: true },
     orderBy: { createdAt: "asc" },
   });
@@ -224,7 +227,7 @@ export async function getStaffMonthDetail(params: {
   month: number;
 }) {
   const membership = await prisma.companyMembership.findFirstOrThrow({
-    where: { userId: params.userId, companyId: params.companyId, role: "STAFF" },
+    where: { userId: params.userId, companyId: params.companyId, OR: [{ role: "STAFF" }, { canWorkShifts: true }] },
     include: { user: true },
   });
   const teamMemberships = await prisma.teamMembership.findMany({

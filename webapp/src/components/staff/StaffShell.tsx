@@ -23,6 +23,7 @@ export function StaffShell({
   userEmail,
   pointsBalance,
   hasMultipleCompanies,
+  canReturnToCompany,
   children,
 }: {
   companyName: string;
@@ -30,6 +31,7 @@ export function StaffShell({
   userEmail: string;
   pointsBalance: number;
   hasMultipleCompanies: boolean;
+  canReturnToCompany: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -74,6 +76,14 @@ export function StaffShell({
                   </div>
                 </div>
                 <div className="mb-3 rounded-lg bg-background px-3 py-2 text-xs">{companyName}</div>
+                {canReturnToCompany ? (
+                  <Link
+                    href="/company"
+                    className="mb-3 block rounded-lg border border-border px-4 py-2 text-center text-sm text-foreground hover:border-primary"
+                  >
+                    会社画面へ
+                  </Link>
+                ) : null}
                 {hasMultipleCompanies ? (
                   <Link
                     href="/home?switch=1"

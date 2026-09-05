@@ -31,6 +31,7 @@ export type ActiveMembership = {
   companyId: string;
   companyName: string;
   role: CompanyRole;
+  canWorkShifts: boolean;
   teamMemberships: { teamId: string; teamName: string; role: string }[];
 };
 
@@ -68,6 +69,7 @@ export const getActiveMembership = cache(
       companyId: membership.companyId,
       companyName: membership.company.name,
       role: membership.role,
+      canWorkShifts: membership.canWorkShifts,
       teamMemberships: teamMemberships.map((tm) => ({
         teamId: tm.teamId,
         teamName: tm.team.name,
@@ -100,9 +102,13 @@ export async function requireActiveMembership() {
   return { userId, membership };
 }
 
+// role=STAFFの人はもちろん、role=STAFFではない管理者/編集者でも
+// canWorkShifts=trueなら通す（同じ会社内での兼務 — 自分もシフトに入って
+// 稼働するケース。タイムカード・業務報告はシフトの所有者チェックだけで
+// 動いており、role自体は見ていないのでこれだけで安全に機能する）。
 export async function requireCompanyStaffRole() {
   const { userId, membership } = await requireActiveMembership();
-  if (membership.role !== "STAFF") {
+  if (membership.role !== "STAFF" && !membership.canWorkShifts) {
     redirect("/company");
   }
   return { userId, membership };

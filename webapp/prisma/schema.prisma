@@ -146,6 +146,12 @@ model CompanyMembership {
   role      CompanyRole
   createdAt DateTime    @default(now())
 
+  // role=STAFFではない管理者/編集者が、自分自身もシフトに入って稼働する
+  // 兼務ケース用のフラグ（同じ会社に「2枚目のCompanyMembership」を作る方式
+  // は@@unique([userId, companyId])に影響が広いため見送り、軽量なフラグ方式
+  // にした）。true の場合のみ/staff/*への入場とシフト割当候補への表示を許す。
+  canWorkShifts Boolean @default(false)
+
   // 本人確認書類（両面）。スタッフ本人・会社どちらからもアップロード可能。
   // 契約ごとではなく所属（会社との関係）単位で1組だけ持つ — 契約を結び直す
   // たびに再提出させる必要は無いため。
