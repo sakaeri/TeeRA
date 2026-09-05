@@ -242,8 +242,6 @@ export async function getClientMonthDetail(params: {
     }),
   ]);
 
-  const staffMap = new Map<string, string>();
-  for (const s of shifts) staffMap.set(s.staffUserId, s.staff.name);
   const unapprovedCount = shifts.filter((s) => s.workReport && s.workReport.approvalStatus !== "APPROVED").length;
   const today = new Date();
   const relationshipNotes = await listRelationshipNotes(params.companyRelationshipId, params.companyId);
@@ -272,7 +270,6 @@ export async function getClientMonthDetail(params: {
     })),
     shiftCount: shifts.length,
     unapprovedCount,
-    staff: Array.from(staffMap.entries()).map(([userId, name]) => ({ userId, name })),
     placementRates: placementRates.map((r) => {
       const current = resolveRateVersion(r.versions, today);
       return {

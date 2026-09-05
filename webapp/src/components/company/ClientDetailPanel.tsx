@@ -48,7 +48,6 @@ type ClientMonthDetail = {
   relationshipNotes: RelationshipNote[];
   shiftCount: number;
   unapprovedCount: number;
-  staff: { userId: string; name: string }[];
   placementRates: PlacementRate[];
   days: {
     shiftId: string;
@@ -409,65 +408,51 @@ export function ClientDetailPanel({
             ) : null}
 
             {tab === "staff" ? (
-              <div className="flex flex-col gap-5">
-                <div>
-                  <p className="mb-2 text-xs font-medium text-muted">配属中スタッフ</p>
-                  <ul className="flex flex-col gap-2">
-                    {data.placements
-                      .filter((p) => p.active)
-                      .map((p) => (
-                        <li key={p.staffUserId} className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
-                          <span>
-                            {p.staffName}
-                            <span className="ml-1 text-xs text-muted">（{p.startedAt}〜）</span>
-                          </span>
-                          <button
-                            type="button"
-                            disabled={pending}
-                            onClick={() => setUnplaceConfirmTarget(p)}
-                            className="shrink-0 text-xs text-muted hover:text-red-600"
-                          >
-                            配属解除
-                          </button>
-                        </li>
-                      ))}
-                    {data.placements.filter((p) => p.active).length === 0 ? (
-                      <p className="py-4 text-center text-sm text-muted">配属中のスタッフはいません。</p>
-                    ) : null}
-                  </ul>
-                  {data.placements.some((p) => !p.active) ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowPlacementHistory((v) => !v)}
-                      className="mt-2 text-xs text-muted hover:text-primary"
-                    >
-                      {showPlacementHistory ? "解除履歴を隠す" : "解除履歴を表示"}
-                    </button>
-                  ) : null}
-                  {showPlacementHistory ? (
-                    <ul className="mt-2 flex flex-col gap-2">
-                      {data.placements
-                        .filter((p) => !p.active)
-                        .map((p) => (
-                          <li key={`${p.staffUserId}-${p.endedAt}`} className="rounded-lg border border-border bg-background/40 p-3 text-xs text-muted">
-                            {p.staffName}（{p.startedAt}〜{p.endedAt}・配属解除）
-                          </li>
-                        ))}
-                    </ul>
-                  ) : null}
-                </div>
-
-                <div>
-                  <p className="mb-2 text-xs font-medium text-muted">今月稼働したスタッフ</p>
-                  <ul className="flex flex-col gap-2">
-                    {data.staff.map((s) => (
-                      <li key={s.userId} className="rounded-lg border border-border p-3 text-sm">
-                        {s.name}
+              <div>
+                <p className="mb-2 text-xs font-medium text-muted">配属中スタッフ</p>
+                <ul className="flex flex-col gap-2">
+                  {data.placements
+                    .filter((p) => p.active)
+                    .map((p) => (
+                      <li key={p.staffUserId} className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
+                        <span>
+                          {p.staffName}
+                          <span className="ml-1 text-xs text-muted">（{p.startedAt}〜）</span>
+                        </span>
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => setUnplaceConfirmTarget(p)}
+                          className="shrink-0 text-xs text-muted hover:text-red-600"
+                        >
+                          配属解除
+                        </button>
                       </li>
                     ))}
-                    {data.staff.length === 0 ? <p className="py-6 text-center text-sm text-muted">稼働実績のあるスタッフはいません。</p> : null}
+                  {data.placements.filter((p) => p.active).length === 0 ? (
+                    <p className="py-4 text-center text-sm text-muted">配属中のスタッフはいません。</p>
+                  ) : null}
+                </ul>
+                {data.placements.some((p) => !p.active) ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowPlacementHistory((v) => !v)}
+                    className="mt-2 text-xs text-muted hover:text-primary"
+                  >
+                    {showPlacementHistory ? "解除履歴を隠す" : "解除履歴を表示"}
+                  </button>
+                ) : null}
+                {showPlacementHistory ? (
+                  <ul className="mt-2 flex flex-col gap-2">
+                    {data.placements
+                      .filter((p) => !p.active)
+                      .map((p) => (
+                        <li key={`${p.staffUserId}-${p.endedAt}`} className="rounded-lg border border-border bg-background/40 p-3 text-xs text-muted">
+                          {p.staffName}（{p.startedAt}〜{p.endedAt}・配属解除）
+                        </li>
+                      ))}
                   </ul>
-                </div>
+                ) : null}
               </div>
             ) : null}
 
