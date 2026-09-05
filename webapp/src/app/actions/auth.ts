@@ -1,6 +1,7 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import { signIn, signOut } from "@/auth";
@@ -10,7 +11,7 @@ import {
   LoginSchema,
   CreateCompanySchema,
 } from "@/lib/validation/auth";
-import { verifySession } from "@/lib/auth/session";
+import { verifySession, getActiveMembership, ACTIVE_COMPANY_COOKIE } from "@/lib/auth/session";
 import { redeemInvite, lookupInvite, redeemCompanyRelationshipInvite } from "@/lib/domain/invites";
 
 export type FormState =
@@ -102,6 +103,26 @@ export async function logoutAction() {
   redirect("/login");
 }
 
+// 「今どの会社として動いているか」を選び直す（複数社所属時の切替）。
+// このuserIdが本当にその会社に所属しているかをDBで確認してからでないと
+// Cookieを立てない（改ざん対策というよりは、単純に存在しない/退会済みの
+// 会社を指してしまわないための整合性チェック）。
+export async function setActiveCompanyAction(companyId: string) {
+  const { userId } = await verifySession();
+  const membership = await prisma.companyMembership.findFirst({ where: { userId, companyId } });
+  if (!membership) throw new Error("forbidden");
+
+  const store = await cookies();
+  store.set(ACTIVE_COMPANY_COOKIE, companyId, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+  });
+
+  redirect(membership.role === "STAFF" ? "/staff" : "/company");
+}
+
 export async function createCompanyAction(
   _state: FormState,
   formData: FormData,
@@ -149,11 +170,13 @@ export async function redeemInviteAction(token: string) {
 }
 
 // CLIENT_UPGRADE / AGENCY_UPGRADE: ログイン中ユーザーが管理者/編集者として
-// 所属する自社を、この招待の相手側企業として結びつける。
+// 所属する自社を、この招待の相手側企業として結びつける。複数社所属時は
+// 「今どの会社として動いているか」（アクティブ会社、/invite/[token]/page.tsxの
+// 表示と同じ解決方法）を使う — ここだけ別の会社を勝手に選ばないようにする。
 export async function redeemCompanyRelationshipInviteAction(token: string) {
   const { userId } = await verifySession();
 
-  const membership = await prisma.companyMembership.findFirst({ where: { userId } });
+  const membership = await getActiveMembership(userId);
   if (!membership) {
     redirect(`/register/company?invite=${token}`);
   }

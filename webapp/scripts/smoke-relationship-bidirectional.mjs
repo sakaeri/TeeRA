@@ -65,7 +65,7 @@ try {
   await client.fill("#name", clientCompanyName);
   await client.click("button[type=submit]");
   await client.waitForURL(/\/invite\//);
-  await client.click("text=この会社として招待を受け取る");
+  await client.click("text=/として招待を受け取る/");
   await client.waitForURL("http://localhost:3000/company/roster");
   const relId = psql(`select id from "CompanyRelationship" where "ownerCompanyId"='${agencyCompanyId}' order by "createdAt" desc limit 1;`);
 

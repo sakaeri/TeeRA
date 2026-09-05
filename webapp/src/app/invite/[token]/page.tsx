@@ -2,7 +2,7 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { lookupInvite } from "@/lib/domain/invites";
 import { redeemInviteAction, redeemCompanyRelationshipInviteAction } from "@/app/actions/auth";
-import { prisma } from "@/lib/prisma";
+import { listMyMemberships, getActiveMembership } from "@/lib/auth/session";
 
 const KIND_LABEL: Record<string, string> = {
   STAFF: "スタッフ",
@@ -61,10 +61,14 @@ export default async function InvitePage({
     );
   }
 
-  const existingMembership = await prisma.companyMembership.findFirst({
-    where: { userId: session.user.id },
-  });
+  // ダブルワーク・兼務対応: 複数社所属を許すので、「どこか1社にでも
+  // 所属していたら拒否」ではなく、この招待先の会社に既に所属しているかだけ
+  // を見る。CLIENT_UPGRADE/AGENCY_UPGRADE（会社同士を結びつける招待）は
+  // 「今どの会社として動いているか」（アクティブ会社）で受諾する。
+  const myMemberships = await listMyMemberships(session.user.id);
+  const membershipAtThisCompany = myMemberships.find((m) => m.companyId === invite.companyId);
   const isCompanyRelationshipInvite = invite.kind === "CLIENT_UPGRADE" || invite.kind === "AGENCY_UPGRADE";
+  const activeMembership = isCompanyRelationshipInvite ? await getActiveMembership(session.user.id) : null;
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-6 py-16">
@@ -81,9 +85,9 @@ export default async function InvitePage({
           として参加します。
         </p>
 
-        {errorKey === "user_already_has_company" ? (
+        {errorKey === "already_member_of_this_company" ? (
           <p className="mb-4 text-sm text-red-600">
-            このアカウントはすでに別の本部に所属しているため、この招待を受け取れません。
+            このアカウントはすでにこの会社に所属しています。
           </p>
         ) : null}
         {errorKey === "requires_admin" ? (
@@ -93,7 +97,7 @@ export default async function InvitePage({
         ) : null}
 
         {isCompanyRelationshipInvite ? (
-          !existingMembership ? (
+          !activeMembership ? (
             <div>
               <p className="mb-4 text-sm text-muted">
                 この招待は会社同士を結びつけるものです。先に自社の本部を作成してください。
@@ -105,7 +109,7 @@ export default async function InvitePage({
                 本部を作成する
               </Link>
             </div>
-          ) : existingMembership.role === "STAFF" ? (
+          ) : activeMembership.role === "STAFF" ? (
             <p className="text-sm text-red-600">自社の管理者/編集者のみがこの招待を受け取れます。</p>
           ) : (
             <form
@@ -118,14 +122,12 @@ export default async function InvitePage({
                 type="submit"
                 className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
               >
-                この会社として招待を受け取る
+                {activeMembership.companyName}として招待を受け取る
               </button>
             </form>
           )
-        ) : existingMembership ? (
-          <p className="text-sm text-red-600">
-            このアカウントはすでに別の本部に所属しているため、この招待を受け取れません。
-          </p>
+        ) : membershipAtThisCompany ? (
+          <p className="text-sm text-red-600">このアカウントはすでにこの会社に所属しています。</p>
         ) : (
           <form
             action={async () => {

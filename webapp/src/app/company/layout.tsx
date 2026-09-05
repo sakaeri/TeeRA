@@ -1,4 +1,4 @@
-import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
+import { requireCompanyAdminOrEditor, listMyMemberships } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { CompanyShell } from "@/components/company/CompanyShell";
 
@@ -28,9 +28,10 @@ export default async function CompanyLayout({
   children: React.ReactNode;
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
-  const [company, user] = await Promise.all([
+  const [company, user, myMemberships] = await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
     prisma.user.findUniqueOrThrow({ where: { id: userId } }),
+    listMyMemberships(userId),
   ]);
 
   return (
@@ -40,6 +41,7 @@ export default async function CompanyLayout({
       userEmail={user.email}
       roleLabel={resolveRoleLabel(membership)}
       teeBalance={company.teeBalance}
+      hasMultipleCompanies={myMemberships.length > 1}
     >
       {children}
     </CompanyShell>

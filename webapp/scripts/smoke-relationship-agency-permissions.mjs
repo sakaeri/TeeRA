@@ -59,7 +59,7 @@ try {
   await agency.fill("#name", agencyCompanyName);
   await agency.click("button[type=submit]");
   await agency.waitForURL(/\/invite\//);
-  await agency.click("text=この会社として招待を受け取る");
+  await agency.click("text=/として招待を受け取る/");
   await agency.waitForURL("http://localhost:3000/company/roster");
   const agencyCompanyId = psql(`select id from "Company" where name='${agencyCompanyName}';`);
   const relId = psql(`select id from "CompanyRelationship" where "ownerCompanyId"='${clientCompanyId}' order by "createdAt" desc limit 1;`);

@@ -1,4 +1,4 @@
-import { requireCompanyStaffRole } from "@/lib/auth/session";
+import { requireCompanyStaffRole, listMyMemberships } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getStaffPointsBalance } from "@/lib/domain/promo";
 import { StaffShell } from "@/components/staff/StaffShell";
@@ -9,9 +9,10 @@ export default async function StaffLayout({
   children: React.ReactNode;
 }) {
   const { userId, membership } = await requireCompanyStaffRole();
-  const [user, pointsBalance] = await Promise.all([
+  const [user, pointsBalance, myMemberships] = await Promise.all([
     prisma.user.findUniqueOrThrow({ where: { id: userId } }),
     getStaffPointsBalance(userId),
+    listMyMemberships(userId),
   ]);
 
   return (
@@ -20,6 +21,7 @@ export default async function StaffLayout({
       userName={user.name}
       userEmail={user.email}
       pointsBalance={pointsBalance}
+      hasMultipleCompanies={myMemberships.length > 1}
     >
       {children}
     </StaffShell>

@@ -22,12 +22,14 @@ export function StaffShell({
   userName,
   userEmail,
   pointsBalance,
+  hasMultipleCompanies,
   children,
 }: {
   companyName: string;
   userName: string;
   userEmail: string;
   pointsBalance: number;
+  hasMultipleCompanies: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -72,6 +74,14 @@ export function StaffShell({
                   </div>
                 </div>
                 <div className="mb-3 rounded-lg bg-background px-3 py-2 text-xs">{companyName}</div>
+                {hasMultipleCompanies ? (
+                  <Link
+                    href="/home?switch=1"
+                    className="mb-3 block rounded-lg border border-border px-4 py-2 text-center text-sm text-foreground hover:border-primary"
+                  >
+                    会社を切り替える
+                  </Link>
+                ) : null}
                 <form action={logoutAction}>
                   <button type="submit" className="w-full rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
                     ログアウト

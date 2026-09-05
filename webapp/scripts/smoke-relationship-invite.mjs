@@ -130,9 +130,9 @@ try {
   await counterpart.click("button[type=submit]");
   await counterpart.waitForURL(/\/invite\//);
   bodyText = await counterpart.textContent("body");
-  log("after creating company, lands back on the invite page", bodyText.includes("この会社として招待を受け取る"));
+  log("after creating company, lands back on the invite page", bodyText.includes("として招待を受け取る"));
 
-  await counterpart.click("text=この会社として招待を受け取る");
+  await counterpart.click("text=/として招待を受け取る/");
   await counterpart.waitForURL("http://localhost:3000/company/roster");
   log("redemption redirects the counterpart to their own roster", counterpart.url().includes("/company/roster"));
 

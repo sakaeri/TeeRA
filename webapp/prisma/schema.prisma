@@ -32,7 +32,7 @@ model User {
   teamMemberships    TeamMembership[]
 
   createdInvites                      InviteToken[]                 @relation("InviteCreatedBy")
-  usedInvite                          InviteToken?                  @relation("InviteUsedBy")
+  usedInvites                         InviteToken[]                 @relation("InviteUsedBy")
   createdTodoItems                    TodoItem[]                    @relation("TodoCreatedBy")
   assignedTodoItems                   TodoItem[]                    @relation("TodoRecipient")
   todoComments                        TodoComment[]
@@ -410,7 +410,7 @@ model InviteToken {
   createdByUserId       String
   expiresAt             DateTime
   usedAt                DateTime?
-  usedByUserId          String?      @unique
+  usedByUserId          String? // 1ユーザーが複数社に所属できるので、生涯で1回しか招待を受諾できないという制約にしてはいけない（unique外し済み）
   createdAt             DateTime     @default(now())
 
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)

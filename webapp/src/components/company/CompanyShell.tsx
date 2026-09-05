@@ -23,6 +23,7 @@ export function CompanyShell({
   userEmail,
   roleLabel,
   teeBalance,
+  hasMultipleCompanies,
   children,
 }: {
   companyName: string;
@@ -30,6 +31,7 @@ export function CompanyShell({
   userEmail: string;
   roleLabel: string;
   teeBalance: number;
+  hasMultipleCompanies: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -80,6 +82,14 @@ export function CompanyShell({
                   <span className="rounded-full bg-primary px-2 py-0.5 text-primary-foreground">{roleLabel}</span>
                   <span>{companyName}</span>
                 </div>
+                {hasMultipleCompanies ? (
+                  <Link
+                    href="/home?switch=1"
+                    className="mb-3 block rounded-lg border border-border px-4 py-2 text-center text-sm text-foreground hover:border-primary"
+                  >
+                    会社を切り替える
+                  </Link>
+                ) : null}
                 <form action={logoutAction}>
                   <button
                     type="submit"

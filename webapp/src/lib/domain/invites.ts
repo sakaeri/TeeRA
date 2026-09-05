@@ -58,6 +58,11 @@ export async function lookupInvite(token: string) {
 // "本部を作成する". Company-relationship invites (CLIENT_UPGRADE/AGENCY_UPGRADE)
 // still require the redeeming user to have or create their own company, since
 // the invite links two companies together, not a person to one.
+//
+// ダブルワーク・兼務対応のため、1ユーザーが複数社のCompanyMembershipを
+// 持てるようにした（元は「どこか1社にでも所属していたら拒否」だったが、
+// 「この招待先の会社に既に所属していないか」だけを見るように緩和 —
+// permission-plan参照）。
 export async function redeemInvite(token: string, userId: string) {
   const redeemedInvite = await prisma.$transaction(async (tx) => {
     const invite = await tx.inviteToken.findUnique({ where: { token } });
@@ -65,8 +70,8 @@ export async function redeemInvite(token: string, userId: string) {
     if (invite.usedAt) throw new Error("invite_already_used");
     if (invite.expiresAt < new Date()) throw new Error("invite_expired");
 
-    const existing = await tx.companyMembership.findFirst({ where: { userId } });
-    if (existing) throw new Error("user_already_has_company");
+    const existing = await tx.companyMembership.findFirst({ where: { userId, companyId: invite.companyId } });
+    if (existing) throw new Error("already_member_of_this_company");
 
     if (invite.kind === "STAFF" || invite.kind === "COMPANY_ADMIN_TRANSFER") {
       if (invite.upgradeProxyUserId) {
