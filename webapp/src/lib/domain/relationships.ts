@@ -243,6 +243,15 @@ export async function getClientMonthDetail(params: {
   ]);
 
   const unapprovedCount = shifts.filter((s) => s.workReport && s.workReport.approvalStatus !== "APPROVED").length;
+  // 稼働時間は日給・時給を問わず実際の実働分（WorkReport.computedMinutes）の
+  // 単純合計 — 請求金額のプレビューではなく「今月どれだけ稼働があったか」
+  // という活動量の目安。日給契約の請求は日数固定で計算されるため
+  // （invoicing.ts参照）、ここでの時間とは別物として扱ってよい。
+  const totalWorkedMinutes = shifts.reduce(
+    (sum, s) => sum + (s.workReport && s.workReport.outcome === "WORKED" ? s.workReport.computedMinutes : 0),
+    0,
+  );
+  const workedHours = Math.round((totalWorkedMinutes / 60) * 10) / 10;
   const today = new Date();
   const relationshipNotes = await listRelationshipNotes(params.companyRelationshipId, params.companyId);
   const teamLinks = await prisma.teamClientRelationship.findMany({
@@ -268,7 +277,7 @@ export async function getClientMonthDetail(params: {
       authorName: n.author.name,
       createdAt: n.createdAt.toISOString().slice(0, 10),
     })),
-    shiftCount: shifts.length,
+    workedHours,
     unapprovedCount,
     placementRates: placementRates.map((r) => {
       const current = resolveRateVersion(r.versions, today);

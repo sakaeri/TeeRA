@@ -218,7 +218,7 @@ try {
   bodyText = await owner.textContent("body");
   log("agency-direction panel hides 単価 tab", !bodyText.includes("単価"));
   log("agency-direction panel hides 請求明細 card", !bodyText.includes("請求明細"));
-  log("agency-direction panel still shows 稼働数/未承認数", bodyText.includes("稼働数") && bodyText.includes("未承認数"));
+  log("agency-direction panel still shows 稼働時間/未承認数", bodyText.includes("稼働時間") && bodyText.includes("未承認数"));
   await owner.click("text=閉じる");
   await owner.waitForTimeout(200);
 
