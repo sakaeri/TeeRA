@@ -1,4 +1,5 @@
 import { requireCompanyStaffRole, listMyMemberships } from "@/lib/auth/session";
+import { hasAnyTeamManagementRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { getStaffPointsBalance } from "@/lib/domain/promo";
 import { StaffShell } from "@/components/staff/StaffShell";
@@ -22,7 +23,7 @@ export default async function StaffLayout({
       userEmail={user.email}
       pointsBalance={pointsBalance}
       hasMultipleCompanies={myMemberships.length > 1}
-      canReturnToCompany={membership.role !== "STAFF"}
+      showCompanyScreenLink={membership.role !== "STAFF" || hasAnyTeamManagementRole(membership)}
     >
       {children}
     </StaffShell>
