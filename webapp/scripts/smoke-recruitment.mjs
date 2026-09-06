@@ -61,7 +61,9 @@ try {
   await staff.click("text=参加する");
   await staff.waitForURL("http://localhost:3000/staff");
 
-  const today = new Date().toISOString().slice(0, 10);
+  // UTC 15〜23時台はJSTと日付がずれるので、JST基準で「今日」を計算する。
+  const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  const today = new Date(Date.now() + JST_OFFSET_MS).toISOString().slice(0, 10);
 
   // create an order (自社/配属スタッフ限定, free) with maxEntries=3 — no Tee
   // should move until it's later switched to 公開募集.

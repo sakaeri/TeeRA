@@ -123,8 +123,13 @@ try {
   const noticeGivenAtAfterEnd = psql(`select "noticeGivenAt" from "StaffContract" where id='${firstContractId}';`);
   log("終了時に本人への通知日（デフォルトは今日）が記録される", noticeGivenAtAfterEnd !== "");
 
+  // アプリ側は「今日」をJST基準(todayJst())で計算するが、psqlのcurrent_date
+  // はセッションのタイムゾーン（UTC）基準なので、UTC 15〜23時台は両者が
+  // ズレてしまう。アプリと同じJST基準の日付リテラルと比較する。
+  const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  const todayJstStr = new Date(Date.now() + JST_OFFSET_MS).toISOString().slice(0, 10);
   const contractEndDateAfterEnd = psql(
-    `select ("contractEndDate" <= current_date) from "StaffContract" where id='${firstContractId}';`,
+    `select ("contractEndDate" <= '${todayJstStr}'::date) from "StaffContract" where id='${firstContractId}';`,
   );
   log("終了時に契約終了日が今日以前に更新される", contractEndDateAfterEnd === "t");
 

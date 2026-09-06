@@ -49,9 +49,11 @@ try {
   // two distinct later days left in the current month view — in that case
   // navigate to the next month (via "次の月") and use early days there so
   // dayA and dayB are always genuinely distinct, valid, selectable dates.
-  const now = new Date();
-  const todayDate = now.getDate();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  // UTC 15〜23時台はJSTと日付がずれるので、JST基準で「今日」を計算する。
+  const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  const nowJst = new Date(Date.now() + JST_OFFSET_MS);
+  const todayDate = nowJst.getUTCDate();
+  const daysInMonth = new Date(Date.UTC(nowJst.getUTCFullYear(), nowJst.getUTCMonth() + 1, 0)).getUTCDate();
   const needsNextMonth = todayDate + 2 > daysInMonth;
   const dayALabel = needsNextMonth ? "1" : String(todayDate + 1);
   const dayBLabel = needsNextMonth ? "2" : String(todayDate + 2);

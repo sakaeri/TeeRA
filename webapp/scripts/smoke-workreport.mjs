@@ -21,7 +21,9 @@ const staff = await staffCtx.newPage();
 
 const adminEmail = `wr-admin-${Date.now()}@example.com`;
 const staffEmail = `wr-staff-${Date.now()}@example.com`;
-const today = new Date().toISOString().slice(0, 10);
+// UTC 15〜23時台はJSTと日付がずれるので、JST基準で「今日」を計算する。
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const today = new Date(Date.now() + JST_OFFSET_MS).toISOString().slice(0, 10);
 
 try {
   await admin.goto("http://localhost:3000/register");

@@ -88,8 +88,10 @@ try {
   log("client-workplace shift's name tag is NOT sky-blue", !staffTagClass.includes("sky"));
   log("month view does not show an オーダーN件 badge for a shift WE created", !bodyText.includes("オーダー1件"));
 
-  const now = new Date();
-  await admin.locator(`button:has-text("${now.getDate()}")`).first().click();
+  // UTC 15〜23時台はJSTと日付がずれるので、JST基準で「今日」を計算する。
+  const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  const nowJst = new Date(Date.now() + JST_OFFSET_MS);
+  await admin.locator(`button:has-text("${nowJst.getUTCDate()}")`).first().click();
   await admin.waitForTimeout(300);
   const dayModal = admin.locator("div.fixed.inset-0.z-20").last();
   bodyText = await dayModal.textContent();
