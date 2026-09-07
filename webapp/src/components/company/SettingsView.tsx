@@ -647,18 +647,22 @@ function TeamInviteForm({
 
   return (
     <div className="rounded-lg border border-border bg-background/40 p-3 text-sm">
-      <div className="mb-2 flex gap-3 text-xs">
+      <div className="mb-3 inline-flex rounded-lg border border-border bg-white p-0.5 text-xs">
         <button
           type="button"
           onClick={() => setMode("new")}
-          className={mode === "new" ? "font-semibold text-primary" : "text-muted"}
+          className={`rounded-md px-3 py-1.5 font-semibold transition-colors ${
+            mode === "new" ? "bg-primary text-primary-foreground" : "text-muted hover:text-foreground"
+          }`}
         >
           新しく招待する
         </button>
         <button
           type="button"
           onClick={() => setMode("existing")}
-          className={mode === "existing" ? "font-semibold text-primary" : "text-muted"}
+          className={`rounded-md px-3 py-1.5 font-semibold transition-colors ${
+            mode === "existing" ? "bg-primary text-primary-foreground" : "text-muted hover:text-foreground"
+          }`}
         >
           既存スタッフから選ぶ
         </button>
