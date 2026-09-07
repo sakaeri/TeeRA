@@ -82,6 +82,8 @@ try {
     .locator("div.rounded-xl.border.border-border.p-4")
     .filter({ has: admin.locator("div.mb-3.font-semibold", { hasText: /^Aチーム$/ }) });
   await teamACard2.getByRole("button", { name: "権限を外す" }).click();
+  await admin.waitForTimeout(300);
+  await admin.locator("div.fixed.inset-0.z-40").last().getByRole("button", { name: "権限を外す" }).click();
   await admin.waitForTimeout(500);
   const roleAfterDemote = psql(`select role from "TeamMembership" where "teamId"='${teamAId}' and "userId"='${mgrUserId}';`);
   log("権限を外すとTEAM_MEMBERに戻る（チームからは外れない）", roleAfterDemote === "TEAM_MEMBER");

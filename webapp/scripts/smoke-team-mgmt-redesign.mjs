@@ -18,6 +18,9 @@ function psql(sql) {
 // - チームのメンバー一覧が本部メンバーと同じ列（氏名/メール/権限/権限を外す）になった
 // - 本部メンバーにも「権限を外す」が付き、STAFFへ降格される（会社からは消えない）
 // - 本部管理者が1名しかいない場合は「権限を外す」が拒否される
+// - チーム/本部どちらの「権限を外す」も、クリックしただけでは実行されず、
+//   確認ダイアログを挟んでからでないと実行されない（キャンセルすると何も
+//   起きない）
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 const adminCtx = await browser.newContext();
@@ -45,7 +48,13 @@ try {
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "担当予定スタッフ");
   await admin.getByRole("button", { name: "作成", exact: true }).click();
-  await admin.waitForTimeout(500);
+  // サーバーアクションの完了（DBコミット）を待つ — 固定sleepだと開発サーバー
+  // が重い時にレースしてチーム作成ポップアップの担当者選択肢に間に合わない
+  // ことがあったため、実際にDBへ現れるまでポーリングする。
+  for (let i = 0; i < 20; i++) {
+    if (psql(`select count(*) from "User" where name='担当予定スタッフ';`) !== "0") break;
+    await admin.waitForTimeout(300);
+  }
 
   // --- チーム管理: 「＋チームを作成」がポップアップになっている ---
   await admin.goto("http://localhost:3000/company/settings?tab=basic");
@@ -81,6 +90,32 @@ try {
   log("チームカード内に担当予定スタッフのメールが表示されている", teamCardText.includes(proxyStaffEmail));
   log("チームカード内に権限を外す列がある", teamCardText.includes("権限を外す"));
 
+  // --- チーム側「権限を外す」: クリックしただけでは実行されず、確認ダイアログを挟む ---
+  const teamCard = admin.locator("div.rounded-xl.border.border-border", { hasText: "再設計確認チーム" }).first();
+  await teamCard.getByRole("button", { name: "権限を外す" }).click();
+  await admin.waitForTimeout(300);
+  let dialogText = await admin.textContent("body");
+  log("チーム側「権限を外す」クリックで確認ダイアログが出る", dialogText.includes("チーム管理者/リーダー権限を外します"));
+
+  // キャンセルすると何も変わらない
+  await admin.getByRole("button", { name: "キャンセル" }).click();
+  await admin.waitForTimeout(300);
+  const roleAfterCancel = psql(
+    `select role from "TeamMembership" tm join "User" u on u.id = tm."userId" where tm."teamId"='${teamId}' and u.name='担当予定スタッフ';`,
+  );
+  log("チーム側: キャンセルすると権限は変わらない", roleAfterCancel === "TEAM_LEADER");
+
+  // 改めて実行し、確認ダイアログの「権限を外す」を押すと実行される
+  await teamCard.getByRole("button", { name: "権限を外す" }).click();
+  await admin.waitForTimeout(300);
+  const teamConfirmDialog = admin.locator("div.fixed.inset-0.z-40").last();
+  await teamConfirmDialog.getByRole("button", { name: "権限を外す" }).click();
+  await admin.waitForTimeout(500);
+  const roleAfterConfirm = psql(
+    `select role from "TeamMembership" tm join "User" u on u.id = tm."userId" where tm."teamId"='${teamId}' and u.name='担当予定スタッフ';`,
+  );
+  log("チーム側: 確認ダイアログで確定すると権限が外れる（TEAM_MEMBERに戻る）", roleAfterConfirm === "TEAM_MEMBER");
+
   // --- 本部メンバーに「権限を外す」があり、編集者は降格できる ---
   await admin.getByRole("button", { name: "＋招待" }).first().click();
   await admin.waitForTimeout(400);
@@ -105,13 +140,34 @@ try {
   let adminsSection = admin.locator("section", { hasText: "本部メンバー権限" });
   let editorRow = adminsSection.locator("tr", { hasText: "降格確認編集者" });
   await editorRow.getByRole("button", { name: "権限を外す" }).click();
-  await admin.waitForTimeout(500);
+  await admin.waitForTimeout(300);
+
+  let dialogBodyText = await admin.textContent("body");
+  log("本部側「権限を外す」クリックで確認ダイアログが出る", dialogBodyText.includes("本部管理者/編集者権限を外し"));
 
   const editorUserId = psql(`select id from "User" where email='${editorEmail}';`);
+
+  // キャンセルすると何も変わらない
+  await admin.getByRole("button", { name: "キャンセル" }).click();
+  await admin.waitForTimeout(300);
+  const editorRoleAfterCancel = psql(
+    `select role from "CompanyMembership" where "companyId"='${companyId}' and "userId"='${editorUserId}';`,
+  );
+  log("本部側: キャンセルすると権限は変わらない", editorRoleAfterCancel === "COMPANY_EDITOR");
+
+  // 改めて実行し、確認ダイアログの「権限を外す」を押すと実行される
+  adminsSection = admin.locator("section", { hasText: "本部メンバー権限" });
+  editorRow = adminsSection.locator("tr", { hasText: "降格確認編集者" });
+  await editorRow.getByRole("button", { name: "権限を外す" }).click();
+  await admin.waitForTimeout(300);
+  const adminConfirmDialog = admin.locator("div.fixed.inset-0.z-40").last();
+  await adminConfirmDialog.getByRole("button", { name: "権限を外す" }).click();
+  await admin.waitForTimeout(500);
+
   const editorMembershipRole = psql(
     `select role from "CompanyMembership" where "companyId"='${companyId}' and "userId"='${editorUserId}';`,
   );
-  log("権限を外すと編集者がSTAFFへ降格される", editorMembershipRole === "STAFF");
+  log("確認ダイアログで確定すると編集者がSTAFFへ降格される", editorMembershipRole === "STAFF");
   const membershipStillExists = Number(
     psql(`select count(*) from "CompanyMembership" where "companyId"='${companyId}' and "userId"='${editorUserId}';`),
   );

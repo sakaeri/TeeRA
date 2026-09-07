@@ -18,6 +18,7 @@ import {
 } from "@/app/company/actions";
 import { ContractsView } from "@/components/company/ContractsView";
 import { WorkReportsQueue } from "@/components/company/WorkReportsQueue";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type Admin = {
   userId: string;
@@ -296,6 +297,7 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
   const [pending, startTransition] = useTransition();
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [removeConfirmTarget, setRemoveConfirmTarget] = useState<{ userId: string; name: string } | null>(null);
   const adminCount = admins.filter((a) => a.role === "COMPANY_ADMIN").length;
 
   return (
@@ -353,13 +355,7 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
                     type="button"
                     disabled={pending || isLastAdmin}
                     title={isLastAdmin ? "本部管理者は最低1名必要です" : undefined}
-                    onClick={() =>
-                      startTransition(async () => {
-                        setError(null);
-                        const result = await removeCompanyMemberRoleAction(a.userId);
-                        if (result.error) setError("本部管理者は最低1名必要なため、外せませんでした。");
-                      })
-                    }
+                    onClick={() => setRemoveConfirmTarget({ userId: a.userId, name: a.name })}
                     className="text-xs text-muted hover:text-red-600 disabled:opacity-40"
                   >
                     権限を外す
@@ -371,6 +367,23 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
         </tbody>
       </table>
       {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
+
+      {removeConfirmTarget ? (
+        <ConfirmDialog
+          message={`「${removeConfirmTarget.name}」の本部管理者/編集者権限を外し、一般スタッフに戻します。よろしいですか？`}
+          confirmLabel="権限を外す"
+          pending={pending}
+          onConfirm={() =>
+            startTransition(async () => {
+              setError(null);
+              const result = await removeCompanyMemberRoleAction(removeConfirmTarget.userId);
+              if (result.error) setError("本部管理者は最低1名必要なため、外せませんでした。");
+              setRemoveConfirmTarget(null);
+            })
+          }
+          onCancel={() => setRemoveConfirmTarget(null)}
+        />
+      ) : null}
 
       <div className="flex items-center gap-3">
         <button
@@ -406,6 +419,9 @@ function TeamsSection({
   const [pending, startTransition] = useTransition();
   const [inviteFormTeamId, setInviteFormTeamId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [removeConfirmTarget, setRemoveConfirmTarget] = useState<{ teamId: string; userId: string; name: string } | null>(
+    null,
+  );
 
   return (
     <SectionCard
@@ -469,7 +485,7 @@ function TeamsSection({
                         <button
                           type="button"
                           disabled={pending}
-                          onClick={() => startTransition(() => setTeamMemberRoleAction(team.id, m.userId, "TEAM_MEMBER"))}
+                          onClick={() => setRemoveConfirmTarget({ teamId: team.id, userId: m.userId, name: m.name })}
                           className="text-xs text-muted hover:text-red-600 disabled:opacity-60"
                         >
                           権限を外す
@@ -511,6 +527,21 @@ function TeamsSection({
 
       {showCreateModal ? (
         <CreateTeamModal staff={staff} onClose={() => setShowCreateModal(false)} />
+      ) : null}
+
+      {removeConfirmTarget ? (
+        <ConfirmDialog
+          message={`「${removeConfirmTarget.name}」のチーム管理者/リーダー権限を外します。よろしいですか？`}
+          confirmLabel="権限を外す"
+          pending={pending}
+          onConfirm={() =>
+            startTransition(async () => {
+              await setTeamMemberRoleAction(removeConfirmTarget.teamId, removeConfirmTarget.userId, "TEAM_MEMBER");
+              setRemoveConfirmTarget(null);
+            })
+          }
+          onCancel={() => setRemoveConfirmTarget(null)}
+        />
       ) : null}
     </SectionCard>
   );
