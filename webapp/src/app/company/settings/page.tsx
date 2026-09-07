@@ -71,6 +71,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
           members: t.memberships.map((m) => ({
             userId: m.userId,
             name: m.user.name,
+            email: m.user.email,
             role: m.role,
           })),
         }))}

@@ -30,8 +30,13 @@ try {
   // remains reachable at all now.
   await admin.click("text=設定");
   await admin.waitForURL("http://localhost:3000/company/settings");
-  await admin.fill('input[placeholder="新しいチーム名"]', "検証チーム");
   await admin.click("text=＋チームを作成");
+  await admin.waitForTimeout(200);
+  {
+    const createModal = admin.locator("div.fixed.inset-0.z-30").last();
+    await createModal.locator('input[placeholder="新しいチーム名"]').fill("検証チーム");
+    await createModal.getByRole("button", { name: "作成", exact: true }).click();
+  }
   await admin.waitForTimeout(600);
 
   await admin.goto("http://localhost:3000/company/roster");

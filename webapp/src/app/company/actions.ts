@@ -35,6 +35,7 @@ import {
   removeTeamMember,
   setCompanyMemberRole,
   setMemberCanWorkShifts,
+  removeCompanyMemberRole,
   addTeamClient,
   removeTeamClient,
   setStaffPlainTeamMemberships,
@@ -199,11 +200,14 @@ export async function inviteNewAgencyAction() {
   return absoluteInviteUrl(invite.token);
 }
 
-export async function createTeamAction(name: string) {
+export async function createTeamAction(
+  name: string,
+  assignment?: { userId: string; role: "TEAM_MANAGER" | "TEAM_LEADER" },
+) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
 
-  await createTeam({ companyId: membership.companyId, name });
+  await createTeam({ companyId: membership.companyId, name, assignment });
   revalidatePath("/company/settings");
 }
 
@@ -403,6 +407,21 @@ export async function setMemberCanWorkShiftsAction(targetUserId: string, canWork
     canWorkShifts,
   });
   revalidatePath("/company/settings");
+}
+
+// 本部メンバーの権限を外し、一般スタッフに戻す（会社からは削除しない）。
+// 本部管理者が0人になる操作はdomain層で拒否される。
+export async function removeCompanyMemberRoleAction(targetUserId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  try {
+    await removeCompanyMemberRole({ companyId: membership.companyId, userId: targetUserId });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "unknown" };
+  }
+  revalidatePath("/company/settings");
+  return { error: null };
 }
 
 export async function inviteCompanyAdminAction(role: "COMPANY_ADMIN" | "COMPANY_EDITOR") {

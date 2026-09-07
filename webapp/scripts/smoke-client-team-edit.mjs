@@ -31,8 +31,13 @@ try {
   const companyId = psql(`select id from "Company" where name='取引先編集確認株式会社' order by "createdAt" desc limit 1;`);
 
   await page.goto("http://localhost:3000/company/settings?tab=teams");
-  await page.fill('input[placeholder="新しいチーム名"]', "Aチーム");
   await page.getByRole("button", { name: "＋チームを作成" }).click();
+  await page.waitForTimeout(200);
+  {
+    const createModal = page.locator("div.fixed.inset-0.z-30").last();
+    await createModal.locator('input[placeholder="新しいチーム名"]').fill("Aチーム");
+    await createModal.getByRole("button", { name: "作成", exact: true }).click();
+  }
   await page.waitForTimeout(400);
   let body = await page.textContent("body");
   log("設定画面のチームカードに「主な取引先」の項目が無い", !body.includes("主な取引先"));

@@ -34,14 +34,16 @@ try {
   await admin.waitForURL("http://localhost:3000/company");
   const companyId = psql(`select id from "Company" where name='編集導線確認株式会社' order by "createdAt" desc limit 1;`);
 
-  // 2チーム作成
+  // 2チーム作成（「＋チームを作成」ポップアップ経由、担当者は割り当てない）
   await admin.goto("http://localhost:3000/company/settings?tab=teams");
-  await admin.fill('input[placeholder="新しいチーム名"]', "Aチーム");
-  await admin.getByRole("button", { name: "＋チームを作成" }).click();
-  await admin.waitForTimeout(400);
-  await admin.fill('input[placeholder="新しいチーム名"]', "Bチーム");
-  await admin.getByRole("button", { name: "＋チームを作成" }).click();
-  await admin.waitForTimeout(400);
+  for (const name of ["Aチーム", "Bチーム"]) {
+    await admin.getByRole("button", { name: "＋チームを作成" }).click();
+    await admin.waitForTimeout(200);
+    const createModal = admin.locator("div.fixed.inset-0.z-30").last();
+    await createModal.locator('input[placeholder="新しいチーム名"]').fill(name);
+    await createModal.getByRole("button", { name: "作成", exact: true }).click();
+    await admin.waitForTimeout(400);
+  }
   let body = await admin.textContent("body");
   log("設定画面にマネージャー/リーダーの説明文が出る", body.includes("マネージャー/リーダーだけです"));
   log("マネージャー未登録のチームは「まだマネージャー/リーダーがいません」と出る", body.includes("まだマネージャー/リーダーがいません"));

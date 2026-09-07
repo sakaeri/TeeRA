@@ -48,8 +48,11 @@ try {
   // --- 2チーム作成 ---
   await admin.goto("http://localhost:3000/company/settings?tab=teams");
   for (const name of ["Aチーム", "Bチーム"]) {
-    await admin.fill('input[placeholder="新しいチーム名"]', name);
     await admin.getByRole("button", { name: "＋チームを作成" }).click();
+    await admin.waitForTimeout(200);
+    const createModal = admin.locator("div.fixed.inset-0.z-30").last();
+    await createModal.locator('input[placeholder="新しいチーム名"]').fill(name);
+    await createModal.getByRole("button", { name: "作成", exact: true }).click();
     await admin.waitForTimeout(400);
   }
   const teamAId = psql(`select id from "Team" where "companyId"='${companyId}' and name='Aチーム';`);

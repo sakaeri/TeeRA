@@ -28,8 +28,20 @@ export async function removeTeamClient(params: { teamId: string; companyRelation
   });
 }
 
-export async function createTeam(params: { companyId: string; name: string }) {
-  return prisma.team.create({ data: { companyId: params.companyId, name: params.name } });
+export async function createTeam(params: {
+  companyId: string;
+  name: string;
+  assignment?: { userId: string; role: "TEAM_MANAGER" | "TEAM_LEADER" };
+}) {
+  return prisma.$transaction(async (tx) => {
+    const team = await tx.team.create({ data: { companyId: params.companyId, name: params.name } });
+    if (params.assignment) {
+      await tx.teamMembership.create({
+        data: { teamId: team.id, userId: params.assignment.userId, role: params.assignment.role },
+      });
+    }
+    return team;
+  });
 }
 
 export async function setTeamMemberRole(params: {
@@ -147,5 +159,26 @@ export async function setMemberCanWorkShifts(params: {
   return prisma.companyMembership.updateMany({
     where: { companyId: params.companyId, userId: params.userId },
     data: { canWorkShifts: params.canWorkShifts },
+  });
+}
+
+// 本部メンバー（管理者/編集者）権限を外し、一般スタッフに戻す
+// （会社からは削除しない — チーム側のremoveTeamMemberと対称の操作）。
+// 本部管理者が0人になってしまう変更は拒否する。
+export async function removeCompanyMemberRole(params: { companyId: string; userId: string }) {
+  await prisma.$transaction(async (tx) => {
+    const target = await tx.companyMembership.findFirstOrThrow({
+      where: { companyId: params.companyId, userId: params.userId },
+    });
+    if (target.role === "COMPANY_ADMIN") {
+      const adminCount = await tx.companyMembership.count({
+        where: { companyId: params.companyId, role: "COMPANY_ADMIN" },
+      });
+      if (adminCount <= 1) throw new Error("last_admin");
+    }
+    await tx.companyMembership.update({
+      where: { id: target.id },
+      data: { role: "STAFF" },
+    });
   });
 }

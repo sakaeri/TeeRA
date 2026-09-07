@@ -81,8 +81,13 @@ try {
   // settings: rename company, create team, assign role
   await page.click("text=設定");
   await page.waitForURL("http://localhost:3000/company/settings");
-  await page.fill('input[placeholder="新しいチーム名"]', "工場チーム");
   await page.click("text=＋チームを作成");
+  await page.waitForTimeout(200);
+  {
+    const createModal = page.locator("div.fixed.inset-0.z-30").last();
+    await createModal.locator('input[placeholder="新しいチーム名"]').fill("工場チーム");
+    await createModal.getByRole("button", { name: "作成", exact: true }).click();
+  }
   await page.waitForTimeout(800);
   bodyText = await page.textContent("body");
   log("team created", bodyText.includes("工場チーム"));
