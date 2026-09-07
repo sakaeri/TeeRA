@@ -1,4 +1,5 @@
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
+import { isCompanyScopeAdmin } from "@/lib/auth/permissions";
 import { listStaffWithSummary } from "@/lib/domain/roster";
 import { listClients, listAgencies } from "@/lib/domain/relationships";
 import { listTeams } from "@/lib/domain/teams";
@@ -55,6 +56,10 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
           status: a.status,
         }))}
         teams={teams.map((t) => ({ id: t.id, name: t.name }))}
+        isCompanyScopeAdmin={isCompanyScopeAdmin(membership)}
+        myManagedTeams={membership.teamMemberships
+          .filter((tm) => tm.role === "TEAM_MANAGER")
+          .map((tm) => ({ id: tm.teamId, name: tm.teamName }))}
         templates={templates
           .filter((t) => t.status !== "ARCHIVED")
           .map((t) => ({

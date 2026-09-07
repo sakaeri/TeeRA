@@ -89,6 +89,8 @@ export function RosterView({
   knownTaskNames,
   initialStaffId,
   initialStaffTab,
+  isCompanyScopeAdmin,
+  myManagedTeams,
 }: {
   staff: StaffRow[];
   companyName: string;
@@ -100,6 +102,8 @@ export function RosterView({
   knownTaskNames: string[];
   initialStaffId?: string;
   initialStaffTab?: "contracts";
+  isCompanyScopeAdmin: boolean;
+  myManagedTeams: Team[];
 }) {
   const [tab, setTab] = useState<Tab>("staff");
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(initialStaffId ?? null);
@@ -116,7 +120,24 @@ export function RosterView({
     "client" | "agency" | "staff" | null
   >(null);
   const [proxyNameInput, setProxyNameInput] = useState("");
+  const [proxyTeamId, setProxyTeamId] = useState("");
   const addMenuRef = useClickOutside<HTMLDivElement>(showAddMenu, () => setShowAddMenu(false));
+
+  // 依頼主/派遣会社は会社全体の資産なのでチームスコープの概念が無く、
+  // 本部管理者/編集者だけが追加できる。スタッフは自チーム内であれば
+  // マネージャーも追加できる（canManage(membership, teamId)と対応）。
+  const canAddStaff = isCompanyScopeAdmin || myManagedTeams.length > 0;
+  const canAddClientsOrAgencies = isCompanyScopeAdmin;
+  const canShowAddButton = tab === "staff" ? canAddStaff : canAddClientsOrAgencies;
+  // マネージャーが複数チームを管理している場合だけ選ばせる — 1つだけなら
+  // 自動的にそのチーム宛にする。本部管理者/編集者はチーム未指定のまま
+  // （今まで通りの挙動）。
+  const proxyStaffTeamId = isCompanyScopeAdmin
+    ? undefined
+    : myManagedTeams.length === 1
+      ? myManagedTeams[0].id
+      : proxyTeamId || undefined;
+  const needsProxyTeamChoice = !isCompanyScopeAdmin && myManagedTeams.length > 1;
 
   function openRelationship(id: string, kind: "client" | "agency") {
     setSelectedRelationshipId(id);
@@ -125,9 +146,10 @@ export function RosterView({
 
   function handleCreateProxy(kind: "client" | "agency" | "staff") {
     if (!proxyNameInput.trim()) return;
+    if (kind === "staff" && needsProxyTeamChoice && !proxyTeamId) return;
     startTransition(async () => {
       if (kind === "staff") {
-        await createProxyStaffAction(proxyNameInput.trim());
+        await createProxyStaffAction(proxyNameInput.trim(), proxyStaffTeamId);
       } else if (kind === "client") {
         await addClientAction(proxyNameInput.trim());
         setTab("clients");
@@ -135,6 +157,7 @@ export function RosterView({
         await addAgencyAction(proxyNameInput.trim());
         setTab("agencies");
       }
+      setProxyTeamId("");
       setProxyNamePromptFor(null);
       setProxyNameInput("");
     });
@@ -159,6 +182,7 @@ export function RosterView({
           </select>
         </div>
 
+        {canShowAddButton ? (
         <div className="relative" ref={addMenuRef}>
           <button
             type="button"
@@ -215,6 +239,7 @@ export function RosterView({
             </div>
           ) : null}
         </div>
+        ) : null}
       </div>
 
       <div className="mb-1 flex items-center gap-1 border-b border-border">
@@ -263,9 +288,30 @@ export function RosterView({
               placeholder="名称を入力"
               className="mb-4 w-full rounded-lg border border-border px-3 py-2 text-sm"
             />
+            {proxyNamePromptFor === "staff" && needsProxyTeamChoice ? (
+              <div className="mb-4">
+                <label className="mb-1 block text-xs text-muted">どのチームに追加しますか？</label>
+                <select
+                  value={proxyTeamId}
+                  onChange={(e) => setProxyTeamId(e.target.value)}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                >
+                  <option value="">選択してください</option>
+                  {myManagedTeams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <button
               type="button"
-              disabled={pending || !proxyNameInput.trim()}
+              disabled={
+                pending ||
+                !proxyNameInput.trim() ||
+                (proxyNamePromptFor === "staff" && needsProxyTeamChoice && !proxyTeamId)
+              }
               onClick={() => handleCreateProxy(proxyNamePromptFor)}
               className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
@@ -372,7 +418,12 @@ export function RosterView({
         />
       ) : null}
       {showInviteStaffModal ? (
-        <InviteStaffModal templates={templates} onClose={() => setShowInviteStaffModal(false)} />
+        <InviteStaffModal
+          templates={templates}
+          isCompanyScopeAdmin={isCompanyScopeAdmin}
+          myManagedTeams={myManagedTeams}
+          onClose={() => setShowInviteStaffModal(false)}
+        />
       ) : null}
       {showInviteRelationshipModal ? (
         <InviteRelationshipModal kind={showInviteRelationshipModal} onClose={() => setShowInviteRelationshipModal(null)} />
@@ -383,16 +434,27 @@ export function RosterView({
 
 function InviteStaffModal({
   templates,
+  isCompanyScopeAdmin,
+  myManagedTeams,
   onClose,
 }: {
   templates: ContractTemplateOption[];
+  isCompanyScopeAdmin: boolean;
+  myManagedTeams: Team[];
   onClose: () => void;
 }) {
   const [templateId, setTemplateId] = useState("");
   const [contractStartDate, setContractStartDate] = useState("");
+  const [teamId, setTeamId] = useState("");
   const [pending, startTransition] = useTransition();
   const [url, setUrl] = useState<string | null>(null);
   const selectedTemplate = templates.find((t) => t.id === templateId);
+  const needsTeamChoice = !isCompanyScopeAdmin && myManagedTeams.length > 1;
+  const effectiveTeamId = isCompanyScopeAdmin
+    ? undefined
+    : myManagedTeams.length === 1
+      ? myManagedTeams[0].id
+      : teamId || undefined;
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
@@ -406,6 +468,24 @@ function InviteStaffModal({
         <p className="mb-4 text-sm text-muted">
           このURLを共有してください。1回のみ使用できます。URLを開いた方はログインまたは新規アカウント作成後、自動的に自社の直雇用スタッフとして追加されます。
         </p>
+
+        {needsTeamChoice ? (
+          <div className="mb-4">
+            <label className="mb-1 block text-xs text-muted">どのチームに追加しますか？</label>
+            <select
+              value={teamId}
+              onChange={(e) => setTeamId(e.target.value)}
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+            >
+              <option value="">選択してください</option>
+              {myManagedTeams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
         {templates.length > 0 ? (
           <div className="mb-4">
@@ -455,11 +535,11 @@ function InviteStaffModal({
         {!url ? (
           <button
             type="button"
-            disabled={pending}
+            disabled={pending || (needsTeamChoice && !teamId)}
             onClick={() =>
               startTransition(async () => {
                 const generated = await inviteStaffAction(
-                  undefined,
+                  effectiveTeamId,
                   templateId || undefined,
                   templateId ? contractStartDate || undefined : undefined,
                 );
