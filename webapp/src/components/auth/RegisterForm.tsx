@@ -81,7 +81,10 @@ export function RegisterForm({ inviteToken }: { inviteToken?: string }) {
 
       <p className="mt-2 text-center text-sm text-muted">
         すでにアカウントをお持ちの方は{" "}
-        <Link href="/login" className="text-primary underline">
+        <Link
+          href={inviteToken ? `/login?from=/invite/${inviteToken}` : "/login"}
+          className="text-primary underline"
+        >
           ログイン
         </Link>
       </p>

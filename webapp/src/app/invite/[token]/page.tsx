@@ -56,6 +56,12 @@ export default async function InvitePage({
           >
             アカウントを作成して参加する
           </Link>
+          <p className="mt-3 text-center text-sm text-muted">
+            すでにアカウントをお持ちの方は{" "}
+            <Link href={`/login?from=/invite/${token}`} className="text-primary underline">
+              ログイン
+            </Link>
+          </p>
         </div>
       </main>
     );

@@ -43,6 +43,7 @@ type ClientMonthDetail = {
   relationshipId: string;
   name: string;
   isProxy: boolean;
+  isOwner: boolean;
   teams: { teamId: string; teamName: string }[];
   placements: Placement[];
   relationshipNotes: RelationshipNote[];
@@ -199,7 +200,7 @@ export function ClientDetailPanel({
           <>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-serif-jp text-xl font-bold">{data.name}</h2>
-              {data.isProxy ? (
+              {data.isOwner ? (
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(true)}
@@ -508,7 +509,11 @@ export function ClientDetailPanel({
 
       {showDeleteConfirm ? (
         <ConfirmDialog
-          message="この取引先情報を削除します。元に戻せません。よろしいですか？"
+          message={
+            data?.isProxy
+              ? "この取引先情報を削除します。元に戻せません。よろしいですか？"
+              : "この取引先との連携を解除します。相手企業との紐付けも解除され、元に戻せません。よろしいですか？"
+          }
           confirmLabel="削除する"
           pending={pending}
           onConfirm={submitDeleteRelationship}

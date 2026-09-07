@@ -134,15 +134,15 @@ export async function setRelationshipStatus(params: {
 // 一件でもある関係は対象外。単価テーブルや契約書テンプレート、チームとの
 // 紐付けは単なる設定情報なのでブロックせずcascadeで一緒に消える
 // （schema.prisma参照）。
+// 相手がまだ仮アカウントの誤作成取り消しだけでなく、招待の向きを間違えて
+// 相手が本アカウントとして連携してしまった直後の取り消しにも使う —
+// 稼働実績（シフト・請求書・配属）が一件も無ければ、相手が仮アカウントか
+// 本アカウントかを問わず削除できる。実績が一件でもあれば、方向の間違いに
+// 気づいた場合でも安全のため削除は拒否する（has_activity）。
 export async function deleteCompanyRelationship(params: { companyId: string; companyRelationshipId: string }) {
-  const relationship = await prisma.companyRelationship.findFirstOrThrow({
+  await prisma.companyRelationship.findFirstOrThrow({
     where: { id: params.companyRelationshipId, ownerCompanyId: params.companyId },
   });
-  // 依頼主一覧なら自社がagencyCompanyId側、相手はclientCompanyId — その逆が
-  // 派遣会社一覧。getClientMonthDetailのisProxy判定と同じ考え方。
-  const isClientDirection = relationship.agencyCompanyId === params.companyId;
-  const counterpartCompanyId = isClientDirection ? relationship.clientCompanyId : relationship.agencyCompanyId;
-  if (counterpartCompanyId) throw new Error("not_proxy");
 
   const [shiftCount, invoiceCount, placementCount] = await Promise.all([
     prisma.shift.count({ where: { companyRelationshipId: params.companyRelationshipId } }),
@@ -263,6 +263,11 @@ export async function getClientMonthDetail(params: {
     relationshipId: relationship.id,
     name: counterpartCompany?.name ?? relationship.proxyName ?? "",
     isProxy: !counterpartCompany,
+    // 削除ボタンの表示判定用 — 関係を作った側（招待の向きを選んだ側）だけが
+    // 削除できる。相手が本アカウント連携済みでも、稼働実績が無ければ
+    // 削除できる（deleteCompanyRelationship参照。招待の向きを間違えた場合の
+    // 取り消し導線）。
+    isOwner: relationship.ownerCompanyId === params.companyId,
     teams: teamLinks.map((l) => ({ teamId: l.teamId, teamName: l.team.name })),
     placements: placements.map((p) => ({
       staffUserId: p.staffUserId,

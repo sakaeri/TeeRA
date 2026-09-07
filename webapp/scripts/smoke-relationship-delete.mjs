@@ -136,6 +136,64 @@ try {
   errorBody = await panel.textContent();
   log("配属実績でもエラーメッセージが表示される", errorBody.includes("稼働実績があるため削除できません"));
 
+  // --- 招待の向きを間違えて相手が本アカウントとして連携してしまった場合の
+  // 取り消し: 稼働実績が無ければ、相手が仮アカウントか本アカウントかを
+  // 問わず削除できる（オーナー側のみ）。---
+  const counterpartCtx = await browser.newContext();
+  const counterpart = await counterpartCtx.newPage();
+  const counterpartEmail = `reldel-counterpart-${Date.now()}@example.com`;
+
+  await page.goto("http://localhost:3000/company/roster");
+  await page.click("text=依頼主一覧");
+  await page.waitForTimeout(200);
+  await page.click("text=＋依頼主を追加する");
+  await page.waitForTimeout(200);
+  await page.click("text=本アカウントを招待");
+  await page.waitForTimeout(200);
+  await page.getByRole("button", { name: "招待URLを発行する" }).click();
+  await page.waitForSelector('input[readonly]');
+  const realInviteUrl = await page.locator('input[readonly]').inputValue();
+
+  await counterpart.goto(realInviteUrl);
+  await counterpart.click("text=アカウントを作成して参加する");
+  await counterpart.fill("#name", "誤連携取消確認担当者");
+  await counterpart.fill("#email", counterpartEmail);
+  await counterpart.fill("#password", "password123");
+  await counterpart.click("button[type=submit]");
+  await counterpart.waitForURL(/\/register\/company\?invite=/);
+  await counterpart.fill("#name", "誤連携取消確認先株式会社");
+  await counterpart.click("button[type=submit]");
+  await counterpart.waitForURL(/\/invite\//);
+  await counterpart.click("text=/として招待を受け取る/");
+  await counterpart.waitForURL("http://localhost:3000/company/roster");
+
+  const realRelId = psql(
+    `select id from "CompanyRelationship" where "ownerCompanyId"='${companyId}' order by "createdAt" desc limit 1;`,
+  );
+
+  await page.goto("http://localhost:3000/company/roster");
+  await page.click("text=依頼主一覧");
+  await page.waitForTimeout(200);
+  await page.click("text=誤連携取消確認先株式会社");
+  await page.waitForTimeout(300);
+  panel = page.locator("div.fixed.inset-0.z-30").last();
+  log(
+    "相手が本アカウント連携済みでも稼働実績が無ければ削除ボタンが出る",
+    (await panel.getByRole("button", { name: "取引先情報を削除" }).count()) === 1,
+  );
+  await panel.getByRole("button", { name: "取引先情報を削除" }).click();
+  await page.waitForTimeout(200);
+  errorBody = await page.textContent("body");
+  log(
+    "確認ダイアログが連携解除であることに言及する",
+    errorBody.includes("連携を解除") || errorBody.includes("紐付けも解除"),
+  );
+  await page.getByRole("button", { name: "削除する" }).click();
+  await page.waitForTimeout(600);
+
+  const realRelGone = psql(`select count(*) from "CompanyRelationship" where id='${realRelId}';`);
+  log("本アカウント連携済みでも稼働実績が無ければ実際に削除できる", realRelGone === "0");
+
   // --- 表示順: バナー(本アカウント連携案内)が先、チームバッジが後 ---
   // 依頼主にはisProxyバナーが出るので、その並び順を確認する
   await page.goto("http://localhost:3000/company/roster");
