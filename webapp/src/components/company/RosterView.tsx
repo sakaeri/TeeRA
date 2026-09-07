@@ -168,18 +168,20 @@ export function RosterView({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           <h1 className="font-serif-jp text-2xl font-bold">スタッフ名簿</h1>
-          <select
-            value={teamFilter}
-            onChange={(e) => setTeamFilter(e.target.value)}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
-          >
-            <option value="">全社（すべて表示）</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
+          {tab === "staff" ? (
+            <select
+              value={teamFilter}
+              onChange={(e) => setTeamFilter(e.target.value)}
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
+            >
+              <option value="">全社（すべて表示）</option>
+              {teams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
         </div>
 
         {canShowAddButton ? (
