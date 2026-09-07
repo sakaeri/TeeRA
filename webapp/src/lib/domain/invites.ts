@@ -162,6 +162,18 @@ export async function redeemCompanyRelationshipInvite(
     }
 
     if (invite.companyRelationshipId) {
+      // 古い（本来は無効化されているはずの）招待URLが後から使われて、既に
+      // 別の会社とリンク済みの関係を横取り・上書きしてしまわないよう、
+      // 現在値を確認してから書き込む。
+      const relationship = await tx.companyRelationship.findUniqueOrThrow({
+        where: { id: invite.companyRelationshipId },
+      });
+      const currentCounterpartId =
+        invite.kind === "CLIENT_UPGRADE" ? relationship.clientCompanyId : relationship.agencyCompanyId;
+      if (currentCounterpartId && currentCounterpartId !== redeemingCompanyId) {
+        throw new Error("relationship_already_linked");
+      }
+
       const data =
         invite.kind === "CLIENT_UPGRADE"
           ? { clientCompanyId: redeemingCompanyId }
@@ -171,6 +183,16 @@ export async function redeemCompanyRelationshipInvite(
         data,
       });
     } else {
+      // 「本アカウントを招待」を同じ相手に複数回発行してしまった等で、既に
+      // 同じ向きの関係が出来ている場合は重複行を作らない。
+      const existing = await tx.companyRelationship.findFirst({
+        where:
+          invite.kind === "CLIENT_UPGRADE"
+            ? { agencyCompanyId: invite.companyId, clientCompanyId: redeemingCompanyId }
+            : { agencyCompanyId: redeemingCompanyId, clientCompanyId: invite.companyId },
+      });
+      if (existing) throw new Error("already_linked_to_this_company");
+
       if (invite.kind === "CLIENT_UPGRADE") {
         await tx.company.update({ where: { id: invite.companyId }, data: { agencyEnabled: true } });
       } else {

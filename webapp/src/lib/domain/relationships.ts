@@ -104,17 +104,34 @@ export async function inviteRelationshipUpgrade(params: {
   kind: "CLIENT_UPGRADE" | "AGENCY_UPGRADE";
 }) {
   const token = randomBytes(24).toString("base64url");
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  // スタッフ/本部メンバー招待と統一（旧30日）。14日以内にリンクされなければ
+  // 再発行してもらう運用。
+  const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
-  return prisma.inviteToken.create({
-    data: {
-      token,
-      kind: params.kind,
-      companyId: params.companyId,
-      companyRelationshipId: params.companyRelationshipId,
-      createdByUserId: params.createdByUserId,
-      expiresAt,
-    },
+  return prisma.$transaction(async (tx) => {
+    // 特定の関係（既存の仮アカウント）向けに発行し直す場合、古い（まだ
+    // 使われていない）招待は無効化する — 後から古いリンクを誰かが誤って
+    // 使ってしまい、既にリンク済みの相手が別の会社に上書きされる事故を
+    // 防ぐため。「本アカウントを招待」で関係がまだ無い新規招待は、複数の
+    // 別々の相手に同時進行で送ることがあり得るので対象外（相手が実際に
+    // リンクする段階でredeemCompanyRelationshipInvite側の重複チェックが
+    // 効く）。
+    if (params.companyRelationshipId) {
+      await tx.inviteToken.deleteMany({
+        where: { companyRelationshipId: params.companyRelationshipId, usedAt: null },
+      });
+    }
+
+    return tx.inviteToken.create({
+      data: {
+        token,
+        kind: params.kind,
+        companyId: params.companyId,
+        companyRelationshipId: params.companyRelationshipId,
+        createdByUserId: params.createdByUserId,
+        expiresAt,
+      },
+    });
   });
 }
 

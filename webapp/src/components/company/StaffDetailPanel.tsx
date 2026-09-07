@@ -153,6 +153,7 @@ export function StaffDetailPanel({
   const [deleteNoteConfirmTarget, setDeleteNoteConfirmTarget] = useState<StaffNote | null>(null);
   const [pending, startTransition] = useTransition();
   const [upgradeUrl, setUpgradeUrl] = useState<string | null>(null);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [editingContractId, setEditingContractId] = useState<string | null>(null);
   const [editWageAmount, setEditWageAmount] = useState("");
   const [editWageEffectiveFrom, setEditWageEffectiveFrom] = useState(todayJst());
@@ -250,9 +251,14 @@ export function StaffDetailPanel({
   }
 
   function handleUpgrade() {
+    setUpgradeError(null);
     startTransition(async () => {
-      const url = await inviteProxyUpgradeAction(userId);
-      setUpgradeUrl(url);
+      try {
+        const url = await inviteProxyUpgradeAction(userId);
+        setUpgradeUrl(url);
+      } catch {
+        setUpgradeError("招待URLを発行できませんでした。自分が管理しているチームのメンバーか確認してください。");
+      }
     });
   }
 
@@ -359,6 +365,7 @@ export function StaffDetailPanel({
                     </button>
                   </div>
                 )}
+                {upgradeError ? <p className="mt-2 text-red-600">{upgradeError}</p> : null}
               </div>
             ) : null}
 

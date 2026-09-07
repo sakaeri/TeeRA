@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { canManage, canManageCompanySettings } from "@/lib/auth/permissions";
+import { canManage, canManageAny, canManageCompanySettings } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import {
   inviteStaff,
@@ -93,9 +93,17 @@ export async function deleteStaffAction(staffUserId: string) {
   return { error: null };
 }
 
+// 仮アカウントを作れたチームマネージャーが、そのまま本登録にも進められる
+// ように — createProxyStaffActionと同じ「その仮アカウントが所属する
+// チームを管理しているか」で判定する（canManage(membership)だけだと
+// teamId無し判定になり本部限定になってしまうため、チームIDを引いてから
+// canManageAnyで判定する）。
 export async function inviteProxyUpgradeAction(proxyUserId: string) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
-  if (!canManage(membership)) throw new Error("forbidden");
+  const teamMemberships = await prisma.teamMembership.findMany({
+    where: { userId: proxyUserId, team: { companyId: membership.companyId } },
+  });
+  if (!canManageAny(membership, teamMemberships.map((tm) => tm.teamId))) throw new Error("forbidden");
 
   const invite = await inviteProxyUpgrade({
     proxyUserId,

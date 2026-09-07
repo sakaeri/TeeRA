@@ -94,11 +94,24 @@ export default async function InvitePage({
         {errorKey === "already_member_of_this_company" ? (
           <p className="mb-4 text-sm text-red-600">
             このアカウントはすでにこの会社に所属しています。
+            {invite.kind === "COMPANY_ADMIN_TRANSFER"
+              ? "権限（管理者/編集者）を変更したい場合は、招待ではなく、既存の管理者/編集者が「設定＞本部メンバー権限」からこのアカウントの権限を直接変更してください。"
+              : ""}
           </p>
         ) : null}
         {errorKey === "requires_admin" ? (
           <p className="mb-4 text-sm text-red-600">
             自社の管理者/編集者のみがこの招待を受け取れます。
+          </p>
+        ) : null}
+        {errorKey === "relationship_already_linked" ? (
+          <p className="mb-4 text-sm text-red-600">
+            この招待URLは古く、すでに別の会社と連携済みです。招待元に新しい招待URLを発行してもらってください。
+          </p>
+        ) : null}
+        {errorKey === "already_linked_to_this_company" ? (
+          <p className="mb-4 text-sm text-red-600">
+            この会社とはすでに連携済みです。
           </p>
         ) : null}
 
@@ -133,7 +146,12 @@ export default async function InvitePage({
             </form>
           )
         ) : membershipAtThisCompany ? (
-          <p className="text-sm text-red-600">このアカウントはすでにこの会社に所属しています。</p>
+          <p className="text-sm text-red-600">
+            このアカウントはすでにこの会社に所属しています。
+            {invite.kind === "COMPANY_ADMIN_TRANSFER"
+              ? "権限（管理者/編集者）を変更したい場合は、招待ではなく、既存の管理者/編集者が「設定＞本部メンバー権限」からこのアカウントの権限を直接変更してください。"
+              : ""}
+          </p>
         ) : (
           <form
             action={async () => {
