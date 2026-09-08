@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
 import { findConflictingShifts, isPastDate, supersedeShift } from "@/lib/domain/shifts";
 import type { WageType } from "@/generated/prisma/enums";
+import type { Prisma } from "@/generated/prisma/client";
+
+type Tx = Prisma.TransactionClient;
 
 const PER_ENTRY_TEE_COST = 10;
 
@@ -156,14 +159,19 @@ export async function updateMaxEntries(params: {
     const recruitment = await tx.publicRecruitment.findUniqueOrThrow({
       where: { id: params.recruitmentId },
     });
-    if (isPastDate(recruitment.date)) {
-      throw new Error("recruitment_in_past");
-    }
 
     const filledCount = await tx.recruitmentEntry.count({
       where: { publicRecruitmentId: recruitment.id, status: { not: "REJECTED" } },
     });
     const newMaxEntries = Math.max(params.newMaxEntries, filledCount);
+
+    // 日付が過ぎた募集でも、枠を減らして未使用分のロック済みTeeを返金する
+    // 方向の変更（締め切り後の精算）だけは引き続き許可する — 確定済みの
+    // シフト・実績には一切触れないので安全。新たに枠を増やす方向だけ、
+    // もう埋まりようがないので引き続き禁止する。
+    if (newMaxEntries > recruitment.maxEntries && isPastDate(recruitment.date)) {
+      throw new Error("recruitment_in_past");
+    }
 
     if (recruitment.visibility === "ORDER") {
       return tx.publicRecruitment.update({
@@ -333,6 +341,27 @@ export async function listOpenRecruitmentsForStaff(params: { companyId: string; 
   return recruitments.map((r) => ({ ...r, isAffiliated: affiliatedCompanyIds.has(r.companyId) }));
 }
 
+// 自社所属、または（アクティブな取引先関係経由の）配属記録がある＝普段から
+// 仕事を頼める関係にあるスタッフかどうか。非公開募集(ORDER)の応募資格判定
+// と、公開募集(PUBLIC)のTee課金要否判定（isStaffEligibleForRecruitmentの
+// PUBLIC分岐、およびapplyToRecruitment/assignStaffToRecruitmentでの返金
+// 判定）の両方で使う共通の土台。
+async function isStaffAlreadyKnownToCompany(companyId: string, staffUserId: string) {
+  const ownMembership = await prisma.companyMembership.findUnique({
+    where: { userId_companyId: { userId: staffUserId, companyId } },
+  });
+  if (ownMembership) return true;
+
+  const placement = await prisma.staffPlacement.findFirst({
+    where: {
+      staffUserId,
+      active: true,
+      companyRelationship: { clientCompanyId: companyId, status: "ACTIVE" },
+    },
+  });
+  return !!placement;
+}
+
 // スタッフの応募/管理者アサインの対象になれるか: 自社所属、配属記録あり、
 // または募集自体がvisibility=PUBLIC（誰でも応募可）のいずれか。
 async function isStaffEligibleForRecruitment(params: {
@@ -341,20 +370,7 @@ async function isStaffEligibleForRecruitment(params: {
   staffUserId: string;
 }) {
   if (params.recruitmentVisibility === "PUBLIC") return true;
-
-  const ownMembership = await prisma.companyMembership.findUnique({
-    where: { userId_companyId: { userId: params.staffUserId, companyId: params.recruitmentCompanyId } },
-  });
-  if (ownMembership) return true;
-
-  const placement = await prisma.staffPlacement.findFirst({
-    where: {
-      staffUserId: params.staffUserId,
-      active: true,
-      companyRelationship: { clientCompanyId: params.recruitmentCompanyId, status: "ACTIVE" },
-    },
-  });
-  return !!placement;
+  return isStaffAlreadyKnownToCompany(params.recruitmentCompanyId, params.staffUserId);
 }
 
 // Admin-initiated assignment (as opposed to applyToRecruitment's staff
@@ -410,6 +426,10 @@ export async function assignStaffToRecruitment(params: {
     if (!rel) throw new Error("forbidden");
     companyRelationshipId = rel.id;
   }
+
+  // 配属記録（あれば）を新規作成するより前に判定する — このアサインで
+  // 初めて配属されるのか、既につながりがあったのかで課金要否が変わるため。
+  const alreadyKnown = await isStaffAlreadyKnownToCompany(recruitment.companyId, params.staffUserId);
 
   const conflicts = await findConflictingShifts({
     staffUserId: params.staffUserId,
@@ -486,6 +506,8 @@ export async function assignStaffToRecruitment(params: {
       data: { resultingShiftId: shift.id },
     });
 
+    await refundRecruitmentSlotIfAlreadyKnown(tx, recruitment, alreadyKnown, params.assignedByUserId);
+
     if (companyRelationshipId) {
       await tx.staffPlacement.upsert({
         where: { staffUserId_companyRelationshipId: { staffUserId: params.staffUserId, companyRelationshipId } },
@@ -512,6 +534,34 @@ export async function assignStaffToRecruitment(params: {
 // against the staff member's other confirmed shifts (chat27/31). visibility
 // =ORDERの募集は、自社所属か配属記録を持つスタッフのみ応募できる（listで
 // 見えていても、URL直叩き等でのすり抜けをサーバー側でも防ぐ）。
+// 公開募集(PUBLIC)の1枠が、自社と元々つながりの無かったスタッフで埋まった
+// ときだけTeeを消費したことにする — 既に自社所属・配属記録がある「普段から
+// 仕事を頼める」スタッフで埋まった場合は、ロック済みのその1枠分をこの場で
+// 即返金する（applyToRecruitment＝本人の応募、assignStaffToRecruitment＝
+// 管理者による直接アサインの両方から呼ぶ）。alreadyKnownは呼び出し側で
+// （配属記録などを新規作成するより前に）判定して渡す。
+async function refundRecruitmentSlotIfAlreadyKnown(
+  tx: Tx,
+  recruitment: { id: string; companyId: string; visibility: "ORDER" | "PUBLIC"; lockedTee: number; perEntryTeeCost: number },
+  alreadyKnown: boolean,
+  refundedByUserId: string,
+) {
+  if (recruitment.visibility !== "PUBLIC" || recruitment.lockedTee <= 0 || !alreadyKnown) return;
+
+  const refund = Math.min(recruitment.perEntryTeeCost, recruitment.lockedTee);
+  await postLedgerEntry(tx, {
+    companyId: recruitment.companyId,
+    type: "UNLOCK_REFUND_RECRUITMENT",
+    amount: refund,
+    publicRecruitmentId: recruitment.id,
+    createdByUserId: refundedByUserId,
+  });
+  await tx.publicRecruitment.update({
+    where: { id: recruitment.id },
+    data: { lockedTee: recruitment.lockedTee - refund },
+  });
+}
+
 export async function applyToRecruitment(params: { recruitmentId: string; staffUserId: string }) {
   return prisma.$transaction(async (tx) => {
     const recruitment = await tx.publicRecruitment.findUniqueOrThrow({
@@ -531,6 +581,8 @@ export async function applyToRecruitment(params: { recruitmentId: string; staffU
     if (!eligible) {
       throw new Error("not_eligible");
     }
+    // 応募では新たに配属記録を作らないので、この時点で判定してよい。
+    const alreadyKnown = await isStaffAlreadyKnownToCompany(recruitment.companyId, params.staffUserId);
 
     // Row-lock the recruitment so two staff applying at the same instant
     // serialize instead of both reading a stale filledCount and overbooking
@@ -574,6 +626,8 @@ export async function applyToRecruitment(params: { recruitmentId: string; staffU
       where: { id: entry.id },
       data: { resultingShiftId: shift.id },
     });
+
+    await refundRecruitmentSlotIfAlreadyKnown(tx, recruitment, alreadyKnown, params.staffUserId);
 
     return { entry, shift };
   });

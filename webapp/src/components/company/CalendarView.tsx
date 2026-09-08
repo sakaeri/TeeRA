@@ -899,6 +899,10 @@ function OrderEditModal({
 
   const remaining = Math.max(recruitment.maxEntries - recruitment.filled, 0);
   const canManage = recruitment.status === "PUBLISHED" && !isPastDay;
+  // 日付が過ぎていても、人数上限を減らして未使用分のロック済みTeeを返金
+  // する操作だけは引き続きできる（updateMaxEntriesのサーバー側の緩和と
+  // 対になる — 削除や公開切り替えなど他の操作は引き続きcanManage限定）。
+  const canReduceMaxEntries = recruitment.status === "PUBLISHED";
   const allAgreed = agreedScope && agreedAccuracy && agreedLiability;
 
   function addItem(label: string, value = "") {
@@ -1009,15 +1013,18 @@ function OrderEditModal({
               <input
                 type="number"
                 min={recruitment.filled}
+                max={isPastDay ? recruitment.maxEntries : undefined}
                 value={maxEntries}
-                disabled={!canManage}
+                disabled={!canReduceMaxEntries}
                 onChange={(e) => setMaxEntries(Number(e.target.value))}
                 className="w-full rounded-lg border border-border px-3 py-2 text-sm disabled:bg-gray-50"
               />
-              {canManage ? (
+              {canReduceMaxEntries ? (
                 <button
                   type="button"
-                  disabled={pending || maxEntries === recruitment.maxEntries}
+                  disabled={
+                    pending || maxEntries === recruitment.maxEntries || (isPastDay && maxEntries > recruitment.maxEntries)
+                  }
                   onClick={saveMaxEntries}
                   className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-background disabled:opacity-50"
                 >
@@ -1032,7 +1039,11 @@ function OrderEditModal({
 
         {!canManage ? (
           recruitment.status === "PUBLISHED" ? (
-            <p className="text-xs text-muted">過去の日付のため変更できません。</p>
+            isPastDay ? (
+              <p className="text-xs text-muted">
+                過去の日付のため、人数上限を減らす（未使用分のTeeを返金する）以外の変更はできません。
+              </p>
+            ) : null
           ) : null
         ) : showPublicForm ? (
           <div className="rounded-lg border border-accent/40 bg-accent/5 p-4">
