@@ -191,6 +191,7 @@ enum PaidLeaveEventType {
   GRANT // 付与（残日数が増える）
   USE // 給料明細での使用日数入力による消化（残日数が減る）
   ADJUST // 手動の残日数訂正（入力ミスの是正など、増減どちらもあり得る）
+  SKIP // 付与予定日が来たが今回は見送り（残日数は変わらず、次回予定日だけ1年後に更新）
 }
 
 // 有給休暇の付与・消化履歴。CompanyMembership.paidLeaveBalanceは常にこの

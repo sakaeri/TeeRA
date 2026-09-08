@@ -14,6 +14,7 @@ import {
   markRedemptionShippedAction,
 } from "@/app/company/promo/actions";
 import { approveWorkReportAction, rejectWorkReportAction } from "@/app/company/workreports/actions";
+import { skipStaffPaidLeaveGrantAction } from "@/app/company/actions";
 import {
   TemplateModal,
   ChooseBaseTemplateModal,
@@ -40,6 +41,7 @@ type Kpis = {
   pendingReportCount: number;
   pendingContractCount: number;
   expiringContractCount: number;
+  duePaidLeaveGrantCount: number;
   promoItemCount: number;
   pendingShipmentCount: number;
 };
@@ -107,6 +109,13 @@ type ExpiringContractStaff = {
   contractEndDate: string;
 };
 
+type DuePaidLeaveGrant = {
+  membershipId: string;
+  staffUserId: string;
+  staffName: string;
+  nextGrantDate: string;
+};
+
 type PromoItem = {
   id: string;
   imageUrl: string;
@@ -127,7 +136,7 @@ type PromoOrder = {
 
 type DashboardTab = "active" | "resolved" | "promoList" | "promoOrders";
 
-type PopupKind = "shortage" | "unconfirmed" | "reports" | "contracts" | "expiring";
+type PopupKind = "shortage" | "unconfirmed" | "reports" | "contracts" | "expiring" | "paidLeave";
 
 const KPI_CARDS: { key: keyof Kpis; label: string; href?: string; tab?: DashboardTab; popup?: PopupKind }[] = [
   { key: "shortageCount", label: "欠員件数", popup: "shortage" },
@@ -135,6 +144,7 @@ const KPI_CARDS: { key: keyof Kpis; label: string; href?: string; tab?: Dashboar
   { key: "pendingReportCount", label: "業務報告未承認", popup: "reports" },
   { key: "pendingContractCount", label: "契約書未確認", popup: "contracts" },
   { key: "expiringContractCount", label: "契約満了間近", popup: "expiring" },
+  { key: "duePaidLeaveGrantCount", label: "有給付与予定", popup: "paidLeave" },
   { key: "pendingShipmentCount", label: "発送待ち", tab: "promoOrders" },
 ];
 
@@ -145,6 +155,7 @@ const TAG_STYLE: Record<string, string> = {
   シフト: "bg-pink-100 text-pink-800",
   契約書: "bg-gray-200 text-gray-700",
   契約満了: "bg-orange-100 text-orange-800",
+  有給付与: "bg-sky-100 text-sky-800",
   販促品: "bg-amber-100 text-amber-800",
 };
 
@@ -170,6 +181,7 @@ export function DashboardView({
   pendingReportEntries,
   pendingContractStaff,
   expiringContractStaff,
+  duePaidLeaveGrants,
   contractTemplates,
   companyName,
   contractClients,
@@ -190,6 +202,7 @@ export function DashboardView({
   pendingReportEntries: PendingReportEntry[];
   pendingContractStaff: PendingContractStaff[];
   expiringContractStaff: ExpiringContractStaff[];
+  duePaidLeaveGrants: DuePaidLeaveGrant[];
   contractTemplates: ContractTemplate[];
   companyName: string;
   contractClients: ClientOption[];
@@ -322,6 +335,9 @@ export function DashboardView({
       ) : null}
       {openPopup === "expiring" ? (
         <ExpiringContractPopup entries={expiringContractStaff} onClose={() => setOpenPopup(null)} />
+      ) : null}
+      {openPopup === "paidLeave" ? (
+        <DuePaidLeaveGrantsPopup entries={duePaidLeaveGrants} onClose={() => setOpenPopup(null)} />
       ) : null}
       {generateTarget && !generateBaseTemplate ? (
         <ChooseBaseTemplateModal
@@ -868,6 +884,52 @@ function ExpiringContractPopup({ entries, onClose }: { entries: ExpiringContract
   );
 }
 
+// 契約満了と違い、予定日を過ぎても一覧から自動では外れない（放置すると
+// 労基法上のリスクがあるため）。実際に消えるのは「確認する」から付与する
+// か、ここで「付与しない」を押して見送る（次回予定日が1年後に更新される）
+// かのどちらか。
+function DuePaidLeaveGrantsPopup({ entries, onClose }: { entries: DuePaidLeaveGrant[]; onClose: () => void }) {
+  const [pending, startTransition] = useTransition();
+  const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set());
+  const visibleEntries = entries.filter((e) => !skippedIds.has(e.membershipId));
+
+  return (
+    <PopupShell title="有給付与" subtitle="次回付与予定日が近づいている、または過ぎています" onClose={onClose}>
+      {visibleEntries.map((e) => (
+        <div key={e.membershipId} className="flex items-center justify-between rounded-xl border border-border/60 p-4 text-sm">
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="font-medium">{e.staffName}</p>
+              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800">{e.nextGrantDate}〜</span>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  await skipStaffPaidLeaveGrantAction(e.membershipId);
+                  setSkippedIds((prev) => new Set(prev).add(e.membershipId));
+                })
+              }
+              className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted disabled:opacity-60"
+            >
+              付与しない
+            </button>
+            <Link
+              href={`/company/roster?staff=${e.staffUserId}&tab=contracts`}
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+            >
+              確認する
+            </Link>
+          </div>
+        </div>
+      ))}
+      {visibleEntries.length === 0 ? <p className="text-center text-muted">付与予定のスタッフはいません。</p> : null}
+    </PopupShell>
+  );
+}
 
 function TodoSection({
   tab,

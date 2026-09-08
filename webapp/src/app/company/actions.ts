@@ -16,7 +16,7 @@ import {
   updateMembershipIdDocument,
   updateMembershipBankInfo,
 } from "@/lib/domain/roster";
-import { setHireDate, grantPaidLeave, adjustPaidLeaveBalance } from "@/lib/domain/paidLeave";
+import { setHireDate, grantPaidLeave, adjustPaidLeaveBalance, skipPaidLeaveGrant } from "@/lib/domain/paidLeave";
 import {
   activateAgencyModuleWithProxyClient,
   activateDispatchModuleWithProxyAgency,
@@ -494,6 +494,7 @@ export async function setStaffHireDateAction(membershipId: string, hireDate: str
   await assertMembershipOwnedByCompany(membershipId, membership.companyId);
   await setHireDate(membershipId, hireDate ? new Date(`${hireDate}T00:00:00.000Z`) : null);
   revalidatePath("/company/roster");
+  revalidatePath("/company");
 }
 
 export async function grantStaffPaidLeaveAction(
@@ -513,6 +514,7 @@ export async function grantStaffPaidLeaveAction(
     note,
   });
   revalidatePath("/company/roster");
+  revalidatePath("/company");
 }
 
 export async function adjustStaffPaidLeaveBalanceAction(membershipId: string, delta: number, note?: string) {
@@ -521,6 +523,17 @@ export async function adjustStaffPaidLeaveBalanceAction(membershipId: string, de
   await assertMembershipOwnedByCompany(membershipId, membership.companyId);
   await adjustPaidLeaveBalance({ membershipId, delta, createdByUserId: userId, note });
   revalidatePath("/company/roster");
+}
+
+// ダッシュボードの「有給付与」アラートの「付与しない」ボタン用 — 今回は
+// 見送り、次回予定日を1年後に更新するだけ（残日数は変えない）。
+export async function skipStaffPaidLeaveGrantAction(membershipId: string) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertMembershipOwnedByCompany(membershipId, membership.companyId);
+  await skipPaidLeaveGrant({ membershipId, createdByUserId: userId });
+  revalidatePath("/company/roster");
+  revalidatePath("/company");
 }
 
 export async function getClientMonthDetailAction(companyRelationshipId: string, year: number, month: number) {

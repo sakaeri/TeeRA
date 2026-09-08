@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { listPendingReportsForCompany } from "@/lib/domain/workReports";
 import { listStaffWithSummary } from "@/lib/domain/roster";
+import { listDuePaidLeaveGrants } from "@/lib/domain/paidLeave";
 import { todayJst } from "@/lib/date";
 
 // 仮アカウント（isProxy）は本人ログインができず自己サービスの同意フローに
@@ -54,8 +55,14 @@ export async function listExpiringContractStaff(companyId: string) {
 // instead of the same handful of queries repeated 3-4x over.
 export async function loadDashboardData(companyId: string) {
   const today = new Date(`${todayJst()}T00:00:00.000Z`);
-  const [shortageRecruitments, allShiftRequests, pendingReports, pendingContractStaff, expiringContractStaff] =
-    await Promise.all([
+  const [
+    shortageRecruitments,
+    allShiftRequests,
+    pendingReports,
+    pendingContractStaff,
+    expiringContractStaff,
+    duePaidLeaveGrants,
+  ] = await Promise.all([
       // 日付が過ぎた募集はもう応募のしようがないので、埋まらないまま残って
       // いても欠員件数・やることリストからは対象外にする（過去日は消えて
       // いい、というのが期待挙動）。
@@ -68,6 +75,7 @@ export async function loadDashboardData(companyId: string) {
       listPendingReportsForCompany(companyId),
       listPendingContractStaff(companyId),
       listExpiringContractStaff(companyId),
+      listDuePaidLeaveGrants(companyId),
     ]);
 
   // 希望日が複数（datesは配列）あり得るため、1件でも今日以降の希望日が
@@ -76,7 +84,7 @@ export async function loadDashboardData(companyId: string) {
   // 判定する。
   const shiftRequests = allShiftRequests.filter((sr) => sr.dates.some((d) => d >= today));
 
-  return { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff };
+  return { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff, duePaidLeaveGrants };
 }
 
 export type DashboardData = Awaited<ReturnType<typeof loadDashboardData>>;
@@ -97,6 +105,7 @@ export function computeKpis(
     pendingReportCount: data.pendingReports.length,
     pendingContractCount: data.pendingContractStaff.length,
     expiringContractCount: data.expiringContractStaff.length,
+    duePaidLeaveGrantCount: data.duePaidLeaveGrants.length,
     promoItemCount,
     pendingShipmentCount,
   };
@@ -161,7 +170,7 @@ export function computePendingReportEntries(data: DashboardData) {
 
 export type AutoTodoItem = {
   id: string;
-  kind: "業務報告" | "欠員" | "シフト" | "契約書" | "契約満了" | "販促品";
+  kind: "業務報告" | "欠員" | "シフト" | "契約書" | "契約満了" | "有給付与" | "販促品";
   text: string;
   actionLabel: string;
   actionHref: string;
@@ -178,7 +187,8 @@ export type AutoTodoItem = {
 // admin — and is intentionally not surfaced here; see the roster's 確認待ち
 // label (listStaffWithSummary) for that state instead.
 export function computeAutoTodoItems(data: DashboardData, pendingShipments: PendingShipment[]): AutoTodoItem[] {
-  const { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff } = data;
+  const { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff, duePaidLeaveGrants } =
+    data;
   const items: AutoTodoItem[] = [];
 
   for (const r of shortageRecruitments) {
@@ -237,6 +247,16 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
       text: `${c.staffName}さんの契約（${c.contractTitle}）が${c.contractEndDate}に満了します`,
       actionLabel: "確認する",
       actionHref: "/company?open=expiring",
+    });
+  }
+
+  for (const g of duePaidLeaveGrants) {
+    items.push({
+      id: `paidleave-${g.membershipId}`,
+      kind: "有給付与",
+      text: `${g.staffName}さんの有給休暇の次回付与予定日（${g.nextGrantDate}）です`,
+      actionLabel: "確認する",
+      actionHref: "/company?open=paidLeave",
     });
   }
 

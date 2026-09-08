@@ -60,7 +60,7 @@ type StaffMonthDetail = {
     nextGrantDate: string | null;
     events: {
       id: string;
-      type: "GRANT" | "USE" | "ADJUST";
+      type: "GRANT" | "USE" | "ADJUST" | "SKIP";
       days: number;
       balanceAfter: number;
       note: string | null;
@@ -132,6 +132,15 @@ function actualTimeLabel(d: StaffMonthDetail["days"][number]) {
   return `${d.actualStartTime ?? "--:--"}〜${d.actualEndTime ?? "--:--"}`;
 }
 
+// 有給休暇の「＋付与する」を開いたときの次回付与予定日の初期値提案
+// （前回の予定日の1年後）。空欄なら提案しない — 手動で決めてもらう。
+function addOneYear(dateStr: string | null): string {
+  if (!dateStr) return "";
+  const d = new Date(`${dateStr}T00:00:00.000Z`);
+  d.setUTCFullYear(d.getUTCFullYear() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 // 業務内容単価タブの「勤務先」選択肢を、このスタッフが実際にシフト実績の
 // ある依頼主が上に来るよう並び替える（絞り込みはしない — まだ一度も
 // 働いていない依頼主向けに先回りで単価を登録しておきたい場面もあるため）。
@@ -163,7 +172,7 @@ export function StaffDetailPanel({
   const initToday = todayJstParts();
   const [year, setYear] = useState(initToday.year);
   const [month, setMonth] = useState(initToday.month);
-  const [tab, setTab] = useState<"history" | "contracts" | "rates" | "leave" | "note">(initialTab ?? "history");
+  const [tab, setTab] = useState<"history" | "contracts" | "rates" | "note">(initialTab ?? "history");
   const [data, setData] = useState<StaffMonthDetail | null>(null);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState("");
@@ -185,6 +194,7 @@ export function StaffDetailPanel({
   const [generateBaseTemplate, setGenerateBaseTemplate] = useState<Template | null>(null);
   const [generateCustomize, setGenerateCustomize] = useState(false);
   const [showContractHistory, setShowContractHistory] = useState(false);
+  const [showPaidLeaveHistory, setShowPaidLeaveHistory] = useState(false);
   const [editingTeams, setEditingTeams] = useState(false);
   const [teamSelection, setTeamSelection] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -359,7 +369,7 @@ export function StaffDetailPanel({
     });
   }
 
-  const PAID_LEAVE_EVENT_LABEL: Record<string, string> = { GRANT: "付与", USE: "使用", ADJUST: "訂正" };
+  const PAID_LEAVE_EVENT_LABEL: Record<string, string> = { GRANT: "付与", USE: "使用", ADJUST: "訂正", SKIP: "見送り" };
 
   function shiftMonth(delta: number) {
     const d = new Date(Date.UTC(year, month - 1 + delta, 1));
@@ -515,13 +525,6 @@ export function StaffDetailPanel({
                 className={`border-b-2 px-1 py-2 font-semibold ${tab === "rates" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
                 業務内容単価
-              </button>
-              <button
-                type="button"
-                onClick={() => setTab("leave")}
-                className={`border-b-2 px-1 py-2 font-semibold ${tab === "leave" ? "border-accent text-primary" : "border-transparent text-muted"}`}
-              >
-                有給休暇
               </button>
               <button
                 type="button"
@@ -719,6 +722,82 @@ export function StaffDetailPanel({
                 })()}
 
                 <div className="rounded-lg border border-border p-3 text-sm">
+                  <p className="mb-2 font-semibold">有給休暇</p>
+                  <div className="flex items-end gap-3">
+                    <label className="flex flex-col gap-1 text-xs">
+                      入社日
+                      <input
+                        type="date"
+                        value={hireDateInput}
+                        onChange={(e) => setHireDateInput(e.target.value)}
+                        className="rounded-lg border border-border px-2 py-1.5 text-sm"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => submitHireDate(data.membershipId)}
+                      className="rounded-lg border border-primary px-3 py-1.5 text-xs text-primary disabled:opacity-60"
+                    >
+                      保存
+                    </button>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm">残日数: {data.paidLeave.balance}日</p>
+                      <p className="text-xs text-muted">
+                        次回付与予定日: {data.paidLeave.nextGrantDate ?? "未設定"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // 次回付与予定日は「前回の予定日の1年後」を初期値として
+                        // 提案する（付与サイクルは通常1年ごとのため）。契約が
+                        // 一度切れて戻ってきたスタッフなど通常のサイクルに
+                        // 当てはまらない場合は、この欄を手動で書き換えられる。
+                        setGrantNextDateInput(addOneYear(data.paidLeave.nextGrantDate));
+                        setShowGrantForm(true);
+                      }}
+                      className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+                    >
+                      ＋付与する
+                    </button>
+                  </div>
+
+                  {data.paidLeave.events.length > 0 ? (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowPaidLeaveHistory((v) => !v)}
+                        className="text-xs text-muted hover:text-primary"
+                      >
+                        {showPaidLeaveHistory ? "▲ 付与・使用履歴を閉じる" : `▼ 付与・使用履歴（${data.paidLeave.events.length}件）`}
+                      </button>
+                      {showPaidLeaveHistory ? (
+                        <ul className="mt-2 flex flex-col gap-2">
+                          {data.paidLeave.events.map((e) => (
+                            <li key={e.id} className="rounded-lg border border-border/60 bg-background/40 p-3 text-xs">
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold">
+                                  {PAID_LEAVE_EVENT_LABEL[e.type]} {e.days > 0 ? `+${e.days}` : e.days}日
+                                </span>
+                                <span className="text-muted">残 {e.balanceAfter}日</span>
+                              </div>
+                              <div className="mt-1 text-muted">
+                                {e.createdAt} {e.createdByName}
+                                {e.note ? `／${e.note}` : ""}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="rounded-lg border border-border p-3 text-sm">
                   <div className="flex items-center justify-between">
                     <p className="font-semibold">本人確認書類</p>
                     <button
@@ -784,73 +863,6 @@ export function StaffDetailPanel({
                 baseContract={data.contracts.find((c) => c.status === "ACTIVE") ?? null}
                 onEditBaseWage={startEditWage}
               />
-            ) : null}
-
-            {tab === "leave" ? (
-              <div className="flex flex-col gap-4">
-                <div className="rounded-lg border border-border p-3 text-sm">
-                  <div className="flex items-end gap-3">
-                    <label className="flex flex-col gap-1 text-xs">
-                      入社日
-                      <input
-                        type="date"
-                        value={hireDateInput}
-                        onChange={(e) => setHireDateInput(e.target.value)}
-                        className="rounded-lg border border-border px-2 py-1.5 text-sm"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => submitHireDate(data.membershipId)}
-                      className="rounded-lg border border-primary px-3 py-1.5 text-xs text-primary disabled:opacity-60"
-                    >
-                      保存
-                    </button>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-border p-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold">残日数: {data.paidLeave.balance}日</p>
-                      <p className="text-xs text-muted">
-                        次回付与予定日: {data.paidLeave.nextGrantDate ?? "未設定"}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowGrantForm(true)}
-                      className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
-                    >
-                      ＋付与する
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="mb-2 text-sm font-semibold">付与・使用履歴</p>
-                  <ul className="flex flex-col gap-2">
-                    {data.paidLeave.events.map((e) => (
-                      <li key={e.id} className="rounded-lg border border-border p-3 text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold">
-                            {PAID_LEAVE_EVENT_LABEL[e.type]} {e.days > 0 ? `+${e.days}` : e.days}日
-                          </span>
-                          <span className="text-muted">残 {e.balanceAfter}日</span>
-                        </div>
-                        <div className="mt-1 text-muted">
-                          {e.createdAt} {e.createdByName}
-                          {e.note ? `／${e.note}` : ""}
-                        </div>
-                      </li>
-                    ))}
-                    {data.paidLeave.events.length === 0 ? (
-                      <p className="py-6 text-center text-sm text-muted">まだ履歴はありません。</p>
-                    ) : null}
-                  </ul>
-                </div>
-              </div>
             ) : null}
 
             {tab === "note" ? (
@@ -976,7 +988,7 @@ export function StaffDetailPanel({
                 />
               </label>
               <label className="flex flex-col gap-1 text-xs">
-                次回付与予定日（任意）
+                次回付与予定日（自動提案・変更可）
                 <input
                   type="date"
                   value={grantNextDateInput}
