@@ -9,6 +9,7 @@ const NAV = [
   { href: "/company", label: "ダッシュボード" },
   { href: "/company/calendar", label: "シフトカレンダー" },
   { href: "/company/roster", label: "スタッフ名簿" },
+  { href: "/company/payroll", label: "給料明細/請求書", matchPrefixes: ["/company/payroll", "/company/invoices"] },
   { href: "/company/settings", label: "設定" },
 ];
 
@@ -117,7 +118,9 @@ export function CompanyShell({
       <div className="flex flex-1">
         <nav className="w-52 shrink-0 bg-primary py-6 text-primary-foreground">
           {NAV.map((item) => {
-            const active = pathname === item.href;
+            const active = item.matchPrefixes
+              ? item.matchPrefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+              : pathname === item.href;
             return (
               <Link
                 key={item.href}

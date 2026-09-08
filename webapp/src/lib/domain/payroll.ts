@@ -351,3 +351,14 @@ export async function listSalarySlipsForCompany(companyId: string, targetMonth: 
     orderBy: { createdAt: "asc" },
   });
 }
+
+// 給料明細/請求書メニューの発行履歴一覧用 — 月を問わず、発行済み
+// （＝課金済み、status=ISSUED）のものだけを対象月をまたいで取得する。
+// listSalarySlipsForCompanyは特定の月専用のため、履歴一覧はこちらを使う。
+export async function listIssuedSalarySlipsForCompany(companyId: string) {
+  return prisma.salarySlip.findMany({
+    where: { companyId, status: "ISSUED" },
+    include: { staff: true, lines: true, issues: { orderBy: { issuedAt: "desc" } } },
+    orderBy: { targetMonth: "desc" },
+  });
+}

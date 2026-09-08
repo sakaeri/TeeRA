@@ -2,15 +2,21 @@ import { redirect } from "next/navigation";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManageAny, isCompanyScopeAdmin } from "@/lib/auth/permissions";
 import { listClients } from "@/lib/domain/relationships";
-import { getOrCreateInvoice, computeInvoiceTotals } from "@/lib/domain/invoicing";
+import { getOrCreateInvoice, computeInvoiceTotals, listIssuedInvoicesForCompany } from "@/lib/domain/invoicing";
 import { prisma } from "@/lib/prisma";
 import { InvoiceEditor } from "@/components/company/InvoiceEditor";
+import { FinanceTabs } from "@/components/company/FinanceTabs";
 import { todayJstParts } from "@/lib/date";
 import Link from "next/link";
 
 function currentMonth() {
   const today = todayJstParts();
   return `${today.year}-${String(today.month).padStart(2, "0")}`;
+}
+
+function monthLabel(periodLabel: string) {
+  const [year, month] = periodLabel.split("-");
+  return `${year}年${Number(month)}月`;
 }
 
 export default async function InvoicesPage({
@@ -91,9 +97,22 @@ export default async function InvoicesPage({
     };
   }
 
+  // 発行履歴一覧 — 発行済みのものだけを月ごとにまとめる。チームマネージャー/
+  // リーダーは自チームに紐づく取引先分だけに絞る。
+  const accessibleClientIds = new Set(clients.map((c) => c.id));
+  const allIssuedInvoices = await listIssuedInvoicesForCompany(membership.companyId);
+  const issuedInvoices = allIssuedInvoices.filter((inv) => accessibleClientIds.has(inv.companyRelationshipId));
+  const issuedByMonth = new Map<string, typeof issuedInvoices>();
+  for (const inv of issuedInvoices) {
+    const list = issuedByMonth.get(inv.periodLabel) ?? [];
+    list.push(inv);
+    issuedByMonth.set(inv.periodLabel, list);
+  }
+
   return (
     <main className="mx-auto w-full max-w-4xl px-8 py-10">
       <h1 className="mb-6 font-serif-jp text-2xl font-bold">請求書</h1>
+      <FinanceTabs active="invoices" invoicesEnabled={company.agencyEnabled} />
 
       <form method="get" className="mb-6 flex items-end gap-3 rounded-xl border border-border bg-white/60 p-4">
         <label className="flex flex-col gap-1 text-xs">
@@ -132,6 +151,50 @@ export default async function InvoicesPage({
           ))}
         </div>
       ) : null}
+
+      <section className="mt-10">
+        <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">発行履歴</h2>
+        {issuedByMonth.size === 0 ? (
+          <p className="text-sm text-muted">まだ発行された請求書はありません。</p>
+        ) : (
+          <div className="flex flex-col gap-6">
+            {[...issuedByMonth.entries()].map(([month, invoicesForMonth]) => (
+              <div key={month}>
+                <h3 className="mb-2 text-sm font-semibold text-muted">{monthLabel(month)}</h3>
+                <ul className="flex flex-col gap-1">
+                  {invoicesForMonth.map((inv) => {
+                    const registered = Boolean(inv.invoiceRegistrationNumberSnapshot);
+                    const totals = computeInvoiceTotals({ lines: inv.lines, registered });
+                    return (
+                      <li
+                        key={inv.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm"
+                      >
+                        <span className="font-medium">
+                          {inv.companyRelationship.clientCompany?.name ?? inv.companyRelationship.proxyName}
+                        </span>
+                        <span className="text-muted">{totals.total}円</span>
+                        <div className="flex flex-wrap gap-3">
+                          {inv.issues.map((i) => (
+                            <Link
+                              key={i.id}
+                              href={`/api/invoices/${inv.id}/pdf?issueId=${i.id}`}
+                              target="_blank"
+                              className="text-xs text-primary underline"
+                            >
+                              PDF（{new Date(i.issuedAt).toLocaleString("ja-JP")}）
+                            </Link>
+                          ))}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </main>
   );
 }

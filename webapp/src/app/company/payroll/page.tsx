@@ -1,15 +1,21 @@
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManageAny, isCompanyScopeAdmin } from "@/lib/auth/permissions";
 import { listStaff } from "@/lib/domain/roster";
-import { getOrCreateSalarySlip, getTotals } from "@/lib/domain/payroll";
+import { getOrCreateSalarySlip, getTotals, listIssuedSalarySlipsForCompany } from "@/lib/domain/payroll";
 import { prisma } from "@/lib/prisma";
 import { SalarySlipEditor } from "@/components/company/SalarySlipEditor";
+import { FinanceTabs } from "@/components/company/FinanceTabs";
 import { todayJstParts } from "@/lib/date";
 import Link from "next/link";
 
 function currentMonth() {
   const today = todayJstParts();
   return `${today.year}-${String(today.month).padStart(2, "0")}`;
+}
+
+function monthLabel(targetMonth: string) {
+  const [year, month] = targetMonth.split("-");
+  return `${year}年${Number(month)}月`;
 }
 
 export default async function PayrollPage({
@@ -20,7 +26,10 @@ export default async function PayrollPage({
   const targetMonth = typeof sp.month === "string" ? sp.month : currentMonth();
   const staffUserId = typeof sp.staff === "string" ? sp.staff : undefined;
 
-  const allStaff = await listStaff(membership.companyId);
+  const [allStaff, company] = await Promise.all([
+    listStaff(membership.companyId),
+    prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
+  ]);
   // チームマネージャー/リーダーは自チームのスタッフしか選べない（本部管理者/
   // 編集者は全社分）。
   const staff = isCompanyScopeAdmin(membership)
@@ -76,9 +85,22 @@ export default async function PayrollPage({
     };
   }
 
+  // 発行履歴一覧 — 発行済み（課金済み）のものだけを月ごとにまとめる。
+  // チームマネージャー/リーダーは自チームのスタッフ分だけに絞る。
+  const accessibleStaffIds = new Set(staff.map((s) => s.userId));
+  const allIssuedSlips = await listIssuedSalarySlipsForCompany(membership.companyId);
+  const issuedSlips = allIssuedSlips.filter((s) => accessibleStaffIds.has(s.staffUserId));
+  const issuedByMonth = new Map<string, typeof issuedSlips>();
+  for (const slip of issuedSlips) {
+    const list = issuedByMonth.get(slip.targetMonth) ?? [];
+    list.push(slip);
+    issuedByMonth.set(slip.targetMonth, list);
+  }
+
   return (
     <main className="mx-auto w-full max-w-4xl px-8 py-10">
       <h1 className="mb-6 font-serif-jp text-2xl font-bold">給与計算</h1>
+      <FinanceTabs active="payroll" invoicesEnabled={company.agencyEnabled} />
 
       <form method="get" className="mb-6 flex items-end gap-3 rounded-xl border border-border bg-white/60 p-4">
         <label className="flex flex-col gap-1 text-xs">
@@ -121,6 +143,44 @@ export default async function PayrollPage({
           ))}
         </div>
       ) : null}
+
+      <section className="mt-10">
+        <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">発行履歴</h2>
+        {issuedByMonth.size === 0 ? (
+          <p className="text-sm text-muted">まだ発行された給与明細はありません。</p>
+        ) : (
+          <div className="flex flex-col gap-6">
+            {[...issuedByMonth.entries()].map(([month, slips]) => (
+              <div key={month}>
+                <h3 className="mb-2 text-sm font-semibold text-muted">{monthLabel(month)}</h3>
+                <ul className="flex flex-col gap-1">
+                  {slips.map((slip) => (
+                    <li
+                      key={slip.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm"
+                    >
+                      <span className="font-medium">{slip.staff.name}</span>
+                      <span className="text-muted">{getTotals(slip).net}円</span>
+                      <div className="flex flex-wrap gap-3">
+                        {slip.issues.map((i) => (
+                          <Link
+                            key={i.id}
+                            href={`/api/salary-slips/${slip.id}/pdf?issueId=${i.id}`}
+                            target="_blank"
+                            className="text-xs text-primary underline"
+                          >
+                            PDF（{new Date(i.issuedAt).toLocaleString("ja-JP")}）
+                          </Link>
+                        ))}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </main>
   );
 }

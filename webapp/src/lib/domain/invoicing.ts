@@ -294,3 +294,13 @@ export async function listInvoicesForCompany(companyId: string) {
     orderBy: { createdAt: "desc" },
   });
 }
+
+// 給料明細/請求書メニューの発行履歴一覧用 — 対象月を問わず、発行済み
+// （status=ISSUED）のものだけを取得する。
+export async function listIssuedInvoicesForCompany(companyId: string) {
+  return prisma.invoice.findMany({
+    where: { issuingCompanyId: companyId, status: "ISSUED" },
+    include: { companyRelationship: { include: { clientCompany: true } }, lines: true, issues: { orderBy: { issuedAt: "desc" } } },
+    orderBy: { periodLabel: "desc" },
+  });
+}
