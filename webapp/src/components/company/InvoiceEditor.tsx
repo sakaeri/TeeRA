@@ -326,14 +326,24 @@ export function InvoiceEditor({
         </div>
 
         {isEditable ? (
-          <button
-            type="button"
-            disabled={pending || !dueDate}
-            onClick={() => startTransition(() => confirmInvoiceAction(invoice.id))}
-            className="mt-4 rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
-          >
-            確定する
-          </button>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              disabled={pending || !dueDate}
+              onClick={() => startTransition(() => confirmInvoiceAction(invoice.id))}
+              className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
+            >
+              確定する
+            </button>
+            <button
+              type="button"
+              disabled={pending || !dueDate}
+              onClick={() => setShowIssueConfirm(true)}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              PDFで請求書を発行する
+            </button>
+          </div>
         ) : invoice.status === "CONFIRMED" ? (
           <div className="mt-4 flex gap-2">
             <button

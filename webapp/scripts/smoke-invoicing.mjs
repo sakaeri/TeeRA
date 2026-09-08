@@ -156,6 +156,14 @@ try {
   await dueDateSaveBtn.click();
   await admin.waitForTimeout(500);
 
+  // ⑥: 給料明細と同じく、下書きの段階から「確定する」を経由せずとも
+  // 「PDFで請求書を発行する」が並んで見える（今までは確定しないと
+  // 発行ボタン自体が出なかった）
+  log(
+    "下書きの段階でも「PDFで請求書を発行する」が確定ボタンと並んで見える",
+    await admin.getByRole("button", { name: "PDFで請求書を発行する", exact: true }).isVisible(),
+  );
+
   await admin.getByRole("button", { name: "確定する", exact: true }).click();
   await admin.waitForTimeout(600);
   body = await admin.textContent("body");
