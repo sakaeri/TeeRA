@@ -69,6 +69,21 @@ try {
       `values (gen_random_uuid()::text, '${staffUserId}', '${companyId}', 'WORK', ARRAY['${unconfirmedDate}']::date[]);`,
   );
 
+  // seed a PAST-dated pending shift request (all desired dates already
+  // passed) — should NOT count toward 未確定シフト or appear in the
+  // auto-todo list, since there's nothing left to confirm for a date that's
+  // already gone.
+  const pastShiftEmail = `popup-past-staff-${Date.now()}@example.com`;
+  psql(
+    `insert into "User" (id, email, "passwordHash", name, "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${pastShiftEmail}', 'x', '過去希望スタッフ', now());`,
+  );
+  const pastShiftStaffUserId = psql(`select id from "User" where email='${pastShiftEmail}';`);
+  psql(
+    `insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates) ` +
+      `values (gen_random_uuid()::text, '${pastShiftStaffUserId}', '${companyId}', 'WORK', ARRAY['${pastShortageDate}']::date[]);`,
+  );
+
   // seed an in-house shift + pending work report (WORKED, with clock in/out)
   const shiftIdValue = `shift-${Date.now()}`;
   psql(
@@ -87,6 +102,7 @@ try {
   let body = await page.textContent("body");
   log("KPI cards show 1 shortage / 1 unconfirmed / 1 pending report", body.includes("1") );
   log("過去日の欠員募集はやることリストに出ない", !body.includes("過去の欠員募集"));
+  log("希望日が全て過去の未確定シフトもやることリストに出ない", !body.includes("過去希望スタッフ"));
 
   // 欠員件数 popup
   await page.getByText("欠員件数").click();
@@ -106,6 +122,7 @@ try {
   await page.waitForTimeout(400);
   body = await page.textContent("body");
   log("未確定シフト popup shows the seeded shift request", body.includes("欠員希望スタッフ") && body.includes("出勤希望"));
+  log("未確定シフト popupにも希望日が全て過去のものは出ない", !body.includes("過去希望スタッフ"));
 
   // 業務報告未承認 popup + detail modal
   await page.goto("http://localhost:3000/company");

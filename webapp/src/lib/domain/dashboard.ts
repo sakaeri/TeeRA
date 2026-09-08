@@ -54,7 +54,7 @@ export async function listExpiringContractStaff(companyId: string) {
 // instead of the same handful of queries repeated 3-4x over.
 export async function loadDashboardData(companyId: string) {
   const today = new Date(`${todayJst()}T00:00:00.000Z`);
-  const [shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff] =
+  const [shortageRecruitments, allShiftRequests, pendingReports, pendingContractStaff, expiringContractStaff] =
     await Promise.all([
       // 日付が過ぎた募集はもう応募のしようがないので、埋まらないまま残って
       // いても欠員件数・やることリストからは対象外にする（過去日は消えて
