@@ -378,7 +378,11 @@ export function ClientDetailPanel({
                         onClick={() =>
                           router.push(`/company/invoices?month=${year}-${String(month).padStart(2, "0")}&client=${relationshipId}`)
                         }
-                        className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
+                        className={
+                          data.invoiceTotal === null
+                            ? "rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
+                            : "rounded-lg border border-primary px-3 py-1 text-xs font-semibold text-primary"
+                        }
                       >
                         {data.invoiceTotal === null ? "作成する" : `${data.invoiceTotal}円`}
                       </button>

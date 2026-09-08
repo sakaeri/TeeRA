@@ -177,8 +177,8 @@ try {
   await admin.waitForTimeout(200);
 
   await admin.goto(`http://localhost:3000/company/payroll?month=${thisMonth}&staff=${staffUserId}`);
+  await admin.getByRole("button", { name: "PDFで明細を発行する", exact: true }).click();
   await admin.getByRole("button", { name: "発行する", exact: true }).click();
-  await admin.getByRole("button", { name: "発行する", exact: true }).last().click();
   await admin.waitForTimeout(1000);
 
   const balanceAfterIssue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
@@ -188,12 +188,36 @@ try {
   log("status shows 発行済み", body.includes("発行済み"));
 
   // re-issue (free)
-  await admin.getByRole("button", { name: "再発行する（同月内は無料）" }).click();
-  await admin.getByRole("button", { name: "発行する", exact: true }).last().click();
+  await admin.getByRole("button", { name: "PDFで明細を再発行する（同月内は無料）" }).click();
+  await admin.getByRole("button", { name: "発行する", exact: true }).click();
   await admin.waitForTimeout(1000);
 
   const balanceAfterReissue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
   log("re-issue same month is free (still 9)", balanceAfterReissue === 9);
+
+  // 発行済みでも「内容を修正する」で下書きに戻して編集でき、同月内の
+  // 再発行は修正後も引き続き無料（⑤: 給料明細に確定/発行後の修正手段が
+  // 無かった問題への対応）
+  await admin.getByRole("button", { name: "内容を修正する" }).click();
+  await admin.waitForTimeout(600);
+  body = await admin.textContent("body");
+  log("「内容を修正する」で下書きに戻る", body.includes("下書き"));
+
+  const socialInsuranceInputAfterReopen = admin
+    .locator("section", { hasText: "控除" })
+    .locator("input[type=number]")
+    .first();
+  await socialInsuranceInputAfterReopen.fill("800");
+  await socialInsuranceInputAfterReopen.blur();
+  await admin.waitForTimeout(500);
+  body = await admin.textContent("body");
+  log("下書きに戻すと控除額を編集し直せる", /差引支給額 [\d,]+円/.test(body));
+
+  await admin.getByRole("button", { name: "PDFで明細を発行する", exact: true }).click();
+  await admin.getByRole("button", { name: "発行する", exact: true }).click();
+  await admin.waitForTimeout(1000);
+  const balanceAfterReopenReissue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
+  log("修正して再発行しても同月内は引き続き無料（still 9）", balanceAfterReopenReissue === 9);
 
   // fetch the PDF
   const pdfLink = await admin.locator('a[href*="/api/salary-slips/"]').first().getAttribute("href");

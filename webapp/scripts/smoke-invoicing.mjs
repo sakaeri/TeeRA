@@ -161,8 +161,18 @@ try {
   body = await admin.textContent("body");
   log("invoice confirmed", body.includes("確定済み"));
 
+  // ⑤: 確定済み（未発行）の段階でも「内容を修正する」で下書きに戻せる
+  // （今までは発行済み以降でしか修正できず、確定しただけの状態は
+  // 直せなかった）
+  await admin.getByRole("button", { name: "内容を修正する" }).click();
+  await admin.waitForTimeout(600);
+  body = await admin.textContent("body");
+  log("確定済みの段階でも「内容を修正する」で下書きに戻せる", body.includes("下書き"));
+  await admin.getByRole("button", { name: "確定する", exact: true }).click();
+  await admin.waitForTimeout(600);
+
+  await admin.getByRole("button", { name: "PDFで請求書を発行する", exact: true }).click();
   await admin.getByRole("button", { name: "発行する", exact: true }).click();
-  await admin.getByRole("button", { name: "発行する", exact: true }).last().click();
   await admin.waitForTimeout(1000);
 
   const balanceAfterFirstIssue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
@@ -195,8 +205,8 @@ try {
   await admin.waitForTimeout(600);
   await admin.getByRole("button", { name: "確定する", exact: true }).click();
   await admin.waitForTimeout(600);
+  await admin.getByRole("button", { name: "PDFで請求書を発行する", exact: true }).click();
   await admin.getByRole("button", { name: "発行する", exact: true }).click();
-  await admin.getByRole("button", { name: "発行する", exact: true }).last().click();
   await admin.waitForTimeout(1000);
 
   const balanceAfterSecondIssue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));

@@ -9,6 +9,7 @@ import {
   updatePaidLeaveAction,
   finalizeSalarySlipAction,
   issueSalarySlipAction,
+  reopenSalarySlipAction,
   renameUnresolvedTaskNamesAction,
 } from "@/app/company/payroll/actions";
 
@@ -177,27 +178,47 @@ export function SalarySlipEditor({
               onClick={() => setShowIssueConfirm(true)}
               className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
-              発行する
+              PDFで明細を発行する
             </button>
           </div>
         ) : slip.status === "FINALIZED" ? (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => setShowIssueConfirm(true)}
-            className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-          >
-            発行する
-          </button>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => startTransition(() => reopenSalarySlipAction(slip.id))}
+              className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
+            >
+              内容を修正する
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setShowIssueConfirm(true)}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              PDFで明細を発行する
+            </button>
+          </div>
         ) : (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => setShowIssueConfirm(true)}
-            className="mt-4 rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
-          >
-            再発行する（同月内は無料）
-          </button>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => startTransition(() => reopenSalarySlipAction(slip.id))}
+              className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
+            >
+              内容を修正する
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setShowIssueConfirm(true)}
+              className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
+            >
+              PDFで明細を再発行する（同月内は無料）
+            </button>
+          </div>
         )}
 
         {showIssueConfirm ? (

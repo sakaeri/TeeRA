@@ -14,6 +14,7 @@ import {
   updatePaidLeave,
   finalizeSalarySlip,
   issueSalarySlip,
+  reopenSalarySlip,
   renameUnresolvedTaskNames,
   type DeductionItem,
 } from "@/lib/domain/payroll";
@@ -87,6 +88,15 @@ export async function issueSalarySlipAction(salarySlipId: string) {
   const { userId } = await requireCompanyAdminOrEditor();
   await assertAccess(salarySlipId);
   await issueSalarySlip({ salarySlipId, issuedByUserId: userId });
+  revalidatePath("/company/payroll");
+}
+
+// 内容を修正する: 確定済み・発行済みの明細を下書きに戻す。再発行は
+// 同月内なら引き続き無料（issueSalarySlipのalreadyIssuedThisMonth判定は
+// 過去の発行履歴で見ているため、reopenでは変わらない）。
+export async function reopenSalarySlipAction(salarySlipId: string) {
+  await assertAccess(salarySlipId);
+  await reopenSalarySlip(salarySlipId);
   revalidatePath("/company/payroll");
 }
 

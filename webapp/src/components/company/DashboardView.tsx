@@ -484,7 +484,7 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
           </button>
         </div>
         <p className="mb-4 text-xs text-muted">
-          スタッフが業務報告のたびに貯まるポイントで交換できる商品です。モチベーションアップ・定着につながる景品を登録しましょう。
+          スタッフが業務報告のたびに貯まるポイントで交換できる商品です。ポイントは会社をまたいで共通なので、自社スタッフ以外（他社で働くスタッフ）からも注文が入ることがあります。モチベーションアップ・スタッフ獲得につながる景品を登録しましょう。
         </p>
 
         <div className="grid grid-cols-2 gap-4">
