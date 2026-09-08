@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
 import { resolveRateVersion, resolveContractWageVersion, pickStaffTaskRate } from "@/lib/domain/contracts";
 import { recordPaidLeaveUsageDelta } from "@/lib/domain/paidLeave";
+import { hasRemainingPdfQuota } from "@/lib/domain/plans";
 
 const FIXED_DEDUCTION_LABELS = ["社会保険料", "厚生年金", "雇用保険料", "所得税", "市県民税"];
 
@@ -339,13 +340,21 @@ export async function issueSalarySlip(params: { salarySlipId: string; issuedByUs
   const totals = computeTotals(slip);
 
   return prisma.$transaction(async (tx) => {
+    let countsAgainstQuota = false;
+    let chargedTee = false;
+
     if (!alreadyIssuedThisMonth) {
-      await postLedgerEntry(tx, {
-        companyId: slip.companyId,
-        type: "CONSUME_SALARY_ISSUE",
-        amount: -1,
-        createdByUserId: params.issuedByUserId,
-      });
+      const company = await tx.company.findUniqueOrThrow({ where: { id: slip.companyId }, select: { planTier: true } });
+      countsAgainstQuota = await hasRemainingPdfQuota(tx, slip.companyId, company.planTier);
+      if (!countsAgainstQuota) {
+        chargedTee = true;
+        await postLedgerEntry(tx, {
+          companyId: slip.companyId,
+          type: "CONSUME_SALARY_ISSUE",
+          amount: -1,
+          createdByUserId: params.issuedByUserId,
+        });
+      }
     }
 
     await tx.salarySlip.update({ where: { id: slip.id }, data: { status: "ISSUED" } });
@@ -353,7 +362,8 @@ export async function issueSalarySlip(params: { salarySlipId: string; issuedByUs
     return tx.salarySlipIssue.create({
       data: {
         salarySlipId: slip.id,
-        chargedTee: !alreadyIssuedThisMonth,
+        chargedTee,
+        countsAgainstQuota,
         snapshot: {
           staffName: slip.staff.name,
           targetMonth: slip.targetMonth,

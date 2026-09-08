@@ -20,6 +20,7 @@ type UnresolvedShift = { shiftId: string; workReportId: string; date: string; ta
 
 export function SalarySlipEditor({
   slip,
+  willUseFreeQuota,
 }: {
   slip: {
     id: string;
@@ -33,6 +34,7 @@ export function SalarySlipEditor({
     totals: Totals;
     unresolved: UnresolvedShift[];
   };
+  willUseFreeQuota: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [newLineDesc, setNewLineDesc] = useState("");
@@ -227,7 +229,9 @@ export function SalarySlipEditor({
             <p className="mb-3">
               {slip.status === "ISSUED"
                 ? "同一対象月への再発行は無料です。よろしいですか？"
-                : "1Teeを課金して発行します。よろしいですか？"}
+                : willUseFreeQuota
+                  ? "今月の無料発行枠を使って発行します（Teeは消費されません）。よろしいですか？"
+                  : "1Teeを課金して発行します。よろしいですか？"}
             </p>
             <div className="flex gap-2">
               <button

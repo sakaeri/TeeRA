@@ -53,3 +53,13 @@ export function cutoffMonthString(cutoff: MonthCutoff): string | null {
   if (!cutoff) return null;
   return `${cutoff.year}-${String(cutoff.month).padStart(2, "0")}`;
 }
+
+// 当月（JST暦月）の開始・終了をUTC基準のDateとして返す — issuedAtのような
+// UTCタイムスタンプ列をJST暦月で絞り込みたい場合（PDF発行の無料枠集計等）
+// に使う。endは翌月開始（排他的な上限）。
+export function currentJstMonthRangeUtc(): { start: Date; end: Date } {
+  const { year, month } = todayJstParts();
+  const start = new Date(Date.UTC(year, month - 1, 1) - JST_OFFSET_MS);
+  const end = new Date(Date.UTC(year, month, 1) - JST_OFFSET_MS);
+  return { start, end };
+}

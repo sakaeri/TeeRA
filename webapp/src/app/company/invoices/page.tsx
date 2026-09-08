@@ -3,6 +3,7 @@ import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManageAny, isCompanyScopeAdmin } from "@/lib/auth/permissions";
 import { listClients } from "@/lib/domain/relationships";
 import { getOrCreateInvoice, computeInvoiceTotals, listIssuedInvoicesForCompany } from "@/lib/domain/invoicing";
+import { pdfQuotaRemaining } from "@/lib/domain/plans";
 import { prisma } from "@/lib/prisma";
 import { InvoiceEditor } from "@/components/company/InvoiceEditor";
 import { FinanceTabs } from "@/components/company/FinanceTabs";
@@ -111,6 +112,7 @@ export default async function InvoicesPage({
   const accessibleClientIds = new Set(clients.map((c) => c.id));
   const allIssuedInvoices = await listIssuedInvoicesForCompany(membership.companyId, minMonth ?? undefined);
   const issuedInvoices = allIssuedInvoices.filter((inv) => accessibleClientIds.has(inv.companyRelationshipId));
+  const pdfQuota = await pdfQuotaRemaining(membership.companyId);
   const issuedByMonth = new Map<string, typeof issuedInvoices>();
   for (const inv of issuedInvoices) {
     const list = issuedByMonth.get(inv.periodLabel) ?? [];
@@ -126,6 +128,12 @@ export default async function InvoicesPage({
       {minMonth ? (
         <p className="mb-4 rounded-lg bg-accent/10 px-3 py-2 text-xs text-primary">
           無料プランでは過去データの閲覧は直近3ヶ月までです。それ以前を見るにはプランのアップグレードが必要です。
+        </p>
+      ) : null}
+
+      {pdfQuota.quota > 0 ? (
+        <p className="mb-4 text-xs text-muted">
+          今月の無料発行枠（給与明細・請求書の合算）：残り{pdfQuota.remaining}/{pdfQuota.quota}件
         </p>
       ) : null}
 
@@ -156,7 +164,11 @@ export default async function InvoicesPage({
         </button>
       </form>
 
-      {invoiceData ? <InvoiceEditor invoice={invoiceData} /> : <p className="text-sm text-muted">対象月と依頼主を選択してください。</p>}
+      {invoiceData ? (
+        <InvoiceEditor invoice={invoiceData} willUseFreeQuota={pdfQuota.quota > 0 && pdfQuota.remaining > 0} />
+      ) : (
+        <p className="text-sm text-muted">対象月と依頼主を選択してください。</p>
+      )}
 
       {invoiceData?.issues.length ? (
         <div className="mt-6 text-sm">

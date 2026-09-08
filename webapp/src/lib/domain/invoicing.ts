@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
 import { resolveRateVersion } from "@/lib/domain/contracts";
+import { hasRemainingPdfQuota } from "@/lib/domain/plans";
 
 function monthRange(periodLabel: string) {
   const [year, month] = periodLabel.split("-").map(Number);
@@ -258,13 +259,22 @@ export async function issueInvoice(params: { invoiceId: string; issuedByUserId: 
   const shiftIds = invoice.lines.map((l) => l.shiftId).filter((id): id is string => Boolean(id));
 
   return prisma.$transaction(async (tx) => {
+    let countsAgainstQuota = false;
+
     if (!alreadyIssuedThisMonth) {
-      await postLedgerEntry(tx, {
-        companyId: invoice.issuingCompanyId,
-        type: "CONSUME_INVOICE_ISSUE",
-        amount: -1,
-        createdByUserId: params.issuedByUserId,
+      const company = await tx.company.findUniqueOrThrow({
+        where: { id: invoice.issuingCompanyId },
+        select: { planTier: true },
       });
+      countsAgainstQuota = await hasRemainingPdfQuota(tx, invoice.issuingCompanyId, company.planTier);
+      if (!countsAgainstQuota) {
+        await postLedgerEntry(tx, {
+          companyId: invoice.issuingCompanyId,
+          type: "CONSUME_INVOICE_ISSUE",
+          amount: -1,
+          createdByUserId: params.issuedByUserId,
+        });
+      }
     }
 
     await tx.invoice.update({
@@ -275,6 +285,7 @@ export async function issueInvoice(params: { invoiceId: string; issuedByUserId: 
     return tx.invoiceIssue.create({
       data: {
         invoiceId: invoice.id,
+        countsAgainstQuota,
         snapshot: {
           periodLabel: invoice.periodLabel,
           dueDate: invoice.dueDate?.toISOString(),

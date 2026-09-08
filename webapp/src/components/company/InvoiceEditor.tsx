@@ -36,6 +36,7 @@ const STATUS_LABEL: Record<string, string> = { DRAFT: "下書き", CONFIRMED: "�
 
 export function InvoiceEditor({
   invoice,
+  willUseFreeQuota,
 }: {
   invoice: {
     id: string;
@@ -48,6 +49,7 @@ export function InvoiceEditor({
     totals: Totals;
     unresolved: UnresolvedShift[];
   };
+  willUseFreeQuota: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [dueDate, setDueDateState] = useState(invoice.dueDate);
@@ -389,7 +391,9 @@ export function InvoiceEditor({
             <p className="mb-3">
               {invoice.status === "ISSUED"
                 ? "同一対象月への再発行は無料です。よろしいですか？"
-                : "1Teeを課金して発行します。よろしいですか？"}
+                : willUseFreeQuota
+                  ? "今月の無料発行枠を使って発行します（Teeは消費されません）。よろしいですか？"
+                  : "1Teeを課金して発行します。よろしいですか？"}
             </p>
             <div className="flex gap-2">
               <button

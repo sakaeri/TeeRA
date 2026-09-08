@@ -2,6 +2,7 @@ import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManageAny, isCompanyScopeAdmin } from "@/lib/auth/permissions";
 import { listStaff } from "@/lib/domain/roster";
 import { getOrCreateSalarySlip, getTotals, listIssuedSalarySlipsForCompany } from "@/lib/domain/payroll";
+import { pdfQuotaRemaining } from "@/lib/domain/plans";
 import { prisma } from "@/lib/prisma";
 import { SalarySlipEditor } from "@/components/company/SalarySlipEditor";
 import { FinanceTabs } from "@/components/company/FinanceTabs";
@@ -107,6 +108,7 @@ export default async function PayrollPage({
   // チームマネージャー/リーダーは自チームのスタッフ分だけに絞る。
   const accessibleStaffIds = new Set(staff.map((s) => s.userId));
   const allIssuedSlips = await listIssuedSalarySlipsForCompany(membership.companyId, minMonth ?? undefined);
+  const pdfQuota = await pdfQuotaRemaining(membership.companyId);
   const issuedSlips = allIssuedSlips.filter((s) => accessibleStaffIds.has(s.staffUserId));
   const issuedByMonth = new Map<string, typeof issuedSlips>();
   for (const slip of issuedSlips) {
@@ -123,6 +125,12 @@ export default async function PayrollPage({
       {minMonth ? (
         <p className="mb-4 rounded-lg bg-accent/10 px-3 py-2 text-xs text-primary">
           無料プランでは過去データの閲覧は直近3ヶ月までです。それ以前を見るにはプランのアップグレードが必要です。
+        </p>
+      ) : null}
+
+      {pdfQuota.quota > 0 ? (
+        <p className="mb-4 text-xs text-muted">
+          今月の無料発行枠（給与明細・請求書の合算）：残り{pdfQuota.remaining}/{pdfQuota.quota}件
         </p>
       ) : null}
 
@@ -154,7 +162,7 @@ export default async function PayrollPage({
       </form>
 
       {slipData ? (
-        <SalarySlipEditor slip={slipData} />
+        <SalarySlipEditor slip={slipData} willUseFreeQuota={pdfQuota.quota > 0 && pdfQuota.remaining > 0} />
       ) : (
         <p className="text-sm text-muted">対象月とスタッフを選択してください。</p>
       )}
