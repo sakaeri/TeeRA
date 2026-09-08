@@ -45,10 +45,22 @@ try {
   const unconfirmedDate = "2026-09-15";
   const reportDate = "2026-08-20";
 
+  // セッションの「今日」に依存せず必ず過去日になるよう、実行時刻基準で
+  // 1年前の日付を使う（JST/UTCの「今日」判定に噛み合わなくても十分過去）。
+  const pastShortageDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
   // seed a public recruitment with a shortage (0/2 filled)
   psql(
     `insert into "PublicRecruitment" (id, "companyId", title, date, "startTime", "endTime", "maxEntries", "lockedTee", status, "updatedAt") ` +
       `values (gen_random_uuid()::text, '${companyId}', 'STB運営事務所', '${shortageDate}', '08:00', '16:00', 2, 20, 'PUBLISHED', now());`,
+  );
+
+  // seed a PAST-dated shortage recruitment (never filled) — should NOT count
+  // toward 欠員件数 or appear in the auto-todo list, since the date has
+  // already passed and nobody can apply anymore.
+  psql(
+    `insert into "PublicRecruitment" (id, "companyId", title, date, "startTime", "endTime", "maxEntries", "lockedTee", status, "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', '過去の欠員募集', '${pastShortageDate}', '08:00', '16:00', 2, 20, 'PUBLISHED', now());`,
   );
 
   // seed a pending shift request
@@ -74,12 +86,14 @@ try {
   await page.goto("http://localhost:3000/company");
   let body = await page.textContent("body");
   log("KPI cards show 1 shortage / 1 unconfirmed / 1 pending report", body.includes("1") );
+  log("過去日の欠員募集はやることリストに出ない", !body.includes("過去の欠員募集"));
 
   // 欠員件数 popup
   await page.getByText("欠員件数").click();
   await page.waitForTimeout(400);
   body = await page.textContent("body");
   log("欠員シフト popup shows the seeded recruitment", body.includes("STB運営事務所") && body.includes("残り2名"));
+  log("欠員シフト popupにも過去日の欠員募集は出ない（件数にも含まれない）", !body.includes("過去の欠員募集"));
   await page.getByText("カレンダーで確認").last().click();
   await page.waitForURL(new RegExp(`date=${shortageDate}`));
   await page.waitForTimeout(400);

@@ -53,10 +53,14 @@ export async function listExpiringContractStaff(companyId: string) {
 // is what keeps the dashboard's page load to a handful of round trips
 // instead of the same handful of queries repeated 3-4x over.
 export async function loadDashboardData(companyId: string) {
+  const today = new Date(`${todayJst()}T00:00:00.000Z`);
   const [shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff] =
     await Promise.all([
+      // 日付が過ぎた募集はもう応募のしようがないので、埋まらないまま残って
+      // いても欠員件数・やることリストからは対象外にする（過去日は消えて
+      // いい、というのが期待挙動）。
       prisma.publicRecruitment.findMany({
-        where: { companyId, status: "PUBLISHED" },
+        where: { companyId, status: "PUBLISHED", date: { gte: today } },
         include: { entries: true },
         orderBy: { date: "asc" },
       }),
