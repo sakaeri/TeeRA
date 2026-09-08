@@ -247,17 +247,19 @@ try {
 
   // ② 日付が過ぎた公開募集でも、未使用分の人数上限を減らして返金できる
   // （UIから直接は過去日の公開募集を作れないため、SQLで直接その状態を再現する）
+  // 日付はJST基準で計算してから渡す — Postgres側のcurrent_dateはUTC基準
+  // （このDBのTIMEZONE設定はEtc/UTC）なので、JST 0時〜9時台はcurrent_date
+  // が「JSTの前日」を指してしまい、テストが期待する日付とずれる。
+  const yesterday = new Date(Date.now() + JST_OFFSET_MS - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const pastRecruitmentId = psql(
     `with ins as (insert into "PublicRecruitment" (id, "companyId", title, date, "maxEntries", "perEntryTeeCost", "lockedTee", status, visibility, "publishedAt", "publicOpenedAt", "isUndecided", "extraItems", "createdAt", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${companyAId}', '過去の公開募集テスト', current_date - interval '2 day', 2, 10, 20, 'PUBLISHED', 'PUBLIC', now(), now(), true, '[]'::jsonb, now(), now()) returning id) select id from ins;`,
+      `values (gen_random_uuid()::text, '${companyAId}', '過去の公開募集テスト', '${yesterday}'::date, 2, 10, 20, 'PUBLISHED', 'PUBLIC', now(), now(), true, '[]'::jsonb, now(), now()) returning id) select id from ins;`,
   );
   psql(
     `update "Company" set "teeBalance" = "teeBalance" - 20 where id = '${companyAId}';` +
       `insert into "TeeLedgerEntry" (id, "companyId", type, amount, "balanceAfter", "publicRecruitmentId", "createdAt") values (gen_random_uuid()::text, '${companyAId}', 'LOCK_RECRUITMENT', -20, (select "teeBalance" from "Company" where id='${companyAId}'), '${pastRecruitmentId}', now());`,
   );
   const balanceBeforePastFix = Number(psql(`select "teeBalance" from "Company" where id='${companyAId}';`));
-
-  const yesterday = new Date(Date.now() + JST_OFFSET_MS - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   await adminA.goto(`http://localhost:3000/company/calendar?date=${yesterday}`);
   await adminA.waitForTimeout(600);
   await adminA
