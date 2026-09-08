@@ -13,6 +13,14 @@ function psql(sql) {
     .trim();
 }
 
+// アプリの「今日」はJST基準（新しい単価のeffectiveFromはtodayJst()が
+// デフォルト）だが、PostgresのCURRENT_DATEはUTC基準。両者がずれる時間帯に
+// このテストがcurrent_dateでシフトを作ると、effectiveFrom（JST今日）が
+// シフト日付（UTC今日）より後になり、resolveRateVersionが単価を見つけ
+// られず基本給にフォールバックしてしまう。シフト日付もJST今日に合わせる。
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const todayJstStr = new Date(Date.now() + JST_OFFSET_MS).toISOString().slice(0, 10);
+
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 const admin = await (await browser.newContext()).newPage();
 const staff = await (await browser.newContext()).newPage();
@@ -145,25 +153,25 @@ try {
   // shift #1: キャディ業務 at A社 -> 11000円 (flat, DAILY)
   const shiftA = psql(
     `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'CLIENT', '${relAId}', 'キャディ業務', current_date, '09:00', '17:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
+      `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'CLIENT', '${relAId}', 'キャディ業務', '${todayJstStr}'::date, '09:00', '17:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
   );
   psql(`insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "clockIn", "clockOut", "computedMinutes", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${shiftA}', '${staffUserId}', 'WORKED', 'APPROVED', now() - interval '8 hours', now(), 480, now(), now());`);
 
   // shift #2: キャディ業務 at B社 -> 12000円
   const shiftB = psql(
     `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'CLIENT', '${relBId}', 'キャディ業務', current_date, '09:00', '17:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
+      `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'CLIENT', '${relBId}', 'キャディ業務', '${todayJstStr}'::date, '09:00', '17:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
   );
   psql(`insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "clockIn", "clockOut", "computedMinutes", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${shiftB}', '${staffUserId}', 'WORKED', 'APPROVED', now() - interval '8 hours', now(), 480, now(), now());`);
 
   // shift #3: 作業 at A社 (no A社-specific 作業 rate -> falls back to the 勤務先問わず 8000円 entry)
   const shiftC = psql(
     `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'CLIENT', '${relAId}', '作業', current_date, '09:00', '17:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
+      `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'CLIENT', '${relAId}', '作業', '${todayJstStr}'::date, '09:00', '17:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
   );
   psql(`insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "clockIn", "clockOut", "computedMinutes", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${shiftC}', '${staffUserId}', 'WORKED', 'APPROVED', now() - interval '8 hours', now(), 480, now(), now());`);
 
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  const thisMonth = todayJstStr.slice(0, 7);
   await admin.goto(`http://localhost:3000/company/payroll?month=${thisMonth}&staff=${staffUserId}`);
   await admin.waitForTimeout(500);
 

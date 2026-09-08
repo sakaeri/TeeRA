@@ -13,6 +13,14 @@ function psql(sql) {
     .trim();
 }
 
+// アプリの「今日」はJST基準（新しい単価のeffectiveFromはtodayJst()が
+// デフォルト）だが、PostgresのCURRENT_DATEはUTC基準。両者がずれる時間帯に
+// このテストがcurrent_dateでシフトを作ると、effectiveFrom（JST今日）が
+// シフト日付（UTC今日）より後になり、resolveRateVersionが単価を見つけ
+// られず基本給にフォールバックしてしまう。シフト日付もJST今日に合わせる。
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const todayJstStr = new Date(Date.now() + JST_OFFSET_MS).toISOString().slice(0, 10);
+
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 const admin = await (await browser.newContext()).newPage();
 const staff = await (await browser.newContext()).newPage();
@@ -94,7 +102,7 @@ try {
   // shift created WITHOUT a taskName (自社/社内 shift — never gets one at creation time)
   const shiftId = psql(
     `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'INHOUSE', null, current_date, '09:00', '17:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
+      `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'INHOUSE', null, '${todayJstStr}'::date, '09:00', '17:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
   );
 
   await staff.goto("http://localhost:3000/staff/timecard");
@@ -137,7 +145,7 @@ try {
   await admin.waitForTimeout(500);
 
   // payroll should now resolve using WorkReport.taskName (9000円 DAILY), NOT the base 1000円/h contract
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  const thisMonth = todayJstStr.slice(0, 7);
   await admin.goto(`http://localhost:3000/company/payroll?month=${thisMonth}&staff=${staffUserId}`);
   await admin.waitForTimeout(600);
 
@@ -171,7 +179,7 @@ try {
   // list (orderBy date desc) is deterministic — shift2 always sorts last.
   const shift2Id = psql(
     `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'CLIENT', '${relId}', null, current_date - interval '1 day', '09:00', '17:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
+      `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'CLIENT', '${relId}', null, '${todayJstStr}'::date - interval '1 day', '09:00', '17:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
   );
   psql(
     `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "clockIn", "clockOut", "computedMinutes", "createdAt", "updatedAt") ` +
