@@ -2771,10 +2771,6 @@ function RecruitmentFormModal({
           />
         </Field>
 
-        <p className="text-xs text-muted">
-          自社スタッフ・配属済みの派遣スタッフのみが対象の募集として作成されます（無料）。応募が足りない場合は、あとから公開募集への切り替えができます。
-        </p>
-
         {error ? <p className="text-xs text-red-600">{error}</p> : null}
 
         <button
