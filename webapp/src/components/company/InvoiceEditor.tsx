@@ -364,19 +364,33 @@ export function InvoiceEditor({
             </button>
           </div>
         ) : invoice.status === "ISSUED" ? (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => startTransition(() => reopenInvoiceForEditAction(invoice.id))}
-            className="mt-4 rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
-          >
-            内容を修正する
-          </button>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => startTransition(() => reopenInvoiceForEditAction(invoice.id))}
+              className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
+            >
+              内容を修正する
+            </button>
+            <button
+              type="button"
+              disabled={pending || !dueDate}
+              onClick={() => setShowIssueConfirm(true)}
+              className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
+            >
+              PDFで請求書を再発行する（同月内は無料）
+            </button>
+          </div>
         ) : null}
 
         {showIssueConfirm ? (
           <div className="mt-4 rounded-lg border border-accent bg-accent/10 p-4 text-sm">
-            <p className="mb-3">1Teeを課金して発行します。よろしいですか？</p>
+            <p className="mb-3">
+              {invoice.status === "ISSUED"
+                ? "同一対象月への再発行は無料です。よろしいですか？"
+                : "1Teeを課金して発行します。よろしいですか？"}
+            </p>
             <div className="flex gap-2">
               <button
                 type="button"

@@ -207,7 +207,7 @@ try {
   await admin.click("text=← 閉じる");
   await admin.waitForTimeout(200);
 
-  // reopen for edit and re-issue -> should charge AGAIN (unlike salary slip)
+  // reopen for edit and re-issue -> 給料明細と同じく同月内の再発行は無料
   await admin.goto(`http://localhost:3000/company/invoices?month=${thisMonth}&client=${companyRelationshipId}`);
   await admin.getByRole("button", { name: "内容を修正する" }).click();
   await admin.waitForTimeout(600);
@@ -218,7 +218,17 @@ try {
   await admin.waitForTimeout(1000);
 
   const balanceAfterSecondIssue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
-  log("re-issue charges again (9 -> 8), unlike salary slip", balanceAfterSecondIssue === 8);
+  log("修正して再発行しても同月内は引き続き無料（still 9）", balanceAfterSecondIssue === 9);
+
+  // 発行済み(ISSUED)状態でも「再発行する（同月内は無料）」ボタンが直接見える
+  // （内容を修正するを経由しなくても再発行できる）
+  const reissueBody = await admin.textContent("body");
+  log("発行済み状態に「PDFで請求書を再発行する（同月内は無料）」ボタンがある", reissueBody.includes("PDFで請求書を再発行する（同月内は無料）"));
+  await admin.getByRole("button", { name: "PDFで請求書を再発行する（同月内は無料）", exact: true }).click();
+  await admin.getByRole("button", { name: "発行する", exact: true }).click();
+  await admin.waitForTimeout(1000);
+  const balanceAfterThirdIssue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
+  log("発行済みから直接再発行しても無料のまま（still 9）", balanceAfterThirdIssue === 9);
 
   // fetch PDF
   const pdfLink = await admin.locator('a[href*="/api/invoices/"]').first().getAttribute("href");

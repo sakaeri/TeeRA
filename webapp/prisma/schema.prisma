@@ -930,8 +930,8 @@ model InvoiceLine {
   shift   Shift?  @relation(fields: [shiftId], references: [id], onDelete: SetNull)
 }
 
-// Every issuance (including re-issues) charges 1 Tee — invoice content
-// differs shift-to-shift, so unlike salary slips there is no free reissue.
+// 給料明細と同じく、同一Invoice行（同月）内の初回発行だけ1Tee課金し、
+// 以降の同月内の再発行は無料（issuing.tsのissueInvoice参照）。
 model InvoiceIssue {
   id        String   @id @default(cuid())
   invoiceId String

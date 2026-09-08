@@ -227,9 +227,9 @@ export function computeInvoiceTotals(params: {
   return { brackets, subtotalAll, taxAll, total: subtotalAll + taxAll };
 }
 
-// 内容を修正する: reopens an ISSUED invoice for editing. The next 発行 will
-// charge another 1 Tee (invoice content differs each time, unlike salary
-// slips) and record a new revision in the issue history.
+// 内容を修正する: reopens an ISSUED invoice for editing. 給料明細と同じく、
+// 同月内（同じInvoice行）の再発行は無料 — 内容を直して発行し直すたびに
+// 課金すると離脱を招くため（給料明細と同じ判断、chat参照）。
 export async function reopenInvoiceForEdit(invoiceId: string) {
   return prisma.invoice.update({ where: { id: invoiceId }, data: { status: "DRAFT" } });
 }
@@ -240,29 +240,32 @@ export async function confirmInvoice(invoiceId: string) {
   return prisma.invoice.update({ where: { id: invoiceId }, data: { status: "CONFIRMED" } });
 }
 
-// 発行: every issuance (including corrections) charges 1 Tee — unlike salary
-// slips, invoice content is different shift-to-shift so there is no free
-// re-issue. invoicedShiftIds is locked here, at actual issuance, not at 確定
-// (a real bug in the prototype fixed in chat29/30: confirming without
-// issuing was destructively consuming shift data).
+// 発行: 給料明細と同じく、同月内（同じInvoice行）の初回発行だけ1Tee課金し、
+// 以降の同月内の再発行（内容を修正しての再発行を含む）は無料。
+// invoicedShiftIdsは確定(確定する)時点ではなく実際の発行時点でロックする
+// （確定だけして発行しないとシフトデータが破壊的に消費されるプロトタイプの
+// バグをchat29/30で修正した経緯があるため）。
 export async function issueInvoice(params: { invoiceId: string; issuedByUserId: string }) {
   const invoice = await prisma.invoice.findUniqueOrThrow({
     where: { id: params.invoiceId },
-    include: { lines: true, companyRelationship: true },
+    include: { lines: true, companyRelationship: true, issues: true },
   });
   if (!invoice.dueDate) throw new Error("due_date_required");
 
+  const alreadyIssuedThisMonth = invoice.issues.length > 0;
   const registered = Boolean(invoice.invoiceRegistrationNumberSnapshot);
   const totals = computeInvoiceTotals({ lines: invoice.lines, registered });
   const shiftIds = invoice.lines.map((l) => l.shiftId).filter((id): id is string => Boolean(id));
 
   return prisma.$transaction(async (tx) => {
-    await postLedgerEntry(tx, {
-      companyId: invoice.issuingCompanyId,
-      type: "CONSUME_INVOICE_ISSUE",
-      amount: -1,
-      createdByUserId: params.issuedByUserId,
-    });
+    if (!alreadyIssuedThisMonth) {
+      await postLedgerEntry(tx, {
+        companyId: invoice.issuingCompanyId,
+        type: "CONSUME_INVOICE_ISSUE",
+        amount: -1,
+        createdByUserId: params.issuedByUserId,
+      });
+    }
 
     await tx.invoice.update({
       where: { id: invoice.id },
