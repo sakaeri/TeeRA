@@ -382,7 +382,7 @@ function TodoModal({
           </button>
         </div>
         <p className="mb-4 text-xs text-muted">
-          担当者に対応してほしい内容を登録します。期日と宛先を指定してください。
+          この会社アカウントに入れる全員（本部メンバー・チームのマネージャー/リーダー）に共有されるやることです。期日と宛先を指定してください。
         </p>
 
         <div className="flex flex-col gap-3">
@@ -475,7 +475,7 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
         className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-1 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">
             販促品を{editingItem ? "編集" : "登録"}
           </h3>
@@ -483,6 +483,9 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
             ✕
           </button>
         </div>
+        <p className="mb-4 text-xs text-muted">
+          スタッフが業務報告のたびに貯まるポイントで交換できる商品です。モチベーションアップ・定着につながる景品を登録しましょう。
+        </p>
 
         <div className="grid grid-cols-2 gap-4">
           <ImageDropzone label="商品画像" imageUrl={imageUrl} onChange={setImageUrl} required />

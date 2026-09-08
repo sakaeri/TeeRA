@@ -7,6 +7,7 @@ import {
   computeUnconfirmedShiftEntries,
   computePendingReportEntries,
   listManualTodos,
+  listDashboardAudience,
 } from "@/lib/domain/dashboard";
 import { listPromoItems, listRedemptionsForCompany } from "@/lib/domain/promo";
 import { listTemplates } from "@/lib/domain/contracts";
@@ -24,7 +25,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
     dashboardData,
     openTodos,
     resolvedTodos,
-    admins,
+    audience,
     promoItems,
     redemptions,
     templates,
@@ -33,11 +34,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
     loadDashboardData(membership.companyId),
     listManualTodos(membership.companyId, "OPEN"),
     listManualTodos(membership.companyId, "RESOLVED"),
-    prisma.companyMembership.findMany({
-      where: { companyId: membership.companyId, role: { in: ["COMPANY_ADMIN", "COMPANY_EDITOR"] } },
-      include: { user: true },
-      orderBy: { createdAt: "asc" },
-    }),
+    listDashboardAudience(membership.companyId),
     listPromoItems(membership.companyId),
     listRedemptionsForCompany(membership.companyId),
     listTemplates(membership.companyId),
@@ -57,7 +54,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
   const pendingContractStaff = dashboardData.pendingContractStaff;
   const expiringContractStaff = dashboardData.expiringContractStaff;
 
-  const currentUserName = admins.find((a) => a.userId === userId)?.user.name ?? "";
+  const currentUserName = audience.find((a) => a.userId === userId)?.name ?? "";
   const initialTab = open === "promoOrders" ? ("promoOrders" as const) : undefined;
   const initialOpenPopup =
     open === "contracts" ? ("contracts" as const) : open === "expiring" ? ("expiring" as const) : undefined;
@@ -86,7 +83,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
           comments: t.comments.map((c) => ({ id: c.id, authorName: c.author.name, body: c.body })),
         }))}
         currentUserName={currentUserName}
-        recipientOptions={admins.map((a) => ({ id: a.userId, name: a.user.name }))}
+        recipientOptions={audience.map((a) => ({ id: a.userId, name: a.name }))}
         promoItems={promoItems.map((p) => ({
           id: p.id,
           imageUrl: p.imageUrl,

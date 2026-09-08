@@ -70,6 +70,12 @@ export async function loadDashboardData(companyId: string) {
       listExpiringContractStaff(companyId),
     ]);
 
+  // 希望日が複数（datesは配列）あり得るため、1件でも今日以降の希望日が
+  // 残っていれば表示対象とする（全ての希望日が過ぎたものだけを除外）。
+  // scalarリストなのでPrisma側の範囲フィルタでは絞り込めず、取得後にJSで
+  // 判定する。
+  const shiftRequests = allShiftRequests.filter((sr) => sr.dates.some((d) => d >= today));
+
   return { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff };
 }
 
@@ -245,6 +251,27 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
   }
 
   return items;
+}
+
+// やることリストの「誰宛か」候補・「誰が出したか」の解決対象 — /company/*
+// の入口ガード（requireCompanyAdminOrEditor内のhasAnyTeamManagementRole判定）
+// で入場できる全員と一致させる。本部管理者/編集者だけでなく、チームの
+// マネージャー/リーダー（会社レベルの役職はSTAFFのまま）も対象に含む。
+export async function listDashboardAudience(companyId: string) {
+  const [companyMembers, teamManagers] = await Promise.all([
+    prisma.companyMembership.findMany({
+      where: { companyId, role: { in: ["COMPANY_ADMIN", "COMPANY_EDITOR"] } },
+      include: { user: true },
+    }),
+    prisma.teamMembership.findMany({
+      where: { team: { companyId }, role: { in: ["TEAM_MANAGER", "TEAM_LEADER"] } },
+      include: { user: true },
+    }),
+  ]);
+  const byUserId = new Map<string, { userId: string; name: string }>();
+  for (const m of companyMembers) byUserId.set(m.userId, { userId: m.userId, name: m.user.name });
+  for (const m of teamManagers) byUserId.set(m.userId, { userId: m.userId, name: m.user.name });
+  return [...byUserId.values()].sort((a, b) => a.name.localeCompare(b.name, "ja"));
 }
 
 export async function listManualTodos(companyId: string, status: "OPEN" | "RESOLVED") {

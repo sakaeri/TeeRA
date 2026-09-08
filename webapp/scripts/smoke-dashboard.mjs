@@ -25,7 +25,10 @@ try {
   log("KPI cards render with 0 counts initially", body.includes("欠員件数") && body.includes("未確定シフト"));
 
   // create a regular staff member — they must NOT be an assignable recipient
-  // (only company admins/editors can see this dashboard and resolve todos)
+  // (only company admins/editors and team managers/leaders can see this
+  // dashboard and resolve todos — see smoke-dashboard-team-manager-todo.mjs
+  // for the team-manager case; a plain staff member with no team role has
+  // no access here at all)
   await page.click("text=スタッフ名簿");
   await page.click("text=＋スタッフを追加する");
   await page.click("text=仮アカウントを作成");
