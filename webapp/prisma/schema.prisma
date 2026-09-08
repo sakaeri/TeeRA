@@ -65,6 +65,12 @@ enum CompanyRole {
   STAFF // スタッフ
 }
 
+enum PlanTier {
+  FREE
+  STANDARD
+  BUSINESS
+}
+
 model Company {
   id                        String   @id @default(cuid())
   name                      String
@@ -74,6 +80,7 @@ model Company {
   dispatchEnabled           Boolean  @default(false) // 派遣会社と連携する (companyModules.dispatch)
   invoiceRegistrationNumber String? // インボイス（適格請求書発行事業者）登録番号
   teeBalance                Int      @default(0) // cached; must always equal sum(TeeLedgerEntry.amount) — see wallet.ts
+  planTier                  PlanTier @default(FREE) // cached; source of truth is StripeSubscription (mirrors teeBalance/TeeLedgerEntry split)
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
 
@@ -95,6 +102,7 @@ model Company {
   teeLedgerEntries     TeeLedgerEntry[]
   bankTransferRequests BankTransferRequest[]
   stripeCharges        StripeCharge[]
+  stripeSubscriptions  StripeSubscription[]
   promoItems           PromoItem[]
   todoItems            TodoItem[]
   inviteTokens         InviteToken[]
@@ -116,6 +124,7 @@ model Team {
   todoItems          TodoItem[]
   inviteTokens       InviteToken[]
   clientLinks        TeamClientRelationship[]
+  teeLedgerEntries   TeeLedgerEntry[]
 
   @@index([companyId])
 }
@@ -878,11 +887,12 @@ model SalarySlipLine {
 // preview until re-issued for real. First issue in a target month charges
 // 1 Tee; subsequent re-issues of the SAME month are free (chat25/27/29).
 model SalarySlipIssue {
-  id           String   @id @default(cuid())
-  salarySlipId String
-  snapshot     Json
-  chargedTee   Boolean // false on free re-issue
-  issuedAt     DateTime @default(now())
+  id                 String   @id @default(cuid())
+  salarySlipId       String
+  snapshot           Json
+  chargedTee         Boolean // false on free re-issue
+  countsAgainstQuota Boolean  @default(false) // true if it consumed the plan's monthly free-PDF quota instead of Tee
+  issuedAt           DateTime @default(now())
 
   salarySlip SalarySlip @relation(fields: [salarySlipId], references: [id], onDelete: Cascade)
 }
@@ -933,10 +943,11 @@ model InvoiceLine {
 // 給料明細と同じく、同一Invoice行（同月）内の初回発行だけ1Tee課金し、
 // 以降の同月内の再発行は無料（issuing.tsのissueInvoice参照）。
 model InvoiceIssue {
-  id        String   @id @default(cuid())
-  invoiceId String
-  snapshot  Json
-  issuedAt  DateTime @default(now())
+  id                 String   @id @default(cuid())
+  invoiceId          String
+  snapshot           Json
+  countsAgainstQuota Boolean  @default(false) // true if it consumed the plan's monthly free-PDF quota instead of Tee
+  issuedAt           DateTime @default(now())
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 }
@@ -952,6 +963,7 @@ enum TeeLedgerEntryType {
   UNLOCK_REFUND_RECRUITMENT
   CONSUME_SALARY_ISSUE
   CONSUME_INVOICE_ISSUE
+  CONSUME_TEAM_UNLOCK
   ADJUSTMENT
 }
 
@@ -964,6 +976,7 @@ model TeeLedgerEntry {
   publicRecruitmentId   String?
   stripeChargeId        String?
   bankTransferRequestId String?
+  teamId                String? // set for CONSUME_TEAM_UNLOCK — audit trail of which team the purchase unlocked
   createdByUserId       String?
   createdAt             DateTime           @default(now())
 
@@ -971,6 +984,7 @@ model TeeLedgerEntry {
   publicRecruitment   PublicRecruitment?   @relation(fields: [publicRecruitmentId], references: [id], onDelete: SetNull)
   stripeCharge        StripeCharge?        @relation(fields: [stripeChargeId], references: [id], onDelete: SetNull)
   bankTransferRequest BankTransferRequest? @relation(fields: [bankTransferRequestId], references: [id], onDelete: SetNull)
+  team                Team?                @relation(fields: [teamId], references: [id], onDelete: SetNull)
 
   @@index([companyId, createdAt])
 }
@@ -1012,6 +1026,31 @@ model StripeCharge {
 
   company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   teeLedgerEntries TeeLedgerEntry[]
+}
+
+enum StripeSubscriptionStatus {
+  PENDING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+// Source of truth for the paid-plan subscription lifecycle (mirrors the
+// StripeCharge / teeLedgerEntries split) — Company.planTier is the cached
+// read side, this is what Stripe checkout/webhooks actually update.
+model StripeSubscription {
+  id                      String                   @id @default(cuid())
+  companyId               String
+  stripeCheckoutSessionId String?                  @unique
+  stripeSubscriptionId    String?                  @unique
+  planTier                PlanTier
+  status                  StripeSubscriptionStatus @default(PENDING)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
 }
 
 // ---------------------------------------------------------------------------
