@@ -19,6 +19,7 @@ import {
 import { ContractsView } from "@/components/company/ContractsView";
 import { WorkReportsQueue } from "@/components/company/WorkReportsQueue";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { CopyUrlField } from "@/components/CopyUrlField";
 
 type Admin = {
   userId: string;
@@ -401,9 +402,9 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
         </button>
       </div>
       {inviteUrl ? (
-        <p className="mt-3 truncate rounded-lg border border-accent bg-accent/10 px-4 py-2 text-sm">
-          招待URL: {inviteUrl}
-        </p>
+        <div className="mt-3">
+          <CopyUrlField url={inviteUrl} />
+        </div>
       ) : null}
     </SectionCard>
   );
@@ -737,7 +738,9 @@ function TeamInviteForm({
       </div>
 
       {inviteUrl ? (
-        <p className="mt-2 truncate rounded-lg border border-accent bg-accent/10 px-3 py-2 text-xs">招待URL: {inviteUrl}</p>
+        <div className="mt-2">
+          <CopyUrlField url={inviteUrl} size="sm" />
+        </div>
       ) : null}
     </div>
   );

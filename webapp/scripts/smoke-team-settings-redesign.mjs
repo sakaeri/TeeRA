@@ -55,8 +55,7 @@ try {
   await teamACard.getByRole("button", { name: "＋招待" }).click();
   await teamACard.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForTimeout(500);
-  const inviteUrl = await teamACard.locator("p", { hasText: "招待URL:" }).textContent();
-  const url = inviteUrl.replace("招待URL:", "").trim();
+  const url = await teamACard.locator("input[readonly]").inputValue();
 
   await mgr.goto(url);
   await mgr.click("text=アカウントを作成して参加する");

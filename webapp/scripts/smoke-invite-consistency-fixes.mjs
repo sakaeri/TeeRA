@@ -196,8 +196,7 @@ try {
   await admin.goto("http://localhost:3000/company/settings?tab=basic");
   await admin.getByRole("button", { name: "＋招待" }).click();
   await admin.waitForTimeout(400);
-  const adminInviteLineText = await admin.locator("p", { hasText: "招待URL:" }).textContent();
-  const adminInviteUrl = adminInviteLineText?.replace("招待URL:", "").trim() ?? null;
+  const adminInviteUrl = await admin.locator('section:has-text("本部メンバー権限") input[readonly]').inputValue();
   log("本部メンバー招待URLが発行された", Boolean(adminInviteUrl?.startsWith("http://localhost:3000/invite/")));
 
   // 既にこの会社のスタッフである人が、誤ってこの招待を開く
