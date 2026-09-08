@@ -12,8 +12,9 @@ import { listTeams } from "@/lib/domain/teams";
 import { listClients, listAgencies } from "@/lib/domain/relationships";
 import { listPlacementRates } from "@/lib/domain/contracts";
 import { prisma } from "@/lib/prisma";
-import { todayJstParts } from "@/lib/date";
+import { todayJstParts, earliestAllowedMonth, isBeforeCutoff } from "@/lib/date";
 import { CalendarView } from "@/components/company/CalendarView";
+import { redirect } from "next/navigation";
 
 export default async function CompanyCalendarPage({
   searchParams,
@@ -21,12 +22,22 @@ export default async function CompanyCalendarPage({
   const { membership } = await requireCompanyAdminOrEditor();
   const sp = await searchParams;
 
+  const company = await prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } });
+  const historyCutoff = earliestAllowedMonth(company.planTier);
+
   const today = todayJstParts();
   const dateParam = typeof sp.date === "string" && sp.date ? sp.date : undefined;
   const [dateYear, dateMonth] = dateParam ? dateParam.split("-").map(Number) : [];
   const year = Number(sp.y) || dateYear || today.year;
   const month = Number(sp.m) || dateMonth || today.month;
   const relationshipId = typeof sp.rel === "string" && sp.rel ? sp.rel : undefined;
+
+  if (isBeforeCutoff(year, month, historyCutoff)) {
+    const params = new URLSearchParams({ y: String(historyCutoff!.year), m: String(historyCutoff!.month) });
+    if (typeof sp.team === "string" && sp.team) params.set("team", sp.team);
+    if (typeof sp.rel === "string" && sp.rel) params.set("rel", sp.rel);
+    redirect(`/company/calendar?${params.toString()}`);
+  }
 
   // 会社スコープの管理者/編集者は全社のシフトを見られる。チームマネージャー/
   // リーダーは自分が所属するチームのシフトしか見えない — sp.teamは「その中で
@@ -38,7 +49,7 @@ export default async function CompanyCalendarPage({
   const teamId = isAdmin || (requestedTeamId && myTeamIds.includes(requestedTeamId)) ? requestedTeamId : undefined;
   const restrictToTeamIds = isAdmin ? undefined : myTeamIds;
 
-  const [shifts, shiftHistory, staff, teams, shiftRequests, recruitments, clientRecruitments, company] = await Promise.all([
+  const [shifts, shiftHistory, staff, teams, shiftRequests, recruitments, clientRecruitments] = await Promise.all([
     listShiftsForMonth({ companyId: membership.companyId, year, month, teamId, restrictToTeamIds, companyRelationshipId: relationshipId }),
     listShiftHistoryForMonth({ companyId: membership.companyId, year, month, teamId, restrictToTeamIds }),
     listStaff(membership.companyId),
@@ -46,7 +57,6 @@ export default async function CompanyCalendarPage({
     listShiftRequests({ companyId: membership.companyId, status: "PENDING" }),
     listPublicRecruitments({ companyId: membership.companyId }),
     listClientRecruitments(membership.companyId),
-    prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
   ]);
 
   const affordable = await affordableMaxEntries(membership.companyId);
@@ -149,6 +159,7 @@ export default async function CompanyCalendarPage({
         selectedRelationshipId={relationshipId}
         companyName={company.name}
         initialSelectedDate={dateParam}
+        historyCutoff={historyCutoff}
       />
     </main>
   );

@@ -23,3 +23,33 @@ export function nowJstHHMM(): string {
   const now = new Date();
   return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 }
+
+export type MonthCutoff = { year: number; month: number } | null;
+
+// 無料プランの過去データ閲覧制限（直近3ヶ月＝当月＋過去2ヶ月）の下限月。
+// 有料プランはnull（制限なし）。ダウングレード時のグランドファザリングは
+// 行わない方針のため、呼び出しの都度その場で計算する（保存されたカット
+// オフ値は持たない）。
+export function earliestAllowedMonth(planTier: "FREE" | "STANDARD" | "BUSINESS"): MonthCutoff {
+  if (planTier !== "FREE") return null;
+  const { year, month } = todayJstParts();
+  let y = year;
+  let m = month - 2;
+  if (m <= 0) {
+    m += 12;
+    y -= 1;
+  }
+  return { year: y, month: m };
+}
+
+export function isBeforeCutoff(year: number, month: number, cutoff: MonthCutoff): boolean {
+  if (!cutoff) return false;
+  if (year !== cutoff.year) return year < cutoff.year;
+  return month < cutoff.month;
+}
+
+// targetMonth/periodLabelのような"YYYY-MM"のゼロ埋め文字列比較で使うための変換。
+export function cutoffMonthString(cutoff: MonthCutoff): string | null {
+  if (!cutoff) return null;
+  return `${cutoff.year}-${String(cutoff.month).padStart(2, "0")}`;
+}

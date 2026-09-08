@@ -17,6 +17,7 @@ import {
   updateMembershipBankInfo,
 } from "@/lib/domain/roster";
 import { setHireDate, grantPaidLeave, adjustPaidLeaveBalance, skipPaidLeaveGrant } from "@/lib/domain/paidLeave";
+import { earliestAllowedMonth, isBeforeCutoff } from "@/lib/date";
 import {
   activateAgencyModuleWithProxyClient,
   activateDispatchModuleWithProxyAgency,
@@ -457,7 +458,14 @@ export async function getStaffMonthDetailAction(userId: string, year: number, mo
   const { membership } = await requireCompanyAdminOrEditor();
   const staffTeamIds = await getStaffTeamIds(userId);
   if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
-  return getStaffMonthDetail({ companyId: membership.companyId, userId, year, month });
+  const company = await prisma.company.findUniqueOrThrow({
+    where: { id: membership.companyId },
+    select: { planTier: true },
+  });
+  const historyCutoff = earliestAllowedMonth(company.planTier);
+  if (isBeforeCutoff(year, month, historyCutoff)) throw new Error("plan_history_limit");
+  const detail = await getStaffMonthDetail({ companyId: membership.companyId, userId, year, month });
+  return { ...detail, historyCutoff };
 }
 
 async function assertMembershipOwnedByCompany(membershipId: string, companyId: string) {
@@ -561,7 +569,14 @@ export async function getClientMonthDetailAction(companyRelationshipId: string, 
   const { membership } = await requireCompanyAdminOrEditor();
   const clientTeamIds = await getClientTeamIds(companyRelationshipId);
   if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
-  return getClientMonthDetail({ companyId: membership.companyId, companyRelationshipId, year, month });
+  const company = await prisma.company.findUniqueOrThrow({
+    where: { id: membership.companyId },
+    select: { planTier: true },
+  });
+  const historyCutoff = earliestAllowedMonth(company.planTier);
+  if (isBeforeCutoff(year, month, historyCutoff)) throw new Error("plan_history_limit");
+  const detail = await getClientMonthDetail({ companyId: membership.companyId, companyRelationshipId, year, month });
+  return { ...detail, historyCutoff };
 }
 
 // 単価設定・チーム紐付けは「請求する側＝派遣会社(agencyCompanyId)」限定。

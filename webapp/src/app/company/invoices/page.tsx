@@ -6,7 +6,7 @@ import { getOrCreateInvoice, computeInvoiceTotals, listIssuedInvoicesForCompany 
 import { prisma } from "@/lib/prisma";
 import { InvoiceEditor } from "@/components/company/InvoiceEditor";
 import { FinanceTabs } from "@/components/company/FinanceTabs";
-import { todayJstParts } from "@/lib/date";
+import { todayJstParts, earliestAllowedMonth, cutoffMonthString } from "@/lib/date";
 import Link from "next/link";
 
 function currentMonth() {
@@ -29,8 +29,17 @@ export default async function InvoicesPage({
   }
 
   const sp = await searchParams;
-  const periodLabel = typeof sp.month === "string" ? sp.month : currentMonth();
+  const requestedMonth = typeof sp.month === "string" ? sp.month : currentMonth();
   const companyRelationshipId = typeof sp.client === "string" ? sp.client : undefined;
+
+  const historyCutoff = earliestAllowedMonth(company.planTier);
+  const minMonth = cutoffMonthString(historyCutoff);
+  if (minMonth && requestedMonth < minMonth) {
+    const params = new URLSearchParams({ month: minMonth });
+    if (companyRelationshipId) params.set("client", companyRelationshipId);
+    redirect(`/company/invoices?${params.toString()}`);
+  }
+  const periodLabel = requestedMonth;
 
   const allClients = await listClients(membership.companyId);
   // チームマネージャー/リーダーは自チームに紐づく取引先しか選べない（本部
@@ -100,7 +109,7 @@ export default async function InvoicesPage({
   // 発行履歴一覧 — 発行済みのものだけを月ごとにまとめる。チームマネージャー/
   // リーダーは自チームに紐づく取引先分だけに絞る。
   const accessibleClientIds = new Set(clients.map((c) => c.id));
-  const allIssuedInvoices = await listIssuedInvoicesForCompany(membership.companyId);
+  const allIssuedInvoices = await listIssuedInvoicesForCompany(membership.companyId, minMonth ?? undefined);
   const issuedInvoices = allIssuedInvoices.filter((inv) => accessibleClientIds.has(inv.companyRelationshipId));
   const issuedByMonth = new Map<string, typeof issuedInvoices>();
   for (const inv of issuedInvoices) {
@@ -114,10 +123,22 @@ export default async function InvoicesPage({
       <h1 className="mb-6 font-serif-jp text-2xl font-bold">請求書</h1>
       <FinanceTabs active="invoices" invoicesEnabled={company.agencyEnabled} />
 
+      {minMonth ? (
+        <p className="mb-4 rounded-lg bg-accent/10 px-3 py-2 text-xs text-primary">
+          無料プランでは過去データの閲覧は直近3ヶ月までです。それ以前を見るにはプランのアップグレードが必要です。
+        </p>
+      ) : null}
+
       <form method="get" className="mb-6 flex items-end gap-3 rounded-xl border border-border bg-white/60 p-4">
         <label className="flex flex-col gap-1 text-xs">
           対象月
-          <input type="month" name="month" defaultValue={periodLabel} className="rounded-lg border border-border px-2 py-2 text-sm" />
+          <input
+            type="month"
+            name="month"
+            defaultValue={periodLabel}
+            min={minMonth ?? undefined}
+            className="rounded-lg border border-border px-2 py-2 text-sm"
+          />
         </label>
         <label className="flex flex-col gap-1 text-xs">
           依頼主

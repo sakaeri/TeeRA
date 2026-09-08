@@ -48,6 +48,7 @@ type StaffMonthDetail = {
   membershipId: string;
   name: string;
   isProxy: boolean;
+  historyCutoff: { year: number; month: number } | null;
   staffNotes: StaffNote[];
   teams: { teamId: string; teamName: string; role: "TEAM_MANAGER" | "TEAM_LEADER" | "TEAM_MEMBER" }[];
   monthlyHours: number;
@@ -373,9 +374,17 @@ export function StaffDetailPanel({
 
   function shiftMonth(delta: number) {
     const d = new Date(Date.UTC(year, month - 1 + delta, 1));
-    setYear(d.getUTCFullYear());
-    setMonth(d.getUTCMonth() + 1);
+    const newYear = d.getUTCFullYear();
+    const newMonth = d.getUTCMonth() + 1;
+    const cutoff = data?.historyCutoff;
+    if (cutoff && (newYear < cutoff.year || (newYear === cutoff.year && newMonth < cutoff.month))) {
+      return;
+    }
+    setYear(newYear);
+    setMonth(newMonth);
   }
+
+  const atHistoryCutoff = Boolean(data?.historyCutoff && data.historyCutoff.year === year && data.historyCutoff.month === month);
 
   return (
     <div className="fixed inset-0 z-30 flex justify-end bg-black/30" onClick={onClose}>
@@ -537,12 +546,18 @@ export function StaffDetailPanel({
 
             {tab === "history" ? (
               <div>
+                {atHistoryCutoff ? (
+                  <p className="mb-3 rounded-lg bg-accent/10 px-3 py-2 text-xs text-primary">
+                    無料プランでは過去データの閲覧は直近3ヶ月までです。それ以前を見るにはプランのアップグレードが必要です。
+                  </p>
+                ) : null}
                 <div className="mb-4 flex items-center justify-center gap-2">
                   <button
                     type="button"
                     onClick={() => shiftMonth(-1)}
+                    disabled={atHistoryCutoff}
                     aria-label="前の月"
-                    className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
+                    className="rounded-full p-2 text-muted hover:bg-background hover:text-primary disabled:cursor-not-allowed disabled:text-border disabled:hover:bg-transparent"
                   >
                     <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
                       <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />

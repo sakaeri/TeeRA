@@ -5,7 +5,8 @@ import { getOrCreateSalarySlip, getTotals, listIssuedSalarySlipsForCompany } fro
 import { prisma } from "@/lib/prisma";
 import { SalarySlipEditor } from "@/components/company/SalarySlipEditor";
 import { FinanceTabs } from "@/components/company/FinanceTabs";
-import { todayJstParts } from "@/lib/date";
+import { todayJstParts, earliestAllowedMonth, cutoffMonthString } from "@/lib/date";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 
 function currentMonth() {
@@ -23,13 +24,22 @@ export default async function PayrollPage({
 }: PageProps<"/company/payroll">) {
   const { membership } = await requireCompanyAdminOrEditor();
   const sp = await searchParams;
-  const targetMonth = typeof sp.month === "string" ? sp.month : currentMonth();
+  const requestedMonth = typeof sp.month === "string" ? sp.month : currentMonth();
   const staffUserId = typeof sp.staff === "string" ? sp.staff : undefined;
 
   const [allStaff, company] = await Promise.all([
     listStaff(membership.companyId),
     prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
   ]);
+
+  const historyCutoff = earliestAllowedMonth(company.planTier);
+  const minMonth = cutoffMonthString(historyCutoff);
+  if (minMonth && requestedMonth < minMonth) {
+    const params = new URLSearchParams({ month: minMonth });
+    if (staffUserId) params.set("staff", staffUserId);
+    redirect(`/company/payroll?${params.toString()}`);
+  }
+  const targetMonth = requestedMonth;
   // チームマネージャー/リーダーは自チームのスタッフしか選べない（本部管理者/
   // 編集者は全社分）。
   const staff = isCompanyScopeAdmin(membership)
@@ -96,7 +106,7 @@ export default async function PayrollPage({
   // 発行履歴一覧 — 発行済み（課金済み）のものだけを月ごとにまとめる。
   // チームマネージャー/リーダーは自チームのスタッフ分だけに絞る。
   const accessibleStaffIds = new Set(staff.map((s) => s.userId));
-  const allIssuedSlips = await listIssuedSalarySlipsForCompany(membership.companyId);
+  const allIssuedSlips = await listIssuedSalarySlipsForCompany(membership.companyId, minMonth ?? undefined);
   const issuedSlips = allIssuedSlips.filter((s) => accessibleStaffIds.has(s.staffUserId));
   const issuedByMonth = new Map<string, typeof issuedSlips>();
   for (const slip of issuedSlips) {
@@ -110,10 +120,22 @@ export default async function PayrollPage({
       <h1 className="mb-6 font-serif-jp text-2xl font-bold">給与計算</h1>
       <FinanceTabs active="payroll" invoicesEnabled={company.agencyEnabled} />
 
+      {minMonth ? (
+        <p className="mb-4 rounded-lg bg-accent/10 px-3 py-2 text-xs text-primary">
+          無料プランでは過去データの閲覧は直近3ヶ月までです。それ以前を見るにはプランのアップグレードが必要です。
+        </p>
+      ) : null}
+
       <form method="get" className="mb-6 flex items-end gap-3 rounded-xl border border-border bg-white/60 p-4">
         <label className="flex flex-col gap-1 text-xs">
           対象月
-          <input type="month" name="month" defaultValue={targetMonth} className="rounded-lg border border-border px-2 py-2 text-sm" />
+          <input
+            type="month"
+            name="month"
+            defaultValue={targetMonth}
+            min={minMonth ?? undefined}
+            className="rounded-lg border border-border px-2 py-2 text-sm"
+          />
         </label>
         <label className="flex flex-col gap-1 text-xs">
           スタッフ

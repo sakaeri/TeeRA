@@ -152,6 +152,7 @@ export function CalendarView({
   selectedRelationshipId,
   companyName,
   initialSelectedDate,
+  historyCutoff,
 }: {
   year: number;
   month: number;
@@ -171,6 +172,7 @@ export function CalendarView({
   selectedRelationshipId?: string;
   companyName: string;
   initialSelectedDate?: string;
+  historyCutoff?: { year: number; month: number } | null;
 }) {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<string | null>(initialSelectedDate ?? null);
@@ -262,6 +264,7 @@ export function CalendarView({
 
   const prev = month === 1 ? { y: year - 1, m: 12 } : { y: year, m: month - 1 };
   const next = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
+  const atHistoryCutoff = Boolean(historyCutoff && historyCutoff.year === year && historyCutoff.month === month);
 
   const selectedShifts = selectedDate ? shiftsByDate.get(selectedDate) ?? [] : [];
 
@@ -362,17 +365,30 @@ export function CalendarView({
         </div>
       </div>
 
+      {atHistoryCutoff ? (
+        <p className="mb-2 rounded-lg bg-accent/10 px-3 py-2 text-xs text-primary">
+          無料プランでは過去データの閲覧は直近3ヶ月までです。それ以前を見るにはプランのアップグレードが必要です。
+        </p>
+      ) : null}
       <div className="rounded-2xl bg-white p-4">
       <div className="mb-2 flex items-center justify-center gap-2">
-        <Link
-          href={`?y=${prev.y}&m=${prev.m}${filterQuery}`}
-          aria-label="前の月"
-          className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
-        >
-          <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
-            <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </Link>
+        {atHistoryCutoff ? (
+          <span aria-label="前の月（無料プランの閲覧範囲外）" className="p-2 text-border">
+            <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+              <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+        ) : (
+          <Link
+            href={`?y=${prev.y}&m=${prev.m}${filterQuery}`}
+            aria-label="前の月"
+            className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
+          >
+            <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+              <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </Link>
+        )}
         <Link
           href={`?y=${todayStr.slice(0, 4)}&m=${Number(todayStr.slice(5, 7))}${filterQuery}`}
           className="rounded-lg px-2 py-1 font-serif-jp text-lg font-bold hover:bg-background"
