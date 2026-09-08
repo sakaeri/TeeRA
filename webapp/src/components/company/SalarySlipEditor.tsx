@@ -28,7 +28,8 @@ export function SalarySlipEditor({
     deductions: Deduction[];
     paidLeaveDaysUsed: number;
     paidLeaveDailyRate: number;
-    paidLeaveGrantDays: number;
+    paidLeaveBalance: number;
+    paidLeaveNextGrantDate: string | null;
     totals: Totals;
     unresolved: UnresolvedShift[];
   };
@@ -358,29 +359,29 @@ function PaidLeaveSection({
   pending,
   startTransition,
 }: {
-  slip: { id: string; paidLeaveDaysUsed: number; paidLeaveDailyRate: number; paidLeaveGrantDays: number };
+  slip: {
+    id: string;
+    paidLeaveDaysUsed: number;
+    paidLeaveDailyRate: number;
+    paidLeaveBalance: number;
+    paidLeaveNextGrantDate: string | null;
+  };
   isEditable: boolean;
   pending: boolean;
   startTransition: (fn: () => void | Promise<void>) => void;
 }) {
   const [daysUsed, setDaysUsed] = useState(slip.paidLeaveDaysUsed);
   const [dailyRate, setDailyRate] = useState(slip.paidLeaveDailyRate);
-  const [grantDays, setGrantDays] = useState(slip.paidLeaveGrantDays);
 
   return (
     <section className="rounded-2xl border border-border bg-white/60 p-6">
       <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">有給休暇</h2>
+      <p className="mb-3 text-xs text-muted">
+        残日数: {slip.paidLeaveBalance}日
+        {slip.paidLeaveNextGrantDate ? `／次回付与予定日: ${slip.paidLeaveNextGrantDate}` : ""}
+        （付与・繰越はスタッフ詳細から管理します）
+      </p>
       <div className="flex items-end gap-3">
-        <label className="flex flex-col gap-1 text-xs">
-          年間付与日数
-          <input
-            type="number"
-            value={grantDays}
-            disabled={!isEditable}
-            onChange={(e) => setGrantDays(Number(e.target.value))}
-            className="w-20 rounded-lg border border-border px-2 py-1.5 text-sm"
-          />
-        </label>
         <label className="flex flex-col gap-1 text-xs">
           使用日数
           <input
@@ -410,7 +411,6 @@ function PaidLeaveSection({
                 updatePaidLeaveAction(slip.id, {
                   paidLeaveDaysUsed: daysUsed,
                   paidLeaveDailyRate: dailyRate,
-                  paidLeaveGrantDays: grantDays,
                 }),
               )
             }

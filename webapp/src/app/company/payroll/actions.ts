@@ -71,10 +71,11 @@ export async function updateDeductionsAction(salarySlipId: string, deductions: D
 
 export async function updatePaidLeaveAction(
   salarySlipId: string,
-  changes: { paidLeaveDaysUsed?: number; paidLeaveDailyRate?: number; paidLeaveGrantDays?: number },
+  changes: { paidLeaveDaysUsed?: number; paidLeaveDailyRate?: number },
 ) {
+  const { userId } = await requireCompanyAdminOrEditor();
   await assertAccess(salarySlipId);
-  await updatePaidLeave(salarySlipId, changes);
+  await updatePaidLeave(salarySlipId, changes, userId);
   revalidatePath("/company/payroll");
 }
 

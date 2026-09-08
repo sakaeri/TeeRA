@@ -43,7 +43,8 @@ export default async function PayrollPage({
     deductions: { id: string; label: string; amount: number }[];
     paidLeaveDaysUsed: number;
     paidLeaveDailyRate: number;
-    paidLeaveGrantDays: number;
+    paidLeaveBalance: number;
+    paidLeaveNextGrantDate: string | null;
     totals: ReturnType<typeof getTotals>;
     issues: { id: string; issuedAt: string; chargedTee: boolean }[];
     unresolved: { shiftId: string; workReportId: string; date: string; taskName: string; source: "workReport" | "shift" }[];
@@ -64,6 +65,10 @@ export default async function PayrollPage({
       where: { salarySlipId: slip.id },
       orderBy: { issuedAt: "desc" },
     });
+    const staffMembership = await prisma.companyMembership.findFirstOrThrow({
+      where: { companyId: membership.companyId, userId: staffUserId },
+      select: { paidLeaveBalance: true, nextPaidLeaveGrantDate: true },
+    });
     slipData = {
       id: slip.id,
       status: slip.status,
@@ -78,7 +83,10 @@ export default async function PayrollPage({
       deductions: slip.deductions as { id: string; label: string; amount: number }[],
       paidLeaveDaysUsed: slip.paidLeaveDaysUsed,
       paidLeaveDailyRate: slip.paidLeaveDailyRate,
-      paidLeaveGrantDays: slip.paidLeaveGrantDays,
+      paidLeaveBalance: staffMembership.paidLeaveBalance,
+      paidLeaveNextGrantDate: staffMembership.nextPaidLeaveGrantDate
+        ? staffMembership.nextPaidLeaveGrantDate.toISOString().slice(0, 10)
+        : null,
       totals,
       issues: issues.map((i) => ({ id: i.id, issuedAt: i.issuedAt.toISOString(), chargedTee: i.chargedTee })),
       unresolved: slip.unresolved,

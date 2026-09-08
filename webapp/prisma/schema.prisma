@@ -54,6 +54,7 @@ model User {
   staffTaskRateVersionsCreated        StaffTaskRateVersion[]
   staffNotesAuthored                  StaffNote[]
   relationshipNotesAuthored           RelationshipNote[]
+  paidLeaveEventsCreated              PaidLeaveEvent[]
 
   @@index([email])
 }
@@ -107,7 +108,7 @@ model Team {
   name      String
   createdAt DateTime @default(now())
 
-  company            Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company            Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   memberships        TeamMembership[]
   shifts             Shift[]
   publicRecruitments PublicRecruitment[]
@@ -125,10 +126,10 @@ model Team {
 // も引き続き選べる。単発でチーム外の依頼主向けにシフトを作ることもある
 // ため）。
 model TeamClientRelationship {
-  id                     String   @id @default(cuid())
-  teamId                 String
-  companyRelationshipId  String
-  createdAt              DateTime @default(now())
+  id                    String   @id @default(cuid())
+  teamId                String
+  companyRelationshipId String
+  createdAt             DateTime @default(now())
 
   team                Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
   companyRelationship CompanyRelationship @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
@@ -167,13 +168,47 @@ model CompanyMembership {
   accountNumber     String?
   accountHolderName String?
 
+  // 有給休暇の繰越管理。日数は法定表からの自動計算はせず（法律要件の
+  // 判定はアプリでは行わない方針）、管理者が付与のたびに手入力する。
+  // ここで残日数・次回付与予定日を記録し、月をまたいでも繰り越されるよう
+  // にする — 従来はSalarySlipごとの独立フィールドで、月が変わるとリセット
+  // されていた。
+  hireDate               DateTime? @db.Date
+  paidLeaveBalance       Int       @default(0)
+  nextPaidLeaveGrantDate DateTime? @db.Date
+
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  staffNotes StaffNote[]
+  staffNotes      StaffNote[]
+  paidLeaveEvents PaidLeaveEvent[]
 
   @@unique([userId, companyId])
   @@index([companyId, role])
+}
+
+enum PaidLeaveEventType {
+  GRANT // 付与（残日数が増える）
+  USE // 給料明細での使用日数入力による消化（残日数が減る）
+  ADJUST // 手動の残日数訂正（入力ミスの是正など、増減どちらもあり得る）
+}
+
+// 有給休暇の付与・消化履歴。CompanyMembership.paidLeaveBalanceは常にこの
+// テーブルのdaysの合計と一致する（監査用の追記式ログ、更新・削除はしない）。
+model PaidLeaveEvent {
+  id              String             @id @default(cuid())
+  membershipId    String
+  type            PaidLeaveEventType
+  days            Int // GRANT/ADJUST(+)は正、USE/ADJUST(-)は負
+  balanceAfter    Int
+  note            String?
+  createdByUserId String
+  createdAt       DateTime           @default(now())
+
+  membership CompanyMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdBy  User              @relation(fields: [createdByUserId], references: [id])
+
+  @@index([membershipId, createdAt])
 }
 
 // 情報メモ (roster staff-detail panel) — いつ・誰が書いたか分かるよう、単一
@@ -259,12 +294,12 @@ model CompanyRelationship {
 // 自社のメモしか扱えないようにする（双方向可視化とは別軸。共有していい
 // のは配属状況・稼働実績だけ、という決定）。
 model RelationshipNote {
-  id                     String   @id @default(cuid())
-  companyRelationshipId  String
-  companyId              String
-  content                String
-  authorUserId           String
-  createdAt              DateTime @default(now())
+  id                    String   @id @default(cuid())
+  companyRelationshipId String
+  companyId             String
+  content               String
+  authorUserId          String
+  createdAt             DateTime @default(now())
 
   companyRelationship CompanyRelationship @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
   company             Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)

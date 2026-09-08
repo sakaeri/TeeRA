@@ -6,6 +6,7 @@ import { createInvite } from "@/lib/domain/invites";
 import { todayJst, todayJstParts } from "@/lib/date";
 import { resolveRateVersion, resolveContractWageVersion } from "@/lib/domain/contracts";
 import { getTotals } from "@/lib/domain/payroll";
+import { getPaidLeaveInfo } from "@/lib/domain/paidLeave";
 import type { TeamRole } from "@/generated/prisma/enums";
 
 // role=STAFFの人に加え、兼務でcanWorkShifts=trueの管理者/編集者も含む —
@@ -305,6 +306,8 @@ export async function getStaffMonthDetail(params: {
   });
   const salarySlipNet = salarySlip ? getTotals(salarySlip).net : null;
 
+  const paidLeave = await getPaidLeaveInfo(membership.id);
+
   return {
     membershipId: membership.id,
     name: membership.user.name,
@@ -320,6 +323,20 @@ export async function getStaffMonthDetail(params: {
     daysWorked,
     salarySlipNet,
     workedClientIds,
+    paidLeave: {
+      hireDate: paidLeave.hireDate?.toISOString().slice(0, 10) ?? null,
+      balance: paidLeave.balance,
+      nextGrantDate: paidLeave.nextGrantDate?.toISOString().slice(0, 10) ?? null,
+      events: paidLeave.events.map((e) => ({
+        id: e.id,
+        type: e.type,
+        days: e.days,
+        balanceAfter: e.balanceAfter,
+        note: e.note,
+        createdByName: e.createdBy.name,
+        createdAt: e.createdAt.toISOString().slice(0, 10),
+      })),
+    },
     idDocumentFrontUrl: membership.idDocumentFrontUrl,
     idDocumentBackUrl: membership.idDocumentBackUrl,
     bankInfo: {

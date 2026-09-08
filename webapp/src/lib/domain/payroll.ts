@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
 import { resolveRateVersion, resolveContractWageVersion, pickStaffTaskRate } from "@/lib/domain/contracts";
+import { recordPaidLeaveUsageDelta } from "@/lib/domain/paidLeave";
 
 const FIXED_DEDUCTION_LABELS = ["社会保険料", "厚生年金", "雇用保険料", "所得税", "市県民税"];
 
@@ -275,11 +276,31 @@ export async function updateDeductions(salarySlipId: string, deductions: Deducti
   return prisma.salarySlip.update({ where: { id: salarySlipId }, data: { deductions } });
 }
 
+// 使用日数(paidLeaveDaysUsed)を変更した分は、スタッフの有給休暇残日数
+// （CompanyMembership.paidLeaveBalance）からも増減させる — 月をまたいでも
+// 繰り越されるようにするため（従来はSalarySlipごとの独立フィールドで、
+// 月が変わるとリセットされていた）。年間付与日数（旧paidLeaveGrantDays）は
+// スタッフ詳細側の付与履歴で管理するようになったため、ここでは扱わない。
 export async function updatePaidLeave(
   salarySlipId: string,
-  changes: { paidLeaveDaysUsed?: number; paidLeaveDailyRate?: number; paidLeaveGrantDays?: number },
+  changes: { paidLeaveDaysUsed?: number; paidLeaveDailyRate?: number },
+  createdByUserId: string,
 ) {
-  return prisma.salarySlip.update({ where: { id: salarySlipId }, data: changes });
+  return prisma.$transaction(async (tx) => {
+    const slip = await tx.salarySlip.findUniqueOrThrow({ where: { id: salarySlipId } });
+    if (changes.paidLeaveDaysUsed !== undefined && changes.paidLeaveDaysUsed !== slip.paidLeaveDaysUsed) {
+      const membership = await tx.companyMembership.findFirstOrThrow({
+        where: { companyId: slip.companyId, userId: slip.staffUserId },
+      });
+      await recordPaidLeaveUsageDelta(tx, {
+        membershipId: membership.id,
+        deltaDays: changes.paidLeaveDaysUsed - slip.paidLeaveDaysUsed,
+        createdByUserId,
+        note: `${slip.targetMonth}分の使用日数を${slip.paidLeaveDaysUsed}日→${changes.paidLeaveDaysUsed}日に変更`,
+      });
+    }
+    return tx.salarySlip.update({ where: { id: salarySlipId }, data: changes });
+  });
 }
 
 function computeTotals(slip: { lines: { amount: number }[]; deductions: unknown; paidLeaveDaysUsed: number; paidLeaveDailyRate: number }) {

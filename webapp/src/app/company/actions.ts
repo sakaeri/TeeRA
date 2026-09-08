@@ -16,6 +16,7 @@ import {
   updateMembershipIdDocument,
   updateMembershipBankInfo,
 } from "@/lib/domain/roster";
+import { setHireDate, grantPaidLeave, adjustPaidLeaveBalance } from "@/lib/domain/paidLeave";
 import {
   activateAgencyModuleWithProxyClient,
   activateDispatchModuleWithProxyAgency,
@@ -484,6 +485,41 @@ export async function updateStaffBankInfoAction(
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
   await assertMembershipOwnedByCompany(membershipId, membership.companyId);
   await updateMembershipBankInfo({ membershipId, ...input });
+  revalidatePath("/company/roster");
+}
+
+export async function setStaffHireDateAction(membershipId: string, hireDate: string | null) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertMembershipOwnedByCompany(membershipId, membership.companyId);
+  await setHireDate(membershipId, hireDate ? new Date(`${hireDate}T00:00:00.000Z`) : null);
+  revalidatePath("/company/roster");
+}
+
+export async function grantStaffPaidLeaveAction(
+  membershipId: string,
+  days: number,
+  nextGrantDate: string | null,
+  note?: string,
+) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertMembershipOwnedByCompany(membershipId, membership.companyId);
+  await grantPaidLeave({
+    membershipId,
+    days,
+    nextGrantDate: nextGrantDate ? new Date(`${nextGrantDate}T00:00:00.000Z`) : null,
+    createdByUserId: userId,
+    note,
+  });
+  revalidatePath("/company/roster");
+}
+
+export async function adjustStaffPaidLeaveBalanceAction(membershipId: string, delta: number, note?: string) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertMembershipOwnedByCompany(membershipId, membership.companyId);
+  await adjustPaidLeaveBalance({ membershipId, delta, createdByUserId: userId, note });
   revalidatePath("/company/roster");
 }
 

@@ -146,21 +146,17 @@ try {
     await admin.locator("section", { hasText: "勤務内訳" }).getByRole("button", { name: "＋追加", exact: true }).isVisible(),
   );
 
-  // 年間付与日数がその場で編集・保存できる（今までは表示だけで編集欄が無かった）
-  const grantDaysInput = admin.locator("section", { hasText: "有給休暇" }).locator("input[type=number]").first();
-  await grantDaysInput.fill("15");
-  await admin
-    .locator("section", { hasText: "有給休暇" })
-    .getByRole("button", { name: "保存" })
-    .click();
+  // 有給休暇: 年間付与日数の編集欄は廃止され、残日数・次回付与予定日の
+  // 読み取り専用表示（スタッフ詳細で管理）に変わった
+  const paidLeaveSection = admin.locator("section", { hasText: "有給休暇" });
+  log("有給休暇セクションに残日数の表示がある（編集欄ではない）", /残日数: \d+日/.test(await paidLeaveSection.textContent()));
+  const paidLeaveDaysUsedInput = paidLeaveSection.locator("input[type=number]").first();
+  await paidLeaveDaysUsedInput.fill("1");
+  await paidLeaveSection.getByRole("button", { name: "保存" }).click();
   await admin.waitForTimeout(500);
   await admin.reload();
-  const grantDaysAfterReload = await admin
-    .locator("section", { hasText: "有給休暇" })
-    .locator("input[type=number]")
-    .first()
-    .inputValue();
-  log("年間付与日数の変更が保存される", grantDaysAfterReload === "15");
+  const daysUsedAfterReload = await paidLeaveSection.locator("input[type=number]").first().inputValue();
+  log("使用日数の変更が保存される", daysUsedAfterReload === "1");
 
   // スタッフ詳細の「計算する」ボタンは、既に給与明細（下書きでも）があれば
   // 金額表示に変わる（今までは常に「計算する」のままで金額が出なかった）
