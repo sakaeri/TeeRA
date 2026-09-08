@@ -133,6 +133,20 @@ try {
     body.includes("請求スタッフ") && hoursInputValue === "6",
   );
 
+  // 手動で項目を追加できる（今までaddCustomLineActionはUIから呼べなかった）。
+  // 相殺はマイナス金額の明細行として表現する。
+  const subtotalBefore = Number((await admin.getByText(/小計 [\d,]+円/).first().textContent()).match(/[\d,]+/)[0].replace(/,/g, ""));
+  await admin.locator('input[placeholder="スタッフ名"]').fill("相殺");
+  await admin.locator('input[placeholder*="相殺の場合"]').fill("端数調整");
+  await admin.locator('input[placeholder="時間"]').fill("1");
+  await admin.locator('input[placeholder="単価"]').fill("-1000");
+  await admin.getByRole("button", { name: "＋追加" }).click();
+  await admin.waitForTimeout(500);
+  body = await admin.textContent("body");
+  log("手動で明細行を追加できる（請求書側にaddCustomLineActionのUIが無かった）", body.includes("相殺") && body.includes("端数調整"));
+  const subtotalAfter = Number((await admin.getByText(/小計 [\d,]+円/).first().textContent()).match(/[\d,]+/)[0].replace(/,/g, ""));
+  log("マイナス金額の明細行が相殺として合計に反映される", subtotalAfter === subtotalBefore - 1000);
+
   // set due date
   await admin.fill('input[type="date"]', "2026-09-30");
   await admin.getByRole("button", { name: "保存" }).first().click();
@@ -142,13 +156,13 @@ try {
   await dueDateSaveBtn.click();
   await admin.waitForTimeout(500);
 
-  await admin.getByRole("button", { name: "確定する（課金なし）" }).click();
+  await admin.getByRole("button", { name: "確定する", exact: true }).click();
   await admin.waitForTimeout(600);
   body = await admin.textContent("body");
   log("invoice confirmed", body.includes("確定済み"));
 
-  await admin.getByRole("button", { name: "発行する（1 Tee）" }).click();
   await admin.getByRole("button", { name: "発行する", exact: true }).click();
+  await admin.getByRole("button", { name: "発行する", exact: true }).last().click();
   await admin.waitForTimeout(1000);
 
   const balanceAfterFirstIssue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
@@ -159,14 +173,30 @@ try {
   );
   log("invoicedShiftIds locked at issuance", invoicedShiftIds.includes(shiftId));
 
+  // 依頼主詳細の「作成する」ボタンも、既に請求書があれば金額表示に変わる
+  // （今までは常に「作成する」のままで金額が出なかった）
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.click("text=依頼主一覧");
+  await admin.waitForTimeout(200);
+  await admin.click("text=GREEN TABLE 渋谷店");
+  await admin.waitForTimeout(400);
+  const invoiceButtonLabel = await admin
+    .locator("div.fixed.inset-0.z-30")
+    .last()
+    .getByRole("button", { name: /円$/ })
+    .textContent();
+  log("依頼主詳細の「作成する」が金額表示に変わる", Boolean(invoiceButtonLabel?.endsWith("円")));
+  await admin.click("text=← 閉じる");
+  await admin.waitForTimeout(200);
+
   // reopen for edit and re-issue -> should charge AGAIN (unlike salary slip)
-  await admin.reload();
+  await admin.goto(`http://localhost:3000/company/invoices?month=${thisMonth}&client=${companyRelationshipId}`);
   await admin.getByRole("button", { name: "内容を修正する" }).click();
   await admin.waitForTimeout(600);
-  await admin.getByRole("button", { name: "確定する（課金なし）" }).click();
+  await admin.getByRole("button", { name: "確定する", exact: true }).click();
   await admin.waitForTimeout(600);
-  await admin.getByRole("button", { name: "発行する（1 Tee）" }).click();
   await admin.getByRole("button", { name: "発行する", exact: true }).click();
+  await admin.getByRole("button", { name: "発行する", exact: true }).last().click();
   await admin.waitForTimeout(1000);
 
   const balanceAfterSecondIssue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));

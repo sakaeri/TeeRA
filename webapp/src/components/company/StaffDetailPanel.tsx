@@ -50,6 +50,7 @@ type StaffMonthDetail = {
   teams: { teamId: string; teamName: string; role: "TEAM_MANAGER" | "TEAM_LEADER" | "TEAM_MEMBER" }[];
   monthlyHours: number;
   daysWorked: number;
+  salarySlipNet: number | null;
   workedClientIds: string[];
   idDocumentFrontUrl: string | null;
   idDocumentBackUrl: string | null;
@@ -521,7 +522,7 @@ export function StaffDetailPanel({
                       onClick={() => router.push(`/company/payroll?month=${year}-${String(month).padStart(2, "0")}&staff=${userId}`)}
                       className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
                     >
-                      計算する
+                      {data.salarySlipNet === null ? "計算する" : `${data.salarySlipNet}円`}
                     </button>
                   </div>
                 </div>

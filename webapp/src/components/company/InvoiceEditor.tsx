@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import {
+  addCustomLineAction,
   updateLineAction,
   deleteLineAction,
   setDueDateAction,
@@ -53,6 +54,11 @@ export function InvoiceEditor({
   const [note, setNoteState] = useState(invoice.note);
   const [regNumber, setRegNumber] = useState(invoice.invoiceRegistrationNumber);
   const [showIssueConfirm, setShowIssueConfirm] = useState(false);
+  const [newLineStaffName, setNewLineStaffName] = useState("");
+  const [newLineDesc, setNewLineDesc] = useState("");
+  const [newLineHours, setNewLineHours] = useState("");
+  const [newLineRate, setNewLineRate] = useState("");
+  const [newLineTaxRatePercent, setNewLineTaxRatePercent] = useState("10");
 
   const isEditable = invoice.status === "DRAFT";
 
@@ -159,6 +165,69 @@ export function InvoiceEditor({
             ) : null}
           </tbody>
         </table>
+
+        {isEditable ? (
+          <div className="mt-3 flex flex-wrap items-end gap-2">
+            <input
+              type="text"
+              placeholder="スタッフ名"
+              value={newLineStaffName}
+              onChange={(e) => setNewLineStaffName(e.target.value)}
+              className="w-28 rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="内容（相殺の場合はマイナス金額で）"
+              value={newLineDesc}
+              onChange={(e) => setNewLineDesc(e.target.value)}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+            <input
+              type="number"
+              placeholder="時間"
+              value={newLineHours}
+              onChange={(e) => setNewLineHours(e.target.value)}
+              className="w-20 rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+            <input
+              type="number"
+              placeholder="単価"
+              value={newLineRate}
+              onChange={(e) => setNewLineRate(e.target.value)}
+              className="w-24 rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+            <select
+              value={newLineTaxRatePercent}
+              onChange={(e) => setNewLineTaxRatePercent(e.target.value)}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            >
+              <option value="10">10%</option>
+              <option value="8">8%</option>
+            </select>
+            <button
+              type="button"
+              disabled={pending || !newLineStaffName || !newLineDesc || !newLineHours || !newLineRate}
+              onClick={() =>
+                startTransition(async () => {
+                  await addCustomLineAction(invoice.id, {
+                    staffName: newLineStaffName,
+                    description: newLineDesc,
+                    hours: Number(newLineHours),
+                    rate: Number(newLineRate),
+                    taxRatePercent: Number(newLineTaxRatePercent),
+                  });
+                  setNewLineStaffName("");
+                  setNewLineDesc("");
+                  setNewLineHours("");
+                  setNewLineRate("");
+                })
+              }
+              className="rounded-lg border border-primary px-3 py-1.5 text-sm text-primary disabled:opacity-60"
+            >
+              ＋追加
+            </button>
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-2xl border border-border bg-white/60 p-6">
@@ -263,7 +332,7 @@ export function InvoiceEditor({
             onClick={() => startTransition(() => confirmInvoiceAction(invoice.id))}
             className="mt-4 rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
           >
-            確定する（課金なし）
+            確定する
           </button>
         ) : invoice.status === "CONFIRMED" ? (
           <button
@@ -272,7 +341,7 @@ export function InvoiceEditor({
             onClick={() => setShowIssueConfirm(true)}
             className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
-            発行する（1 Tee）
+            発行する
           </button>
         ) : invoice.status === "ISSUED" ? (
           <button

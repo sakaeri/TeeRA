@@ -49,6 +49,7 @@ type ClientMonthDetail = {
   relationshipNotes: RelationshipNote[];
   workedHours: number;
   unapprovedCount: number;
+  invoiceTotal: number | null;
   placementRates: PlacementRate[];
   days: {
     shiftId: string;
@@ -379,7 +380,7 @@ export function ClientDetailPanel({
                         }
                         className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
                       >
-                        作成する
+                        {data.invoiceTotal === null ? "作成する" : `${data.invoiceTotal}円`}
                       </button>
                     </div>
                   ) : null}

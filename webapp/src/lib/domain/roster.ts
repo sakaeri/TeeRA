@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { createInvite } from "@/lib/domain/invites";
 import { todayJst, todayJstParts } from "@/lib/date";
 import { resolveRateVersion, resolveContractWageVersion } from "@/lib/domain/contracts";
+import { getTotals } from "@/lib/domain/payroll";
 import type { TeamRole } from "@/generated/prisma/enums";
 
 // role=STAFFの人に加え、兼務でcanWorkShifts=trueの管理者/編集者も含む —
@@ -294,6 +295,16 @@ export async function getStaffMonthDetail(params: {
 
   const staffNotes = await listStaffNotes(membership.id);
 
+  // スタッフ詳細の「計算する」ボタン用 — その月の給与明細が既に作成されて
+  // いれば（下書きでも）差引支給額を表示し、まだ無ければnull（未計算）の
+  // ままボタンのラベルで案内する。
+  const targetMonth = `${params.year}-${String(params.month).padStart(2, "0")}`;
+  const salarySlip = await prisma.salarySlip.findUnique({
+    where: { companyId_staffUserId_targetMonth: { companyId: params.companyId, staffUserId: params.userId, targetMonth } },
+    include: { lines: true },
+  });
+  const salarySlipNet = salarySlip ? getTotals(salarySlip).net : null;
+
   return {
     membershipId: membership.id,
     name: membership.user.name,
@@ -307,6 +318,7 @@ export async function getStaffMonthDetail(params: {
     teams: teamMemberships.map((tm) => ({ teamId: tm.teamId, teamName: tm.team.name, role: tm.role })),
     monthlyHours: Math.round(hours * 10) / 10,
     daysWorked,
+    salarySlipNet,
     workedClientIds,
     idDocumentFrontUrl: membership.idDocumentFrontUrl,
     idDocumentBackUrl: membership.idDocumentBackUrl,

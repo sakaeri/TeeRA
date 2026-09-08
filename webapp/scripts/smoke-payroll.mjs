@@ -140,8 +140,45 @@ try {
   body = await admin.textContent("body");
   log("net pay reflects deduction", /差引支給額 [\d,]+円/.test(body));
 
-  await admin.getByRole("button", { name: "発行する（1 Tee）" }).click();
+  // 業務内容の追加ボタンは「＋別の業務を追加」ではなく「＋追加」に短縮された
+  log(
+    "業務内容の追加ボタンが「＋追加」に短縮されている",
+    await admin.locator("section", { hasText: "勤務内訳" }).getByRole("button", { name: "＋追加", exact: true }).isVisible(),
+  );
+
+  // 年間付与日数がその場で編集・保存できる（今までは表示だけで編集欄が無かった）
+  const grantDaysInput = admin.locator("section", { hasText: "有給休暇" }).locator("input[type=number]").first();
+  await grantDaysInput.fill("15");
+  await admin
+    .locator("section", { hasText: "有給休暇" })
+    .getByRole("button", { name: "保存" })
+    .click();
+  await admin.waitForTimeout(500);
+  await admin.reload();
+  const grantDaysAfterReload = await admin
+    .locator("section", { hasText: "有給休暇" })
+    .locator("input[type=number]")
+    .first()
+    .inputValue();
+  log("年間付与日数の変更が保存される", grantDaysAfterReload === "15");
+
+  // スタッフ詳細の「計算する」ボタンは、既に給与明細（下書きでも）があれば
+  // 金額表示に変わる（今までは常に「計算する」のままで金額が出なかった）
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.click("text=給与スタッフ");
+  await admin.waitForTimeout(400);
+  const payrollButtonLabel = await admin
+    .locator("div.fixed.inset-0.z-30")
+    .last()
+    .getByRole("button", { name: /円$/ })
+    .textContent();
+  log("スタッフ詳細の「計算する」が金額表示に変わる", Boolean(payrollButtonLabel?.endsWith("円")));
+  await admin.click("text=← 閉じる");
+  await admin.waitForTimeout(200);
+
+  await admin.goto(`http://localhost:3000/company/payroll?month=${thisMonth}&staff=${staffUserId}`);
   await admin.getByRole("button", { name: "発行する", exact: true }).click();
+  await admin.getByRole("button", { name: "発行する", exact: true }).last().click();
   await admin.waitForTimeout(1000);
 
   const balanceAfterIssue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
@@ -152,7 +189,7 @@ try {
 
   // re-issue (free)
   await admin.getByRole("button", { name: "再発行する（同月内は無料）" }).click();
-  await admin.getByRole("button", { name: "発行する", exact: true }).click();
+  await admin.getByRole("button", { name: "発行する", exact: true }).last().click();
   await admin.waitForTimeout(1000);
 
   const balanceAfterReissue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));

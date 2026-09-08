@@ -146,7 +146,7 @@ export function SalarySlipEditor({
               }
               className="rounded-lg border border-primary px-3 py-1.5 text-sm text-primary disabled:opacity-60"
             >
-              ＋別の業務を追加
+              ＋追加
             </button>
           </div>
         ) : null}
@@ -169,7 +169,7 @@ export function SalarySlipEditor({
               onClick={() => startTransition(() => finalizeSalarySlipAction(slip.id))}
               className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
             >
-              確定する（課金なし）
+              確定する
             </button>
             <button
               type="button"
@@ -177,7 +177,7 @@ export function SalarySlipEditor({
               onClick={() => setShowIssueConfirm(true)}
               className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
-              発行する（1 Tee）
+              発行する
             </button>
           </div>
         ) : slip.status === "FINALIZED" ? (
@@ -187,7 +187,7 @@ export function SalarySlipEditor({
             onClick={() => setShowIssueConfirm(true)}
             className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
-            発行する（1 Tee）
+            発行する
           </button>
         ) : (
           <button
@@ -344,12 +344,22 @@ function PaidLeaveSection({
 }) {
   const [daysUsed, setDaysUsed] = useState(slip.paidLeaveDaysUsed);
   const [dailyRate, setDailyRate] = useState(slip.paidLeaveDailyRate);
+  const [grantDays, setGrantDays] = useState(slip.paidLeaveGrantDays);
 
   return (
     <section className="rounded-2xl border border-border bg-white/60 p-6">
       <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">有給休暇</h2>
-      <p className="mb-3 text-xs text-muted">年間付与日数: {slip.paidLeaveGrantDays}日（デフォルト。変更する場合のみ編集）</p>
       <div className="flex items-end gap-3">
+        <label className="flex flex-col gap-1 text-xs">
+          年間付与日数
+          <input
+            type="number"
+            value={grantDays}
+            disabled={!isEditable}
+            onChange={(e) => setGrantDays(Number(e.target.value))}
+            className="w-20 rounded-lg border border-border px-2 py-1.5 text-sm"
+          />
+        </label>
         <label className="flex flex-col gap-1 text-xs">
           使用日数
           <input
@@ -376,7 +386,11 @@ function PaidLeaveSection({
             disabled={pending}
             onClick={() =>
               startTransition(() =>
-                updatePaidLeaveAction(slip.id, { paidLeaveDaysUsed: daysUsed, paidLeaveDailyRate: dailyRate }),
+                updatePaidLeaveAction(slip.id, {
+                  paidLeaveDaysUsed: daysUsed,
+                  paidLeaveDailyRate: dailyRate,
+                  paidLeaveGrantDays: grantDays,
+                }),
               )
             }
             className="rounded-lg border border-primary px-3 py-1.5 text-sm text-primary disabled:opacity-60"

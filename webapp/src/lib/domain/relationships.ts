@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { resolveRateVersion } from "@/lib/domain/contracts";
+import { computeInvoiceTotals } from "@/lib/domain/invoicing";
 
 // 依頼主一覧 (from this company's perspective as the sending/agency side):
 // companies this company sends staff to. ownerCompanyIdでは絞らない —
@@ -276,6 +277,24 @@ export async function getClientMonthDetail(params: {
     include: { team: true },
   });
 
+  // 依頼主詳細の「作成する」ボタン用 — その月の請求書が既に作成されて
+  // いれば（下書きでも）合計金額を表示する。請求書は常に派遣元
+  // （agencyCompanyId）が発行するので、そちら基準で探す。
+  const targetPeriodLabel = `${params.year}-${String(params.month).padStart(2, "0")}`;
+  const invoice = shiftOwnerCompanyId
+    ? await prisma.invoice.findFirst({
+        where: {
+          issuingCompanyId: shiftOwnerCompanyId,
+          companyRelationshipId: params.companyRelationshipId,
+          periodLabel: targetPeriodLabel,
+        },
+        include: { lines: true },
+      })
+    : null;
+  const invoiceTotal = invoice
+    ? computeInvoiceTotals({ lines: invoice.lines, registered: Boolean(invoice.invoiceRegistrationNumberSnapshot) }).total
+    : null;
+
   return {
     relationshipId: relationship.id,
     name: counterpartCompany?.name ?? relationship.proxyName ?? "",
@@ -301,6 +320,7 @@ export async function getClientMonthDetail(params: {
     })),
     workedHours,
     unapprovedCount,
+    invoiceTotal,
     placementRates: placementRates.map((r) => {
       const current = resolveRateVersion(r.versions, today);
       return {
