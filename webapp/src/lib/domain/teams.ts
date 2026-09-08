@@ -1,6 +1,12 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { TeamRole } from "@/generated/prisma/enums";
+import { postLedgerEntry } from "@/lib/domain/wallet";
+
+// 2チーム目以降の作成に必要なTee（プラン不問 — 無料プランでもTeeさえあれば
+// 購入可能。チーム削除機能が無いためTeam.count()がそのまま「購入済み数」
+// の判定に使える）。
+export const TEAM_UNLOCK_TEE_COST = 10;
 
 export async function listTeams(companyId: string) {
   return prisma.team.findMany({
@@ -32,12 +38,23 @@ export async function createTeam(params: {
   companyId: string;
   name: string;
   assignment?: { userId: string; role: "TEAM_MANAGER" | "TEAM_LEADER" };
+  createdByUserId?: string;
 }) {
   return prisma.$transaction(async (tx) => {
+    const existingTeamCount = await tx.team.count({ where: { companyId: params.companyId } });
     const team = await tx.team.create({ data: { companyId: params.companyId, name: params.name } });
     if (params.assignment) {
       await tx.teamMembership.create({
         data: { teamId: team.id, userId: params.assignment.userId, role: params.assignment.role },
+      });
+    }
+    if (existingTeamCount > 0) {
+      await postLedgerEntry(tx, {
+        companyId: params.companyId,
+        type: "CONSUME_TEAM_UNLOCK",
+        amount: -TEAM_UNLOCK_TEE_COST,
+        teamId: team.id,
+        createdByUserId: params.createdByUserId,
       });
     }
     return team;

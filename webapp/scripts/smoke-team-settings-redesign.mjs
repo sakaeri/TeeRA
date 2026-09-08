@@ -34,6 +34,12 @@ try {
   await admin.waitForURL("http://localhost:3000/company");
   const companyId = psql(`select id from "Company" where name='編集導線確認株式会社' order by "createdAt" desc limit 1;`);
 
+  // 2チーム目以降は10Tee消費するため、テスト用に残高を付与しておく
+  psql(
+    `update "Company" set "teeBalance" = 100 where id = '${companyId}';` +
+      `insert into "TeeLedgerEntry" (id, "companyId", type, amount, "balanceAfter", "createdAt") values (gen_random_uuid()::text, '${companyId}', 'ADJUSTMENT', 100, 100, now());`,
+  );
+
   // 2チーム作成（「＋チームを作成」ポップアップ経由、担当者は割り当てない）
   await admin.goto("http://localhost:3000/company/settings?tab=teams");
   for (const name of ["Aチーム", "Bチーム"]) {

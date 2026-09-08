@@ -33,6 +33,10 @@ type TeamMember = { userId: string; name: string; email: string; role: string };
 type Team = { id: string; name: string; members: TeamMember[] };
 type StaffOption = { userId: string; name: string };
 
+// 2チーム目以降の作成コスト。src/lib/domain/teams.tsのTEAM_UNLOCK_TEE_COSTと
+// 同値（"server-only"ファイルのためクライアント側では値のみ複製）。
+const TEAM_UNLOCK_TEE_COST = 10;
+
 type ContractTemplate = {
   id: string;
   title: string;
@@ -94,6 +98,7 @@ export function SettingsView({
   admins,
   teams,
   staff,
+  teeBalance,
   contractTemplates,
   contractClients,
   workReports,
@@ -106,6 +111,7 @@ export function SettingsView({
   admins: Admin[];
   teams: Team[];
   staff: StaffOption[];
+  teeBalance: number;
   contractTemplates: ContractTemplate[];
   contractClients: ContractClientOption[];
   workReports: WorkReportRow[];
@@ -140,7 +146,7 @@ export function SettingsView({
             phoneNumber={phoneNumber}
           />
           <AdminsSection admins={admins} />
-          <TeamsSection teams={teams} staff={staff} />
+          <TeamsSection teams={teams} staff={staff} teeBalance={teeBalance} />
         </div>
       ) : null}
 
@@ -413,9 +419,11 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
 function TeamsSection({
   teams,
   staff,
+  teeBalance,
 }: {
   teams: Team[];
   staff: StaffOption[];
+  teeBalance: number;
 }) {
   const [pending, startTransition] = useTransition();
   const [inviteFormTeamId, setInviteFormTeamId] = useState<string | null>(null);
@@ -424,21 +432,31 @@ function TeamsSection({
     null,
   );
 
+  const nextTeamRequiresTee = teams.length > 0;
+  const canAffordNextTeam = !nextTeamRequiresTee || teeBalance >= TEAM_UNLOCK_TEE_COST;
+
   return (
     <SectionCard
       title="チーム管理"
       headerAction={
         <button
           type="button"
+          disabled={!canAffordNextTeam}
           onClick={() => setShowCreateModal(true)}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
           ＋チームを作成
         </button>
       }
     >
-      <p className="mb-4 text-xs text-muted">
+      <p className="mb-1 text-xs text-muted">
         ここに載るのはチームのマネージャー/リーダーだけです。一般スタッフのチーム所属はスタッフ名簿の各スタッフ詳細から、依頼主/派遣会社との紐付けは各企業詳細から変更できます。
+      </p>
+      <p className="mb-4 text-xs text-muted">
+        1チーム目は無料、2チーム目以降は1チームにつき{TEAM_UNLOCK_TEE_COST} Teeで作成できます（プラン不問）。
+        {nextTeamRequiresTee && !canAffordNextTeam ? (
+          <span className="ml-1 text-red-600">Tee残高が不足しています（残高: {teeBalance} Tee）。</span>
+        ) : null}
       </p>
 
       <div className="flex flex-col gap-6">
@@ -527,7 +545,11 @@ function TeamsSection({
       </div>
 
       {showCreateModal ? (
-        <CreateTeamModal staff={staff} onClose={() => setShowCreateModal(false)} />
+        <CreateTeamModal
+          staff={staff}
+          teeCost={nextTeamRequiresTee ? TEAM_UNLOCK_TEE_COST : 0}
+          onClose={() => setShowCreateModal(false)}
+        />
       ) : null}
 
       {removeConfirmTarget ? (
@@ -550,9 +572,11 @@ function TeamsSection({
 
 function CreateTeamModal({
   staff,
+  teeCost,
   onClose,
 }: {
   staff: StaffOption[];
+  teeCost: number;
   onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
@@ -612,6 +636,10 @@ function CreateTeamModal({
         ) : (
           <div className="mb-4" />
         )}
+
+        {teeCost > 0 ? (
+          <p className="mb-3 text-xs text-muted">このチームの作成に{teeCost} Teeを消費します。</p>
+        ) : null}
 
         <button
           type="button"

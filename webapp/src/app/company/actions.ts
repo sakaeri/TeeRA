@@ -209,10 +209,10 @@ export async function createTeamAction(
   name: string,
   assignment?: { userId: string; role: "TEAM_MANAGER" | "TEAM_LEADER" },
 ) {
-  const { membership } = await requireCompanyAdminOrEditor();
+  const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
 
-  await createTeam({ companyId: membership.companyId, name, assignment });
+  await createTeam({ companyId: membership.companyId, name, assignment, createdByUserId: userId });
   revalidatePath("/company/settings");
 }
 

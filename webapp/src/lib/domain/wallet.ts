@@ -18,6 +18,7 @@ export async function postLedgerEntry(
     publicRecruitmentId?: string;
     stripeChargeId?: string;
     bankTransferRequestId?: string;
+    teamId?: string;
     createdByUserId?: string;
   },
 ) {
@@ -45,6 +46,7 @@ export async function postLedgerEntry(
       publicRecruitmentId: params.publicRecruitmentId,
       stripeChargeId: params.stripeChargeId,
       bankTransferRequestId: params.bankTransferRequestId,
+      teamId: params.teamId,
       createdByUserId: params.createdByUserId,
     },
   });

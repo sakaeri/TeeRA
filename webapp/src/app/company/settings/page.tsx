@@ -58,6 +58,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
         invoiceRegistrationNumber={company.invoiceRegistrationNumber ?? ""}
         address={company.address ?? ""}
         phoneNumber={company.phoneNumber ?? ""}
+        teeBalance={company.teeBalance}
         admins={admins.map((a) => ({
           userId: a.userId,
           name: a.user.name,

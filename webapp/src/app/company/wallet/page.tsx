@@ -10,6 +10,7 @@ const LEDGER_LABEL: Record<string, string> = {
   UNLOCK_REFUND_RECRUITMENT: "公開募集ロック解除",
   CONSUME_SALARY_ISSUE: "給与明細書発行",
   CONSUME_INVOICE_ISSUE: "請求書発行",
+  CONSUME_TEAM_UNLOCK: "追加チーム作成",
   ADJUSTMENT: "調整",
 };
 
