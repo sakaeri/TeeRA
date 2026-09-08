@@ -41,6 +41,7 @@ export async function updateTemplateAction(
 ) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
+  await prisma.contractTemplate.findFirstOrThrow({ where: { id: templateId, companyId: membership.companyId } });
 
   await updateOrDuplicateTemplate({ templateId, changes, duplicateTitle });
   revalidatePath("/company/settings");
@@ -49,6 +50,7 @@ export async function updateTemplateAction(
 export async function deleteTemplateAction(templateId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
+  await prisma.contractTemplate.findFirstOrThrow({ where: { id: templateId, companyId: membership.companyId } });
 
   await deleteTemplate(templateId);
   revalidatePath("/company/settings");

@@ -41,6 +41,8 @@ import {
   removeTeamClient,
   setStaffPlainTeamMemberships,
   setClientTeams,
+  getStaffTeamIds,
+  getClientTeamIds,
 } from "@/lib/domain/teams";
 
 function absoluteInviteUrl(token: string) {
@@ -154,6 +156,7 @@ export async function addAgencyAction(proxyName: string) {
 export async function inviteClientUpgradeAction(companyRelationshipId: string) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertRelationshipParty(companyRelationshipId, membership.companyId);
 
   const invite = await inviteRelationshipUpgrade({
     companyRelationshipId,
@@ -167,6 +170,7 @@ export async function inviteClientUpgradeAction(companyRelationshipId: string) {
 export async function inviteAgencyUpgradeAction(companyRelationshipId: string) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertRelationshipParty(companyRelationshipId, membership.companyId);
 
   const invite = await inviteRelationshipUpgrade({
     companyRelationshipId,
@@ -219,6 +223,7 @@ export async function setTeamMemberRoleAction(
 ) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertTeamOwnedByCompany(teamId, membership.companyId);
 
   await setTeamMemberRole({ teamId, userId, role });
   revalidatePath("/company/settings");
@@ -227,6 +232,7 @@ export async function setTeamMemberRoleAction(
 export async function removeTeamMemberAction(teamId: string, userId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertTeamOwnedByCompany(teamId, membership.companyId);
 
   await removeTeamMember({ teamId, userId });
   revalidatePath("/company/settings");
@@ -237,6 +243,7 @@ export async function removeTeamMemberAction(teamId: string, userId: string) {
 export async function inviteTeamManagerAction(teamId: string, teamRole: "TEAM_MANAGER" | "TEAM_LEADER") {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertTeamOwnedByCompany(teamId, membership.companyId);
 
   const invite = await inviteTeamManager({
     companyId: membership.companyId,
@@ -258,6 +265,7 @@ export async function promoteExistingStaffToTeamRoleAction(
 ) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertTeamOwnedByCompany(teamId, membership.companyId);
 
   await setTeamMemberRole({ teamId, userId: targetUserId, role: teamRole });
   revalidatePath("/company/settings");
@@ -319,6 +327,7 @@ export async function unplaceStaffAction(companyRelationshipId: string, staffUse
 export async function addTeamClientAction(teamId: string, companyRelationshipId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertTeamOwnedByCompany(teamId, membership.companyId);
   await assertRelationshipAgencySide(companyRelationshipId, membership.companyId);
 
   await addTeamClient({ teamId, companyRelationshipId });
@@ -329,6 +338,7 @@ export async function addTeamClientAction(teamId: string, companyRelationshipId:
 export async function removeTeamClientAction(teamId: string, companyRelationshipId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertTeamOwnedByCompany(teamId, membership.companyId);
   await assertRelationshipAgencySide(companyRelationshipId, membership.companyId);
 
   await removeTeamClient({ teamId, companyRelationshipId });
@@ -439,14 +449,25 @@ export async function inviteCompanyAdminAction(role: "COMPANY_ADMIN" | "COMPANY_
   return absoluteInviteUrl(invite.token);
 }
 
+// 稼働履歴だけでなく口座情報・本人確認書類・給与額まで含む詳細なので、
+// リーダーは対象外（canManageAny＝canManage基準。チーム作成・シフト権限の
+// canManageShiftsとは別 — リーダーは給与・契約書は閲覧も含めて一切触れない
+// という決定事項どおり）。マネージャーは自チームのスタッフのみ。
 export async function getStaffMonthDetailAction(userId: string, year: number, month: number) {
   const { membership } = await requireCompanyAdminOrEditor();
+  const staffTeamIds = await getStaffTeamIds(userId);
+  if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
   return getStaffMonthDetail({ companyId: membership.companyId, userId, year, month });
 }
 
 async function assertMembershipOwnedByCompany(membershipId: string, companyId: string) {
   const target = await prisma.companyMembership.findFirstOrThrow({ where: { id: membershipId, companyId } });
   return target;
+}
+
+async function assertTeamOwnedByCompany(teamId: string, companyId: string) {
+  const team = await prisma.team.findFirstOrThrow({ where: { id: teamId, companyId } });
+  return team;
 }
 
 export async function addStaffNoteAction(membershipId: string, content: string) {
@@ -538,6 +559,8 @@ export async function skipStaffPaidLeaveGrantAction(membershipId: string) {
 
 export async function getClientMonthDetailAction(companyRelationshipId: string, year: number, month: number) {
   const { membership } = await requireCompanyAdminOrEditor();
+  const clientTeamIds = await getClientTeamIds(companyRelationshipId);
+  if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
   return getClientMonthDetail({ companyId: membership.companyId, companyRelationshipId, year, month });
 }
 
