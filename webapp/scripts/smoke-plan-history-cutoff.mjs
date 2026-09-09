@@ -130,7 +130,16 @@ try {
   await admin.waitForTimeout(300);
   let bodyText = await admin.textContent("body");
   log("給料計算の発行履歴に5ヶ月前の明細は表示されない（無料プラン）", !bodyText.includes(`${farPast.year}年${farPast.month}月`));
-  log("給料計算に無料プランの制限バナーが表示される", bodyText.includes("直近3ヶ月まで"));
+  log("通常の対象月を見ている時は制限バナーが出ない（無料プランというだけで常時出ると邪魔）", !bodyText.includes("直近3ヶ月まで"));
+
+  await admin.goto(`http://localhost:3000/company/payroll?month=${monthStr(cutoff)}&staff=${staffUserId}`);
+  await admin.waitForTimeout(300);
+  bodyText = await admin.textContent("body");
+  log("給料計算でカットオフ月そのものを見ている時は制限バナーが表示される", bodyText.includes("直近3ヶ月まで"));
+  log("制限バナーにプランアップグレードへの導線がある", await admin.getByRole("link", { name: "プランをアップグレードする" }).isVisible());
+  await admin.getByRole("link", { name: "プランをアップグレードする" }).click();
+  await admin.waitForURL("http://localhost:3000/company/wallet");
+  log("導線をクリックするとTee残高ページに遷移する", admin.url() === "http://localhost:3000/company/wallet");
 
   // --- 請求書: カットオフより前の月を指定するとリダイレクトされる ---
   await admin.goto(`http://localhost:3000/company/invoices?month=${farPastMonth}&client=${relationshipId}`);
@@ -142,6 +151,12 @@ try {
   await admin.waitForTimeout(300);
   bodyText = await admin.textContent("body");
   log("請求書の発行履歴に5ヶ月前の請求書は表示されない（無料プラン）", !bodyText.includes(`${farPast.year}年${farPast.month}月`));
+  log("通常の対象月を見ている時は請求書にも制限バナーが出ない", !bodyText.includes("直近3ヶ月まで"));
+
+  await admin.goto(`http://localhost:3000/company/invoices?month=${monthStr(cutoff)}&client=${relationshipId}`);
+  await admin.waitForTimeout(300);
+  bodyText = await admin.textContent("body");
+  log("請求書でカットオフ月そのものを見ている時は制限バナーが表示される", bodyText.includes("直近3ヶ月まで"));
 
   // --- スタッフ詳細パネル: カットオフ月で「前の月」が無効化される ---
   await admin.goto(`http://localhost:3000/company/roster?staff=${staffUserId}`);

@@ -366,9 +366,12 @@ export function CalendarView({
       </div>
 
       {atHistoryCutoff ? (
-        <p className="mb-2 rounded-lg bg-accent/10 px-3 py-2 text-xs text-primary">
-          無料プランでは過去データの閲覧は直近3ヶ月までです。それ以前を見るにはプランのアップグレードが必要です。
-        </p>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-accent/10 px-3 py-2 text-xs text-primary">
+          <span>無料プランでは過去データの閲覧は直近3ヶ月までです。それ以前を見るにはプランのアップグレードが必要です。</span>
+          <Link href="/company/wallet" className="shrink-0 font-semibold underline whitespace-nowrap">
+            プランをアップグレードする
+          </Link>
+        </div>
       ) : null}
       <div className="rounded-2xl bg-white p-4">
       <div className="mb-2 flex items-center justify-center gap-2">

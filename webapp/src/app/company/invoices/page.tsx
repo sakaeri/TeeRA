@@ -41,6 +41,9 @@ export default async function InvoicesPage({
     redirect(`/company/invoices?${params.toString()}`);
   }
   const periodLabel = requestedMonth;
+  // カレンダー/スタッフ詳細パネルと同様、カットオフ月そのものを見ている
+  // 時だけバナーを出す（無料プランというだけで常時表示すると邪魔になる）。
+  const atHistoryCutoff = minMonth !== null && periodLabel === minMonth;
 
   const allClients = await listClients(membership.companyId);
   // チームマネージャー/リーダーは自チームに紐づく取引先しか選べない（本部
@@ -125,10 +128,13 @@ export default async function InvoicesPage({
       <h1 className="mb-6 font-serif-jp text-2xl font-bold">請求書</h1>
       <FinanceTabs active="invoices" invoicesEnabled={company.agencyEnabled} />
 
-      {minMonth ? (
-        <p className="mb-4 rounded-lg bg-accent/10 px-3 py-2 text-xs text-primary">
-          無料プランでは過去データの閲覧は直近3ヶ月までです。それ以前を見るにはプランのアップグレードが必要です。
-        </p>
+      {atHistoryCutoff ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-accent/10 px-3 py-2 text-xs text-primary">
+          <span>無料プランでは過去データの閲覧は直近3ヶ月までです。それ以前を見るにはプランのアップグレードが必要です。</span>
+          <Link href="/company/wallet" className="shrink-0 font-semibold underline whitespace-nowrap">
+            プランをアップグレードする
+          </Link>
+        </div>
       ) : null}
 
       {pdfQuota.quota > 0 ? (
