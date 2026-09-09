@@ -1,4 +1,4 @@
-import { requireCompanyStaffRole } from "@/lib/auth/session";
+import { requireCompanyStaffRole, listMyMemberships } from "@/lib/auth/session";
 import { listStaffShiftsForMonth } from "@/lib/domain/shifts";
 import { listStaffNotices } from "@/lib/domain/notices";
 import { todayJstParts } from "@/lib/date";
@@ -15,8 +15,11 @@ export default async function StaffHomePage({
   const year = Number(sp.y) || today.year;
   const month = Number(sp.m) || today.month;
 
+  const myMemberships = await listMyMemberships(userId);
+  const companyIds = myMemberships.map((m) => m.companyId);
+
   const [shifts, notices] = await Promise.all([
-    listStaffShiftsForMonth({ staffUserId: userId, companyId: membership.companyId, year, month }),
+    listStaffShiftsForMonth({ staffUserId: userId, companyIds, year, month }),
     listStaffNotices(userId, membership.companyId),
   ]);
   const unreadNotices = notices.filter((n) => !n.readAt);
@@ -30,9 +33,11 @@ export default async function StaffHomePage({
       <StaffCalendarView
         year={year}
         month={month}
+        companies={myMemberships.map((m) => ({ id: m.companyId, name: m.companyName }))}
         shifts={shifts.map((s) => ({
           id: s.id,
           date: s.date.toISOString().slice(0, 10),
+          companyId: s.companyId,
           companyName: s.company.name,
           startTime: s.startTime,
           endTime: s.endTime,

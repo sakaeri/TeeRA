@@ -16,16 +16,16 @@ function psql(sql) {
 // body.textContent() also picks up stale __next_f RSC payload <script> tags
 // left behind by earlier client-side navigations, so it can't reliably tell
 // which company is "currently active" (an old company name lingers in that
-// script noise even after switching away). The profile-menu panel's company
-// chip is a real, freshly-rendered element for the CURRENT page only, so
-// scope the read to it instead.
+// script noise even after switching away). The active_company_id cookie is
+// the actual source of truth server-side (session.ts), so read that instead
+// of scraping any UI element — the staff-side dropdown no longer shows the
+// company name at all (calendar/timecard are unified across companies now,
+// so there's nothing UI-visible to scrape here).
 async function currentStaffCompanyName(page) {
-  const alreadyOpen = await page.locator('button[aria-label="プロフィールメニュー"] + div').isVisible().catch(() => false);
-  if (!alreadyOpen) {
-    await page.click('button[aria-label="プロフィールメニュー"]');
-    await page.waitForTimeout(200);
-  }
-  return page.locator('button[aria-label="プロフィールメニュー"] + div > div.rounded-lg.bg-background').textContent();
+  const cookies = await page.context().cookies();
+  const companyId = cookies.find((c) => c.name === "active_company_id")?.value;
+  if (!companyId) return "";
+  return psql(`select name from "Company" where id='${companyId}';`);
 }
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });

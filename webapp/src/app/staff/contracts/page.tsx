@@ -8,8 +8,10 @@ export default async function StaffContractsPage() {
 
   const [allContracts, myMembership, company] = await Promise.all([
     listStaffContracts(userId, membership.companyId),
-    prisma.companyMembership.findFirstOrThrow({
-      where: { userId, companyId: membership.companyId, role: "STAFF" },
+    // role=STAFFではない管理者/編集者がcanWorkShifts経由でこの画面に来る
+    // 兼務ケースもあるため、roleでは絞らずuserId+companyIdの一意な組み合わせで引く。
+    prisma.companyMembership.findUniqueOrThrow({
+      where: { userId_companyId: { userId, companyId: membership.companyId } },
     }),
     prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
   ]);

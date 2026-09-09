@@ -45,7 +45,7 @@ try {
   // --- 設定画面で「このメンバーはシフトにも入れる」をON ---
   await admin.goto("http://localhost:3000/company/settings?tab=basic");
   await admin.locator("tr", { hasText: adminName }).getByRole("checkbox").check();
-  await admin.waitForTimeout(400);
+  await admin.waitForTimeout(800);
 
   const canWorkShiftsFlag = psql(
     `select "canWorkShifts" from "CompanyMembership" where "userId"='${adminUserId}';`,
@@ -58,6 +58,14 @@ try {
   log("兼務フラグON後は/staffに入れる（会社に戻されない）", admin.url().endsWith("/staff"));
   let mainText = await admin.locator("main").textContent();
   log("スタッフ側のシフトカレンダー画面が表示される", mainText.includes("シフトカレンダー"));
+
+  // --- 兼務（role≠STAFF）のまま所属先設定を開いてもクラッシュしない ---
+  // （findFirstOrThrowにrole:"STAFF"を条件に含めていたため、兼務ユーザーが
+  // 開くとCompanyMembershipの行が見つからずサーバーエラーになっていた）
+  await admin.goto("http://localhost:3000/staff/contracts");
+  await admin.waitForTimeout(400);
+  const contractsText = await admin.locator("main").textContent();
+  log("兼務ユーザーでも所属先設定画面がクラッシュせず開ける", contractsText.includes("所属先設定"));
 
   await admin.click('button[aria-label="プロフィールメニュー"]');
   await admin.waitForTimeout(200);
@@ -94,7 +102,7 @@ try {
   // --- 兼務フラグをOFFに戻すと、再び/staffから締め出される ---
   await admin.goto("http://localhost:3000/company/settings?tab=basic");
   await admin.locator("tr", { hasText: adminName }).getByRole("checkbox").uncheck();
-  await admin.waitForTimeout(400);
+  await admin.waitForTimeout(800);
   const canWorkShiftsFlagAfter = psql(
     `select "canWorkShifts" from "CompanyMembership" where "userId"='${adminUserId}';`,
   );

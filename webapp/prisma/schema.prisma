@@ -713,6 +713,11 @@ model WorkReport {
   // （shift.taskName）のまま。単価解決はこちらを優先し、無ければ
   // shift.taskNameにフォールバックする。
   taskName          String?
+  // 出勤/退勤の打刻時点でこの行自体は作られ、outcome/approvalStatusも
+  // 既定値(WORKED/PENDING)が入るため、それらだけでは「打刻しただけ」と
+  // 「実際に業務報告を提出した」を区別できない。submitWorkReport()が
+  // 呼ばれた時にのみセットされる、提出済みの唯一の目印。
+  submittedAt       DateTime?
   approvalStatus    ApprovalStatus    @default(PENDING)
   approverUserId    String?
   approvedAt        DateTime?

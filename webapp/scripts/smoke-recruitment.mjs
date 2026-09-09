@@ -102,7 +102,9 @@ try {
   log("staff sees open recruitment", staffBody.includes(recruitmentTitle));
 
   const recruitmentItem = staff.locator("li", { hasText: recruitmentTitle });
-  await recruitmentItem.getByRole("button", { name: "応募する" }).click();
+  await recruitmentItem.click();
+  await staff.waitForTimeout(200);
+  await staff.getByRole("button", { name: "応募する" }).click();
   await staff.waitForTimeout(800);
   staffBody = await staff.textContent("body");
   log("staff shows applied", staffBody.includes("応募済み"));

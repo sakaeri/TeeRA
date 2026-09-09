@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
 import { findConflictingShifts, isPastDate, supersedeShift } from "@/lib/domain/shifts";
+import { todayJst } from "@/lib/date";
 import type { WageType } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -328,6 +329,9 @@ export async function listOpenRecruitmentsForStaff(params: { companyId: string; 
   const recruitments = await prisma.publicRecruitment.findMany({
     where: {
       status: "PUBLISHED",
+      // 日付を過ぎたものは「応募する」を押しても失敗するだけなので、
+      // 一覧から除外する（過去分がそのまま出ていた設計漏れ）。
+      date: { gte: new Date(`${todayJst()}T00:00:00.000Z`) },
       OR: [
         { companyId: params.companyId },
         { companyId: { in: clientCompanyIds }, visibility: "ORDER" },

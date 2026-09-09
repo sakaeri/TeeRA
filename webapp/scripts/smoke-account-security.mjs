@@ -56,7 +56,7 @@ try {
   await page.waitForURL("http://localhost:3000/forgot-password");
   await page.fill("#email", email);
   await page.getByRole("button", { name: "再設定メールを送信する" }).click();
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(600);
   body = await page.textContent("body");
   log("送信後に案内メッセージが表示される", body.includes("送信しました"));
 
@@ -74,7 +74,7 @@ try {
   await page.goto("http://localhost:3000/forgot-password");
   await page.fill("#email", nonexistentEmail);
   await page.getByRole("button", { name: "再設定メールを送信する" }).click();
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(600);
   body = await page.textContent("body");
   log("存在しないメールアドレスでも同じ案内文が表示される（列挙対策）", body.includes("送信しました"));
   const tokenCountForOriginalUser = psql(
@@ -86,7 +86,7 @@ try {
   await page.goto("http://localhost:3000/reset-password/invalid-token-xyz");
   await page.fill("#password", "newpassword123");
   await page.getByRole("button", { name: "パスワードを変更する" }).click();
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(800);
   body = await page.textContent("body");
   log("無効なトークンではエラーメッセージが表示される", body.includes("無効か"));
 
@@ -117,7 +117,7 @@ try {
   await page.goto(`http://localhost:3000/reset-password/${resetToken}`);
   await page.fill("#password", "anotherpassword123");
   await page.getByRole("button", { name: "パスワードを変更する" }).click();
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(600);
   body = await page.textContent("body");
   log("使用済みトークンは再利用できない", body.includes("無効か"));
 

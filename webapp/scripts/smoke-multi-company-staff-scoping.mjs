@@ -13,10 +13,12 @@ function psql(sql) {
     .trim();
 }
 
-// フェーズ3の検証: 1人のスタッフが2社（A社・B社）で本当に稼働している状態
-// を作り、A社のスタッフ画面にB社のシフト/お知らせ/契約が一切混ざらない
-// ことを確認する（逆方向も同様）。フェーズ1-2で複数社所属自体は解禁
-// 済みなので、ここでは各ドメイン関数のcompanyId絞り込みだけを見る。
+// 1人のスタッフが2社（A社・B社）で本当に稼働している状態を作って検証する。
+// カレンダー・タイムカードは「スタッフ画面はその人個人の所有物」という
+// 方針に合わせ、アクティブな会社に関わらず所属する全社分をまとめて表示
+// する（絞り込みは配属先セレクトで任意に行う）。一方、お知らせ・所属先
+// 設定（契約書）のように本質的に1社宛の情報は、引き続きアクティブな
+// 会社だけに絞られる。
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 const adminACtx = await browser.newContext();
@@ -133,37 +135,44 @@ try {
   await setupCompanyContract(adminA, companyAId, staffUserId, "A社契約業務", 1000);
   await setupCompanyContract(adminB, companyBId, staffUserId, "B社契約業務", 2000);
 
-  // --- switch to company A: only A's data should show ---
+  // --- switch to company A: calendar/timecard show both companies, notices/contracts stay scoped to A ---
   await switchTo(staff, companyAName);
 
   await staff.goto("http://localhost:3000/staff");
   let mainText = await staff.locator("main").textContent();
-  log("A社アクティブ時: カレンダーにA社が表示される", mainText.includes(companyAName));
-  log("A社アクティブ時: カレンダーにB社は表示されない", !mainText.includes(companyBName));
+  let gridText = await staff.locator(".grid.grid-cols-7").textContent();
+  log("カレンダーはアクティブ会社に関わらずA社・B社とも表示される", gridText.includes(companyAName) && gridText.includes(companyBName));
   log("A社アクティブ時: A社のお知らせが表示される", mainText.includes("A社からのお知らせ"));
   log("A社アクティブ時: B社のお知らせは表示されない", !mainText.includes("B社からのお知らせ"));
 
+  // 配属先セレクトでA社だけに絞り込める（selectの<option>自体にも両社名が
+  // 常に含まれるため、main全体ではなくカレンダーの日付グリッドだけを見る）
+  await staff.locator("select").selectOption({ label: companyAName });
+  await staff.waitForTimeout(200);
+  gridText = await staff.locator(".grid.grid-cols-7").textContent();
+  log("配属先セレクトでA社に絞るとB社のシフトは消える", gridText.includes(companyAName) && !gridText.includes(companyBName));
+
   await staff.goto("http://localhost:3000/staff/timecard");
   mainText = await staff.locator("main").textContent();
-  log("A社アクティブ時: タイムカードにA社のシフトのみ", mainText.includes(companyAName) && !mainText.includes(companyBName));
+  log("タイムカードもアクティブ会社に関わらずA社・B社とも表示される", mainText.includes(companyAName) && mainText.includes(companyBName));
 
   await staff.goto("http://localhost:3000/staff/contracts");
   mainText = await staff.locator("main").textContent();
   log("A社アクティブ時: 契約一覧にA社契約業務のみ", mainText.includes("A社契約業務") && !mainText.includes("B社契約業務"));
 
-  // --- switch to company B: only B's data should show ---
+  // --- switch to company B: notices/contracts scoped to B, calendar/timecard still show both ---
   await switchTo(staff, companyBName);
 
   await staff.goto("http://localhost:3000/staff");
   mainText = await staff.locator("main").textContent();
-  log("B社アクティブ時: カレンダーにB社が表示される", mainText.includes(companyBName));
-  log("B社アクティブ時: カレンダーにA社は表示されない", !mainText.includes(companyAName));
+  gridText = await staff.locator(".grid.grid-cols-7").textContent();
+  log("B社アクティブ時もカレンダーはA社・B社とも表示される", gridText.includes(companyAName) && gridText.includes(companyBName));
   log("B社アクティブ時: B社のお知らせが表示される", mainText.includes("B社からのお知らせ"));
   log("B社アクティブ時: A社のお知らせは表示されない", !mainText.includes("A社からのお知らせ"));
 
   await staff.goto("http://localhost:3000/staff/timecard");
   mainText = await staff.locator("main").textContent();
-  log("B社アクティブ時: タイムカードにB社のシフトのみ", mainText.includes(companyBName) && !mainText.includes(companyAName));
+  log("B社アクティブ時もタイムカードはA社・B社とも表示される", mainText.includes(companyAName) && mainText.includes(companyBName));
 
   await staff.goto("http://localhost:3000/staff/contracts");
   mainText = await staff.locator("main").textContent();

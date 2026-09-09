@@ -26,7 +26,10 @@ export function StaffPointsView({
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [redeemedIds, setRedeemedIds] = useState<Set<string>>(new Set());
-  const [redeemTarget, setRedeemTarget] = useState<Item | null>(null);
+  // 交換できる商品だけでなく、交換不可（在庫切れ／pt不足）の商品も
+  // 「これのために頑張ろう」で見られるよう、詳細ポップアップはタップ
+  // すれば誰でも開ける。交換フォームはその中で条件を満たす時だけ出す。
+  const [detailItem, setDetailItem] = useState<Item | null>(null);
   const [address, setAddress] = useState(savedAddress);
   const [phone, setPhone] = useState(savedPhone);
 
@@ -41,7 +44,7 @@ export function StaffPointsView({
       } else {
         setRedeemedIds((prev) => new Set(prev).add(id));
       }
-      setRedeemTarget(null);
+      setDetailItem(null);
     });
   }
 
@@ -74,34 +77,32 @@ export function StaffPointsView({
       </div>
 
       {tab === "list" ? (
-        <ul className="grid grid-cols-2 gap-3">
+        <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
           {items.map((i) => {
             const isRedeemed = redeemedIds.has(i.id);
-            const disabled = pending || i.stock <= 0 || balance < i.pointsCost || isRedeemed;
+            const outOfStock = i.stock <= 0;
             return (
-              <li key={i.id} className="rounded-xl border border-border bg-white/60 p-3 text-sm">
-                {i.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={i.imageUrl} alt="" className="mb-2 h-24 w-full rounded-lg object-cover" />
-                ) : null}
-                <div className="mb-1 font-medium">{i.name}</div>
-                <p className="text-muted">
-                  {i.pointsCost}pt ／ 在庫 {i.stock}
-                </p>
-                {i.description ? <p className="mt-1 text-xs text-muted">{i.description}</p> : null}
-                {errors[i.id] ? <p className="mt-1 text-xs text-red-600">{errors[i.id]}</p> : null}
+              <li key={i.id}>
                 <button
                   type="button"
-                  disabled={disabled}
-                  onClick={() => setRedeemTarget(i)}
-                  className="mt-2 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+                  onClick={() => setDetailItem(i)}
+                  className="block w-full rounded-xl border border-border bg-white/60 p-2 text-left text-sm hover:border-primary"
                 >
-                  {isRedeemed ? "交換済み" : i.stock <= 0 ? "在庫切れ" : "交換する"}
+                  {i.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={i.imageUrl} alt="" className="mb-2 aspect-square w-full rounded-lg object-cover" />
+                  ) : (
+                    <div className="mb-2 aspect-square w-full rounded-lg bg-background" />
+                  )}
+                  <div className="truncate font-medium">{i.name}</div>
+                  <p className="text-xs text-muted">
+                    {i.pointsCost}pt{isRedeemed ? " ／ 交換済み" : outOfStock ? " ／ 在庫切れ" : ""}
+                  </p>
                 </button>
               </li>
             );
           })}
-          {items.length === 0 ? <p className="col-span-2 text-center text-muted">商品がありません。</p> : null}
+          {items.length === 0 ? <p className="col-span-full text-center text-muted">商品がありません。</p> : null}
         </ul>
       ) : (
         <ul className="flex flex-col gap-2">
@@ -117,54 +118,111 @@ export function StaffPointsView({
         </ul>
       )}
 
-      {redeemTarget ? (
-        <div
-          className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4"
-          onClick={() => setRedeemTarget(null)}
-        >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-serif-jp text-lg font-bold text-primary">配送先を確認</h3>
-              <button type="button" onClick={() => setRedeemTarget(null)} className="text-muted">
-                ✕
-              </button>
-            </div>
-            <p className="mb-3 text-sm">
-              「{redeemTarget.name}」（{redeemTarget.pointsCost}pt）と交換します。お届け先を入力してください。
-            </p>
-            <div className="flex flex-col gap-3">
-              <label className="flex flex-col gap-1 text-xs">
-                住所
-                <input
-                  type="text"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="例：東京都渋谷区〇〇1-2-3"
-                  className="rounded-lg border border-border px-2 py-2 text-sm"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs">
-                電話番号
-                <input
-                  type="text"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="例：090-1234-5678"
-                  className="rounded-lg border border-border px-2 py-2 text-sm"
-                />
-              </label>
-              <button
-                type="button"
-                disabled={pending || !address.trim() || !phone.trim()}
-                onClick={() => redeem(redeemTarget.id)}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-              >
-                この内容で交換する
-              </button>
-            </div>
-          </div>
-        </div>
+      {detailItem ? (
+        <ItemDetailModal
+          item={detailItem}
+          balance={balance}
+          pending={pending}
+          isRedeemed={redeemedIds.has(detailItem.id)}
+          error={errors[detailItem.id]}
+          address={address}
+          phone={phone}
+          onAddressChange={setAddress}
+          onPhoneChange={setPhone}
+          onRedeem={() => redeem(detailItem.id)}
+          onClose={() => setDetailItem(null)}
+        />
       ) : null}
+    </div>
+  );
+}
+
+function ItemDetailModal({
+  item,
+  balance,
+  pending,
+  isRedeemed,
+  error,
+  address,
+  phone,
+  onAddressChange,
+  onPhoneChange,
+  onRedeem,
+  onClose,
+}: {
+  item: Item;
+  balance: number;
+  pending: boolean;
+  isRedeemed: boolean;
+  error?: string;
+  address: string;
+  phone: string;
+  onAddressChange: (v: string) => void;
+  onPhoneChange: (v: string) => void;
+  onRedeem: () => void;
+  onClose: () => void;
+}) {
+  const outOfStock = item.stock <= 0;
+  const insufficientPoints = balance < item.pointsCost;
+  const canRedeem = !isRedeemed && !outOfStock && !insufficientPoints;
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">{item.name}</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        {item.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.imageUrl} alt="" className="mb-3 aspect-square w-full rounded-lg object-cover" />
+        ) : null}
+        <p className="mb-1 font-serif-jp text-lg font-bold text-primary">{item.pointsCost}pt</p>
+        {item.description ? <p className="mb-3 text-sm text-muted">{item.description}</p> : null}
+
+        {isRedeemed ? (
+          <p className="text-sm text-muted">この商品はすでに交換済みです。</p>
+        ) : !canRedeem ? (
+          <p className="text-sm text-muted">
+            {outOfStock ? "現在在庫切れです。" : `あと${item.pointsCost - balance}pt貯めると交換できます。`}
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm">お届け先を入力して交換してください。</p>
+            <label className="flex flex-col gap-1 text-xs">
+              住所
+              <input
+                type="text"
+                value={address}
+                onChange={(e) => onAddressChange(e.target.value)}
+                placeholder="例：東京都渋谷区〇〇1-2-3"
+                className="rounded-lg border border-border px-2 py-2 text-sm"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              電話番号
+              <input
+                type="text"
+                value={phone}
+                onChange={(e) => onPhoneChange(e.target.value)}
+                placeholder="例：090-1234-5678"
+                className="rounded-lg border border-border px-2 py-2 text-sm"
+              />
+            </label>
+            {error ? <p className="text-xs text-red-600">{error}</p> : null}
+            <button
+              type="button"
+              disabled={pending || !address.trim() || !phone.trim()}
+              onClick={onRedeem}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              この内容で交換する
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

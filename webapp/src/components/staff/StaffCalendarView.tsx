@@ -8,12 +8,15 @@ import { todayJst } from "@/lib/date";
 type ShiftRow = {
   id: string;
   date: string;
+  companyId: string;
   companyName: string;
   startTime: string | null;
   endTime: string | null;
   isAllDay: boolean;
   isUndecided: boolean;
 };
+
+type Company = { id: string; name: string };
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -26,23 +29,28 @@ function weekdayColor(dow: number) {
 export function StaffCalendarView({
   year,
   month,
+  companies,
   shifts,
 }: {
   year: number;
   month: number;
+  companies: Company[];
   shifts: ShiftRow[];
 }) {
   const [showWizard, setShowWizard] = useState(false);
+  const [companyFilter, setCompanyFilter] = useState("");
   const todayStr = todayJst();
+
+  const filteredShifts = companyFilter ? shifts.filter((s) => s.companyId === companyFilter) : shifts;
 
   const shiftsByDate = useMemo(() => {
     const map = new Map<string, ShiftRow[]>();
-    for (const s of shifts) {
+    for (const s of filteredShifts) {
       if (!map.has(s.date)) map.set(s.date, []);
       map.get(s.date)!.push(s);
     }
     return map;
-  }, [shifts]);
+  }, [filteredShifts]);
 
   const cells = useMemo(() => {
     const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
@@ -89,6 +97,23 @@ export function StaffCalendarView({
           </svg>
         </Link>
       </div>
+
+      {companies.length > 1 ? (
+        <div className="mb-3 flex justify-center">
+          <select
+            value={companyFilter}
+            onChange={(e) => setCompanyFilter(e.target.value)}
+            className="rounded-lg border border-border px-2 py-1.5 text-xs"
+          >
+            <option value="">すべての配属先</option>
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-7 gap-1">
         {WEEKDAYS.map((w, i) => (

@@ -18,7 +18,6 @@ export default async function StaffLayout({
 
   return (
     <StaffShell
-      companyName={membership.companyName}
       userName={user.name}
       userEmail={user.email}
       pointsBalance={pointsBalance}

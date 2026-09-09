@@ -116,11 +116,12 @@ try {
   body = await staff.textContent("body");
   log("staff has 1pt", body.includes("1pt") && body.includes("承認済み業務報告 1件"));
 
-  // redeem: opens shipping-info modal, fill address/phone, confirm
-  await staff.getByRole("button", { name: "交換する" }).click();
+  // 商品カードをタップして詳細ポップアップを開く（交換可能な場合は
+  // その中に配送先フォームが出る）
+  await staff.getByRole("button", { name: /オリジナルタオルSサイズ/ }).click();
   await staff.waitForTimeout(300);
   body = await staff.textContent("body");
-  log("shipping info modal opens", body.includes("配送先を確認"));
+  log("detail popup opens with shipping form", body.includes("お届け先を入力して交換してください"));
 
   await staff.fill('input[placeholder="例：東京都渋谷区〇〇1-2-3"]', "東京都新宿区テスト1-1-1");
   await staff.fill('input[placeholder="例：090-1234-5678"]', "090-0000-1111");

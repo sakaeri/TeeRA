@@ -256,9 +256,13 @@ export async function listShiftHistoryForMonth(params: {
   });
 }
 
+// スタッフのカレンダーは「今アクティブな会社」ではなく、所属する全社分を
+// まとめて1つに表示する（スタッフ画面はその人個人の所有物で、会社側の
+// ように会社ごとに視点を切り替えるものではないため）。companyIdsは
+// listMyMembershipsで取得した、そのスタッフが所属する全社のID一覧。
 export async function listStaffShiftsForMonth(params: {
   staffUserId: string;
-  companyId: string;
+  companyIds: string[];
   year: number;
   month: number;
 }) {
@@ -268,7 +272,7 @@ export async function listStaffShiftsForMonth(params: {
   return prisma.shift.findMany({
     where: {
       staffUserId: params.staffUserId,
-      companyId: params.companyId,
+      companyId: { in: params.companyIds },
       date: { gte: start, lt: end },
       status: { notIn: ["SUPERSEDED", "CANCELLED"] },
     },

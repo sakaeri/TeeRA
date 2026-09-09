@@ -12,6 +12,7 @@ type ShiftRow = {
   id: string;
   workReportId: string | null;
   date: string;
+  companyId: string;
   companyName: string;
   startTime: string | null;
   endTime: string | null;
@@ -24,6 +25,7 @@ type ShiftRow = {
   outcome: string | null;
   approvalStatus: string | null;
   computedMinutes: number;
+  submittedAt: string | null;
 };
 
 const APPROVAL_LABEL: Record<string, string> = {
@@ -35,16 +37,59 @@ const APPROVAL_LABEL: Record<string, string> = {
 
 const NEW_TASK_NAME_SENTINEL = "__new__";
 
-export function StaffTimecardView({ shifts, knownTaskNames }: { shifts: ShiftRow[]; knownTaskNames: string[] }) {
+// 「済み」＝欠勤/キャンセルとして報告済み、または業務報告を提出して
+// 承認待ち・承認済みになったもの（差し戻しREJECTEDだけは修正して
+// 再提出が必要なので「対応が必要」側に残す）。
+// 出勤/退勤の打刻だけではWorkReport行のoutcome/approvalStatusに既定値
+// （WORKED/PENDING）が入るため、それらだけでは「打刻しただけ」と
+// 「実際に提出した」を区別できない。submittedAt（提出時に確実にセット
+// される）で見分ける。
+function isDone(shift: ShiftRow) {
+  const finalized = shift.outcome !== null && shift.outcome !== "WORKED";
+  const submitted =
+    shift.outcome === "WORKED" &&
+    Boolean(shift.submittedAt) &&
+    (shift.approvalStatus === "PENDING" || shift.approvalStatus === "APPROVED");
+  return finalized || submitted;
+}
+
+export function StaffTimecardView({
+  shifts,
+  knownTaskNamesByCompany,
+}: {
+  shifts: ShiftRow[];
+  knownTaskNamesByCompany: Record<string, string[]>;
+}) {
+  const actionable = shifts.filter((s) => !isDone(s));
+  const done = shifts.filter(isDone);
+
   return (
-    <ul className="flex flex-col gap-4">
-      {shifts.map((s) => (
-        <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNames} />
-      ))}
-      {shifts.length === 0 ? (
-        <p className="text-sm text-muted">対象のシフトがありません。</p>
+    <div className="flex flex-col gap-6">
+      <ul className="flex flex-col gap-4">
+        {actionable.map((s) => (
+          <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} />
+        ))}
+        {shifts.length === 0 ? (
+          <p className="text-sm text-muted">対象のシフトがありません。</p>
+        ) : null}
+        {shifts.length > 0 && actionable.length === 0 ? (
+          <p className="text-sm text-muted">対応が必要な報告はありません。</p>
+        ) : null}
+      </ul>
+
+      {done.length > 0 ? (
+        <details className="rounded-xl border border-border/60 bg-white/40 p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-muted">
+            過去の報告（{done.length}件）
+          </summary>
+          <ul className="mt-3 flex flex-col gap-4">
+            {done.map((s) => (
+              <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} />
+            ))}
+          </ul>
+        </details>
       ) : null}
-    </ul>
+    </div>
   );
 }
 
@@ -60,6 +105,14 @@ function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTaskNames:
 
   const finalized = shift.outcome && shift.outcome !== "WORKED";
   const readyToSubmit = shift.clockIn && shift.clockOut;
+  // 提出済み（差し戻し以外）は編集フォームを出さず、読み取り専用の
+  // 報告内容にする。承認済みかどうかは上のバッジで分かるので、ここでは
+  // 「何を報告したか」だけ分かれば十分（差し戻し=REJECTEDだけは修正して
+  // 再提出できるよう、下の編集フォームのまま残す）。isDone()の判定と揃えている。
+  const submitted =
+    shift.outcome === "WORKED" &&
+    Boolean(shift.submittedAt) &&
+    (shift.approvalStatus === "PENDING" || shift.approvalStatus === "APPROVED");
 
   return (
     <li className="rounded-xl border border-border bg-white/60 p-4">
@@ -101,6 +154,11 @@ function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTaskNames:
       ) : finalized ? (
         <p className="text-sm text-muted">
           {shift.outcome === "ABSENT" ? "欠勤として報告済みです。" : "勤務先からのキャンセルとして報告済みです。"}
+        </p>
+      ) : submitted ? (
+        <p className="text-sm text-muted">
+          業務報告を提出済みです。{shift.taskName ? `（${shift.taskName}／` : "（"}
+          実働 {(shift.computedMinutes / 60).toFixed(1)} 時間）
         </p>
       ) : (
         <>

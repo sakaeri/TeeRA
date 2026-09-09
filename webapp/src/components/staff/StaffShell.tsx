@@ -18,7 +18,6 @@ function todayLabel() {
 }
 
 export function StaffShell({
-  companyName,
   userName,
   userEmail,
   pointsBalance,
@@ -26,7 +25,6 @@ export function StaffShell({
   showCompanyScreenLink,
   children,
 }: {
-  companyName: string;
   userName: string;
   userEmail: string;
   pointsBalance: number;
@@ -75,7 +73,6 @@ export function StaffShell({
                     <p className="text-xs text-muted">{userEmail}</p>
                   </div>
                 </div>
-                <div className="mb-3 rounded-lg bg-background px-3 py-2 text-xs">{companyName}</div>
                 <Link
                   href="/account"
                   className="mb-3 block rounded-lg border border-border px-4 py-2 text-center text-sm text-foreground hover:border-primary"

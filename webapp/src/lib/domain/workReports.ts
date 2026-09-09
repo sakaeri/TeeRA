@@ -89,7 +89,13 @@ export async function submitWorkReport(params: {
     }
     return prisma.workReport.update({
       where: { shiftId: params.shiftId },
-      data: { outcome: "WORKED", comment: params.comment, taskName: params.taskName, approvalStatus: "PENDING" },
+      data: {
+        outcome: "WORKED",
+        comment: params.comment,
+        taskName: params.taskName,
+        approvalStatus: "PENDING",
+        submittedAt: new Date(),
+      },
     });
   }
 
@@ -101,12 +107,14 @@ export async function submitWorkReport(params: {
       outcome: params.outcome,
       computedMinutes: 0,
       comment: params.comment,
+      submittedAt: new Date(),
     },
     update: {
       outcome: params.outcome,
       computedMinutes: 0,
       comment: params.comment,
       approvalStatus: "PENDING",
+      submittedAt: new Date(),
     },
   });
 }
@@ -134,7 +142,9 @@ export async function listPendingReportsForCompany(companyId: string) {
   });
 }
 
-export async function listOwnShiftsNeedingReport(staffUserId: string, companyId: string) {
+// カレンダーと同じく、所属する全社分のシフトをまとめて対象にする
+// （companyIdsはlistMyMembershipsで取得した所属先ID一覧）。
+export async function listOwnShiftsNeedingReport(staffUserId: string, companyIds: string[]) {
   // 「今日」はJSTの暦日で判定する（date.tsの方針参照）。UTC基準のDate/
   // setUTCHours(23,59,59,999)だと、JSTの深夜0時〜朝9時台（UTC前日15〜23時
   // 台）は「今日」が前日扱いになり、今日の（JSTでの）シフトが一時的に一覧
@@ -144,7 +154,7 @@ export async function listOwnShiftsNeedingReport(staffUserId: string, companyId:
   return prisma.shift.findMany({
     where: {
       staffUserId,
-      companyId,
+      companyId: { in: companyIds },
       status: "CONFIRMED",
       date: { lte: today },
     },
