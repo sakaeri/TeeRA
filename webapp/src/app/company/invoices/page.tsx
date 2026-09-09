@@ -7,6 +7,7 @@ import { pdfQuotaRemaining } from "@/lib/domain/plans";
 import { prisma } from "@/lib/prisma";
 import { InvoiceEditor } from "@/components/company/InvoiceEditor";
 import { FinanceTabs } from "@/components/company/FinanceTabs";
+import { MonthNavFilterBar } from "@/components/company/MonthNavFilterBar";
 import { todayJstParts, earliestAllowedMonth, cutoffMonthString } from "@/lib/date";
 import Link from "next/link";
 
@@ -143,32 +144,16 @@ export default async function InvoicesPage({
         </p>
       ) : null}
 
-      <form method="get" className="mb-6 flex items-end gap-3 rounded-xl border border-border bg-white/60 p-4">
-        <label className="flex flex-col gap-1 text-xs">
-          対象月
-          <input
-            type="month"
-            name="month"
-            defaultValue={periodLabel}
-            min={minMonth ?? undefined}
-            className="rounded-lg border border-border px-2 py-2 text-sm"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-xs">
-          依頼主
-          <select name="client" defaultValue={companyRelationshipId} className="rounded-lg border border-border px-2 py-2 text-sm">
-            <option value="">選択してください</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.clientCompany?.name ?? c.proxyName}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="submit" className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
-          開く
-        </button>
-      </form>
+      <MonthNavFilterBar
+        basePath="/company/invoices"
+        targetMonth={periodLabel}
+        minMonth={minMonth}
+        todayMonth={currentMonth()}
+        extraParamName="client"
+        extraParamValue={companyRelationshipId}
+        extraLabel="依頼主"
+        extraOptions={clients.map((c) => ({ id: c.id, name: c.clientCompany?.name ?? c.proxyName ?? "" }))}
+      />
 
       {invoiceData ? (
         <InvoiceEditor invoice={invoiceData} willUseFreeQuota={pdfQuota.quota > 0 && pdfQuota.remaining > 0} />
