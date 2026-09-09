@@ -35,6 +35,14 @@ export async function getStaffPointsBalance(staffUserId: string) {
   return latest?.balanceAfter ?? 0;
 }
 
+// TeeRAメンバーのランク（ブロンズ/シルバー/ゴールド）— 承認済み業務報告の
+// 累計件数のみで決まる。thresholdはそのランクの終わり（=次のランクの開始）。
+const RANKS = [
+  { name: "ブロンズ", rate: 1, start: 0, threshold: 300 },
+  { name: "シルバー", rate: 2, start: 300, threshold: 600 },
+  { name: "ゴールド", rate: 3, start: 600, threshold: null as number | null },
+] as const;
+
 // Tier progress toward the NEXT accrual rate (1pt for the 1st-300th approved
 // WORKED report, 2pt for 301st-600th, 3pt for 601st+ — permission-rules-memo
 // item ④). This tracks report count, not point balance.
@@ -43,11 +51,19 @@ export async function getStaffTierProgress(staffUserId: string) {
     where: { staffUserId, outcome: "WORKED", approvalStatus: "APPROVED" },
   });
 
-  const currentRate = approvedCount < 300 ? 1 : approvedCount < 600 ? 2 : 3;
-  const nextThreshold = approvedCount < 300 ? 300 : approvedCount < 600 ? 600 : null;
-  const remaining = nextThreshold ? nextThreshold - approvedCount : 0;
+  const rankIndex = approvedCount < 300 ? 0 : approvedCount < 600 ? 1 : 2;
+  const rank = RANKS[rankIndex];
+  const nextRank = RANKS[rankIndex + 1] ?? null;
 
-  return { approvedCount, currentRate, nextThreshold, remaining };
+  return {
+    approvedCount,
+    rankName: rank.name,
+    rankLevel: rankIndex + 1,
+    currentRate: rank.rate,
+    tierStart: rank.start,
+    tierThreshold: rank.threshold,
+    nextRankName: nextRank?.name ?? null,
+  };
 }
 
 export async function redeemPromoItem(params: {

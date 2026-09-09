@@ -114,7 +114,7 @@ try {
   // staff checks points page
   await staff.goto("http://localhost:3000/staff/points");
   body = await staff.textContent("body");
-  log("staff has 1pt", body.includes("1pt") && body.includes("承認済み業務報告 1件"));
+  log("staff has 1pt", body.includes("1pt") && body.includes("ブロンズ") && body.includes("1 / 300件"));
 
   // 商品カードをタップして詳細ポップアップを開く（交換可能な場合は
   // その中に配送先フォームが出る）

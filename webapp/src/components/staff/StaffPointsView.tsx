@@ -5,7 +5,22 @@ import { redeemPromoItemAction } from "@/app/staff/points/actions";
 
 type Item = { id: string; imageUrl: string; name: string; pointsCost: number; stock: number; description: string | null };
 type Order = { id: string; itemName: string; pointsSpent: number; status: string; createdAt: string };
-type Tier = { approvedCount: number; currentRate: number; nextThreshold: number | null; remaining: number };
+type Tier = {
+  approvedCount: number;
+  rankName: string;
+  rankLevel: number;
+  currentRate: number;
+  tierStart: number;
+  tierThreshold: number | null;
+  nextRankName: string | null;
+};
+
+// ランクごとにバーの色味を変え、切り替わった実感を出す。
+const RANK_FILL: Record<number, string> = {
+  1: "linear-gradient(90deg, #9c6b45, #cd9868)",
+  2: "linear-gradient(90deg, #8a94a0, #d6dde3)",
+  3: "linear-gradient(90deg, var(--brand-accent), #f4dfa0)",
+};
 
 export function StaffPointsView({
   balance,
@@ -48,15 +63,78 @@ export function StaffPointsView({
     });
   }
 
+  const tierThreshold = tier.tierThreshold;
+  const isMaxRank = tierThreshold === null;
+  const tierTotal = isMaxRank ? null : tierThreshold - tier.tierStart;
+  const tierProgress = isMaxRank ? null : tier.approvedCount - tier.tierStart;
+  const fillPct = isMaxRank ? 100 : Math.min(100, ((tierProgress as number) / (tierTotal as number)) * 100);
+  const remaining = isMaxRank ? 0 : tierThreshold - tier.approvedCount;
+
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border-2 border-primary bg-white/60 p-6 text-center">
-        <p className="text-sm text-muted">保有ポイント</p>
-        <p className="font-serif-jp text-3xl font-bold text-primary">{balance}pt</p>
-        <p className="mt-2 text-xs text-muted">
-          承認済み業務報告 {tier.approvedCount}件（現在 {tier.currentRate}pt/件）
-          {tier.nextThreshold ? ` ／ 次のランクまで残り${tier.remaining}件` : " ／ 最高ランクです"}
-        </p>
+      <section className="relative overflow-hidden rounded-3xl bg-primary text-primary-foreground shadow-lg">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-accent/20" />
+        <div className="pointer-events-none absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-white/5" />
+
+        <div className="relative px-8 pb-7 pt-8 text-center">
+          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-accent font-serif-jp text-2xl font-bold text-primary shadow-md ring-4 ring-white/10">
+            T
+          </div>
+          <p className="text-xs uppercase tracking-widest text-primary-foreground/60">保有ポイント</p>
+          <p className="mt-1 font-serif-jp text-5xl font-bold">
+            {balance}
+            <span className="ml-2 text-xl font-normal text-primary-foreground/70">pt</span>
+          </p>
+          <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-xs">
+            <span className="flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold text-primary">
+              Lv.{tier.rankLevel}
+            </span>
+            <span className="font-serif-jp font-bold text-accent">現在のランク：{tier.rankName}</span>
+            <span className="text-primary-foreground/65">承認1件につき {tier.currentRate}pt</span>
+          </div>
+        </div>
+
+        <div className="relative mx-8 border-t border-white/15" />
+
+        <div className="relative px-8 pb-7 pt-5 text-left">
+          <div className="mb-3.5 flex items-baseline justify-between gap-3">
+            <span className="text-xs font-bold text-primary-foreground/85">このランクでの進捗</span>
+            <span className="text-[11px] tabular-nums text-primary-foreground/60">
+              {isMaxRank ? `承認済み ${tier.approvedCount}件` : `${tierProgress} / ${tierTotal}件`}
+            </span>
+          </div>
+          <div className="relative h-2.5 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700"
+              style={{ width: `${fillPct}%`, background: RANK_FILL[tier.rankLevel] ?? RANK_FILL[1] }}
+            />
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[11px] text-primary-foreground/55">
+            <span>
+              現在：<strong className="font-bold text-primary-foreground/85">{tier.rankName}</strong>
+            </span>
+            <span>
+              {isMaxRank ? (
+                <strong className="font-bold text-accent">MAX</strong>
+              ) : (
+                <>
+                  次へ：<strong className="font-bold text-primary-foreground/85">{tier.nextRankName}</strong>
+                </>
+              )}
+            </span>
+          </div>
+          {isMaxRank ? (
+            <p className="mt-4 text-[13px] text-primary-foreground/90">
+              <strong className="font-bold text-accent">{tier.rankName}</strong>
+              ――TeeRAメンバーの最高ランクに到達しています
+            </p>
+          ) : (
+            <p className="mt-4 text-[13px] text-primary-foreground/90">
+              次のランク「<strong className="font-bold text-accent">{tier.nextRankName}</strong>」まであと
+              <strong className="font-bold text-accent">{remaining}</strong>件
+            </p>
+          )}
+        </div>
       </section>
 
       <div className="flex gap-1 border-b border-border">
@@ -88,16 +166,19 @@ export function StaffPointsView({
                   onClick={() => setDetailItem(i)}
                   className="block w-full rounded-xl border border-border bg-white/60 p-2 text-left text-sm hover:border-primary"
                 >
-                  {i.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={i.imageUrl} alt="" className="mb-2 aspect-square w-full rounded-lg object-cover" />
-                  ) : (
-                    <div className="mb-2 aspect-square w-full rounded-lg bg-background" />
-                  )}
+                  <div className="relative mb-2 aspect-square w-full overflow-hidden rounded-lg bg-background">
+                    {i.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={i.imageUrl} alt="" className="h-full w-full object-cover" />
+                    ) : null}
+                    <span className="absolute left-1.5 top-1.5 rounded-md bg-primary/85 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-primary-foreground">
+                      {i.pointsCost}pt
+                    </span>
+                  </div>
                   <div className="truncate font-medium">{i.name}</div>
-                  <p className="text-xs text-muted">
-                    {i.pointsCost}pt{isRedeemed ? " ／ 交換済み" : outOfStock ? " ／ 在庫切れ" : ""}
-                  </p>
+                  {isRedeemed || outOfStock ? (
+                    <p className="text-xs text-muted">{isRedeemed ? "交換済み" : "在庫切れ"}</p>
+                  ) : null}
                 </button>
               </li>
             );
