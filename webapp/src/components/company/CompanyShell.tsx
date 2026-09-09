@@ -81,10 +81,6 @@ export function CompanyShell({
                     <p className="text-xs text-muted">{userEmail}</p>
                   </div>
                 </div>
-                <div className="mb-3 flex items-center gap-2 rounded-lg bg-background px-3 py-2 text-xs">
-                  <span className="rounded-full bg-primary px-2 py-0.5 text-primary-foreground">{roleLabel}</span>
-                  <span>{companyName}</span>
-                </div>
                 {showStaffScreenLink ? (
                   <Link
                     href="/staff"
