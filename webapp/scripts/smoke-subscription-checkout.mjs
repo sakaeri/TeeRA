@@ -46,7 +46,17 @@ try {
   await page.goto("http://localhost:3000/company/settings?tab=basic");
   let bodyText = await page.textContent("body");
   log("設定画面に現在のプラン（無料）が表示される", bodyText.includes("現在のプラン") && bodyText.includes("無料"));
-  log("スタンダード/ビジネスへのアップグレードボタンが表示される", bodyText.includes("スタンダードにアップグレード") && bodyText.includes("ビジネスにアップグレード"));
+  log("設定画面からTee残高ページへの導線がある", bodyText.includes("Tee残高ページでプランを変更"));
+
+  // プランの選択・変更はTee残高ページの「プランを選ぶ」ポップアップに集約されている
+  await page.goto("http://localhost:3000/company/wallet");
+  await page.getByRole("button", { name: "プランを選ぶ" }).click();
+  bodyText = await page.textContent("body");
+  log(
+    "Tee残高ページのプランポップアップにスタンダード/ビジネスへのアップグレードボタンが表示される",
+    (bodyText.match(/このプランにする/g) ?? []).length === 2,
+  );
+  await page.click("text=✕");
 
   // --- Stripeサブスクcheckout + webhook simulation (local HMAC, no network needed) ---
   const stripe = new Stripe("sk_test_local_dev_placeholder_not_a_real_key");
@@ -99,9 +109,13 @@ try {
   planTier = psql(`select "planTier" from "Company" where id='${companyId}';`);
   log("再送してもplanTierはSTANDARDのまま", planTier === "STANDARD");
 
-  await page.reload();
+  await page.goto("http://localhost:3000/company/settings?tab=basic");
   bodyText = await page.textContent("body");
   log("設定画面の現在のプラン表示がスタンダードに更新される", bodyText.includes("スタンダード"));
+
+  await page.goto("http://localhost:3000/company/wallet");
+  bodyText = await page.textContent("body");
+  log("Tee残高ページの残高カードのプラン表示もスタンダードに更新される", bodyText.includes("スタンダードプラン"));
 
   // --- 解約イベントで無料プランに即座に戻る（グランドファザリングなし） ---
   const cancelPayload = JSON.stringify({

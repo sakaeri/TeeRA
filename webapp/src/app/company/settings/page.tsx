@@ -60,7 +60,6 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
         phoneNumber={company.phoneNumber ?? ""}
         teeBalance={company.teeBalance}
         planTier={company.planTier}
-        stripeConfigured={Boolean(process.env.STRIPE_SECRET_KEY)}
         admins={admins.map((a) => ({
           userId: a.userId,
           name: a.user.name,

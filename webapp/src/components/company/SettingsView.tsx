@@ -16,7 +16,6 @@ import {
   inviteTeamManagerAction,
   promoteExistingStaffToTeamRoleAction,
 } from "@/app/company/actions";
-import { createSubscriptionCheckoutSessionAction } from "@/app/company/settings/subscriptionActions";
 import { ContractsView } from "@/components/company/ContractsView";
 import { WorkReportsQueue } from "@/components/company/WorkReportsQueue";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -37,12 +36,6 @@ type StaffOption = { userId: string; name: string };
 // 2チーム目以降の作成コスト。src/lib/domain/teams.tsのTEAM_UNLOCK_TEE_COSTと
 // 同値（"server-only"ファイルのためクライアント側では値のみ複製）。
 const TEAM_UNLOCK_TEE_COST = 10;
-
-// src/lib/domain/plans.tsのPLAN_YEN/PLAN_PDF_QUOTAと同値の複製（同上）。
-const PLAN_INFO: Record<"STANDARD" | "BUSINESS", { label: string; yen: number; quota: number }> = {
-  STANDARD: { label: "スタンダード", yen: 3980, quota: 30 },
-  BUSINESS: { label: "ビジネス", yen: 7980, quota: 100 },
-};
 
 type ContractTemplate = {
   id: string;
@@ -107,7 +100,6 @@ export function SettingsView({
   staff,
   teeBalance,
   planTier,
-  stripeConfigured,
   contractTemplates,
   contractClients,
   workReports,
@@ -122,7 +114,6 @@ export function SettingsView({
   staff: StaffOption[];
   teeBalance: number;
   planTier: "FREE" | "STANDARD" | "BUSINESS";
-  stripeConfigured: boolean;
   contractTemplates: ContractTemplate[];
   contractClients: ContractClientOption[];
   workReports: WorkReportRow[];
@@ -157,7 +148,7 @@ export function SettingsView({
             phoneNumber={phoneNumber}
           />
           <AdminsSection admins={admins} />
-          <PlanSection planTier={planTier} stripeConfigured={stripeConfigured} />
+          <PlanSection planTier={planTier} />
           <TeamsSection teams={teams} staff={staff} teeBalance={teeBalance} />
         </div>
       ) : null}
@@ -197,52 +188,25 @@ const PLAN_LABEL: Record<"FREE" | "STANDARD" | "BUSINESS", string> = {
   BUSINESS: "ビジネス",
 };
 
-function PlanSection({
-  planTier,
-  stripeConfigured,
-}: {
-  planTier: "FREE" | "STANDARD" | "BUSINESS";
-  stripeConfigured: boolean;
-}) {
-  const [pending, startTransition] = useTransition();
-  const upgradeTargets = (["STANDARD", "BUSINESS"] as const).filter((t) => t !== planTier);
+// プランの選択・変更はTee残高ページに集約したため、ここでは現在のプラン
+// 表示とそこへの導線だけを置く。
+function PlanSection({ planTier }: { planTier: "FREE" | "STANDARD" | "BUSINESS" }) {
+  const router = useRouter();
 
   return (
     <SectionCard title="プラン">
-      <p className="mb-4 text-sm">
-        現在のプラン: <span className="font-semibold text-primary">{PLAN_LABEL[planTier]}</span>
-        {planTier === "FREE" ? (
-          <span className="ml-2 text-xs text-muted">過去データの閲覧は直近3ヶ月までです。</span>
-        ) : (
-          <span className="ml-2 text-xs text-muted">
-            過去データ閲覧が無制限、PDF発行が月{PLAN_INFO[planTier].quota}件まで無料です。
-          </span>
-        )}
-      </p>
-
-      {upgradeTargets.length > 0 ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {upgradeTargets.map((tier) => (
-            <div key={tier} className="rounded-xl border border-border p-4">
-              <p className="font-semibold text-foreground">{PLAN_INFO[tier].label}プラン</p>
-              <p className="mt-1 text-xs text-muted">
-                月額{PLAN_INFO[tier].yen.toLocaleString()}円 / PDF発行 月{PLAN_INFO[tier].quota}件まで無料
-              </p>
-              <button
-                type="button"
-                disabled={pending || !stripeConfigured}
-                onClick={() => startTransition(() => createSubscriptionCheckoutSessionAction(tier))}
-                className="mt-3 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
-              >
-                {PLAN_INFO[tier].label}にアップグレード
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {!stripeConfigured ? (
-        <p className="mt-3 text-xs text-red-600">Stripeが未設定のため、プランのアップグレードは利用できません。</p>
-      ) : null}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm">
+          現在のプラン: <span className="font-semibold text-primary">{PLAN_LABEL[planTier]}</span>
+        </p>
+        <button
+          type="button"
+          onClick={() => router.push("/company/wallet")}
+          className="shrink-0 rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary whitespace-nowrap"
+        >
+          Tee残高ページでプランを変更
+        </button>
+      </div>
     </SectionCard>
   );
 }
