@@ -81,6 +81,12 @@ export function CompanyShell({
                     <p className="text-xs text-muted">{userEmail}</p>
                   </div>
                 </div>
+                <Link
+                  href="/account"
+                  className="mb-3 block rounded-lg border border-border px-4 py-2 text-center text-sm text-foreground hover:border-primary"
+                >
+                  アカウント設定
+                </Link>
                 {showStaffScreenLink ? (
                   <Link
                     href="/staff"

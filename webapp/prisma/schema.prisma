@@ -33,6 +33,7 @@ model User {
 
   createdInvites                      InviteToken[]                 @relation("InviteCreatedBy")
   usedInvites                         InviteToken[]                 @relation("InviteUsedBy")
+  accountActionTokens                 AccountActionToken[]
   createdTodoItems                    TodoItem[]                    @relation("TodoCreatedBy")
   assignedTodoItems                   TodoItem[]                    @relation("TodoRecipient")
   todoComments                        TodoComment[]
@@ -472,6 +473,31 @@ model InviteToken {
   usedBy              User?                @relation("InviteUsedBy", fields: [usedByUserId], references: [id])
 
   @@index([companyId])
+}
+
+enum AccountActionTokenKind {
+  PASSWORD_RESET
+  EMAIL_CHANGE
+}
+
+// パスワードリセット・メールアドレス変更確認用の使い捨てトークン。
+// InviteTokenと同じ「kind列挙型＋用途別オプション列」の構成に揃えた。
+// メールで送るのはtoken本体で、DBにはハッシュ（tokenHash）だけを保存する
+// （招待URLと違い、こちらは本人以外が知り得ない前提で使うトークンのため、
+// DB漏洩時にそのまま使われてしまわないようにする）。
+model AccountActionToken {
+  id        String                 @id @default(cuid())
+  tokenHash String                 @unique
+  kind      AccountActionTokenKind
+  userId    String
+  newEmail  String? // EMAIL_CHANGE用 — 確定するまでUser.emailは変更しない
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime               @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // ---------------------------------------------------------------------------

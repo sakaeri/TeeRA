@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 
-const PUBLIC_ROUTES = ["/", "/login", "/register"];
+const PUBLIC_ROUTES = ["/", "/login", "/register", "/forgot-password"];
+const PUBLIC_PREFIXES = ["/invite/", "/reset-password/", "/confirm-email-change/"];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isPublic =
-    PUBLIC_ROUTES.includes(pathname) || pathname.startsWith("/invite/");
+    PUBLIC_ROUTES.includes(pathname) || PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
   const isAuthed = Boolean(req.auth?.user);
 
   if (!isAuthed && !isPublic) {

@@ -10,9 +10,12 @@ import {
   RegisterSchema,
   LoginSchema,
   CreateCompanySchema,
+  ForgotPasswordSchema,
+  ResetPasswordSchema,
 } from "@/lib/validation/auth";
 import { verifySession, getActiveMembership, ACTIVE_COMPANY_COOKIE } from "@/lib/auth/session";
 import { redeemInvite, lookupInvite, redeemCompanyRelationshipInvite } from "@/lib/domain/invites";
+import { requestPasswordReset, resetPassword } from "@/lib/domain/accountSecurity";
 
 export type FormState =
   | { errors?: Record<string, string[]>; message?: string }
@@ -101,6 +104,41 @@ export async function loginAction(
 export async function logoutAction() {
   await signOut({ redirect: false });
   redirect("/login");
+}
+
+// メールアドレスの存在有無を外部に漏らさないため、見つかった/見つからない
+// どちらでも同じ成功メッセージを返す（呼び出し元のフォームはこの結果を
+// 常に「送信しました」として表示する）。
+export async function requestPasswordResetAction(
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const parsed = ForgotPasswordSchema.safeParse({ email: formData.get("email") });
+  if (!parsed.success) {
+    return { errors: z_flatten(parsed) };
+  }
+
+  await requestPasswordReset(parsed.data.email);
+  return { message: "sent" };
+}
+
+export async function resetPasswordAction(
+  token: string,
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const parsed = ResetPasswordSchema.safeParse({ password: formData.get("password") });
+  if (!parsed.success) {
+    return { errors: z_flatten(parsed) };
+  }
+
+  try {
+    await resetPassword(token, parsed.data.password);
+  } catch {
+    return { message: "invalid_or_expired_token" };
+  }
+
+  redirect("/login?reset=1");
 }
 
 // 「今どの会社として動いているか」を選び直す（複数社所属時の切替）。

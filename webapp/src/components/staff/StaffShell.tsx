@@ -76,6 +76,12 @@ export function StaffShell({
                   </div>
                 </div>
                 <div className="mb-3 rounded-lg bg-background px-3 py-2 text-xs">{companyName}</div>
+                <Link
+                  href="/account"
+                  className="mb-3 block rounded-lg border border-border px-4 py-2 text-center text-sm text-foreground hover:border-primary"
+                >
+                  アカウント設定
+                </Link>
                 {showCompanyScreenLink ? (
                   <Link
                     href="/company"
