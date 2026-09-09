@@ -99,7 +99,6 @@ export function SettingsView({
   teams,
   staff,
   teeBalance,
-  planTier,
   contractTemplates,
   contractClients,
   workReports,
@@ -113,7 +112,6 @@ export function SettingsView({
   teams: Team[];
   staff: StaffOption[];
   teeBalance: number;
-  planTier: "FREE" | "STANDARD" | "BUSINESS";
   contractTemplates: ContractTemplate[];
   contractClients: ContractClientOption[];
   workReports: WorkReportRow[];
@@ -148,7 +146,6 @@ export function SettingsView({
             phoneNumber={phoneNumber}
           />
           <AdminsSection admins={admins} />
-          <PlanSection planTier={planTier} />
           <TeamsSection teams={teams} staff={staff} teeBalance={teeBalance} />
         </div>
       ) : null}
@@ -179,35 +176,6 @@ function SectionCard({
       </div>
       {children}
     </section>
-  );
-}
-
-const PLAN_LABEL: Record<"FREE" | "STANDARD" | "BUSINESS", string> = {
-  FREE: "無料",
-  STANDARD: "スタンダード",
-  BUSINESS: "ビジネス",
-};
-
-// プランの選択・変更はTee残高ページに集約したため、ここでは現在のプラン
-// 表示とそこへの導線だけを置く。
-function PlanSection({ planTier }: { planTier: "FREE" | "STANDARD" | "BUSINESS" }) {
-  const router = useRouter();
-
-  return (
-    <SectionCard title="プラン">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm">
-          現在のプラン: <span className="font-semibold text-primary">{PLAN_LABEL[planTier]}</span>
-        </p>
-        <button
-          type="button"
-          onClick={() => router.push("/company/wallet")}
-          className="shrink-0 rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary whitespace-nowrap"
-        >
-          Tee残高ページでプランを変更
-        </button>
-      </div>
-    </SectionCard>
   );
 }
 
