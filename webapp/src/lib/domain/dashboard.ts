@@ -246,7 +246,7 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
       kind: "契約満了",
       text: `${c.staffName}さんの契約（${c.contractTitle}）が${c.contractEndDate}に満了します`,
       actionLabel: "確認する",
-      actionHref: "/company?open=expiring",
+      actionHref: "/company?open=contracts",
     });
   }
 

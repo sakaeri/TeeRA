@@ -78,10 +78,12 @@ try {
 
   await page.goto("http://localhost:3000/company");
   let body = await page.textContent("body");
-  log("契約満了間近 KPI shows exactly 1 (10日以内の1件のみ)", /契約満了間近[\s\S]{0,20}1/.test(body));
+  // 契約満了間近は独立したKPIカードではなく「契約書未確認」カードに合算
+  // 表示される（ダッシュボードの升目のバランスを保つための統合）。
+  log("契約書未確認 KPI shows exactly 1 (10日以内の1件のみ、未送付の契約書は無し)", /契約書未確認[\s\S]{0,20}1/.test(body));
   log("統一やることリストにも契約満了の項目が出る", body.includes("満了") && body.includes("満了５日後太郎"));
 
-  await page.getByText("契約満了間近", { exact: true }).click();
+  await page.getByText("契約書未確認", { exact: true }).click();
   await page.waitForTimeout(400);
   // ページ全体のbody.textContent()には、他のstate用にクライアントへ送られる
   // contractTemplates（他スタッフの契約書テンプレートのタイトルにも本人の

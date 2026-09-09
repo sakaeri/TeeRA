@@ -136,14 +136,16 @@ type PromoOrder = {
 
 type DashboardTab = "active" | "resolved" | "promoList" | "promoOrders";
 
-type PopupKind = "shortage" | "unconfirmed" | "reports" | "contracts" | "expiring" | "paidLeave";
+type PopupKind = "shortage" | "unconfirmed" | "reports" | "contracts" | "paidLeave";
 
-const KPI_CARDS: { key: keyof Kpis; label: string; href?: string; tab?: DashboardTab; popup?: PopupKind }[] = [
+// 「契約満了間近」はダッシュボードの升目のバランスが悪くなる（7枚で3列
+// グリッドの最終行が1枚だけ余る）ため独立カードにせず、「契約書未確認」
+// のカードにextraKeyとして合算表示し、ポップアップも1つにまとめている。
+const KPI_CARDS: { key: keyof Kpis; label: string; href?: string; tab?: DashboardTab; popup?: PopupKind; extraKey?: keyof Kpis }[] = [
   { key: "shortageCount", label: "欠員件数", popup: "shortage" },
   { key: "unconfirmedShiftCount", label: "未確定シフト", popup: "unconfirmed" },
   { key: "pendingReportCount", label: "業務報告未承認", popup: "reports" },
-  { key: "pendingContractCount", label: "契約書未確認", popup: "contracts" },
-  { key: "expiringContractCount", label: "契約満了間近", popup: "expiring" },
+  { key: "pendingContractCount", label: "契約書未確認", popup: "contracts", extraKey: "expiringContractCount" },
   { key: "duePaidLeaveGrantCount", label: "有給付与予定", popup: "paidLeave" },
   { key: "pendingShipmentCount", label: "発送待ち", tab: "promoOrders" },
 ];
@@ -251,8 +253,9 @@ export function DashboardView({
       </div>
 
       <section className="grid grid-cols-3 gap-4">
-        {KPI_CARDS.map((card) =>
-          card.tab || card.popup ? (
+        {KPI_CARDS.map((card) => {
+          const count = kpis[card.key] + (card.extraKey ? kpis[card.extraKey] : 0);
+          return card.tab || card.popup ? (
             <button
               key={card.key}
               type="button"
@@ -261,7 +264,7 @@ export function DashboardView({
             >
               <p className="text-sm text-muted">{card.label}</p>
               <p className="font-serif-jp text-2xl font-bold text-primary">
-                {kpis[card.key]}
+                {count}
                 <span className="ml-1 text-xs text-accent">件 ▾</span>
               </p>
             </button>
@@ -273,12 +276,12 @@ export function DashboardView({
             >
               <p className="text-sm text-muted">{card.label}</p>
               <p className="font-serif-jp text-2xl font-bold text-primary">
-                {kpis[card.key]}
+                {count}
                 <span className="ml-1 text-xs text-accent">件 ▾</span>
               </p>
             </Link>
-          ),
-        )}
+          );
+        })}
       </section>
 
       <TodoSection
@@ -326,15 +329,13 @@ export function DashboardView({
       {openPopup === "contracts" ? (
         <PendingContractPopup
           staff={pendingContractStaff}
+          expiringEntries={expiringContractStaff}
           onSelect={(staff) => {
             setOpenPopup(null);
             setGenerateTarget(staff);
           }}
           onClose={() => setOpenPopup(null)}
         />
-      ) : null}
-      {openPopup === "expiring" ? (
-        <ExpiringContractPopup entries={expiringContractStaff} onClose={() => setOpenPopup(null)} />
       ) : null}
       {openPopup === "paidLeave" ? (
         <DuePaidLeaveGrantsPopup entries={duePaidLeaveGrants} onClose={() => setOpenPopup(null)} />
@@ -826,17 +827,22 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
   );
 }
 
+// 「契約書未確認」と「契約満了間近」は元は別々のポップアップだったが、
+// ダッシュボードのカードを1枚に統合したのに合わせてポップアップも1つに
+// まとめている（各項目は元のバッジで種別が分かるようにしてある）。
 function PendingContractPopup({
   staff,
+  expiringEntries,
   onSelect,
   onClose,
 }: {
   staff: PendingContractStaff[];
+  expiringEntries: ExpiringContractStaff[];
   onSelect: (staff: PendingContractStaff) => void;
   onClose: () => void;
 }) {
   return (
-    <PopupShell title="契約書未確認" subtitle="未締結の契約書です" onClose={onClose}>
+    <PopupShell title="契約書未確認" subtitle="未締結・まもなく満了する契約です" onClose={onClose}>
       {staff.map((s) => (
         <div key={s.userId} className="flex items-center justify-between rounded-xl border border-border/60 p-4 text-sm">
           <div className="flex items-center gap-2">
@@ -852,15 +858,7 @@ function PendingContractPopup({
           </button>
         </div>
       ))}
-      {staff.length === 0 ? <p className="text-center text-muted">未締結の契約書はありません。</p> : null}
-    </PopupShell>
-  );
-}
-
-function ExpiringContractPopup({ entries, onClose }: { entries: ExpiringContractStaff[]; onClose: () => void }) {
-  return (
-    <PopupShell title="契約満了間近" subtitle="10日以内に契約期間が満了します" onClose={onClose}>
-      {entries.map((e) => (
+      {expiringEntries.map((e) => (
         <div key={e.staffContractId} className="flex items-center justify-between rounded-xl border border-border/60 p-4 text-sm">
           <div>
             <div className="flex items-center gap-2">
@@ -879,7 +877,9 @@ function ExpiringContractPopup({ entries, onClose }: { entries: ExpiringContract
           </Link>
         </div>
       ))}
-      {entries.length === 0 ? <p className="text-center text-muted">満了間近の契約はありません。</p> : null}
+      {staff.length === 0 && expiringEntries.length === 0 ? (
+        <p className="text-center text-muted">対応が必要な契約はありません。</p>
+      ) : null}
     </PopupShell>
   );
 }

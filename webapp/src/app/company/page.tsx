@@ -57,14 +57,14 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
 
   const currentUserName = audience.find((a) => a.userId === userId)?.name ?? "";
   const initialTab = open === "promoOrders" ? ("promoOrders" as const) : undefined;
+  // "expiring"は契約満了間近ポップアップが契約書未確認ポップアップに統合
+  // される前の旧リンク（やることリストの履歴等）向けの後方互換。
   const initialOpenPopup =
-    open === "contracts"
+    open === "contracts" || open === "expiring"
       ? ("contracts" as const)
-      : open === "expiring"
-        ? ("expiring" as const)
-        : open === "paidLeave"
-          ? ("paidLeave" as const)
-          : undefined;
+      : open === "paidLeave"
+        ? ("paidLeave" as const)
+        : undefined;
   const initialReportDetailId = open === "reports" ? reportId : undefined;
 
   return (
