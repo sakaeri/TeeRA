@@ -12,7 +12,6 @@ import {
   deleteLine,
   updateDeductions,
   updatePaidLeave,
-  finalizeSalarySlip,
   issueSalarySlip,
   reopenSalarySlip,
   renameUnresolvedTaskNames,
@@ -76,12 +75,6 @@ export async function updatePaidLeaveAction(
   const { userId } = await requireCompanyAdminOrEditor();
   await assertAccess(salarySlipId);
   await updatePaidLeave(salarySlipId, changes, userId);
-  revalidatePath("/company/payroll");
-}
-
-export async function finalizeSalarySlipAction(salarySlipId: string) {
-  await assertAccess(salarySlipId);
-  await finalizeSalarySlip(salarySlipId);
   revalidatePath("/company/payroll");
 }
 

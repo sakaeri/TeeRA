@@ -7,7 +7,6 @@ import {
   deleteLineAction,
   updateDeductionsAction,
   updatePaidLeaveAction,
-  finalizeSalarySlipAction,
   issueSalarySlipAction,
   reopenSalarySlipAction,
   renameUnresolvedTaskNamesAction,
@@ -52,7 +51,7 @@ export function SalarySlipEditor({
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-serif-jp text-lg font-bold text-primary">勤務内訳</h2>
           <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">
-            {slip.status === "DRAFT" ? "下書き" : slip.status === "FINALIZED" ? "確定済み" : "発行済み"}
+            {slip.status === "DRAFT" ? "下書き" : "発行済み"}
           </span>
         </div>
         <table className="w-full text-sm">
@@ -167,33 +166,6 @@ export function SalarySlipEditor({
 
         {isEditable ? (
           <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => startTransition(() => finalizeSalarySlipAction(slip.id))}
-              className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
-            >
-              確定する
-            </button>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => setShowIssueConfirm(true)}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              PDFで明細を発行する
-            </button>
-          </div>
-        ) : slip.status === "FINALIZED" ? (
-          <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => startTransition(() => reopenSalarySlipAction(slip.id))}
-              className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
-            >
-              内容を修正する
-            </button>
             <button
               type="button"
               disabled={pending}

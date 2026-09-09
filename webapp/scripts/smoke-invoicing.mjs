@@ -156,28 +156,12 @@ try {
   await dueDateSaveBtn.click();
   await admin.waitForTimeout(500);
 
-  // ⑥: 給料明細と同じく、下書きの段階から「確定する」を経由せずとも
-  // 「PDFで請求書を発行する」が並んで見える（今までは確定しないと
-  // 発行ボタン自体が出なかった）
+  // 「確定する」という中間状態は廃止され、下書きからそのまま
+  // 「PDFで請求書を発行する」で発行できる（計算＝PDF発行のみに単純化）
   log(
-    "下書きの段階でも「PDFで請求書を発行する」が確定ボタンと並んで見える",
+    "下書きの段階で「PDFで請求書を発行する」ボタンが見える",
     await admin.getByRole("button", { name: "PDFで請求書を発行する", exact: true }).isVisible(),
   );
-
-  await admin.getByRole("button", { name: "確定する", exact: true }).click();
-  await admin.waitForTimeout(600);
-  body = await admin.textContent("body");
-  log("invoice confirmed", body.includes("確定済み"));
-
-  // ⑤: 確定済み（未発行）の段階でも「内容を修正する」で下書きに戻せる
-  // （今までは発行済み以降でしか修正できず、確定しただけの状態は
-  // 直せなかった）
-  await admin.getByRole("button", { name: "内容を修正する" }).click();
-  await admin.waitForTimeout(600);
-  body = await admin.textContent("body");
-  log("確定済みの段階でも「内容を修正する」で下書きに戻せる", body.includes("下書き"));
-  await admin.getByRole("button", { name: "確定する", exact: true }).click();
-  await admin.waitForTimeout(600);
 
   await admin.getByRole("button", { name: "PDFで請求書を発行する", exact: true }).click();
   await admin.getByRole("button", { name: "発行する", exact: true }).click();
@@ -210,8 +194,6 @@ try {
   // reopen for edit and re-issue -> 給料明細と同じく同月内の再発行は無料
   await admin.goto(`http://localhost:3000/company/invoices?month=${thisMonth}&client=${companyRelationshipId}`);
   await admin.getByRole("button", { name: "内容を修正する" }).click();
-  await admin.waitForTimeout(600);
-  await admin.getByRole("button", { name: "確定する", exact: true }).click();
   await admin.waitForTimeout(600);
   await admin.getByRole("button", { name: "PDFで請求書を発行する", exact: true }).click();
   await admin.getByRole("button", { name: "発行する", exact: true }).click();

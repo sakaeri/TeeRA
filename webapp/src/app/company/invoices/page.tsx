@@ -17,8 +17,6 @@ function currentMonth() {
   return `${today.year}-${String(today.month).padStart(2, "0")}`;
 }
 
-const DRAFT_STATUS_LABEL: Record<string, string> = { DRAFT: "下書き", CONFIRMED: "確定済み" };
-
 export default async function InvoicesPage({
   searchParams,
 }: PageProps<"/company/invoices">) {
@@ -110,8 +108,8 @@ export default async function InvoicesPage({
   }
 
   // 対象月の一覧 — 月と依頼主選択は別物なので、表示中の月に存在する
-  // 請求書（下書き/確定済み/発行済み）を「下書き中」「発行履歴」に分けて
-  // 表示する。チームマネージャー/リーダーは自チームに紐づく取引先分だけに絞る。
+  // 請求書（下書き/発行済み）を「下書き中」「発行履歴」に分けて表示する。
+  // チームマネージャー/リーダーは自チームに紐づく取引先分だけに絞る。
   const accessibleClientIds = new Set(clients.map((c) => c.id));
   const invoicesThisMonth = (await listInvoicesForCompany(membership.companyId, periodLabel)).filter((inv) =>
     accessibleClientIds.has(inv.companyRelationshipId),
@@ -119,6 +117,10 @@ export default async function InvoicesPage({
   const pdfQuota = await pdfQuotaRemaining(membership.companyId);
   const draftInvoices = invoicesThisMonth.filter((inv) => inv.status !== "ISSUED");
   const issuedInvoices = invoicesThisMonth.filter((inv) => inv.status === "ISSUED");
+  // ＋新しく作成の選択肢は、この月にまだ何も無い依頼主だけに絞る
+  // （既にある人は下書き中/発行履歴の行から直接開けるため）。
+  const clientsWithRecordIds = new Set(invoicesThisMonth.map((inv) => inv.companyRelationshipId));
+  const clientsAvailableForNewInvoice = clients.filter((c) => !clientsWithRecordIds.has(c.id));
 
   return (
     <main className="mx-auto w-full max-w-4xl px-8 py-10">
@@ -173,7 +175,7 @@ export default async function InvoicesPage({
                 targetMonth={periodLabel}
                 paramName="client"
                 label="依頼主"
-                options={clients.map((c) => ({ id: c.id, name: c.clientCompany?.name ?? c.proxyName ?? "" }))}
+                options={clientsAvailableForNewInvoice.map((c) => ({ id: c.id, name: c.clientCompany?.name ?? c.proxyName ?? "" }))}
               />
             </div>
             {draftInvoices.length === 0 ? (
@@ -189,7 +191,6 @@ export default async function InvoicesPage({
                       <span className="font-medium">
                         {inv.companyRelationship.clientCompany?.name ?? inv.companyRelationship.proxyName}
                       </span>
-                      <span className="text-xs text-muted">{DRAFT_STATUS_LABEL[inv.status] ?? inv.status}</span>
                     </Link>
                   </li>
                 ))}

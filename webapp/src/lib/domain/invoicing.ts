@@ -235,17 +235,9 @@ export async function reopenInvoiceForEdit(invoiceId: string) {
   return prisma.invoice.update({ where: { id: invoiceId }, data: { status: "DRAFT" } });
 }
 
-export async function confirmInvoice(invoiceId: string) {
-  const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
-  if (!invoice.dueDate) throw new Error("due_date_required");
-  return prisma.invoice.update({ where: { id: invoiceId }, data: { status: "CONFIRMED" } });
-}
-
 // 発行: 給料明細と同じく、同月内（同じInvoice行）の初回発行だけ1Tee課金し、
 // 以降の同月内の再発行（内容を修正しての再発行を含む）は無料。
-// invoicedShiftIdsは確定(確定する)時点ではなく実際の発行時点でロックする
-// （確定だけして発行しないとシフトデータが破壊的に消費されるプロトタイプの
-// バグをchat29/30で修正した経緯があるため）。
+// invoicedShiftIdsは編集中ではなく実際の発行時点でロックする。
 export async function issueInvoice(params: { invoiceId: string; issuedByUserId: string }) {
   const invoice = await prisma.invoice.findUniqueOrThrow({
     where: { id: params.invoiceId },

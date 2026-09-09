@@ -101,7 +101,8 @@ try {
   // --- 「＋新しく作成」→ポップアップでスタッフ選択→明細編集画面へ ---
   await admin.getByRole("button", { name: "＋新しく作成" }).click();
   await admin.waitForTimeout(200);
-  await admin.locator("select").selectOption(staffUserId);
+  await admin.fill('input[placeholder="スタッフ名で検索"]', "対象月ナビ確認スタッフ");
+  await admin.getByRole("button", { name: "対象月ナビ確認スタッフ", exact: true }).click();
   await admin.getByRole("button", { name: "作成へ進む" }).click();
   await admin.waitForTimeout(400);
   url = new URL(admin.url());
@@ -157,7 +158,8 @@ try {
 
   await admin.getByRole("button", { name: "＋新しく作成" }).click();
   await admin.waitForTimeout(200);
-  await admin.locator("select").selectOption(relationshipId);
+  await admin.fill('input[placeholder="依頼主名で検索"]', "対象月ナビ確認取引先");
+  await admin.getByRole("button", { name: "対象月ナビ確認取引先", exact: true }).click();
   await admin.getByRole("button", { name: "作成へ進む" }).click();
   await admin.waitForTimeout(400);
   url = new URL(admin.url());

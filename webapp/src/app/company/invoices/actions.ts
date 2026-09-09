@@ -13,7 +13,6 @@ import {
   setDueDate,
   setNote,
   setInvoiceRegistrationNumber,
-  confirmInvoice,
   issueInvoice,
   reopenInvoiceForEdit,
 } from "@/lib/domain/invoicing";
@@ -85,12 +84,6 @@ export async function setInvoiceRegistrationNumberAction(invoiceId: string, numb
   await setInvoiceRegistrationNumber(membership.companyId, invoiceId, number);
   revalidatePath("/company/invoices");
   revalidatePath("/company/settings");
-}
-
-export async function confirmInvoiceAction(invoiceId: string) {
-  await assertAccess(invoiceId);
-  await confirmInvoice(invoiceId);
-  revalidatePath("/company/invoices");
 }
 
 export async function issueInvoiceAction(invoiceId: string) {

@@ -314,11 +314,7 @@ function computeTotals(slip: { lines: { amount: number }[]; deductions: unknown;
   return { grossFromShifts, paidLeaveAmount, gross, totalDeductions, net };
 }
 
-export async function finalizeSalarySlip(salarySlipId: string) {
-  return prisma.salarySlip.update({ where: { id: salarySlipId }, data: { status: "FINALIZED" } });
-}
-
-// 内容を修正する: 確定済み・発行済みの明細を下書きに戻して編集可能にする
+// 内容を修正する: 発行済みの明細を下書きに戻して編集可能にする
 // （invoicing.tsのreopenInvoiceForEditと同じ考え方）。同月内の再発行は
 // 引き続き無料のまま — 修正のたびに課金すると使われなくなるため、
 // 「同月内は1回課金すればあとは何度でも直せる」という運用にしている。

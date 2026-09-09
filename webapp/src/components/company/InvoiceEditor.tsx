@@ -8,7 +8,6 @@ import {
   setDueDateAction,
   setNoteAction,
   setInvoiceRegistrationNumberAction,
-  confirmInvoiceAction,
   issueInvoiceAction,
   reopenInvoiceForEditAction,
 } from "@/app/company/invoices/actions";
@@ -32,7 +31,7 @@ type Totals = {
 
 type UnresolvedShift = { shiftId: string; date: string; staffName: string; taskName: string | null };
 
-const STATUS_LABEL: Record<string, string> = { DRAFT: "下書き", CONFIRMED: "確定済み", ISSUED: "発行済み" };
+const STATUS_LABEL: Record<string, string> = { DRAFT: "下書き", ISSUED: "発行済み" };
 
 export function InvoiceEditor({
   invoice,
@@ -329,33 +328,6 @@ export function InvoiceEditor({
 
         {isEditable ? (
           <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              disabled={pending || !dueDate}
-              onClick={() => startTransition(() => confirmInvoiceAction(invoice.id))}
-              className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
-            >
-              確定する
-            </button>
-            <button
-              type="button"
-              disabled={pending || !dueDate}
-              onClick={() => setShowIssueConfirm(true)}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              PDFで請求書を発行する
-            </button>
-          </div>
-        ) : invoice.status === "CONFIRMED" ? (
-          <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => startTransition(() => reopenInvoiceForEditAction(invoice.id))}
-              className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
-            >
-              内容を修正する
-            </button>
             <button
               type="button"
               disabled={pending || !dueDate}

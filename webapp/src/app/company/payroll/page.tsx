@@ -17,8 +17,6 @@ function currentMonth() {
   return `${today.year}-${String(today.month).padStart(2, "0")}`;
 }
 
-const DRAFT_STATUS_LABEL: Record<string, string> = { DRAFT: "下書き", FINALIZED: "確定済み" };
-
 export default async function PayrollPage({
   searchParams,
 }: PageProps<"/company/payroll">) {
@@ -107,8 +105,8 @@ export default async function PayrollPage({
   }
 
   // 対象月の一覧 — 月とスタッフ選択は別物なので、表示中の月に存在する
-  // 明細（下書き/確定済み/発行済み）を「下書き中」「発行履歴」に分けて
-  // 表示する。チームマネージャー/リーダーは自チームのスタッフ分だけに絞る。
+  // 明細（下書き/発行済み）を「下書き中」「発行履歴」に分けて表示する。
+  // チームマネージャー/リーダーは自チームのスタッフ分だけに絞る。
   const accessibleStaffIds = new Set(staff.map((s) => s.userId));
   const slipsThisMonth = (await listSalarySlipsForCompany(membership.companyId, targetMonth)).filter((s) =>
     accessibleStaffIds.has(s.staffUserId),
@@ -116,6 +114,10 @@ export default async function PayrollPage({
   const pdfQuota = await pdfQuotaRemaining(membership.companyId);
   const draftSlips = slipsThisMonth.filter((s) => s.status !== "ISSUED");
   const issuedSlips = slipsThisMonth.filter((s) => s.status === "ISSUED");
+  // ＋新しく作成の選択肢は、この月にまだ何も無いスタッフだけに絞る
+  // （既にある人は下書き中/発行履歴の行から直接開けるため）。
+  const staffWithRecordIds = new Set(slipsThisMonth.map((s) => s.staffUserId));
+  const staffAvailableForNewSlip = staff.filter((s) => !staffWithRecordIds.has(s.userId));
 
   return (
     <main className="mx-auto w-full max-w-4xl px-8 py-10">
@@ -170,7 +172,7 @@ export default async function PayrollPage({
                 targetMonth={targetMonth}
                 paramName="staff"
                 label="スタッフ"
-                options={staff.map((s) => ({ id: s.userId, name: s.name }))}
+                options={staffAvailableForNewSlip.map((s) => ({ id: s.userId, name: s.name }))}
               />
             </div>
             {draftSlips.length === 0 ? (
@@ -184,7 +186,6 @@ export default async function PayrollPage({
                       className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm hover:bg-background"
                     >
                       <span className="font-medium">{slip.staff.name}</span>
-                      <span className="text-xs text-muted">{DRAFT_STATUS_LABEL[slip.status] ?? slip.status}</span>
                     </Link>
                   </li>
                 ))}
