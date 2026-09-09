@@ -50,13 +50,13 @@ try {
   await staff.click("text=参加する");
   await staff.waitForURL("http://localhost:3000/staff");
 
-  // --- staff: submit shift request for a date
-  const targetDate = "2026-09-15";
+  // --- staff: submit shift request for a date (day 15, taken from the
+  // wizard's mini calendar grid for the currently-viewed month)
   await staff.locator("button.fixed.bottom-8.right-8").click();
   await staff.click("text=出勤希望");
-  await staff.fill('input[type=date]', targetDate);
-  await staff.click("text=追加");
-  await staff.click("text=申請する");
+  const wizard = staff.locator("div.fixed.inset-0.z-30");
+  await wizard.getByRole("button", { name: "15", exact: true }).click();
+  await wizard.getByRole("button", { name: "申請する" }).click();
   await staff.waitForTimeout(800);
 
   // --- admin: go to calendar for Sept 2026, see pending request, match it

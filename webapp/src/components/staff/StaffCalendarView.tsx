@@ -26,6 +26,19 @@ function weekdayColor(dow: number) {
   return "text-foreground";
 }
 
+function buildMonthCells(year: number, month: number) {
+  const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
+  const startDow = firstOfMonth.getUTCDay();
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const out: { dateStr: string | null; day: number | null }[] = [];
+  for (let i = 0; i < startDow; i++) out.push({ dateStr: null, day: null });
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    out.push({ dateStr, day: d });
+  }
+  return out;
+}
+
 export function StaffCalendarView({
   year,
   month,
@@ -38,6 +51,8 @@ export function StaffCalendarView({
   shifts: ShiftRow[];
 }) {
   const [showWizard, setShowWizard] = useState(false);
+  const [wizardInitialDate, setWizardInitialDate] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [companyFilter, setCompanyFilter] = useState("");
   const todayStr = todayJst();
 
@@ -52,18 +67,7 @@ export function StaffCalendarView({
     return map;
   }, [filteredShifts]);
 
-  const cells = useMemo(() => {
-    const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
-    const startDow = firstOfMonth.getUTCDay();
-    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-    const out: { dateStr: string | null; day: number | null }[] = [];
-    for (let i = 0; i < startDow; i++) out.push({ dateStr: null, day: null });
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      out.push({ dateStr, day: d });
-    }
-    return out;
-  }, [year, month]);
+  const cells = useMemo(() => buildMonthCells(year, month), [year, month]);
 
   const prev = month === 1 ? { y: year - 1, m: 12 } : { y: year, m: month - 1 };
   const next = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
@@ -125,15 +129,18 @@ export function StaffCalendarView({
           if (!c.dateStr) {
             return <div key={i} className="h-[100px]" />;
           }
-          const dow = new Date(c.dateStr + "T00:00:00Z").getUTCDay();
-          const dayShifts = shiftsByDate.get(c.dateStr) ?? [];
-          const isToday = c.dateStr === todayStr;
+          const dateStr = c.dateStr;
+          const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
+          const dayShifts = shiftsByDate.get(dateStr) ?? [];
+          const isToday = dateStr === todayStr;
           const visibleShifts = dayShifts.slice(0, CONFIRMED_SLOT_BUDGET);
           const hasOverflow = dayShifts.length > CONFIRMED_SLOT_BUDGET;
           return (
-            <div
+            <button
               key={i}
-              className={`relative flex h-[100px] flex-col items-stretch justify-start overflow-hidden rounded-xl rounded-tr-none p-1.5 ${
+              type="button"
+              onClick={() => setSelectedDay(dateStr)}
+              className={`relative flex h-[100px] flex-col items-stretch justify-start overflow-hidden rounded-xl rounded-tr-none p-1.5 text-left ${
                 isToday ? "bg-accent/25" : "bg-white/40"
               }`}
             >
@@ -154,7 +161,7 @@ export function StaffCalendarView({
                   </span>
                 ))}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -167,27 +174,116 @@ export function StaffCalendarView({
         ＋
       </button>
 
-      {showWizard ? <ApplyWizard onClose={() => setShowWizard(false)} /> : null}
+      {selectedDay ? (
+        <DayDetailPanel
+          date={selectedDay}
+          shifts={shiftsByDate.get(selectedDay) ?? []}
+          onRequest={() => {
+            setWizardInitialDate(selectedDay);
+            setSelectedDay(null);
+            setShowWizard(true);
+          }}
+          onClose={() => setSelectedDay(null)}
+        />
+      ) : null}
+
+      {showWizard ? (
+        <RequestWizard
+          year={year}
+          month={month}
+          companies={companies}
+          initialDate={wizardInitialDate}
+          onClose={() => {
+            setShowWizard(false);
+            setWizardInitialDate(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-function ApplyWizard({ onClose }: { onClose: () => void }) {
+function formatDateJa(dateStr: string) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dow = new Date(`${dateStr}T00:00:00Z`).getUTCDay();
+  return `${y}年${m}月${d}日（${WEEKDAYS[dow]}）`;
+}
+
+// 日付をタップすると、予定の有無に関わらず詳細パネルが開く。予定が無い
+// 日でも、そこからそのままシフト希望申請につなげられるようにしている。
+function DayDetailPanel({
+  date,
+  shifts,
+  onRequest,
+  onClose,
+}: {
+  date: string;
+  shifts: ShiftRow[];
+  onRequest: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">{formatDateJa(date)}</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+
+        {shifts.length === 0 ? (
+          <p className="mb-4 text-sm text-muted">この日の予定はありません。</p>
+        ) : (
+          <ul className="mb-4 flex flex-col gap-2">
+            {shifts.map((s) => (
+              <li key={s.id} className="rounded-lg border border-border bg-white/60 p-3 text-sm">
+                <p className="font-medium">{s.companyName}</p>
+                <p className="text-muted">{s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <button
+          type="button"
+          onClick={onRequest}
+          className="w-full rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary"
+        >
+          この日にシフト希望を出す
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RequestWizard({
+  year,
+  month,
+  companies,
+  initialDate,
+  onClose,
+}: {
+  year: number;
+  month: number;
+  companies: Company[];
+  initialDate: string | null;
+  onClose: () => void;
+}) {
+  const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
   const [desire, setDesire] = useState<"WORK" | "OFF">("WORK");
-  const [dateInput, setDateInput] = useState("");
-  const [dates, setDates] = useState<string[]>([]);
+  const [dates, setDates] = useState<string[]>(initialDate ? [initialDate] : []);
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
 
-  function addDate() {
-    if (dateInput && !dates.includes(dateInput)) {
-      setDates([...dates, dateInput].sort());
-      setDateInput("");
-    }
+  const cells = useMemo(() => buildMonthCells(year, month), [year, month]);
+
+  function toggleDate(dateStr: string) {
+    setDates((prev) => (prev.includes(dateStr) ? prev.filter((d) => d !== dateStr) : [...prev, dateStr].sort()));
   }
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">シフト希望申請</h3>
@@ -195,6 +291,25 @@ function ApplyWizard({ onClose }: { onClose: () => void }) {
             ✕
           </button>
         </div>
+
+        <label className="mb-3 flex flex-col gap-1 text-xs text-muted">
+          勤務先
+          {companies.length > 1 ? (
+            <select
+              value={companyId}
+              onChange={(e) => setCompanyId(e.target.value)}
+              className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+            >
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <p className="text-sm text-foreground">{companies[0]?.name}</p>
+          )}
+        </label>
 
         <div className="mb-3 flex gap-2 text-sm">
           <button
@@ -217,33 +332,36 @@ function ApplyWizard({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div className="mb-3 flex gap-2">
-          <input
-            type="date"
-            value={dateInput}
-            onChange={(e) => setDateInput(e.target.value)}
-            className="flex-1 rounded-lg border border-border px-3 py-2 text-sm"
-          />
-          <button
-            type="button"
-            onClick={addDate}
-            className="rounded-lg border border-primary px-3 py-2 text-sm text-primary"
-          >
-            追加
-          </button>
-        </div>
-        {dates.length > 0 ? (
-          <div className="mb-3 flex flex-wrap gap-1">
-            {dates.map((d) => (
-              <span
-                key={d}
-                className="rounded-full bg-accent/20 px-3 py-1 text-xs text-accent"
+        <p className="mb-1 text-xs text-muted">日付を複数選択できます（{year}年{month}月）</p>
+        <div className="mb-3 grid grid-cols-7 gap-1">
+          {WEEKDAYS.map((w, i) => (
+            <div key={w} className={`py-0.5 text-center text-[10px] font-semibold ${weekdayColor(i)}`}>
+              {w}
+            </div>
+          ))}
+          {cells.map((c, i) => {
+            if (!c.dateStr) return <div key={i} />;
+            const dateStr = c.dateStr;
+            const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
+            const selected = dates.includes(dateStr);
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => toggleDate(dateStr)}
+                className={`rounded-lg py-1.5 text-xs ${
+                  selected
+                    ? "bg-primary font-semibold text-primary-foreground"
+                    : `hover:bg-background ${weekdayColor(dow)}`
+                }`}
               >
-                {d}
-              </span>
-            ))}
-          </div>
-        ) : null}
+                {c.day}
+              </button>
+            );
+          })}
+        </div>
+
+        {dates.length > 0 ? <p className="mb-3 text-xs text-muted">{dates.length}日を選択中</p> : null}
 
         <textarea
           value={note}
@@ -255,10 +373,10 @@ function ApplyWizard({ onClose }: { onClose: () => void }) {
 
         <button
           type="button"
-          disabled={pending || dates.length === 0}
+          disabled={pending || dates.length === 0 || !companyId}
           onClick={() =>
             startTransition(async () => {
-              await submitShiftRequestAction({ desire, dates, note: note || undefined });
+              await submitShiftRequestAction({ companyId, desire, dates, note: note || undefined });
               onClose();
             })
           }

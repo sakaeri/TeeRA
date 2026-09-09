@@ -82,16 +82,25 @@ export async function confirmCorrectedWorkReportAction(workReportId: string) {
   revalidatePath("/staff/timecard");
 }
 
+// カレンダーが所属する全社分をまとめて表示するようになったのに合わせ、
+// シフト希望申請も「今アクティブな会社」に固定せず、どの勤務先宛かを
+// 明示的に選べるようにした。他人の会社IDを渡されて成りすませないよう、
+// 本当にそのuserIdがそのcompanyIdに所属しているかをサーバー側で必ず検証する。
 export async function submitShiftRequestAction(input: {
+  companyId: string;
   desire: "WORK" | "OFF";
   dates: string[];
   note?: string;
 }) {
-  const { userId, membership } = await requireCompanyStaffRole();
+  const { userId } = await requireCompanyStaffRole();
+  const membership = await prisma.companyMembership.findUnique({
+    where: { userId_companyId: { userId, companyId: input.companyId } },
+  });
+  if (!membership) throw new Error("forbidden");
 
   await submitShiftRequest({
     staffUserId: userId,
-    companyId: membership.companyId,
+    companyId: input.companyId,
     desire: input.desire,
     dates: input.dates.map((d) => new Date(`${d}T00:00:00.000Z`)),
     note: input.note,
