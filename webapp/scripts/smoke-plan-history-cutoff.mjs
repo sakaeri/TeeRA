@@ -182,16 +182,19 @@ try {
     url.searchParams.get("y") === String(farPast.year) && url.searchParams.get("m") === String(farPast.month),
   );
 
-  await admin.goto("http://localhost:3000/company/payroll");
+  // 発行履歴は月ナビで表示中の月だけを対象にする設計になったため、5ヶ月前
+  // そのものを対象月として開き、そこに履歴が表示されること（＝リダイレクト
+  // もされずアクセスできること）を確認する。
+  await admin.goto(`http://localhost:3000/company/payroll?month=${farPastMonth}`);
   await admin.waitForTimeout(300);
   bodyText = await admin.textContent("body");
-  log("スタンダードプランでは給料計算の発行履歴に5ヶ月前の明細が表示される", bodyText.includes(`${farPast.year}年${farPast.month}月`));
+  log("スタンダードプランでは給料計算で5ヶ月前を対象月にしても発行履歴に表示される", bodyText.includes("過去データ制限確認スタッフ"));
   log("スタンダードプランでは制限バナーが表示されない", !bodyText.includes("直近3ヶ月まで"));
 
-  await admin.goto("http://localhost:3000/company/invoices");
+  await admin.goto(`http://localhost:3000/company/invoices?month=${farPastMonth}`);
   await admin.waitForTimeout(300);
   bodyText = await admin.textContent("body");
-  log("スタンダードプランでは請求書の発行履歴に5ヶ月前の請求書が表示される", bodyText.includes(`${farPast.year}年${farPast.month}月`));
+  log("スタンダードプランでは請求書で5ヶ月前を対象月にしても発行履歴に表示される", bodyText.includes("過去データ制限確認取引先"));
 
   await admin.goto(`http://localhost:3000/company/roster?staff=${staffUserId}`);
   await admin.waitForTimeout(400);

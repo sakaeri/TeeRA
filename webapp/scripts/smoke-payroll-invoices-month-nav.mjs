@@ -14,12 +14,17 @@ function psql(sql) {
 }
 
 // 給料計算・請求書の対象月選択を、従来の「日付ピッカー＋開くボタン」から
-// カレンダー/詳細パネルと同じ「＜ 年月 ＞」矢印形式に統一した変更の検証:
-// - 矢印クリックだけで（開くボタン無しで）月が切り替わり、選択中の
-//   スタッフ/依頼主は保持される
+// カレンダー/詳細パネルと同じ「＜ 年月 ＞」矢印形式に統一し、さらに月送り
+// ナビと明細作成（スタッフ/依頼主選択）を分離した変更の検証:
+// - 月ナビは矢印クリックだけで（開くボタン無しで）切り替わり、選択中の
+//   スタッフ/依頼主とは無関係に独立して動く
 // - 中央の年月ラベルをクリックすると当月に戻る
 // - 無料プランでカットオフ月に達すると「＜」が無効化される
-// - スタッフ/依頼主セレクトを変更すると即座に反映される（開くボタン不要）
+// - 一覧画面（スタッフ/依頼主未選択）では「下書き中」「発行履歴」の
+//   2つのセクションが、表示中の月のデータだけを対象に表示される
+// - 「＋新しく作成」ボタンからポップアップでスタッフ/依頼主を選ぶと、
+//   その月・その対象の明細編集画面に遷移する
+// - 編集画面には「一覧に戻る」リンクがあり、月一覧に戻れる
 
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 function jstPartsMonthsAgo(monthsAgo) {
@@ -69,30 +74,48 @@ try {
   await staff.waitForURL("http://localhost:3000/staff");
   const staffUserId = psql(`select id from "User" where email='${staffEmail}';`);
 
-  // --- 給料計算: 矢印だけで月が切り替わり、スタッフ選択が保持される ---
-  await admin.goto(`http://localhost:3000/company/payroll?staff=${staffUserId}`);
+  // --- 給料計算: 一覧画面での月ナビ（開くボタン無し、対象選択とは無関係） ---
+  await admin.goto("http://localhost:3000/company/payroll");
   await admin.waitForTimeout(300);
   let body = await admin.textContent("body");
   log("開くボタンはもう無い", !body.includes("開く"));
   log("当月の年月ラベルが表示される", body.includes(`${today.year}年${today.month}月`));
+  log("一覧画面に「下書き中」セクションがある", body.includes("下書き中"));
+  log("一覧画面に「発行履歴」セクションがある", body.includes("発行履歴"));
+  log("「＋新しく作成」ボタンがある", body.includes("＋新しく作成"));
 
   await admin.getByRole("button", { name: "前の月" }).click();
   await admin.waitForTimeout(300);
   let url = new URL(admin.url());
   const prevYm = jstPartsMonthsAgo(1);
-  log("「前の月」クリックだけで前月のURLに遷移する", url.searchParams.get("month") === `${prevYm.year}-${String(prevYm.month).padStart(2, "0")}`);
-  log("前の月に移動してもスタッフ選択が保持される", url.searchParams.get("staff") === staffUserId);
+  log(
+    "「前の月」クリックだけで前月のURLに遷移する（対象未選択のまま）",
+    url.searchParams.get("month") === `${prevYm.year}-${String(prevYm.month).padStart(2, "0")}` && !url.searchParams.has("staff"),
+  );
 
   await admin.getByRole("button", { name: "当月に戻る" }).click();
   await admin.waitForTimeout(300);
   url = new URL(admin.url());
   log("中央の年月ラベルをクリックすると当月に戻る", url.searchParams.get("month") === `${today.year}-${String(today.month).padStart(2, "0")}`);
 
-  // --- スタッフ選択を変更すると即座に反映される ---
+  // --- 「＋新しく作成」→ポップアップでスタッフ選択→明細編集画面へ ---
+  await admin.getByRole("button", { name: "＋新しく作成" }).click();
+  await admin.waitForTimeout(200);
   await admin.locator("select").selectOption(staffUserId);
-  await admin.waitForTimeout(300);
+  await admin.getByRole("button", { name: "作成へ進む" }).click();
+  await admin.waitForTimeout(400);
+  url = new URL(admin.url());
+  log("＋新しく作成→スタッフ選択で、その月・そのスタッフの編集画面に遷移する", url.searchParams.get("staff") === staffUserId);
   body = await admin.textContent("body");
-  log("スタッフ選択の変更が開くボタン無しで反映される（計算画面が出る）", body.includes("勤務内訳"));
+  log("編集画面が開く（計算画面が出る）", body.includes("勤務内訳"));
+  log("編集画面に「一覧に戻る」リンクがある", body.includes("一覧に戻る"));
+
+  await admin.click("text=一覧に戻る");
+  await admin.waitForTimeout(300);
+  url = new URL(admin.url());
+  log("「一覧に戻る」をクリックすると一覧画面（対象未選択）に戻る", !url.searchParams.has("staff"));
+  body = await admin.textContent("body");
+  log("一覧に戻ると、作成した明細が「下書き中」に表示される", body.includes("対象月ナビ確認スタッフ"));
 
   // --- カットオフ月では「前の月」が無効化される ---
   for (let i = 0; i < 2; i++) {
@@ -118,15 +141,27 @@ try {
     `select id from "CompanyRelationship" where "ownerCompanyId"='${companyId}' order by "createdAt" desc limit 1;`,
   );
 
-  await admin.goto(`http://localhost:3000/company/invoices?client=${relationshipId}`);
+  await admin.goto("http://localhost:3000/company/invoices");
   await admin.waitForTimeout(300);
   body = await admin.textContent("body");
   log("請求書にも開くボタンは無い", !body.includes("開く"));
+  log("請求書の一覧画面にも「下書き中」「発行履歴」セクションがある", body.includes("下書き中") && body.includes("発行履歴"));
 
   await admin.getByRole("button", { name: "前の月" }).click();
   await admin.waitForTimeout(300);
   url = new URL(admin.url());
-  log("請求書でも「前の月」クリックだけで前月に遷移し、依頼主選択が保持される", url.searchParams.get("client") === relationshipId);
+  log("請求書でも「前の月」クリックだけで前月に遷移する（対象未選択のまま）", !url.searchParams.has("client"));
+
+  await admin.getByRole("button", { name: "当月に戻る" }).click();
+  await admin.waitForTimeout(300);
+
+  await admin.getByRole("button", { name: "＋新しく作成" }).click();
+  await admin.waitForTimeout(200);
+  await admin.locator("select").selectOption(relationshipId);
+  await admin.getByRole("button", { name: "作成へ進む" }).click();
+  await admin.waitForTimeout(400);
+  url = new URL(admin.url());
+  log("請求書でも＋新しく作成→依頼主選択で、その月・その依頼主の編集画面に遷移する", url.searchParams.get("client") === relationshipId);
 
   console.log(process.exitCode ? "PAYROLL/INVOICES MONTH NAV SMOKE TEST HAD FAILURES" : "PAYROLL/INVOICES MONTH NAV SMOKE TEST PASSED");
 } catch (err) {

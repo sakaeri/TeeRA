@@ -102,7 +102,7 @@ try {
   await leader.goto(`http://localhost:3000/company/payroll?month=${thisMonth}&staff=${plainStaffId}`);
   await leader.waitForTimeout(500);
   let body = await leader.textContent("body");
-  log("リーダーは給与計算を閲覧できない", body.includes("対象月とスタッフを選択してください") && !body.includes("勤務内訳"));
+  log("リーダーは給与計算を閲覧できない", body.includes("下書き中") && !body.includes("勤務内訳"));
 
   // --- 派遣会社詳細にはチーム編集セクションが出ない（依頼主のみ）---
   await admin.goto("http://localhost:3000/company/roster");

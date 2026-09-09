@@ -1,12 +1,13 @@
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManageAny, isCompanyScopeAdmin } from "@/lib/auth/permissions";
 import { listStaff } from "@/lib/domain/roster";
-import { getOrCreateSalarySlip, getTotals, listIssuedSalarySlipsForCompany } from "@/lib/domain/payroll";
+import { getOrCreateSalarySlip, getTotals, listSalarySlipsForCompany } from "@/lib/domain/payroll";
 import { pdfQuotaRemaining } from "@/lib/domain/plans";
 import { prisma } from "@/lib/prisma";
 import { SalarySlipEditor } from "@/components/company/SalarySlipEditor";
 import { FinanceTabs } from "@/components/company/FinanceTabs";
-import { MonthNavFilterBar } from "@/components/company/MonthNavFilterBar";
+import { MonthNavBar } from "@/components/company/MonthNavBar";
+import { CreateRecordButton } from "@/components/company/CreateRecordButton";
 import { todayJstParts, earliestAllowedMonth, cutoffMonthString } from "@/lib/date";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -16,10 +17,7 @@ function currentMonth() {
   return `${today.year}-${String(today.month).padStart(2, "0")}`;
 }
 
-function monthLabel(targetMonth: string) {
-  const [year, month] = targetMonth.split("-");
-  return `${year}年${Number(month)}月`;
-}
+const DRAFT_STATUS_LABEL: Record<string, string> = { DRAFT: "下書き", FINALIZED: "確定済み" };
 
 export default async function PayrollPage({
   searchParams,
@@ -108,18 +106,16 @@ export default async function PayrollPage({
     };
   }
 
-  // 発行履歴一覧 — 発行済み（課金済み）のものだけを月ごとにまとめる。
-  // チームマネージャー/リーダーは自チームのスタッフ分だけに絞る。
+  // 対象月の一覧 — 月とスタッフ選択は別物なので、表示中の月に存在する
+  // 明細（下書き/確定済み/発行済み）を「下書き中」「発行履歴」に分けて
+  // 表示する。チームマネージャー/リーダーは自チームのスタッフ分だけに絞る。
   const accessibleStaffIds = new Set(staff.map((s) => s.userId));
-  const allIssuedSlips = await listIssuedSalarySlipsForCompany(membership.companyId, minMonth ?? undefined);
+  const slipsThisMonth = (await listSalarySlipsForCompany(membership.companyId, targetMonth)).filter((s) =>
+    accessibleStaffIds.has(s.staffUserId),
+  );
   const pdfQuota = await pdfQuotaRemaining(membership.companyId);
-  const issuedSlips = allIssuedSlips.filter((s) => accessibleStaffIds.has(s.staffUserId));
-  const issuedByMonth = new Map<string, typeof issuedSlips>();
-  for (const slip of issuedSlips) {
-    const list = issuedByMonth.get(slip.targetMonth) ?? [];
-    list.push(slip);
-    issuedByMonth.set(slip.targetMonth, list);
-  }
+  const draftSlips = slipsThisMonth.filter((s) => s.status !== "ISSUED");
+  const issuedSlips = slipsThisMonth.filter((s) => s.status === "ISSUED");
 
   return (
     <main className="mx-auto w-full max-w-4xl px-8 py-10">
@@ -141,75 +137,93 @@ export default async function PayrollPage({
         </p>
       ) : null}
 
-      <MonthNavFilterBar
-        basePath="/company/payroll"
-        targetMonth={targetMonth}
-        minMonth={minMonth}
-        todayMonth={currentMonth()}
-        extraParamName="staff"
-        extraParamValue={staffUserId}
-        extraLabel="スタッフ"
-        extraOptions={staff.map((s) => ({ id: s.userId, name: s.name }))}
-      />
+      <MonthNavBar basePath="/company/payroll" targetMonth={targetMonth} minMonth={minMonth} todayMonth={currentMonth()} />
 
       {slipData ? (
-        <SalarySlipEditor slip={slipData} willUseFreeQuota={pdfQuota.quota > 0 && pdfQuota.remaining > 0} />
+        <>
+          <Link href={`/company/payroll?month=${targetMonth}`} className="mb-4 inline-block text-sm text-primary underline">
+            ← 一覧に戻る
+          </Link>
+          <SalarySlipEditor slip={slipData} willUseFreeQuota={pdfQuota.quota > 0 && pdfQuota.remaining > 0} />
+          {slipData.issues.length ? (
+            <div className="mt-6 text-sm">
+              {slipData.issues.map((i) => (
+                <Link
+                  key={i.id}
+                  href={`/api/salary-slips/${slipData!.id}/pdf?issueId=${i.id}`}
+                  target="_blank"
+                  className="mr-4 text-primary underline"
+                >
+                  PDF ({new Date(i.issuedAt).toLocaleString("ja-JP")})
+                </Link>
+              ))}
+            </div>
+          ) : null}
+        </>
       ) : (
-        <p className="text-sm text-muted">対象月とスタッフを選択してください。</p>
-      )}
-
-      {slipData?.issues.length ? (
-        <div className="mt-6 text-sm">
-          {slipData.issues.map((i) => (
-            <Link
-              key={i.id}
-              href={`/api/salary-slips/${slipData!.id}/pdf?issueId=${i.id}`}
-              target="_blank"
-              className="mr-4 text-primary underline"
-            >
-              PDF ({new Date(i.issuedAt).toLocaleString("ja-JP")})
-            </Link>
-          ))}
-        </div>
-      ) : null}
-
-      <section className="mt-10">
-        <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">発行履歴</h2>
-        {issuedByMonth.size === 0 ? (
-          <p className="text-sm text-muted">まだ発行された給与明細はありません。</p>
-        ) : (
-          <div className="flex flex-col gap-6">
-            {[...issuedByMonth.entries()].map(([month, slips]) => (
-              <div key={month}>
-                <h3 className="mb-2 text-sm font-semibold text-muted">{monthLabel(month)}</h3>
-                <ul className="flex flex-col gap-1">
-                  {slips.map((slip) => (
-                    <li
-                      key={slip.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm"
+        <>
+          <section>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-serif-jp text-lg font-bold text-primary">下書き中</h2>
+              <CreateRecordButton
+                basePath="/company/payroll"
+                targetMonth={targetMonth}
+                paramName="staff"
+                label="スタッフ"
+                options={staff.map((s) => ({ id: s.userId, name: s.name }))}
+              />
+            </div>
+            {draftSlips.length === 0 ? (
+              <p className="text-sm text-muted">下書き中の給与明細はありません。</p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {draftSlips.map((slip) => (
+                  <li key={slip.id}>
+                    <Link
+                      href={`/company/payroll?month=${targetMonth}&staff=${slip.staffUserId}`}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm hover:bg-background"
                     >
                       <span className="font-medium">{slip.staff.name}</span>
-                      <span className="text-muted">{getTotals(slip).net}円</span>
-                      <div className="flex flex-wrap gap-3">
-                        {slip.issues.map((i) => (
-                          <Link
-                            key={i.id}
-                            href={`/api/salary-slips/${slip.id}/pdf?issueId=${i.id}`}
-                            target="_blank"
-                            className="text-xs text-primary underline"
-                          >
-                            PDF（{new Date(i.issuedAt).toLocaleString("ja-JP")}）
-                          </Link>
-                        ))}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+                      <span className="text-xs text-muted">{DRAFT_STATUS_LABEL[slip.status] ?? slip.status}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="mt-10">
+            <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">発行履歴</h2>
+            {issuedSlips.length === 0 ? (
+              <p className="text-sm text-muted">この月に発行された給与明細はありません。</p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {issuedSlips.map((slip) => (
+                  <li
+                    key={slip.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm"
+                  >
+                    <span className="font-medium">{slip.staff.name}</span>
+                    <span className="text-muted">{getTotals(slip).net}円</span>
+                    <div className="flex flex-wrap gap-3">
+                      {slip.issues.map((i) => (
+                        <Link
+                          key={i.id}
+                          href={`/api/salary-slips/${slip.id}/pdf?issueId=${i.id}`}
+                          target="_blank"
+                          className="text-xs text-primary underline"
+                        >
+                          PDF（{new Date(i.issuedAt).toLocaleString("ja-JP")}）
+                        </Link>
+                      ))}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
     </main>
   );
 }

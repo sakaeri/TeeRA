@@ -301,21 +301,10 @@ export async function issueInvoice(params: { invoiceId: string; issuedByUserId: 
   });
 }
 
-export async function listInvoicesForCompany(companyId: string) {
+export async function listInvoicesForCompany(companyId: string, periodLabel: string) {
   return prisma.invoice.findMany({
-    where: { issuingCompanyId: companyId },
+    where: { issuingCompanyId: companyId, periodLabel },
     include: { companyRelationship: { include: { clientCompany: true } }, lines: true, issues: true },
-    orderBy: { createdAt: "desc" },
-  });
-}
-
-// 給料明細/請求書メニューの発行履歴一覧用 — 対象月を問わず、発行済み
-// （status=ISSUED）のものだけを取得する。minMonthを渡すと（無料プランの
-// 3ヶ月制限用）それより前の対象月は除外する。
-export async function listIssuedInvoicesForCompany(companyId: string, minMonth?: string) {
-  return prisma.invoice.findMany({
-    where: { issuingCompanyId: companyId, status: "ISSUED", ...(minMonth ? { periodLabel: { gte: minMonth } } : {}) },
-    include: { companyRelationship: { include: { clientCompany: true } }, lines: true, issues: { orderBy: { issuedAt: "desc" } } },
-    orderBy: { periodLabel: "desc" },
+    orderBy: { createdAt: "asc" },
   });
 }

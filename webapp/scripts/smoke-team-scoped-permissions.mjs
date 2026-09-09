@@ -184,7 +184,7 @@ try {
   await mgr.goto(`http://localhost:3000/company/payroll?month=${thisMonth}&staff=${staffBId}`);
   await mgr.waitForTimeout(500);
   body = await mgr.textContent("body");
-  log("給与計算: Bチームスタッフの給与画面は開けない（対象月とスタッフを選択してくださいのまま）", body.includes("対象月とスタッフを選択してください") && !body.includes("勤務内訳"));
+  log("給与計算: Bチームスタッフの給与画面は開けない（一覧画面のまま）", body.includes("下書き中") && !body.includes("勤務内訳"));
 
   // invoices: forbidden for team-B's client
   await mgr.goto(`http://localhost:3000/company/invoices?month=${thisMonth}&client=${relBId}`);
@@ -193,7 +193,7 @@ try {
   // 「明細」は給料明細/請求書メニューのタブ見出し（給料明細タブ）にも
   // 常に出る文言になったため、InvoiceEditor本体にしか出ない「支払期限」で
   // 判定する。
-  log("請求書: Bチーム取引先の請求書画面は開けない", body.includes("対象月と依頼主を選択してください") && !body.includes("支払期限"));
+  log("請求書: Bチーム取引先の請求書画面は開けない", body.includes("下書き中") && !body.includes("支払期限"));
 
   // contracts: forbidden to end team-B staff's contract via direct action call is hard to script from
   // the browser (server actions aren't callable directly) — instead confirm via the roster detail
