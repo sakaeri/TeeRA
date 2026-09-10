@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { submitShiftRequestAction } from "@/app/staff/actions";
-import { todayJst } from "@/lib/date";
+import { todayJst, nowJstHHMM } from "@/lib/date";
 
 type ShiftRow = {
   id: string;
@@ -14,6 +14,7 @@ type ShiftRow = {
   endTime: string | null;
   isAllDay: boolean;
   isUndecided: boolean;
+  approvalStatus: string | null;
 };
 
 type PendingRequestRow = {
@@ -32,6 +33,18 @@ function weekdayColor(dow: number) {
   if (dow === 0) return "text-red-600";
   if (dow === 6) return "text-blue-600";
   return "text-foreground";
+}
+
+// 「未報告」の赤丸は、業務時間を過ぎてから初めて意味を持つ警告 —
+// 未来日やまだ終了時刻前の当日シフトを「未報告」扱いにすると、単なる
+// ノイズになる（会社画面のCalendarView.tsxと同じ考え方）。
+function isReportOverdue(s: ShiftRow) {
+  if (s.approvalStatus) return false;
+  const todayStr = todayJst();
+  if (s.date > todayStr) return false;
+  if (s.date < todayStr) return true;
+  if (s.isAllDay || s.isUndecided || !s.endTime) return false;
+  return nowJstHHMM() >= s.endTime;
 }
 
 function buildMonthCells(year: number, month: number) {
@@ -182,17 +195,29 @@ export function StaffCalendarView({
                     key={s.id}
                     className="truncate rounded-full bg-emerald-100 px-1.5 py-px text-[8px] font-medium leading-tight text-emerald-900"
                   >
+                    {isReportOverdue(s) ? (
+                      <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" aria-label="未報告" />
+                    ) : null}
                     {s.companyName} {s.isAllDay ? "終日" : s.isUndecided ? "未定" : s.startTime}
                   </span>
                 ))}
-                {visibleRequests.map((r) => (
-                  <span
-                    key={r.id}
-                    className="truncate rounded-full bg-amber-100 px-1.5 py-px text-[8px] font-medium leading-tight text-amber-900"
-                  >
-                    {r.companyName} {r.desire === "WORK" ? "出勤希望" : "休み希望"}
-                  </span>
-                ))}
+                {visibleRequests.map((r) =>
+                  r.desire === "OFF" ? (
+                    <span
+                      key={r.id}
+                      className="truncate rounded-full bg-gray-200 px-1.5 py-px text-[8px] font-medium leading-tight text-gray-700"
+                    >
+                      {r.companyName} 休み
+                    </span>
+                  ) : (
+                    <span
+                      key={r.id}
+                      className="truncate rounded-full bg-orange-100 px-1.5 py-px text-[8px] font-medium leading-tight text-orange-900"
+                    >
+                      {r.companyName} 出勤希望
+                    </span>
+                  ),
+                )}
               </div>
             </button>
           );
@@ -274,18 +299,29 @@ function DayDetailPanel({
           <ul className="mb-4 flex flex-col gap-2">
             {shifts.map((s) => (
               <li key={s.id} className="rounded-lg border border-border bg-white/60 p-3 text-sm">
-                <p className="font-medium">{s.companyName}</p>
+                <div className="flex items-center gap-1.5">
+                  {isReportOverdue(s) ? (
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" aria-label="未報告" />
+                  ) : null}
+                  <p className="font-medium">{s.companyName}</p>
+                </div>
                 <p className="text-muted">{s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}</p>
+                {isReportOverdue(s) ? <p className="text-xs text-red-600">業務報告が未提出です。</p> : null}
               </li>
             ))}
-            {requests.map((r) => (
-              <li key={r.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
-                <p className="font-medium">
-                  {r.companyName} ／ {r.desire === "WORK" ? "出勤希望" : "休み希望"}
-                </p>
-                <p className="text-amber-800">会社の回答待ちです。</p>
-              </li>
-            ))}
+            {requests.map((r) =>
+              r.desire === "OFF" ? (
+                <li key={r.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+                  <p className="font-medium text-gray-700">{r.companyName} ／ 休み希望</p>
+                  <p className="text-muted">休み希望として登録されています（会社の操作は不要です）。</p>
+                </li>
+              ) : (
+                <li key={r.id} className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm">
+                  <p className="font-medium text-orange-900">{r.companyName} ／ 出勤希望</p>
+                  <p className="text-orange-800">会社の回答待ちです。</p>
+                </li>
+              ),
+            )}
           </ul>
         )}
 

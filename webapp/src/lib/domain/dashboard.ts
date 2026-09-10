@@ -101,7 +101,10 @@ export function computeKpis(
 
   return {
     shortageCount,
-    unconfirmedShiftCount: data.shiftRequests.length,
+    // 休み希望は会社の確認・マッチングが不要なので、ここでの「未確定」は
+    // 出勤希望のみを数える(休み希望はカレンダー画面に常時表示されており、
+    // 別途アクションを要求しない)。
+    unconfirmedShiftCount: data.shiftRequests.filter((r) => r.desire === "WORK").length,
     pendingReportCount: data.pendingReports.length,
     pendingContractCount: data.pendingContractStaff.length,
     expiringContractCount: data.expiringContractStaff.length,
@@ -126,13 +129,15 @@ export function computeShortageEntries(data: DashboardData) {
 }
 
 export function computeUnconfirmedShiftEntries(data: DashboardData) {
-  return data.shiftRequests.map((r) => ({
-    id: r.id,
-    staffName: r.staff.name,
-    desire: r.desire,
-    dates: r.dates.map((d) => d.toISOString().slice(0, 10)),
-    note: r.note,
-  }));
+  return data.shiftRequests
+    .filter((r) => r.desire === "WORK")
+    .map((r) => ({
+      id: r.id,
+      staffName: r.staff.name,
+      desire: r.desire,
+      dates: r.dates.map((d) => d.toISOString().slice(0, 10)),
+      note: r.note,
+    }));
 }
 
 const REPORT_OUTCOME_LABEL: Record<string, string> = {
@@ -205,7 +210,9 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
     }
   }
 
-  for (const sr of shiftRequests) {
+  // 休み希望は会社の確認・マッチングが不要なので、やることリストには
+  // 出勤希望のみを出す。
+  for (const sr of shiftRequests.filter((r) => r.desire === "WORK")) {
     const dateStr = sr.dates[0]?.toISOString().slice(0, 10) ?? "";
     items.push({
       id: `shift-${sr.id}`,

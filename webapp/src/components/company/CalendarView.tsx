@@ -103,7 +103,7 @@ type ClientRecruitmentRow = {
   filled: number;
 };
 
-type TagEntry = { kind: "solid"; id: string; label: string; className: string };
+type TagEntry = { kind: "solid"; id: string; label: string; className: string; dot?: boolean };
 
 // シフト作成モーダルの業務内容ステップで使う、依頼主ごとの業務名の登録
 // リスト。単価はここでは扱わない（単価は依頼主詳細で別途手動設定し、給与/
@@ -443,16 +443,26 @@ export function CalendarView({
               ? { kind: "solid", id: "client-order", label: `オーダー${dayClientOrders.length}件`, className: "bg-sky-100 text-sky-900" }
               : null;
 
-          // Fixed row budget of 5 total: 未確定・募集中・オーダー (1 row each,
-          // only when there's something to show that day) — confirmed-shift
-          // names get whatever's left, so a day with none of those can show
-          // up to 5 names instead of being capped regardless.
-          const unconfirmedTag: TagEntry | null =
-            dayShiftRequests.length > 0
-              ? { kind: "solid", id: "unconfirmed", label: `未確定${dayShiftRequests.length}件`, className: "bg-rose-100 text-rose-900" }
+          // シフト希望は「休み」と「出勤希望」で状態も見た目も別物 —
+          // 休みは会社の承認が要らない記録、出勤希望はマッチさせるまで
+          // 未確定、という区別を色で出す(休み=グレー、出勤希望=オレンジ)。
+          const offRequests = dayShiftRequests.filter((r) => r.desire === "OFF");
+          const pendingWorkRequests = dayShiftRequests.filter((r) => r.desire === "WORK");
+
+          // Fixed row budget of 5 total: 休み・出勤希望・募集中・オーダー
+          // (1 row each, only when there's something to show that day) —
+          // confirmed-shift names get whatever's left, so a day with none
+          // of those can show up to 5 names instead of being capped regardless.
+          const offTag: TagEntry | null =
+            offRequests.length > 0
+              ? { kind: "solid", id: "off", label: `休み${offRequests.length}件`, className: "bg-gray-200 text-gray-700" }
+              : null;
+          const workTag: TagEntry | null =
+            pendingWorkRequests.length > 0
+              ? { kind: "solid", id: "work-pending", label: `希望${pendingWorkRequests.length}件`, className: "bg-orange-100 text-orange-900" }
               : null;
 
-          const reservedRows = (unconfirmedTag ? 1 : 0) + (recruitTag ? 1 : 0) + (orderTag ? 1 : 0);
+          const reservedRows = (offTag ? 1 : 0) + (workTag ? 1 : 0) + (recruitTag ? 1 : 0) + (orderTag ? 1 : 0);
           const confirmedSlotBudget = 5 - reservedRows;
           const visibleConfirmed = confirmedShifts.slice(0, confirmedSlotBudget);
           const hasOverflow = confirmedShifts.length > confirmedSlotBudget;
@@ -463,8 +473,10 @@ export function CalendarView({
               id: s.id,
               label: s.staffName,
               className: "bg-emerald-100 text-emerald-900",
+              dot: isReportOverdue(s),
             })),
-            ...(unconfirmedTag ? [unconfirmedTag] : []),
+            ...(offTag ? [offTag] : []),
+            ...(workTag ? [workTag] : []),
             ...(recruitTag ? [recruitTag] : []),
             ...(orderTag ? [orderTag] : []),
           ];
@@ -491,6 +503,9 @@ export function CalendarView({
                     key={tag.id}
                     className={`truncate rounded-full px-1.5 py-px text-[8px] font-medium leading-tight ${tag.className}`}
                   >
+                    {tag.dot ? (
+                      <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" aria-label="未報告" />
+                    ) : null}
                     {tag.label}
                   </span>
                 ))}
@@ -2823,19 +2838,38 @@ function ShiftRequestsSection({ requests, teams }: { requests: ShiftRequestRow[]
   const [matchStart, setMatchStart] = useState("09:00");
   const [matchEnd, setMatchEnd] = useState("18:00");
 
+  const offRequests = requests.filter((r) => r.desire === "OFF");
+  const workRequests = requests.filter((r) => r.desire === "WORK");
+
   return (
     <div className="mt-8 rounded-xl border border-border bg-white/60 p-5">
-      <h3 className="mb-3 font-semibold">未確定シフト</h3>
-      {requests.length === 0 ? (
-        <p className="text-sm text-muted">未確定のシフト希望はありません。</p>
+      <h3 className="mb-3 font-semibold">シフト希望</h3>
+
+      {offRequests.length > 0 ? (
+        <div className="mb-4">
+          <p className="mb-2 text-xs font-semibold text-muted">休み希望（会社の操作は不要です）</p>
+          <ul className="flex flex-col gap-2 text-sm">
+            {offRequests.map((r) => (
+              <li key={r.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <span className="font-medium text-gray-700">{r.staffName}</span>
+                <p className="text-xs text-muted">希望日: {r.dates.join("、")}</p>
+                {r.note ? <p className="text-xs text-muted">メモ: {r.note}</p> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {workRequests.length === 0 ? (
+        offRequests.length === 0 ? <p className="text-sm text-muted">未確定のシフト希望はありません。</p> : null
       ) : (
-        <ul className="flex flex-col gap-3 text-sm">
-          {requests.map((r) => (
-            <li key={r.id} className="rounded-lg border border-border/60 p-3">
+        <>
+          <p className="mb-2 text-xs font-semibold text-muted">出勤希望（会社の対応が必要です）</p>
+          <ul className="flex flex-col gap-3 text-sm">
+          {workRequests.map((r) => (
+            <li key={r.id} className="rounded-lg border border-orange-200 bg-orange-50/60 p-3">
               <div className="mb-1 flex items-center justify-between">
-                <span>
-                  {r.staffName} — {r.desire === "WORK" ? "出勤希望" : "休み希望"}
-                </span>
+                <span className="font-medium">{r.staffName}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -2911,7 +2945,8 @@ function ShiftRequestsSection({ requests, teams }: { requests: ShiftRequestRow[]
               ) : null}
             </li>
           ))}
-        </ul>
+          </ul>
+        </>
       )}
     </div>
   );

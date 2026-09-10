@@ -62,7 +62,7 @@ try {
   // --- admin: go to calendar for Sept 2026, see pending request, match it
   await admin.goto("http://localhost:3000/company/calendar?y=2026&m=9");
   let calBody = await admin.textContent("body");
-  log("pending shift request visible to admin", calBody.includes("カレンダースタッフ") && calBody.includes("未確定シフト"));
+  log("pending shift request visible to admin", calBody.includes("カレンダースタッフ") && calBody.includes("会社の対応が必要です"));
 
   await admin.click("text=マッチさせる");
   await admin.waitForTimeout(300);
