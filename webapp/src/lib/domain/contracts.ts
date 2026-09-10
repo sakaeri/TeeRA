@@ -389,6 +389,19 @@ export async function listStaffTaskRates(companyId: string) {
   });
 }
 
+// スタッフ本人が自分の単価を閲覧するための、staffUserIdでも絞り込む版
+// （編集は引き続き会社側のみ・こちらは参照用）。
+export async function listStaffTaskRatesForStaff(companyId: string, staffUserId: string) {
+  return prisma.staffTaskRate.findMany({
+    where: { companyId, staffUserId },
+    include: {
+      versions: { orderBy: { effectiveFrom: "asc" } },
+      companyRelationship: { include: { clientCompany: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
 // シフトの勤務先(companyRelationshipId)に一致する行を優先し、無ければ
 // companyRelationshipId=null（勤務先を問わない）の行にフォールバックする。
 export function pickStaffTaskRate<T extends { companyRelationshipId: string | null }>(

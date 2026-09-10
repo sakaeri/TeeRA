@@ -1,80 +1,33 @@
-import { requireCompanyStaffRole } from "@/lib/auth/session";
-import { listStaffContracts, resolveContractWageVersion } from "@/lib/domain/contracts";
+import { requireCompanyStaffRole, listMyMemberships } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { StaffContractsView } from "@/components/staff/StaffContractsView";
+import { StaffAffiliationsView } from "@/components/staff/StaffAffiliationsView";
 
-export default async function StaffContractsPage() {
-  const { userId, membership } = await requireCompanyStaffRole();
+export default async function StaffContractsListPage() {
+  const { userId } = await requireCompanyStaffRole();
+  const memberships = await listMyMemberships(userId);
+  const companyIds = memberships.map((m) => m.companyId);
 
-  const [allContracts, myMembership, company] = await Promise.all([
-    listStaffContracts(userId, membership.companyId),
-    // role=STAFFではない管理者/編集者がcanWorkShifts経由でこの画面に来る
-    // 兼務ケースもあるため、roleでは絞らずuserId+companyIdの一意な組み合わせで引く。
-    prisma.companyMembership.findUniqueOrThrow({
-      where: { userId_companyId: { userId, companyId: membership.companyId } },
-    }),
-    prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
-  ]);
-
-  const today = new Date();
-  const myContracts = allContracts.filter((c) => c.status !== "PENDING_CONSENT");
-  const pendingContracts = allContracts.filter((c) => c.status === "PENDING_CONSENT");
+  // 会社ごとに「本人の確認待ち（要確認）」件数を出すため、まとめて1クエリで
+  // 取得してからJS側でcompanyIdごとに数える。
+  const pending = await prisma.staffContract.findMany({
+    where: { staffUserId: userId, status: "PENDING_CONSENT", template: { companyId: { in: companyIds } } },
+    select: { template: { select: { companyId: true } } },
+  });
+  const pendingByCompany = new Map<string, number>();
+  for (const c of pending) {
+    pendingByCompany.set(c.template.companyId, (pendingByCompany.get(c.template.companyId) ?? 0) + 1);
+  }
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-10">
       <h1 className="mb-6 font-serif-jp text-2xl font-bold">所属先設定・雇用契約書</h1>
-      <StaffContractsView
-        companyName={company.name}
-        myContracts={myContracts.map((c) => ({
-          id: c.id,
-          title: c.template.title,
-          status: c.status,
-          wageAmountSnapshot: resolveContractWageVersion(c.wageVersions, today)?.wageAmount ?? c.wageAmountSnapshot,
-          wageType: c.template.wageType,
-          contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
+      <StaffAffiliationsView
+        companies={memberships.map((m) => ({
+          companyId: m.companyId,
+          companyName: m.companyName,
+          role: m.role,
+          pendingCount: pendingByCompany.get(m.companyId) ?? 0,
         }))}
-        pendingContracts={pendingContracts.map((c) => ({
-          id: c.id,
-          templateDetail: {
-            id: c.template.id,
-            title: c.template.title,
-            employmentType: c.template.employmentType,
-            workplaceType: c.template.workplaceType,
-            workplaceNote: c.template.workplaceNote,
-            clientName: null,
-            jobDescription: c.template.jobDescription,
-            scheduleType: c.template.scheduleType,
-            workStartTime: c.template.workStartTime,
-            workEndTime: c.template.workEndTime,
-            actualWorkMinutes: c.template.actualWorkMinutes,
-            breakMinutes: c.template.breakMinutes,
-            hasOvertime: c.template.hasOvertime,
-            overtimeNote: c.template.overtimeNote,
-            fixedWeekdays: c.template.fixedWeekdays,
-            shiftPatternNote: c.template.shiftPatternNote,
-            restNote: c.template.restNote,
-            wageType: c.template.wageType,
-            wageAmount: c.wageAmountSnapshot,
-            paymentClosingDay: c.template.paymentClosingDay,
-            paymentDay: c.template.paymentDay,
-            paymentMethod: c.template.paymentMethod,
-            contractPeriodType: c.template.contractPeriodType,
-            contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
-            contractEndDate: (c.contractEndDate ?? c.template.contractEndDate)?.toISOString().slice(0, 10) ?? null,
-            extraItems: (c.template.extraItems as { label: string; value: string }[] | null) ?? [],
-            status: c.template.status,
-            contractedStaffNames: [] as string[],
-          },
-        }))}
-        idDocumentFrontUrl={myMembership.idDocumentFrontUrl}
-        idDocumentBackUrl={myMembership.idDocumentBackUrl}
-        bankInfo={{
-          bankName: myMembership.bankName ?? "",
-          branchName: myMembership.branchName ?? "",
-          accountType: myMembership.accountType ?? "",
-          accountNumber: myMembership.accountNumber ?? "",
-          accountHolderName: myMembership.accountHolderName ?? "",
-        }}
       />
     </main>
   );

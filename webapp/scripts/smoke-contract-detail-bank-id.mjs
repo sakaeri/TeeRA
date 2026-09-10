@@ -75,7 +75,7 @@ try {
       `values (gen_random_uuid()::text, '${detailStaffContractId}', ${detailWageAmount}, current_date - interval '7 day', now());`,
   );
   psql(`update "ContractTemplate" set status='LOCKED' where id='${detailTemplateId}';`);
-  await staff.goto("http://localhost:3000/staff/contracts");
+  await staff.goto(`http://localhost:3000/staff/contracts/${detailCompanyId}`);
   await staff.reload();
   await staff.waitForTimeout(600);
 
@@ -137,11 +137,16 @@ try {
   log("会社側の画面に振込先情報が表示される", panelTextAfterBank.includes("テスト銀行") && panelTextAfterBank.includes("1234567"));
 
   // --- ④ 振込先情報（スタッフ側）: 自分で上書きできる
-  await staff.goto("http://localhost:3000/staff/contracts");
+  // (会社側のスタッフ詳細と同じく、普段は値のサマリだけを表示し、
+  // 「編集」リンクを押した時だけ入力欄が開く)
+  await staff.goto(`http://localhost:3000/staff/contracts/${detailCompanyId}`);
   await staff.waitForTimeout(300);
   const staffBankSection = staff.locator("section", { hasText: "振込先情報" });
-  log("スタッフ側にも会社が入力した振込先が表示される", (await staffBankSection.locator('input').first().inputValue()) === "テスト銀行");
+  const staffBankSummary = await staffBankSection.textContent();
+  log("スタッフ側にも会社が入力した振込先が表示される", staffBankSummary.includes("テスト銀行"));
 
+  await staffBankSection.getByRole("button", { name: "編集" }).click();
+  await staff.waitForTimeout(200);
   await staffBankSection.locator("label", { hasText: "支店名" }).locator("input").fill("スタッフ支店");
   await staffBankSection.getByRole("button", { name: "保存する" }).click();
   await staff.waitForTimeout(600);
@@ -150,9 +155,12 @@ try {
   log("スタッフ側からの編集もDBに反映される", bankRowAfterStaffEdit === "スタッフ支店");
 
   // --- ⑤ 本人確認書類（スタッフ側）: 既存画像がImageDropzoneに表示される
+  // (「アップロード」リンクを押すと編集用のドロップゾーンが開く)
   await staff.reload();
   await staff.waitForTimeout(300);
   const idSection = staff.locator("section", { hasText: "本人確認書類" });
+  await idSection.getByRole("button", { name: "アップロード" }).click();
+  await staff.waitForTimeout(200);
   const frontImgSrc = await idSection.locator("img").first().getAttribute("src");
   log("スタッフ側の本人確認書類欄に既存の表面画像が表示される", frontImgSrc === "https://example.com/id-front.jpg");
 

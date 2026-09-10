@@ -23,16 +23,28 @@ type BankInfo = {
 
 type PendingContract = { id: string; templateDetail: Template };
 
+type TaskRate = {
+  id: string;
+  taskName: string;
+  workplaceLabel: string;
+  currentLabel: string;
+  versions: { id: string; label: string; effectiveFrom: string }[];
+};
+
 type WizardStep = "review" | "id" | "bank" | "done";
 
 export function StaffContractsView({
+  companyId,
   companyName,
   myContracts,
   pendingContracts,
   idDocumentFrontUrl,
   idDocumentBackUrl,
   bankInfo,
+  taskRates,
+  clientNames,
 }: {
+  companyId: string;
   companyName: string;
   myContracts: {
     id: string;
@@ -46,6 +58,8 @@ export function StaffContractsView({
   idDocumentFrontUrl: string | null;
   idDocumentBackUrl: string | null;
   bankInfo: BankInfo;
+  taskRates: TaskRate[];
+  clientNames: string[];
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -57,6 +71,10 @@ export function StaffContractsView({
   const [accountNumber, setAccountNumber] = useState(bankInfo.accountNumber);
   const [accountHolderName, setAccountHolderName] = useState(bankInfo.accountHolderName);
   const [saved, setSaved] = useState(false);
+  const [idEditing, setIdEditing] = useState(false);
+  const [bankEditing, setBankEditing] = useState(false);
+  const [showPastContracts, setShowPastContracts] = useState(false);
+  const [expandedRateId, setExpandedRateId] = useState<string | null>(null);
 
   // 同意アクションはrevalidatePathでこのページのサーバーデータを更新する
   // ため、pendingContractsのpropsはウィザードの途中でも変わりうる。ウィザ
@@ -67,6 +85,9 @@ export function StaffContractsView({
   const activePending = queue[queueIndex] ?? null;
   const [wizardStep, setWizardStep] = useState<WizardStep>("review");
   const [showDetail, setShowDetail] = useState(false);
+
+  const currentContracts = myContracts.filter((c) => c.status !== "ENDED");
+  const pastContracts = myContracts.filter((c) => c.status === "ENDED");
 
   function idComplete() {
     return frontUrl !== "" && backUrl !== "";
@@ -84,7 +105,7 @@ export function StaffContractsView({
     if (!activePending) return;
     const id = activePending.id;
     startTransition(async () => {
-      await consentContractAction(id);
+      await consentContractAction(id, companyId);
       setWizardStep(nextStepAfter("review"));
     });
   }
@@ -92,17 +113,18 @@ export function StaffContractsView({
   function uploadIdDocument(side: "front" | "back", url: string) {
     if (side === "front") setFrontUrl(url);
     else setBackUrl(url);
-    startTransition(() => updateMyIdDocumentAction(side, url));
+    startTransition(() => updateMyIdDocumentAction(companyId, side, url));
   }
 
   function submitBankInfo(advance: boolean) {
     setSaved(false);
     startTransition(async () => {
-      await updateMyBankInfoAction({ bankName, branchName, accountType, accountNumber, accountHolderName });
+      await updateMyBankInfoAction(companyId, { bankName, branchName, accountType, accountNumber, accountHolderName });
       if (advance) {
         setWizardStep("done");
       } else {
         setSaved(true);
+        setBankEditing(false);
         setTimeout(() => setSaved(false), 2000);
       }
     });
@@ -265,11 +287,11 @@ export function StaffContractsView({
 
       <section className="rounded-2xl border border-border bg-white/60 p-6">
         <h2 className="mb-4 font-serif-jp text-lg font-bold text-primary">契約中の雇用契約書</h2>
-        {myContracts.length === 0 ? (
+        {currentContracts.length === 0 ? (
           <p className="text-sm text-muted">契約はまだありません。</p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {myContracts.map((c) => (
+            {currentContracts.map((c) => (
               <li key={c.id} className="flex items-center justify-between rounded-lg border border-border/60 p-3 text-sm">
                 <div>
                   <p>{c.title}</p>
@@ -282,84 +304,203 @@ export function StaffContractsView({
             ))}
           </ul>
         )}
-      </section>
-
-      <section className="rounded-2xl border border-border bg-white/60 p-6">
-        <h2 className="mb-2 font-serif-jp text-lg font-bold text-primary">本人確認書類</h2>
-        <p className="mb-4 text-xs text-muted">運転免許証など、両面の写真を提出してください。</p>
-        {frontUrl || backUrl ? (
-          <p className="mb-3 text-xs text-muted">再アップロードする場合のみ画像をクリックしてください</p>
-        ) : null}
-        <div className="flex gap-6">
-          <div className="w-40">
-            <ImageDropzone label="表面" required imageUrl={frontUrl} onChange={(url) => uploadIdDocument("front", url)} />
-          </div>
-          <div className="w-40">
-            <ImageDropzone label="裏面" required imageUrl={backUrl} onChange={(url) => uploadIdDocument("back", url)} />
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-border bg-white/60 p-6">
-        <h2 className="mb-4 font-serif-jp text-lg font-bold text-primary">振込先情報</h2>
-        <div className="flex flex-col gap-3">
-          <label className="flex flex-col gap-1 text-xs text-muted">
-            銀行名
-            <input
-              type="text"
-              value={bankName}
-              onChange={(e) => setBankName(e.target.value)}
-              className="rounded-lg border border-border px-3 py-2 text-sm"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-muted">
-            支店名
-            <input
-              type="text"
-              value={branchName}
-              onChange={(e) => setBranchName(e.target.value)}
-              className="rounded-lg border border-border px-3 py-2 text-sm"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-muted">
-            口座種別
-            <select
-              value={accountType}
-              onChange={(e) => setAccountType(e.target.value)}
-              className="rounded-lg border border-border px-3 py-2 text-sm"
+        {pastContracts.length > 0 ? (
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setShowPastContracts((v) => !v)}
+              className="text-xs text-muted hover:text-primary"
             >
-              <option value="">未選択</option>
-              <option value="普通">普通</option>
-              <option value="当座">当座</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-muted">
-            口座番号
-            <input
-              type="text"
-              value={accountNumber}
-              onChange={(e) => setAccountNumber(e.target.value)}
-              className="rounded-lg border border-border px-3 py-2 text-sm"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-muted">
-            口座名義
-            <input
-              type="text"
-              value={accountHolderName}
-              onChange={(e) => setAccountHolderName(e.target.value)}
-              className="rounded-lg border border-border px-3 py-2 text-sm"
-            />
-          </label>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => submitBankInfo(false)}
-            className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-          >
-            {saved ? "保存しました" : "保存する"}
+              {showPastContracts ? "▲ 過去の契約を閉じる" : `▼ 過去の契約（${pastContracts.length}件）`}
+            </button>
+            {showPastContracts ? (
+              <ul className="mt-2 flex flex-col gap-2">
+                {pastContracts.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex items-center justify-between rounded-lg border border-border/50 bg-background/40 p-3 text-sm"
+                  >
+                    <div>
+                      <p>{c.title}</p>
+                      <p className="text-xs text-muted">雇用開始日: {c.contractStartDate}</p>
+                    </div>
+                    <span className="text-muted">
+                      {WAGE_TYPE_LABEL[c.wageType]} {c.wageAmountSnapshot}円 ／ {STATUS_LABEL[c.status]}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      {taskRates.length > 0 ? (
+        <section className="rounded-2xl border border-border bg-white/60 p-6">
+          <h2 className="mb-1 font-serif-jp text-lg font-bold text-primary">単価</h2>
+          <p className="mb-4 text-xs text-muted">業務内容ごとの単価です（閲覧のみ・変更は会社にお問い合わせください）。</p>
+          <ul className="flex flex-col gap-2">
+            {taskRates.map((r) => (
+              <li key={r.id} className="rounded-lg border border-border/60 p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">
+                    {r.workplaceLabel} <span className="text-xs font-normal text-muted">（{r.taskName}）</span>
+                  </span>
+                  <span className="text-muted">{r.currentLabel}</span>
+                </div>
+                {r.versions.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setExpandedRateId(expandedRateId === r.id ? null : r.id)}
+                    className="mt-2 text-xs text-muted hover:text-primary"
+                  >
+                    {expandedRateId === r.id ? "▲ 履歴を閉じる" : `▼ 履歴（${r.versions.length}件）`}
+                  </button>
+                ) : null}
+                {expandedRateId === r.id ? (
+                  <ul className="mt-2 flex flex-col text-xs text-muted">
+                    {r.versions.map((v) => (
+                      <li key={v.id} className="flex items-center justify-between border-t border-border/50 py-1">
+                        <span>{v.effectiveFrom} 〜</span>
+                        <span>{v.label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {clientNames.length > 0 ? (
+        <section className="rounded-2xl border border-border bg-white/60 p-6">
+          <h2 className="mb-1 font-serif-jp text-lg font-bold text-primary">配属先一覧</h2>
+          <p className="mb-4 text-xs text-muted">{companyName}が業務を受けている依頼主です（参考情報）。</p>
+          <ul className="flex flex-wrap gap-2">
+            {clientNames.map((name, i) => (
+              <li key={i} className="rounded-full border border-border/60 bg-background/40 px-3 py-1.5 text-xs">
+                {name}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <section className="rounded-lg border border-border p-3 text-sm">
+        <div className="flex items-center justify-between">
+          <p className="font-semibold">本人確認書類</p>
+          <button type="button" onClick={() => setIdEditing((v) => !v)} className="text-xs text-primary hover:underline">
+            アップロード
           </button>
         </div>
+        <div className="mt-1 flex flex-col gap-1">
+          {(["front", "back"] as const).map((side) => {
+            const url = side === "front" ? frontUrl : backUrl;
+            return (
+              <div key={side} className="flex items-center justify-between text-xs">
+                <span className="text-muted">{side === "front" ? "表面" : "裏面"}</span>
+                {url ? (
+                  <a href={url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                    📎 画像を見る
+                  </a>
+                ) : (
+                  <span className="rounded-md bg-gray-100 px-1.5 py-0.5 font-semibold text-gray-600">未提出</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {idEditing ? (
+          <div className="mt-4 flex gap-6 border-t border-border/60 pt-4">
+            <div className="w-40">
+              <ImageDropzone label="表面" required imageUrl={frontUrl} onChange={(url) => uploadIdDocument("front", url)} />
+            </div>
+            <div className="w-40">
+              <ImageDropzone label="裏面" required imageUrl={backUrl} onChange={(url) => uploadIdDocument("back", url)} />
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="rounded-lg border border-border p-3 text-sm">
+        <div className="flex items-center justify-between">
+          <p className="font-semibold">振込先情報</p>
+          <button type="button" onClick={() => setBankEditing((v) => !v)} className="text-xs text-primary hover:underline">
+            {saved ? "保存しました" : bankName ? "編集" : "登録"}
+          </button>
+        </div>
+        {bankName ? (
+          <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted">
+            <span>
+              {bankName} {branchName}（{accountType}）
+            </span>
+            <span>口座番号: {accountNumber}</span>
+            <span>口座名義: {accountHolderName}</span>
+          </div>
+        ) : (
+          <p className="mt-1 text-xs text-muted">未設定</p>
+        )}
+        {bankEditing ? (
+          <div className="mt-4 flex flex-col gap-3 border-t border-border/60 pt-4">
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              銀行名
+              <input
+                type="text"
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+                className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              支店名
+              <input
+                type="text"
+                value={branchName}
+                onChange={(e) => setBranchName(e.target.value)}
+                className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              口座種別
+              <select
+                value={accountType}
+                onChange={(e) => setAccountType(e.target.value)}
+                className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+              >
+                <option value="">未選択</option>
+                <option value="普通">普通</option>
+                <option value="当座">当座</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              口座番号
+              <input
+                type="text"
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              口座名義
+              <input
+                type="text"
+                value={accountHolderName}
+                onChange={(e) => setAccountHolderName(e.target.value)}
+                className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => submitBankInfo(false)}
+              className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              保存する
+            </button>
+          </div>
+        ) : null}
       </section>
     </div>
   );

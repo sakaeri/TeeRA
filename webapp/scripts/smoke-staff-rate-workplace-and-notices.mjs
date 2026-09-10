@@ -97,7 +97,7 @@ try {
       `values (gen_random_uuid()::text, '${baseStaffContractId}', ${baseWageAmount}, current_date - interval '7 day', now());`,
   );
   psql(`update "ContractTemplate" set status='LOCKED' where id='${baseTemplateId}';`);
-  await staff.goto("http://localhost:3000/staff/contracts");
+  await staff.goto(`http://localhost:3000/staff/contracts/${companyId}`);
   await staff.waitForTimeout(600);
 
   // set: キャディ業務×A社=11000円/日, キャディ業務×B社=12000円/日, 作業×勤務先問わず=8000円/日

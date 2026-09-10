@@ -86,7 +86,7 @@ try {
   );
   psql(`update "ContractTemplate" set status='LOCKED' where id='${baseTemplateId}';`);
 
-  await staff.goto("http://localhost:3000/staff/contracts");
+  await staff.goto(`http://localhost:3000/staff/contracts/${companyId}`);
   await staff.waitForTimeout(600);
 
   // a staff-specific override rate for "キャディ業務": DAILY 8000円

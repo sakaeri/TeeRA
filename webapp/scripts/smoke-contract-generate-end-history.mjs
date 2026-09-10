@@ -162,7 +162,7 @@ try {
   log("再雇用の新しい契約もまずPENDING_CONSENT（本人の同意待ち）で作られる", pendingAfterRehire === "PENDING_CONSENT");
 
   // 本人が同意して初めてACTIVEになる
-  await staff.goto("http://localhost:3000/staff/contracts");
+  await staff.goto(`http://localhost:3000/staff/contracts/${companyId}`);
   await staff.waitForTimeout(500);
   await staff.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
   await staff.waitForTimeout(600);

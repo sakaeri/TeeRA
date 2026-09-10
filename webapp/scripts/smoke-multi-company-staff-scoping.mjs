@@ -156,11 +156,21 @@ try {
   mainText = await staff.locator("main").textContent();
   log("タイムカードもアクティブ会社に関わらずA社・B社とも表示される", mainText.includes(companyAName) && mainText.includes(companyBName));
 
+  // 所属先設定は「今アクティブな会社」ではなく、URLで明示的に選んだ会社
+  // ごとに常に見える(一覧には両社とも出て、詳細はその会社のものだけ)。
   await staff.goto("http://localhost:3000/staff/contracts");
   mainText = await staff.locator("main").textContent();
-  log("A社アクティブ時: 契約一覧にA社契約業務のみ", mainText.includes("A社契約業務") && !mainText.includes("B社契約業務"));
+  log("所属先一覧にはアクティブ会社に関わらずA社・B社とも表示される", mainText.includes(companyAName) && mainText.includes(companyBName));
 
-  // --- switch to company B: notices/contracts scoped to B, calendar/timecard still show both ---
+  await staff.goto(`http://localhost:3000/staff/contracts/${companyAId}`);
+  mainText = await staff.locator("main").textContent();
+  log("A社の所属先詳細にはA社契約業務のみ表示される", mainText.includes("A社契約業務") && !mainText.includes("B社契約業務"));
+
+  await staff.goto(`http://localhost:3000/staff/contracts/${companyBId}`);
+  mainText = await staff.locator("main").textContent();
+  log("B社の所属先詳細にはB社契約業務のみ表示される", mainText.includes("B社契約業務") && !mainText.includes("A社契約業務"));
+
+  // --- switch to company B: notices scoped to B, calendar/timecard/contracts still show both ---
   await switchTo(staff, companyBName);
 
   await staff.goto("http://localhost:3000/staff");
@@ -173,10 +183,6 @@ try {
   await staff.goto("http://localhost:3000/staff/timecard");
   mainText = await staff.locator("main").textContent();
   log("B社アクティブ時もタイムカードはA社・B社とも表示される", mainText.includes(companyAName) && mainText.includes(companyBName));
-
-  await staff.goto("http://localhost:3000/staff/contracts");
-  mainText = await staff.locator("main").textContent();
-  log("B社アクティブ時: 契約一覧にB社契約業務のみ", mainText.includes("B社契約業務") && !mainText.includes("A社契約業務"));
 
   console.log(process.exitCode ? "MULTI-COMPANY STAFF SCOPING SMOKE TEST HAD FAILURES" : "MULTI-COMPANY STAFF SCOPING SMOKE TEST PASSED");
 } catch (err) {

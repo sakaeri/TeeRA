@@ -71,8 +71,11 @@ try {
   await assign.getByRole("button", { name: "このテンプレートのまま契約する" }).click();
   await admin.waitForTimeout(700);
 
-  // staff: review and consent to the contract
+  // staff: review and consent to the contract (via the affiliations list ->
+  // per-company detail page)
   await staff.goto("http://localhost:3000/staff/contracts");
+  await staff.getByRole("link", { name: /契約テスト株式会社/ }).click();
+  await staff.waitForTimeout(300);
   body = await staff.textContent("body");
   log("staff sees the contract prepared for them, awaiting consent", body.includes("新しい契約書があります") && body.includes("1200円"));
 

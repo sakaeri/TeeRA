@@ -15,33 +15,37 @@ async function assertOwnShift(shiftId: string, staffUserId: string) {
 }
 
 // 自分自身のCompanyMembership.id — クライアントから渡させず、必ずサーバー側で
-// セッションのuserId/companyIdから引き直す（他人のmembershipIdを渡されて
-// 書き換えられることを防ぐ）。
+// セッションのuserIdと、渡されたcompanyIdの組み合わせから引き直す（他人の
+// membershipIdや他社への書き込みを防ぐ）。所属先設定が複数社対応になった
+// ため、対象は「今アクティブな会社」ではなく明示的なcompanyIdで受け取る。
 async function myMembershipId(userId: string, companyId: string) {
-  const membership = await prisma.companyMembership.findFirstOrThrow({
-    where: { userId, companyId, role: "STAFF" },
+  const membership = await prisma.companyMembership.findUniqueOrThrow({
+    where: { userId_companyId: { userId, companyId } },
   });
   return membership.id;
 }
 
-export async function updateMyIdDocumentAction(side: "front" | "back", url: string) {
-  const { userId, membership } = await requireCompanyStaffRole();
-  const membershipId = await myMembershipId(userId, membership.companyId);
+export async function updateMyIdDocumentAction(companyId: string, side: "front" | "back", url: string) {
+  const { userId } = await requireCompanyStaffRole();
+  const membershipId = await myMembershipId(userId, companyId);
   await updateMembershipIdDocument({ membershipId, side, url });
-  revalidatePath("/staff/contracts");
+  revalidatePath(`/staff/contracts/${companyId}`);
 }
 
-export async function updateMyBankInfoAction(input: {
-  bankName: string;
-  branchName: string;
-  accountType: string;
-  accountNumber: string;
-  accountHolderName: string;
-}) {
-  const { userId, membership } = await requireCompanyStaffRole();
-  const membershipId = await myMembershipId(userId, membership.companyId);
+export async function updateMyBankInfoAction(
+  companyId: string,
+  input: {
+    bankName: string;
+    branchName: string;
+    accountType: string;
+    accountNumber: string;
+    accountHolderName: string;
+  },
+) {
+  const { userId } = await requireCompanyStaffRole();
+  const membershipId = await myMembershipId(userId, companyId);
   await updateMembershipBankInfo({ membershipId, ...input });
-  revalidatePath("/staff/contracts");
+  revalidatePath(`/staff/contracts/${companyId}`);
 }
 
 export async function clockInAction(shiftId: string) {

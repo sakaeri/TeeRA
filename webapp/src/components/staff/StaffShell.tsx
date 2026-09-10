@@ -160,7 +160,8 @@ export function StaffShell({
 
       <nav className="flex flex-wrap gap-2 px-4 py-3">
         {NAV.map((item) => {
-          const active = pathname === item.href;
+          const active =
+            pathname === item.href || (item.href !== "/staff" && pathname.startsWith(`${item.href}/`));
           return (
             <Link
               key={item.href}

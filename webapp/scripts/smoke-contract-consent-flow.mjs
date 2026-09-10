@@ -115,7 +115,7 @@ try {
   const lineForPendingContract = psql(`select count(*) from "SalarySlipLine" where "shiftId"='${shiftId}';`);
   log("同意前の契約は給与計算に使われない（確定シフトがあっても明細行は作られない）", lineForPendingContract === "0");
 
-  await staffA.goto("http://localhost:3000/staff/contracts");
+  await staffA.goto(`http://localhost:3000/staff/contracts/${companyId}`);
   await staffA.waitForTimeout(500);
   let bodyA = await staffA.textContent("body");
   log("スタッフ側に「新しい契約書があります」ウィザードが表示される", bodyA.includes("新しい契約書があります") && bodyA.includes("① 契約内容を確認"));
@@ -152,7 +152,7 @@ try {
 
   // --- staff C: ID docs already on file (rehire-style) but no bank info yet
   await generateContract("同意次郎");
-  await staffC.goto("http://localhost:3000/staff/contracts");
+  await staffC.goto(`http://localhost:3000/staff/contracts/${companyId}`);
   await staffC.waitForTimeout(500);
   await staffC.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
   await staffC.waitForTimeout(600);
