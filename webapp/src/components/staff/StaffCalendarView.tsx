@@ -109,7 +109,7 @@ export function StaffCalendarView({
   const CONFIRMED_SLOT_BUDGET = 5;
 
   return (
-    <div className="rounded-2xl bg-white p-4">
+    <div className="rounded-2xl bg-white p-1.5 sm:p-4">
       <div className="mb-2 flex items-center justify-center gap-2">
         <Link
           href={`?y=${prev.y}&m=${prev.m}`}
@@ -138,7 +138,7 @@ export function StaffCalendarView({
       </div>
 
       {companies.length > 1 ? (
-        <div className="mb-3 flex justify-center">
+        <div className="mb-2 flex justify-center sm:mb-3">
           <select
             value={companyFilter}
             onChange={(e) => setCompanyFilter(e.target.value)}
@@ -154,7 +154,7 @@ export function StaffCalendarView({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
         {WEEKDAYS.map((w, i) => (
           <div key={w} className={`py-1 text-center text-xs font-semibold ${weekdayColor(i)}`}>
             {w}
@@ -162,7 +162,7 @@ export function StaffCalendarView({
         ))}
         {cells.map((c, i) => {
           if (!c.dateStr) {
-            return <div key={i} className="h-[100px]" />;
+            return <div key={i} className="h-14 sm:h-[100px]" />;
           }
           const dateStr = c.dateStr;
           const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
@@ -178,7 +178,7 @@ export function StaffCalendarView({
               key={i}
               type="button"
               onClick={() => setSelectedDay(dateStr)}
-              className={`relative flex h-[100px] flex-col items-stretch justify-start overflow-hidden rounded-xl rounded-tr-none p-1.5 text-left ${
+              className={`relative flex h-14 flex-col items-stretch justify-start overflow-hidden rounded-lg p-1 text-left sm:h-[100px] sm:rounded-xl sm:rounded-tr-none sm:p-1.5 ${
                 isToday ? "bg-accent/25" : "bg-white/40"
               }`}
             >

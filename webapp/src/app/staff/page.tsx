@@ -38,8 +38,8 @@ export default async function StaffHomePage({
   );
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-10">
-      <h1 className="mb-6 font-serif-jp text-2xl font-bold">シフトカレンダー</h1>
+    <main className="mx-auto w-full max-w-4xl px-1 py-4 sm:px-6 sm:py-10">
+      <h1 className="mb-6 hidden font-serif-jp text-2xl font-bold sm:block">シフトカレンダー</h1>
       <StaffNoticesSection
         notices={unreadNotices.map((n) => ({ id: n.id, message: n.message, createdAt: n.createdAt.toISOString() }))}
       />
