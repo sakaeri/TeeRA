@@ -90,10 +90,46 @@ export async function findConflictingShifts(params: {
   return sameDayShifts.filter((s) => timeRangesOverlap(params, s));
 }
 
+// 休み希望を出している日にアサインしようとした時、会社側に一度確認を
+// 挟むための判定。findConflictingShifts(シフトの重複)とは別の軸のチェック
+// — 休み希望自体は会社の承認を必要としない記録だが、それでもアサイン
+// しようとした場合だけ「本当にいいですか」と聞く。
+export async function findPendingOffRequest(staffUserId: string, date: Date) {
+  return prisma.shiftRequest.findFirst({
+    where: { staffUserId, desire: "OFF", status: "PENDING", dates: { has: date } },
+  });
+}
+
+// 出勤希望を出している日にシフトが作られた/アサインされた時、その希望を
+// 自動的に「対応済み」(MATCHED)にする — 以前あった「マッチさせる」で
+// 時間だけ選んで確定する独立操作は廃止し、実際のシフト作成/アサイン
+// そのものを確定操作として扱う(どの依頼主のどの業務にマッチするのかが
+// わかった状態でしか確定できないようにするため)。
+export async function autoResolveMatchingWorkRequest(
+  tx: Tx,
+  params: { staffUserId: string; companyId: string; date: Date; shiftId: string },
+) {
+  const request = await tx.shiftRequest.findFirst({
+    where: {
+      staffUserId: params.staffUserId,
+      companyId: params.companyId,
+      desire: "WORK",
+      status: "PENDING",
+      dates: { has: params.date },
+    },
+  });
+  if (request) {
+    await tx.shiftRequest.update({
+      where: { id: request.id },
+      data: { status: "MATCHED", matchedShiftId: params.shiftId },
+    });
+  }
+}
+
 // シフトを作成 (company-initiated assign). Runs the overlap conflict check —
 // this check is intentionally NOT applied to staff self-apply flows
-// (applyToRecruitment / matchShiftRequestToShift), which is a known,
-// deliberately-unresolved gap carried over from the design (chat27/31).
+// (applyToRecruitment), which is a known, deliberately-unresolved gap
+// carried over from the design (chat27/31).
 // companyRelationshipIdが指定された場合（＝依頼主へのアサイン）、配属記録
 // (StaffPlacement)も一緒に登録する — 派遣会社が能動的にアサインする操作
 // （このシフト作成とオーダーへのアサイン）は配属になる、というルール。
@@ -110,9 +146,17 @@ export async function createAssignedShift(params: {
   note?: string;
   confirmedByUserId: string;
   overrideShiftIds?: string[]; // set when the caller has already confirmed the override(s) with staff — one entry per conflicting shift being superseded
+  confirmedDespiteOffRequest?: boolean; // set when the caller has already confirmed assigning despite a pending 休み希望
   companyRelationshipId?: string; // set for 取引先オーダー (source becomes CLIENT, billable on that client's invoice)
   taskName?: string; // 業務内容 — 単価は保持しない。給与/請求計算時にその都度参照される
 }) {
+  if (!params.confirmedDespiteOffRequest) {
+    const offRequest = await findPendingOffRequest(params.staffUserId, params.date);
+    if (offRequest) {
+      return { status: "off_request" as const, offRequest };
+    }
+  }
+
   const conflicts = await findConflictingShifts({
     staffUserId: params.staffUserId,
     date: params.date,
@@ -166,6 +210,13 @@ export async function createAssignedShift(params: {
         confirmedByUserId: params.confirmedByUserId,
       });
     }
+
+    await autoResolveMatchingWorkRequest(tx, {
+      staffUserId: params.staffUserId,
+      companyId: params.companyId,
+      date: params.date,
+      shiftId: created.id,
+    });
 
     return created;
   });
@@ -321,49 +372,6 @@ export async function listOwnPendingShiftRequests(params: { staffUserId: string;
     where: { staffUserId: params.staffUserId, companyId: { in: params.companyIds }, status: "PENDING" },
     include: { company: true },
     orderBy: { createdAt: "desc" },
-  });
-}
-
-// Company matches a (portion of a) staff request to an actual shift slot.
-// No conflict check here by design (see module doc comment above) — matching
-// a WORK request the staff themselves submitted is treated as pre-confirmed.
-export async function matchShiftRequestToShift(params: {
-  shiftRequestId: string;
-  date: Date;
-  startTime: string | null;
-  endTime: string | null;
-  isAllDay: boolean;
-  isUndecided: boolean;
-  teamId?: string;
-  note?: string;
-}) {
-  const request = await prisma.shiftRequest.findUniqueOrThrow({
-    where: { id: params.shiftRequestId },
-  });
-
-  return prisma.$transaction(async (tx) => {
-    const shift = await tx.shift.create({
-      data: {
-        companyId: request.companyId,
-        teamId: params.teamId ?? request.teamId,
-        staffUserId: request.staffUserId,
-        source: "INHOUSE",
-        date: params.date,
-        startTime: params.startTime,
-        endTime: params.endTime,
-        isAllDay: params.isAllDay,
-        isUndecided: params.isUndecided,
-        note: params.note,
-        createdVia: "STAFF_APPLICATION",
-      },
-    });
-
-    await tx.shiftRequest.update({
-      where: { id: request.id },
-      data: { status: "MATCHED", matchedShiftId: shift.id },
-    });
-
-    return shift;
   });
 }
 

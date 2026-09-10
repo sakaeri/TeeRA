@@ -1,7 +1,13 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
-import { findConflictingShifts, isPastDate, supersedeShift } from "@/lib/domain/shifts";
+import {
+  autoResolveMatchingWorkRequest,
+  findConflictingShifts,
+  findPendingOffRequest,
+  isPastDate,
+  supersedeShift,
+} from "@/lib/domain/shifts";
 import { todayJst } from "@/lib/date";
 import type { WageType } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
@@ -398,6 +404,7 @@ export async function assignStaffToRecruitment(params: {
   assignerCompanyId: string;
   assignedByUserId: string;
   overrideShiftIds?: string[];
+  confirmedDespiteOffRequest?: boolean; // set when the caller has already confirmed assigning despite a pending 休み希望
 }) {
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: params.recruitmentId } });
   if (recruitment.status !== "PUBLISHED") {
@@ -434,6 +441,13 @@ export async function assignStaffToRecruitment(params: {
   // 配属記録（あれば）を新規作成するより前に判定する — このアサインで
   // 初めて配属されるのか、既につながりがあったのかで課金要否が変わるため。
   const alreadyKnown = await isStaffAlreadyKnownToCompany(recruitment.companyId, params.staffUserId);
+
+  if (!params.confirmedDespiteOffRequest) {
+    const offRequest = await findPendingOffRequest(params.staffUserId, recruitment.date);
+    if (offRequest) {
+      return { status: "off_request" as const, offRequest };
+    }
+  }
 
   const conflicts = await findConflictingShifts({
     staffUserId: params.staffUserId,
@@ -508,6 +522,13 @@ export async function assignStaffToRecruitment(params: {
     await tx.recruitmentEntry.update({
       where: { id: entry.id },
       data: { resultingShiftId: shift.id },
+    });
+
+    await autoResolveMatchingWorkRequest(tx, {
+      staffUserId: params.staffUserId,
+      companyId: params.assignerCompanyId,
+      date: recruitment.date,
+      shiftId: shift.id,
     });
 
     await refundRecruitmentSlotIfAlreadyKnown(tx, recruitment, alreadyKnown, params.assignedByUserId);

@@ -6,7 +6,6 @@ import { canManageShifts } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import {
   createAssignedShift,
-  matchShiftRequestToShift,
   dismissShiftRequest,
   cancelShift,
 } from "@/lib/domain/shifts";
@@ -33,10 +32,12 @@ export async function createAssignedShiftAction(input: {
   companyRelationshipId?: string;
   taskName?: string;
   overridesByDate?: Record<string, string[]>; // date -> conflicting shift ids to supersede, set once confirmed
+  confirmedOffDates?: string[]; // dates where a pending 休み希望 has already been confirmed by the caller
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManageShifts(membership, input.teamId)) throw new Error("forbidden");
 
+  const offRequestDates: string[] = [];
   const conflictsByDate: { date: string; conflicts: { id: string; startTime: string | null; endTime: string | null }[] }[] = [];
   const createdShiftIds: string[] = [];
 
@@ -55,51 +56,33 @@ export async function createAssignedShiftAction(input: {
       note: input.note,
       confirmedByUserId: userId,
       overrideShiftIds: input.overridesByDate?.[date],
+      confirmedDespiteOffRequest: input.confirmedOffDates?.includes(date),
     });
-    if (result.status === "conflict") {
+    if (result.status === "off_request") {
+      offRequestDates.push(date);
+    } else if (result.status === "conflict") {
       conflictsByDate.push({ date, conflicts: result.conflicts });
     } else {
       createdShiftIds.push(result.shift.id);
     }
   }
 
-  if (conflictsByDate.length > 0) {
+  if (offRequestDates.length > 0 || conflictsByDate.length > 0) {
     // all-or-nothing across the whole date range: roll back this pass's
-    // successes so a retry with overridesByDate doesn't double-create them.
+    // successes so a retry with confirmedOffDates/overridesByDate doesn't
+    // double-create them.
     if (createdShiftIds.length > 0) {
       await prisma.shift.deleteMany({ where: { id: { in: createdShiftIds } } });
+    }
+    if (offRequestDates.length > 0) {
+      return { status: "off_request" as const, offRequestDates };
     }
     return { status: "conflict" as const, conflictsByDate };
   }
 
   revalidatePath("/company/calendar");
+  revalidatePath("/company");
   return { status: "created" as const, count: createdShiftIds.length };
-}
-
-export async function matchShiftRequestAction(input: {
-  shiftRequestId: string;
-  date: string;
-  startTime: string | null;
-  endTime: string | null;
-  isAllDay: boolean;
-  isUndecided: boolean;
-  teamId?: string;
-  note?: string;
-}) {
-  const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManageShifts(membership, input.teamId)) throw new Error("forbidden");
-
-  await matchShiftRequestToShift({
-    shiftRequestId: input.shiftRequestId,
-    date: new Date(`${input.date}T00:00:00.000Z`),
-    startTime: input.startTime,
-    endTime: input.endTime,
-    isAllDay: input.isAllDay,
-    isUndecided: input.isUndecided,
-    teamId: input.teamId,
-    note: input.note,
-  });
-  revalidatePath("/company/calendar");
 }
 
 export async function dismissShiftRequestAction(shiftRequestId: string) {
@@ -215,6 +198,7 @@ export async function assignStaffToRecruitmentAction(input: {
   recruitmentId: string;
   staffUserId: string;
   overrideShiftIds?: string[];
+  confirmedDespiteOffRequest?: boolean;
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: input.recruitmentId } });
@@ -226,9 +210,11 @@ export async function assignStaffToRecruitmentAction(input: {
     assignerCompanyId: membership.companyId,
     assignedByUserId: userId,
     overrideShiftIds: input.overrideShiftIds,
+    confirmedDespiteOffRequest: input.confirmedDespiteOffRequest,
   });
   if (result.status === "created") {
     revalidatePath("/company/calendar");
+    revalidatePath("/company");
   }
   return result;
 }

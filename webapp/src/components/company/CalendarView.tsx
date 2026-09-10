@@ -3,11 +3,10 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { todayJst, nowJstHHMM } from "@/lib/date";
+import { todayJst } from "@/lib/date";
 import { useClickOutside } from "@/lib/useClickOutside";
 import {
   createAssignedShiftAction,
-  matchShiftRequestAction,
   dismissShiftRequestAction,
   createPublicRecruitmentAction,
   updateMaxEntriesAction,
@@ -103,7 +102,7 @@ type ClientRecruitmentRow = {
   filled: number;
 };
 
-type TagEntry = { kind: "solid"; id: string; label: string; className: string; dot?: boolean };
+type TagEntry = { kind: "solid"; id: string; label: string; className: string };
 
 // シフト作成モーダルの業務内容ステップで使う、依頼主ごとの業務名の登録
 // リスト。単価はここでは扱わない（単価は依頼主詳細で別途手動設定し、給与/
@@ -115,17 +114,6 @@ type TaskNameRow = {
 };
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
-
-// 「未報告」の赤丸は、業務時間を過ぎてから初めて意味を持つ警告 — 未来日や
-// まだ終了時刻前の当日シフトを「未報告」扱いにすると、単なるノイズになる。
-function isReportOverdue(s: ShiftRow) {
-  if (s.approvalStatus) return false;
-  const todayStr = todayJst();
-  if (s.date > todayStr) return false;
-  if (s.date < todayStr) return true;
-  if (s.isAllDay || s.isUndecided || !s.endTime) return false;
-  return nowJstHHMM() >= s.endTime;
-}
 
 function weekdayColor(dow: number) {
   if (dow === 0) return "text-red-600";
@@ -237,17 +225,6 @@ export function CalendarView({
     }
     return map;
   }, [shifts]);
-
-  const shiftRequestsByDate = useMemo(() => {
-    const map = new Map<string, ShiftRequestRow[]>();
-    for (const r of shiftRequests) {
-      for (const d of r.dates) {
-        if (!map.has(d)) map.set(d, []);
-        map.get(d)!.push(r);
-      }
-    }
-    return map;
-  }, [shiftRequests]);
 
   const cells = useMemo(() => {
     const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
@@ -430,7 +407,6 @@ export function CalendarView({
           // オーダー＝依頼主が出した募集（本アカウントで繋がっている依頼主が
           // 出した求人）。こちらが作成したシフトはオーダーには含めない。
           const dayClientOrders = clientRecruitments.filter((r) => r.date === c.dateStr && r.filled < r.maxEntries);
-          const dayShiftRequests = shiftRequestsByDate.get(c.dateStr) ?? [];
           const isToday = c.dateStr === todayStr;
           const isSelected = c.dateStr === selectedDate;
 
@@ -443,26 +419,13 @@ export function CalendarView({
               ? { kind: "solid", id: "client-order", label: `オーダー${dayClientOrders.length}件`, className: "bg-sky-100 text-sky-900" }
               : null;
 
-          // シフト希望は「休み」と「出勤希望」で状態も見た目も別物 —
-          // 休みは会社の承認が要らない記録、出勤希望はマッチさせるまで
-          // 未確定、という区別を色で出す(休み=グレー、出勤希望=オレンジ)。
-          const offRequests = dayShiftRequests.filter((r) => r.desire === "OFF");
-          const pendingWorkRequests = dayShiftRequests.filter((r) => r.desire === "WORK");
-
-          // Fixed row budget of 5 total: 休み・出勤希望・募集中・オーダー
-          // (1 row each, only when there's something to show that day) —
-          // confirmed-shift names get whatever's left, so a day with none
-          // of those can show up to 5 names instead of being capped regardless.
-          const offTag: TagEntry | null =
-            offRequests.length > 0
-              ? { kind: "solid", id: "off", label: `休み${offRequests.length}件`, className: "bg-gray-200 text-gray-700" }
-              : null;
-          const workTag: TagEntry | null =
-            pendingWorkRequests.length > 0
-              ? { kind: "solid", id: "work-pending", label: `希望${pendingWorkRequests.length}件`, className: "bg-orange-100 text-orange-900" }
-              : null;
-
-          const reservedRows = (offTag ? 1 : 0) + (workTag ? 1 : 0) + (recruitTag ? 1 : 0) + (orderTag ? 1 : 0);
+          // Fixed row budget of 5 total: 募集中・オーダー (1 row each, only
+          // when there's something to show that day) — confirmed-shift
+          // names get whatever's left, so a day with none of those can show
+          // up to 5 names instead of being capped regardless. シフト希望
+          // (休み・出勤希望とも)は月表示には出さず、下部の「シフト希望」欄
+          // だけに出す。
+          const reservedRows = (recruitTag ? 1 : 0) + (orderTag ? 1 : 0);
           const confirmedSlotBudget = 5 - reservedRows;
           const visibleConfirmed = confirmedShifts.slice(0, confirmedSlotBudget);
           const hasOverflow = confirmedShifts.length > confirmedSlotBudget;
@@ -473,10 +436,7 @@ export function CalendarView({
               id: s.id,
               label: s.staffName,
               className: "bg-emerald-100 text-emerald-900",
-              dot: isReportOverdue(s),
             })),
-            ...(offTag ? [offTag] : []),
-            ...(workTag ? [workTag] : []),
             ...(recruitTag ? [recruitTag] : []),
             ...(orderTag ? [orderTag] : []),
           ];
@@ -503,9 +463,6 @@ export function CalendarView({
                     key={tag.id}
                     className={`truncate rounded-full px-1.5 py-px text-[8px] font-medium leading-tight ${tag.className}`}
                   >
-                    {tag.dot ? (
-                      <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" aria-label="未報告" />
-                    ) : null}
                     {tag.label}
                   </span>
                 ))}
@@ -536,6 +493,7 @@ export function CalendarView({
           staffOptions={staffOptions}
           affordableMaxEntries={affordableMaxEntries}
           onNavigate={setSelectedDate}
+          onCreateShift={() => setShowAssignForm(true)}
           onClose={() => setSelectedDate(null)}
         />
       ) : null}
@@ -565,7 +523,7 @@ export function CalendarView({
         />
       ) : null}
 
-      <ShiftRequestsSection requests={shiftRequests} teams={teams} />
+      <ShiftRequestsSection requests={shiftRequests} onNavigate={setSelectedDate} />
     </div>
   );
 }
@@ -703,6 +661,7 @@ function DayDetailModal({
   staffOptions,
   affordableMaxEntries,
   onNavigate,
+  onCreateShift,
   onClose,
 }: {
   dateStr: string;
@@ -713,13 +672,13 @@ function DayDetailModal({
   staffOptions: StaffOption[];
   affordableMaxEntries: number;
   onNavigate: (dateStr: string) => void;
+  onCreateShift: () => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"shifts" | "client" | "recruit">("shifts");
   const [editingRecruitmentId, setEditingRecruitmentId] = useState<string | null>(null);
   const isPastDay = dateStr < todayJst();
   const remaining = recruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
-  const hasUnreported = shifts.some((s) => isReportOverdue(s));
 
   const date = new Date(dateStr + "T00:00:00Z");
   const weekdayLabel = WEEKDAYS[date.getUTCDay()];
@@ -763,21 +722,29 @@ function DayDetailModal({
               </svg>
             </button>
           </div>
-          <button type="button" onClick={onClose} className="text-muted">
-            ✕
-          </button>
+          <div className="flex items-center gap-3">
+            {!isPastDay ? (
+              <button
+                type="button"
+                onClick={onCreateShift}
+                className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary"
+              >
+                ＋シフトを作成
+              </button>
+            ) : null}
+            <button type="button" onClick={onClose} className="text-muted">
+              ✕
+            </button>
+          </div>
         </div>
 
         <div className="mb-4 flex gap-4 border-b border-border text-sm">
           <button
             type="button"
             onClick={() => setTab("shifts")}
-            className={`relative border-b-2 px-1 py-2 font-semibold ${tab === "shifts" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+            className={`border-b-2 px-1 py-2 font-semibold ${tab === "shifts" ? "border-accent text-primary" : "border-transparent text-muted"}`}
           >
             スタッフシフト
-            {hasUnreported ? (
-              <span className="absolute -right-1.5 -top-0.5 h-2 w-2 rounded-full bg-red-500" aria-label="未報告あり" />
-            ) : null}
           </button>
           {clientOrders.length > 0 ? (
             <button
@@ -1549,7 +1516,7 @@ function MultiAssignModal({
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [phase, setPhase] = useState<"select" | "done">("select");
   const [pending, startTransition] = useTransition();
-  const [results, setResults] = useState<{ name: string; ok: boolean }[]>([]);
+  const [results, setResults] = useState<{ name: string; ok: boolean; reason?: string }[]>([]);
   const [conflicts, setConflicts] = useState<{ id: string; startTime: string | null; endTime: string | null }[] | null>(
     null,
   );
@@ -1557,7 +1524,7 @@ function MultiAssignModal({
   const [conflictTargetName, setConflictTargetName] = useState<string | null>(null);
   const targetsRef = useRef<StaffOption[]>([]);
   const indexRef = useRef(0);
-  const doneRef = useRef<{ name: string; ok: boolean }[]>([]);
+  const doneRef = useRef<{ name: string; ok: boolean; reason?: string }[]>([]);
 
   function toggle(id: string) {
     setChecked((prev) => {
@@ -1583,6 +1550,9 @@ function MultiAssignModal({
         if (result.status === "conflict") {
           setConflicts(result.conflicts);
           setConflictTargetName(target.name);
+        } else if (result.status === "off_request") {
+          doneRef.current = [...doneRef.current, { name: target.name, ok: false, reason: "休み希望が出ています" }];
+          processFrom(index + 1);
         } else {
           doneRef.current = [...doneRef.current, { name: target.name, ok: true }];
           processFrom(index + 1);
@@ -1708,7 +1678,7 @@ function MultiAssignModal({
           <div className="rounded-lg border border-border bg-background p-2 text-xs">
             {results.map((r, i) => (
               <p key={i} className={r.ok ? "text-muted" : "text-red-600"}>
-                {r.name}：{r.ok ? "追加しました" : "追加できませんでした"}
+                {r.name}：{r.ok ? "追加しました" : r.reason ? `追加できませんでした（${r.reason}）` : "追加できませんでした"}
               </p>
             ))}
           </div>
@@ -1737,22 +1707,33 @@ function RecruitmentAssignControls({
   const [staffUserId, setStaffUserId] = useState(staffOptions[0]?.id ?? "");
   const [confirming, setConfirming] = useState(false);
   const [conflicts, setConflicts] = useState<{ id: string; startTime: string | null; endTime: string | null }[] | null>(null);
+  const [offRequestWarning, setOffRequestWarning] = useState(false);
   const [overrideChecked, setOverrideChecked] = useState(false);
+  const [offConfirmChecked, setOffConfirmChecked] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function assign(overrideShiftIds?: string[]) {
+  function assign(overrideShiftIds?: string[], confirmedDespiteOffRequest?: boolean) {
     if (!staffUserId) return;
     setError(null);
     startTransition(async () => {
       try {
-        const result = await assignStaffToRecruitmentAction({ recruitmentId, staffUserId, overrideShiftIds });
-        if (result.status === "conflict") {
+        const result = await assignStaffToRecruitmentAction({
+          recruitmentId,
+          staffUserId,
+          overrideShiftIds,
+          confirmedDespiteOffRequest,
+        });
+        if (result.status === "off_request") {
+          setOffRequestWarning(true);
+        } else if (result.status === "conflict") {
           setConflicts(result.conflicts);
         } else {
           setConflicts(null);
+          setOffRequestWarning(false);
           setConfirming(false);
           setOverrideChecked(false);
+          setOffConfirmChecked(false);
         }
       } catch {
         setError("アサインに失敗しました。");
@@ -1775,6 +1756,7 @@ function RecruitmentAssignControls({
             setStaffUserId(e.target.value);
             setConfirming(false);
             setConflicts(null);
+            setOffRequestWarning(false);
           }}
           className="flex-1 rounded-lg border border-border px-2 py-1.5 text-xs"
         >
@@ -1796,7 +1778,7 @@ function RecruitmentAssignControls({
         ) : null}
       </div>
 
-      {confirming && !conflicts ? (
+      {confirming && !conflicts && !offRequestWarning ? (
         <Modal title="アサインの確認" onClose={() => setConfirming(false)}>
           <p className="mb-4 text-sm text-muted">{staffName}さんをこの枠にアサインします。よろしいですか？</p>
           {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
@@ -1815,6 +1797,47 @@ function RecruitmentAssignControls({
               className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
             >
               確定
+            </button>
+          </div>
+        </Modal>
+      ) : null}
+
+      {offRequestWarning ? (
+        <Modal
+          title="休み希望が出ています"
+          onClose={() => {
+            setOffRequestWarning(false);
+            setConfirming(false);
+            setOffConfirmChecked(false);
+          }}
+        >
+          <p className="mb-4 text-sm text-muted">
+            {staffName}さんはこの日に休み希望を出しています。それでもアサインしますか？
+          </p>
+          <label className="mb-4 flex items-center gap-1.5 text-sm">
+            <input type="checkbox" checked={offConfirmChecked} onChange={(e) => setOffConfirmChecked(e.target.checked)} />
+            スタッフ本人と確認済み
+          </label>
+          {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOffRequestWarning(false);
+                setConfirming(false);
+                setOffConfirmChecked(false);
+              }}
+              className="rounded-lg border border-border px-4 py-2 text-sm"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              disabled={pending || !offConfirmChecked}
+              onClick={() => assign(undefined, true)}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              確認のうえアサインする
             </button>
           </div>
         </Modal>
@@ -2103,6 +2126,8 @@ function AssignShiftModal({
   const [conflictsByDate, setConflictsByDate] = useState<
     { date: string; conflicts: { id: string; startTime: string | null; endTime: string | null }[] }[] | null
   >(null);
+  const [offRequestDates, setOffRequestDates] = useState<string[] | null>(null);
+  const [offConfirmChecked, setOffConfirmChecked] = useState(false);
   const [overrideChecked, setOverrideChecked] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -2144,6 +2169,8 @@ function AssignShiftModal({
   function clearStaleConflicts() {
     setConflictsByDate(null);
     setOverrideChecked(false);
+    setOffRequestDates(null);
+    setOffConfirmChecked(false);
   }
 
   function toggleDate(d: string) {
@@ -2170,8 +2197,12 @@ function AssignShiftModal({
           companyRelationshipId: companyRelationshipId || undefined,
           taskName: taskName || undefined,
           overridesByDate,
+          confirmedOffDates: offRequestDates ?? undefined,
         });
-        if (result.status === "conflict") {
+        if (result.status === "off_request") {
+          setOffRequestDates(result.offRequestDates);
+          setOffConfirmChecked(false);
+        } else if (result.status === "conflict") {
           setConflictsByDate(result.conflictsByDate);
           setOverrideChecked(false);
         } else {
@@ -2476,6 +2507,21 @@ function AssignShiftModal({
           ) : null}
         </dl>
 
+        {offRequestDates && !conflictsByDate ? (
+          <div className="rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-800">
+            <p className="mb-2 font-semibold">休み希望が出ている日があります。</p>
+            <ul className="mb-2 list-disc pl-4">
+              {offRequestDates.map((date) => (
+                <li key={date}>{date}</li>
+              ))}
+            </ul>
+            <label className="flex items-center gap-1">
+              <input type="checkbox" checked={offConfirmChecked} onChange={(e) => setOffConfirmChecked(e.target.checked)} />
+              スタッフ本人と確認済み
+            </label>
+          </div>
+        ) : null}
+
         {conflictsByDate ? (
           <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-xs text-red-700">
             <p className="mb-2 font-semibold">他のシフトと重複している日があります。</p>
@@ -2497,11 +2543,23 @@ function AssignShiftModal({
 
         <button
           type="button"
-          disabled={pending || !staffUserId || dates.length === 0 || (conflictsByDate !== null && !overrideChecked)}
+          disabled={
+            pending ||
+            !staffUserId ||
+            dates.length === 0 ||
+            (conflictsByDate !== null && !overrideChecked) ||
+            (offRequestDates !== null && !conflictsByDate && !offConfirmChecked)
+          }
           onClick={() => submit()}
           className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
-          {pending ? "作成中…" : conflictsByDate ? "重複を確認のうえ作成する" : `${dates.length}件のシフトを作成`}
+          {pending
+            ? "作成中…"
+            : conflictsByDate
+              ? "重複を確認のうえ作成する"
+              : offRequestDates
+                ? "休み希望を確認のうえ作成する"
+                : `${dates.length}件のシフトを作成`}
         </button>
       </div>
     </Modal>
@@ -2831,122 +2889,80 @@ function RecruitmentFormModal({
   );
 }
 
-function ShiftRequestsSection({ requests, teams }: { requests: ShiftRequestRow[]; teams: Team[] }) {
+// 休み希望は会社の承認・操作が要らない記録なのでここには出さない（本人が
+// 希望を出している日にアサインしようとした時、その場で警告する形にした）。
+// 出勤希望は日付ごとにまとめ、「確認」でその日のカレンダー詳細に飛んで
+// そちらでアサイン/シフト作成する — 何の仕事にマッチするか分からないまま
+// 時間だけ選んで確定する旧「マッチさせる」操作は廃止した。
+function ShiftRequestsSection({
+  requests,
+  onNavigate,
+}: {
+  requests: ShiftRequestRow[];
+  onNavigate: (dateStr: string) => void;
+}) {
   const [pending, startTransition] = useTransition();
-  const [matchingId, setMatchingId] = useState<string | null>(null);
-  const [matchDate, setMatchDate] = useState("");
-  const [matchStart, setMatchStart] = useState("09:00");
-  const [matchEnd, setMatchEnd] = useState("18:00");
-
-  const offRequests = requests.filter((r) => r.desire === "OFF");
   const workRequests = requests.filter((r) => r.desire === "WORK");
+
+  const byDate = new Map<string, { requestId: string; staffName: string; note: string | null }[]>();
+  for (const r of workRequests) {
+    for (const d of r.dates) {
+      if (!byDate.has(d)) byDate.set(d, []);
+      byDate.get(d)!.push({ requestId: r.id, staffName: r.staffName, note: r.note });
+    }
+  }
+  const sortedDates = [...byDate.keys()].sort();
 
   return (
     <div className="mt-8 rounded-xl border border-border bg-white/60 p-5">
-      <h3 className="mb-3 font-semibold">シフト希望</h3>
-
-      {offRequests.length > 0 ? (
-        <div className="mb-4">
-          <p className="mb-2 text-xs font-semibold text-muted">休み希望（会社の操作は不要です）</p>
-          <ul className="flex flex-col gap-2 text-sm">
-            {offRequests.map((r) => (
-              <li key={r.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                <span className="font-medium text-gray-700">{r.staffName}</span>
-                <p className="text-xs text-muted">希望日: {r.dates.join("、")}</p>
-                {r.note ? <p className="text-xs text-muted">メモ: {r.note}</p> : null}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {workRequests.length === 0 ? (
-        offRequests.length === 0 ? <p className="text-sm text-muted">未確定のシフト希望はありません。</p> : null
+      <h3 className="mb-3 font-semibold">シフト希望（未確定の出勤希望）</h3>
+      {sortedDates.length === 0 ? (
+        <p className="text-sm text-muted">未確定の出勤希望はありません。</p>
       ) : (
-        <>
-          <p className="mb-2 text-xs font-semibold text-muted">出勤希望（会社の対応が必要です）</p>
-          <ul className="flex flex-col gap-3 text-sm">
-          {workRequests.map((r) => (
-            <li key={r.id} className="rounded-lg border border-orange-200 bg-orange-50/60 p-3">
-              <div className="mb-1 flex items-center justify-between">
-                <span className="font-medium">{r.staffName}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMatchingId(r.id);
-                    setMatchDate(r.dates[0] ?? "");
-                  }}
-                  className="text-xs text-primary underline"
-                >
-                  マッチさせる
-                </button>
-              </div>
-              <p className="text-xs text-muted">希望日: {r.dates.join("、")}</p>
-              {r.note ? <p className="text-xs text-muted">メモ: {r.note}</p> : null}
-
-              {matchingId === r.id ? (
-                <div className="mt-2 flex flex-wrap items-end gap-2 border-t border-border/50 pt-2">
-                  <select
-                    value={matchDate}
-                    onChange={(e) => setMatchDate(e.target.value)}
-                    className="rounded-lg border border-border px-2 py-1 text-xs"
-                  >
-                    {r.dates.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="time"
-                    value={matchStart}
-                    onChange={(e) => setMatchStart(e.target.value)}
-                    className="rounded-lg border border-border px-2 py-1 text-xs"
-                  />
-                  <input
-                    type="time"
-                    value={matchEnd}
-                    onChange={(e) => setMatchEnd(e.target.value)}
-                    className="rounded-lg border border-border px-2 py-1 text-xs"
-                  />
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() =>
-                      startTransition(async () => {
-                        try {
-                          await matchShiftRequestAction({
-                            shiftRequestId: r.id,
-                            date: matchDate,
-                            startTime: matchStart,
-                            endTime: matchEnd,
-                            isAllDay: false,
-                            isUndecided: false,
-                          });
-                          setMatchingId(null);
-                        } catch (err) {
-                          console.error("match failed", err);
-                        }
-                      })
-                    }
-                    className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
-                  >
-                    確定
-                  </button>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => startTransition(() => dismissShiftRequestAction(r.id))}
-                    className="text-xs text-muted underline"
-                  >
-                    見送る
-                  </button>
-                </div>
-              ) : null}
-            </li>
-          ))}
-          </ul>
-        </>
+        <ul className="flex flex-col gap-3 text-sm">
+          {sortedDates.map((date) => {
+            const rows = byDate.get(date)!;
+            const dt = new Date(`${date}T00:00:00Z`);
+            const dateLabel = `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
+            return (
+              <li key={date} className="rounded-lg border border-orange-200 bg-orange-50/60 p-3">
+                <p className="mb-2 font-semibold">
+                  {dateLabel}　{rows.length}名
+                </p>
+                <ul className="flex flex-col gap-1.5">
+                  {rows.map((row) => (
+                    <li
+                      key={row.requestId}
+                      className="flex items-center justify-between gap-2 rounded-lg bg-white/70 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-medium">{row.staffName}さん</span>
+                        {row.note ? <span className="ml-2 truncate text-xs text-muted">メモ: {row.note}</span> : null}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => onNavigate(date)}
+                          className="text-xs text-primary underline"
+                        >
+                          確認
+                        </button>
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => startTransition(() => dismissShiftRequestAction(row.requestId))}
+                          className="text-xs text-muted underline"
+                        >
+                          見送る
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

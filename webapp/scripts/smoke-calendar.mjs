@@ -59,35 +59,22 @@ try {
   await wizard.getByRole("button", { name: "申請する" }).click();
   await staff.waitForTimeout(800);
 
-  // --- admin: go to calendar for Sept 2026, see pending request, match it
+  // --- admin: go to calendar for Sept 2026, see pending request grouped by
+  // date at the bottom, resolve it via the day-detail's ＋シフトを作成
+  // (the old "マッチさせる" mini-form — which created a bare shift without
+  // any task/workplace context — was retired; resolving a shift request now
+  // goes through the same day-detail flow as any other assignment).
   await admin.goto("http://localhost:3000/company/calendar?y=2026&m=9");
   let calBody = await admin.textContent("body");
-  log("pending shift request visible to admin", calBody.includes("カレンダースタッフ") && calBody.includes("会社の対応が必要です"));
+  log("pending shift request visible to admin", calBody.includes("カレンダースタッフ") && calBody.includes("9月15日"));
 
-  await admin.click("text=マッチさせる");
+  await admin.getByRole("button", { name: "確認" }).click();
   await admin.waitForTimeout(300);
-  await admin.screenshot({ path: "/tmp/smoke-calendar-pre-confirm.png" });
-  await admin.getByRole("button", { name: "確定", exact: true }).click();
-  await admin.waitForTimeout(1200);
-  await admin.screenshot({ path: "/tmp/smoke-calendar-post-confirm.png" });
+  let bodyText = await admin.textContent("body");
+  log("確認で日別詳細が開き＋シフトを作成が表示される", bodyText.includes("＋シフトを作成"));
 
-  const requestsAfterMatch = await fetch("http://localhost:3000/company/calendar?y=2026&m=9").then((r) => r.text());
-  console.log("request section still shows pending list?", requestsAfterMatch.includes("未確定のシフト希望はありません"));
-
-  // click the day cell for target date to see shift in day detail
-  await admin.click(`button:has-text("15")`);
+  await admin.click("text=＋シフトを作成");
   await admin.waitForTimeout(300);
-  calBody = await admin.textContent("body");
-  const dayDetailMatch = calBody.match(/9月15日[\s\S]{0,200}/);
-  console.log("day detail snippet:", dayDetailMatch?.[0]);
-  log("matched shift appears in day detail panel", Boolean(dayDetailMatch && dayDetailMatch[0].includes("カレンダースタッフ")));
-
-  // --- admin: create an overlapping assigned shift on same day -> expect conflict
-  // (no team in this company, so the wizard starts at 勤務先 step; the day-detail
-  // modal for targetDate is still open above, so its date is already selected as
-  // the wizard's default date — no need to touch the mini calendar)
-  await admin.locator("button", { hasText: "＋" }).last().click();
-  await admin.getByText("シフトを作成").click();
   const assignModal = admin.locator("div.fixed.inset-0.z-20").last();
   await assignModal.getByRole("button", { name: "社内（自社スタッフとして勤務）" }).click();
   await assignModal.getByRole("button", { name: "＋ 新しい業務内容を追加する" }).click();
@@ -98,6 +85,41 @@ try {
   await assignModal.getByRole("button", { name: "次へ" }).click();
   await admin.waitForTimeout(300);
   await assignModal.getByRole("button", { name: /件のシフトを作成/ }).click();
+  await admin.waitForTimeout(1000);
+
+  // AssignShiftModal closed itself after success, but the day-detail modal for
+  // day 15 underneath is still open (selectedDate never got cleared) — the
+  // server action's revalidatePath already refreshed the route's data, so it
+  // should now show the newly-created shift without any extra click.
+  calBody = await admin.textContent("body");
+  const dayDetailMatch = calBody.match(/9月15日[\s\S]{0,300}/);
+  console.log("day detail snippet:", dayDetailMatch?.[0]);
+  log("matched shift appears in day detail panel", Boolean(dayDetailMatch && dayDetailMatch[0].includes("カレンダースタッフ")));
+
+  // use the admin's own authenticated browser session (a bare `fetch()` here
+  // has no cookies, so it would just hit the unauthenticated response) to
+  // confirm the shift request list at the bottom of the page dropped this
+  // now-resolved request.
+  const requestsAfterMatch = await admin.evaluate((url) => fetch(url).then((r) => r.text()), "http://localhost:3000/company/calendar?y=2026&m=9");
+  log("シフト作成に伴い出勤希望が自動的に対応済みになる", requestsAfterMatch.includes("未確定の出勤希望はありません"));
+
+  // --- admin: create an overlapping assigned shift on same day -> expect conflict
+  // (the day-detail modal for this date is still open above, so its date is
+  // already selected as the wizard's default date — no need to touch the mini
+  // calendar. 「通常業務」は直前のシフト作成で登録済みなので、今度は選択式になる)
+  await admin.locator("button", { hasText: "＋" }).last().click();
+  await admin.getByRole("button", { name: "シフトを作成", exact: true }).click();
+  const assignModal2 = admin.locator("div.fixed.inset-0.z-20").last();
+  await assignModal2.getByRole("button", { name: "社内（自社スタッフとして勤務）" }).click();
+  await admin.waitForTimeout(300);
+  await assignModal2.getByRole("button", { name: "通常業務" }).click();
+  const taskNextBtn = assignModal2.getByRole("button", { name: "次へ" });
+  if ((await taskNextBtn.count()) > 0) await taskNextBtn.click();
+  await admin.waitForTimeout(300);
+  await assignModal2.getByRole("button", { name: "カレンダースタッフ" }).click();
+  await assignModal2.getByRole("button", { name: "次へ" }).click();
+  await admin.waitForTimeout(300);
+  await assignModal2.getByRole("button", { name: /件のシフトを作成/ }).click();
   await admin.waitForTimeout(800);
   let modalBody = await admin.textContent("body");
   log("conflict detected on overlapping assign", modalBody.includes("重複している日があります"));
