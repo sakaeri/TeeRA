@@ -7,26 +7,10 @@ import {
   submitWorkReportAction,
   confirmCorrectedWorkReportAction,
 } from "@/app/staff/actions";
+import { isDone, type ShiftRow } from "@/lib/staffShiftStatus";
 
-type ShiftRow = {
-  id: string;
-  workReportId: string | null;
-  date: string;
-  companyId: string;
-  companyName: string;
-  startTime: string | null;
-  endTime: string | null;
-  taskName: string | null;
-  clockIn: string | null;
-  clockOut: string | null;
-  clockInTime: string | null;
-  clockOutTime: string | null;
-  breakMinutes: number;
-  outcome: string | null;
-  approvalStatus: string | null;
-  computedMinutes: number;
-  submittedAt: string | null;
-};
+export type { ShiftRow };
+export { isDone };
 
 const APPROVAL_LABEL: Record<string, string> = {
   PENDING: "承認待ち",
@@ -37,21 +21,9 @@ const APPROVAL_LABEL: Record<string, string> = {
 
 const NEW_TASK_NAME_SENTINEL = "__new__";
 
-// 「済み」＝欠勤/キャンセルとして報告済み、または業務報告を提出して
-// 承認待ち・承認済みになったもの（差し戻しREJECTEDだけは修正して
-// 再提出が必要なので「対応が必要」側に残す）。
-// 出勤/退勤の打刻だけではWorkReport行のoutcome/approvalStatusに既定値
-// （WORKED/PENDING）が入るため、それらだけでは「打刻しただけ」と
-// 「実際に提出した」を区別できない。submittedAt（提出時に確実にセット
-// される）で見分ける。
-function isDone(shift: ShiftRow) {
-  const finalized = shift.outcome !== null && shift.outcome !== "WORKED";
-  const submitted =
-    shift.outcome === "WORKED" &&
-    Boolean(shift.submittedAt) &&
-    (shift.approvalStatus === "PENDING" || shift.approvalStatus === "APPROVED");
-  return finalized || submitted;
-}
+// 労基法の目安（6時間超で45分、8時間超で60分）を踏まえたよくある休憩時間
+// をボタンで即選択できるようにする — 手入力欄は細かい調整用に残す。
+const BREAK_MINUTE_PRESETS = [0, 30, 45, 60, 90];
 
 export function StaffTimecardView({
   shifts,
@@ -93,7 +65,7 @@ export function StaffTimecardView({
   );
 }
 
-function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTaskNames: string[] }) {
+export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTaskNames: string[] }) {
   const [pending, startTransition] = useTransition();
   const [comment, setComment] = useState("");
   const [taskName, setTaskName] = useState(shift.taskName ?? "");
@@ -105,6 +77,17 @@ function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTaskNames:
 
   const finalized = shift.outcome && shift.outcome !== "WORKED";
   const readyToSubmit = shift.clockIn && shift.clockOut;
+  // 休憩を確定させる前の実働時間プレビュー — サーバー側のcomputedMinutes
+  // は退勤時点では休憩0分のままなので、入力中の休憩分数を反映してここで
+  // 再計算する（実際の値は提出時にサーバー側で確定する）。
+  const liveComputedMinutes =
+    shift.clockIn && shift.clockOut
+      ? Math.max(
+          Math.round((new Date(shift.clockOut).getTime() - new Date(shift.clockIn).getTime()) / 60000) -
+            (Number(breakMinutes) || 0),
+          0,
+        )
+      : 0;
   // 提出済み（差し戻し以外）は編集フォームを出さず、読み取り専用の
   // 報告内容にする。承認済みかどうかは上のバッジで分かるので、ここでは
   // 「何を報告したか」だけ分かれば十分（差し戻し=REJECTEDだけは修正して
@@ -172,30 +155,44 @@ function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTaskNames:
               出勤
             </button>
           ) : !shift.clockOut ? (
-            <div className="flex items-end gap-2">
-              <label className="flex flex-col gap-0.5 text-xs text-muted">
-                休憩時間
-                <input
-                  type="number"
-                  min="0"
-                  value={breakMinutes}
-                  onChange={(e) => setBreakMinutes(e.target.value)}
-                  className="w-20 rounded-lg border border-border px-2 py-1.5 text-sm"
-                />
-              </label>
-              <span className="pb-1.5 text-xs text-muted">分</span>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => startTransition(() => clockOutAction(shift.id, Number(breakMinutes) || 0))}
-                className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-              >
-                退勤
-              </button>
-            </div>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => startTransition(() => clockOutAction(shift.id))}
+              className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              退勤
+            </button>
           ) : (
             <div className="flex flex-col gap-2">
-              <p className="text-sm text-muted">実働 {(shift.computedMinutes / 60).toFixed(1)} 時間</p>
+              <div>
+                <p className="mb-1 text-xs text-muted">休憩時間</p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {BREAK_MINUTE_PRESETS.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setBreakMinutes(String(m))}
+                      className={`rounded-full border px-2.5 py-1 text-xs ${
+                        Number(breakMinutes) === m
+                          ? "border-primary bg-primary/10 font-semibold text-primary"
+                          : "border-border text-foreground"
+                      }`}
+                    >
+                      {m}分
+                    </button>
+                  ))}
+                  <input
+                    type="number"
+                    min="0"
+                    value={breakMinutes}
+                    onChange={(e) => setBreakMinutes(e.target.value)}
+                    className="w-16 rounded-lg border border-border px-2 py-1 text-xs"
+                  />
+                  <span className="text-xs text-muted">分</span>
+                </div>
+              </div>
+              <p className="text-sm text-muted">実働 {(liveComputedMinutes / 60).toFixed(1)} 時間</p>
               <label className="flex flex-col gap-0.5 text-xs text-muted">
                 業務内容
                 {taskNameMode === "pick" ? (
@@ -262,6 +259,7 @@ function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTaskNames:
                         outcome: "WORKED",
                         comment: comment || undefined,
                         taskName: taskName.trim() || undefined,
+                        breakMinutes: Number(breakMinutes) || 0,
                       });
                     } catch {
                       setError("提出に失敗しました。");

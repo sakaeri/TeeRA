@@ -192,6 +192,14 @@ try {
 
   await staff.goto("http://localhost:3000/staff");
   await staff.waitForTimeout(500);
+  // 今日付のシフトを複数登録したので「本日の出退勤」ポップアップが自動で
+  // 開く — お知らせ欄の操作を試す前に閉じておく（本文のブレークテストとは
+  // 無関係だが、同じページを共有しているため）。
+  const shiftPopupClose = staff.getByRole("button", { name: "✕", exact: true });
+  if ((await shiftPopupClose.count()) > 0) {
+    await shiftPopupClose.click();
+    await staff.waitForTimeout(300);
+  }
   let staffBody = await staff.textContent("body");
   log("スタッフ画面トップに「お知らせ」欄が表示される", staffBody.includes("お知らせ"));
   log("お知らせにキャディ業務(A社)の内容が含まれる", staffBody.includes("キャディ業務") && staffBody.includes("A社") && staffBody.includes("11000円"));

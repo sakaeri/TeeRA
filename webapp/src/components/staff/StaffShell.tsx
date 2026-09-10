@@ -74,6 +74,7 @@ export function StaffShell({
   pointsBalance,
   hasMultipleCompanies,
   showCompanyScreenLink,
+  openRecruitmentCount,
   children,
 }: {
   userName: string;
@@ -81,6 +82,7 @@ export function StaffShell({
   pointsBalance: number;
   hasMultipleCompanies: boolean;
   showCompanyScreenLink: boolean;
+  openRecruitmentCount: number;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -162,18 +164,26 @@ export function StaffShell({
         {NAV.map((item) => {
           const active =
             pathname === item.href || (item.href !== "/staff" && pathname.startsWith(`${item.href}/`));
+          const badgeCount = item.href === "/staff/recruitments" ? openRecruitmentCount : 0;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm ${
+              className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-2 text-sm sm:px-3 ${
                 active
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border bg-white/60 text-foreground"
               }`}
             >
-              <item.Icon className="h-4 w-4 shrink-0" />
-              {item.label}
+              <span className="relative flex shrink-0">
+                <item.Icon className="h-4 w-4 shrink-0" />
+                {badgeCount > 0 ? (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-red-600 px-0.5 text-[9px] font-bold leading-none text-white">
+                    {badgeCount > 99 ? "99+" : badgeCount}
+                  </span>
+                ) : null}
+              </span>
+              <span className="hidden sm:inline">{item.label}</span>
             </Link>
           );
         })}

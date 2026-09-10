@@ -53,13 +53,15 @@ export async function clockInAction(shiftId: string) {
   await assertOwnShift(shiftId, userId);
   await clockIn({ shiftId, staffUserId: userId });
   revalidatePath("/staff/timecard");
+  revalidatePath("/staff");
 }
 
-export async function clockOutAction(shiftId: string, breakMinutes?: number) {
+export async function clockOutAction(shiftId: string) {
   const { userId } = await requireCompanyStaffRole();
   await assertOwnShift(shiftId, userId);
-  await clockOut({ shiftId, staffUserId: userId, breakMinutes });
+  await clockOut({ shiftId, staffUserId: userId });
   revalidatePath("/staff/timecard");
+  revalidatePath("/staff");
 }
 
 export async function submitWorkReportAction(input: {
@@ -67,6 +69,7 @@ export async function submitWorkReportAction(input: {
   outcome: "WORKED" | "ABSENT" | "CANCELLED_BY_EMPLOYER";
   comment?: string;
   taskName?: string;
+  breakMinutes?: number;
 }) {
   const { userId } = await requireCompanyStaffRole();
   await assertOwnShift(input.shiftId, userId);
@@ -76,14 +79,17 @@ export async function submitWorkReportAction(input: {
     outcome: input.outcome,
     comment: input.comment,
     taskName: input.taskName,
+    breakMinutes: input.breakMinutes,
   });
   revalidatePath("/staff/timecard");
+  revalidatePath("/staff");
 }
 
 export async function confirmCorrectedWorkReportAction(workReportId: string) {
   const { userId } = await requireCompanyStaffRole();
   await confirmCorrectedWorkReport({ workReportId, staffUserId: userId });
   revalidatePath("/staff/timecard");
+  revalidatePath("/staff");
 }
 
 // カレンダーが所属する全社分をまとめて表示するようになったのに合わせ、

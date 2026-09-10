@@ -162,7 +162,7 @@ export function StaffCalendarView({
         ))}
         {cells.map((c, i) => {
           if (!c.dateStr) {
-            return <div key={i} className="h-14 sm:h-[100px]" />;
+            return <div key={i} className="h-[68px] sm:h-[100px]" />;
           }
           const dateStr = c.dateStr;
           const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
@@ -178,7 +178,7 @@ export function StaffCalendarView({
               key={i}
               type="button"
               onClick={() => setSelectedDay(dateStr)}
-              className={`relative flex h-14 flex-col items-stretch justify-start overflow-hidden rounded-lg p-1 text-left sm:h-[100px] sm:rounded-xl sm:rounded-tr-none sm:p-1.5 ${
+              className={`relative flex h-[68px] flex-col items-stretch justify-start overflow-hidden rounded-lg p-1 text-left sm:h-[100px] sm:rounded-xl sm:rounded-tr-none sm:p-1.5 ${
                 isToday ? "bg-accent/25" : "bg-white/40"
               }`}
             >
@@ -193,7 +193,7 @@ export function StaffCalendarView({
                 {visibleShifts.map((s) => (
                   <span
                     key={s.id}
-                    className="truncate rounded-full bg-emerald-100 px-1.5 py-px text-[8px] font-medium leading-tight text-emerald-900"
+                    className="block w-full truncate rounded bg-emerald-100 px-1.5 py-px text-[8px] font-medium leading-tight text-emerald-900"
                   >
                     {isReportOverdue(s) ? (
                       <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" aria-label="未報告" />
@@ -205,14 +205,14 @@ export function StaffCalendarView({
                   r.desire === "OFF" ? (
                     <span
                       key={r.id}
-                      className="truncate rounded-full bg-gray-200 px-1.5 py-px text-[8px] font-medium leading-tight text-gray-700"
+                      className="block w-full truncate rounded bg-gray-200 px-1.5 py-px text-[8px] font-medium leading-tight text-gray-700"
                     >
                       {r.companyName} 休み
                     </span>
                   ) : (
                     <span
                       key={r.id}
-                      className="truncate rounded-full bg-orange-100 px-1.5 py-px text-[8px] font-medium leading-tight text-orange-900"
+                      className="block w-full truncate rounded bg-orange-100 px-1.5 py-px text-[8px] font-medium leading-tight text-orange-900"
                     >
                       {r.companyName} 出勤希望
                     </span>
@@ -227,9 +227,14 @@ export function StaffCalendarView({
       <button
         type="button"
         onClick={() => setShowWizard(true)}
+        aria-label="シフト希望を申請する"
         className="fixed bottom-8 right-8 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-2xl text-primary-foreground shadow-lg"
       >
-        ＋
+        <span
+          className={`inline-block transition-transform duration-200 ${showWizard ? "rotate-45" : "rotate-0"}`}
+        >
+          ＋
+        </span>
       </button>
 
       {selectedDay ? (

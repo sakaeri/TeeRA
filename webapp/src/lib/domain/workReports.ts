@@ -37,29 +37,34 @@ export async function clockIn(params: { shiftId: string; staffUserId: string }) 
   });
 }
 
-export async function clockOut(params: { shiftId: string; staffUserId: string; breakMinutes?: number }) {
+// 休憩時間はここでは聞かない — 退勤の瞬間は正確な休憩分数をまだ把握して
+// いないことが多いため、後段の業務報告提出時にまとめて確定させる
+// （submitWorkReport側でcomputedMinutesを再計算する）。
+export async function clockOut(params: { shiftId: string; staffUserId: string }) {
   const report = await prisma.workReport.findUniqueOrThrow({ where: { shiftId: params.shiftId } });
   if (!report.clockIn) throw new Error("not_clocked_in");
 
   const clockOutAt = new Date();
-  const breakMinutes = params.breakMinutes ?? report.breakMinutes;
   const rawMinutes = Math.round((clockOutAt.getTime() - report.clockIn.getTime()) / 60000);
-  const computedMinutes = Math.max(rawMinutes - breakMinutes, 0);
+  const computedMinutes = Math.max(rawMinutes - report.breakMinutes, 0);
 
   return prisma.workReport.update({
     where: { shiftId: params.shiftId },
-    data: { clockOut: clockOutAt, breakMinutes, computedMinutes },
+    data: { clockOut: clockOutAt, computedMinutes },
   });
 }
 
 // 業務報告を提出する — the three outcomes (出勤した / 欠勤 / 勤務先からのキャンセル)
-// all route through this one flow into the same approval queue (chat24).
+// all route through this one flow into the same approval queue (chat24)。
+// breakMinutesはWORKEDの時だけ意味を持ち、ここで最終確定してcomputedMinutes
+// を打刻時刻から再計算する（退勤時点では休憩は未確定のまま0扱いだった）。
 export async function submitWorkReport(params: {
   shiftId: string;
   staffUserId: string;
   outcome: "WORKED" | "ABSENT" | "CANCELLED_BY_EMPLOYER";
   comment?: string;
   taskName?: string;
+  breakMinutes?: number;
 }) {
   const existing = await prisma.workReport.findUnique({ where: { shiftId: params.shiftId } });
 
@@ -67,6 +72,9 @@ export async function submitWorkReport(params: {
     if (!existing?.clockIn || !existing?.clockOut) {
       throw new Error("clock_in_out_required");
     }
+    const breakMinutes = params.breakMinutes ?? existing.breakMinutes;
+    const rawMinutes = Math.round((existing.clockOut.getTime() - existing.clockIn.getTime()) / 60000);
+    const computedMinutes = Math.max(rawMinutes - breakMinutes, 0);
     if (params.taskName) {
       // 業務報告で選ばれた（または新規入力された）業務内容を単価表にも登録
       // しておく — こうしないと後で会社側が単価を設定しようとしたとき、
@@ -93,6 +101,8 @@ export async function submitWorkReport(params: {
         outcome: "WORKED",
         comment: params.comment,
         taskName: params.taskName,
+        breakMinutes,
+        computedMinutes,
         approvalStatus: "PENDING",
         submittedAt: new Date(),
       },
