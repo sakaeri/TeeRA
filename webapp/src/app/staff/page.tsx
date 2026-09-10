@@ -1,5 +1,5 @@
 import { requireCompanyStaffRole, listMyMemberships } from "@/lib/auth/session";
-import { listStaffShiftsForMonth } from "@/lib/domain/shifts";
+import { listStaffShiftsForMonth, listOwnPendingShiftRequests } from "@/lib/domain/shifts";
 import { listStaffNotices } from "@/lib/domain/notices";
 import { todayJstParts } from "@/lib/date";
 import { StaffCalendarView } from "@/components/staff/StaffCalendarView";
@@ -18,11 +18,24 @@ export default async function StaffHomePage({
   const myMemberships = await listMyMemberships(userId);
   const companyIds = myMemberships.map((m) => m.companyId);
 
-  const [shifts, notices] = await Promise.all([
+  const [shifts, pendingRequests, notices] = await Promise.all([
     listStaffShiftsForMonth({ staffUserId: userId, companyIds, year, month }),
+    listOwnPendingShiftRequests({ staffUserId: userId, companyIds }),
     listStaffNotices(userId, membership.companyId),
   ]);
   const unreadNotices = notices.filter((n) => !n.readAt);
+
+  // 1件のShiftRequestが複数日をまとめて持っているため、カレンダー表示用に
+  // 「1日=1行」へ展開する。
+  const requestRows = pendingRequests.flatMap((r) =>
+    r.dates.map((d) => ({
+      id: `${r.id}-${d.toISOString().slice(0, 10)}`,
+      date: d.toISOString().slice(0, 10),
+      companyId: r.companyId,
+      companyName: r.company.name,
+      desire: r.desire,
+    })),
+  );
 
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-10">
@@ -44,6 +57,7 @@ export default async function StaffHomePage({
           isAllDay: s.isAllDay,
           isUndecided: s.isUndecided,
         }))}
+        pendingRequests={requestRows}
       />
     </main>
   );

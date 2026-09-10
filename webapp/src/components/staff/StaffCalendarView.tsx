@@ -16,6 +16,14 @@ type ShiftRow = {
   isUndecided: boolean;
 };
 
+type PendingRequestRow = {
+  id: string;
+  date: string;
+  companyId: string;
+  companyName: string;
+  desire: "WORK" | "OFF";
+};
+
 type Company = { id: string; name: string };
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -44,11 +52,13 @@ export function StaffCalendarView({
   month,
   companies,
   shifts,
+  pendingRequests,
 }: {
   year: number;
   month: number;
   companies: Company[];
   shifts: ShiftRow[];
+  pendingRequests: PendingRequestRow[];
 }) {
   const [showWizard, setShowWizard] = useState(false);
   const [wizardInitialDate, setWizardInitialDate] = useState<string | null>(null);
@@ -57,6 +67,9 @@ export function StaffCalendarView({
   const todayStr = todayJst();
 
   const filteredShifts = companyFilter ? shifts.filter((s) => s.companyId === companyFilter) : shifts;
+  const filteredRequests = companyFilter
+    ? pendingRequests.filter((r) => r.companyId === companyFilter)
+    : pendingRequests;
 
   const shiftsByDate = useMemo(() => {
     const map = new Map<string, ShiftRow[]>();
@@ -66,6 +79,15 @@ export function StaffCalendarView({
     }
     return map;
   }, [filteredShifts]);
+
+  const requestsByDate = useMemo(() => {
+    const map = new Map<string, PendingRequestRow[]>();
+    for (const r of filteredRequests) {
+      if (!map.has(r.date)) map.set(r.date, []);
+      map.get(r.date)!.push(r);
+    }
+    return map;
+  }, [filteredRequests]);
 
   const cells = useMemo(() => buildMonthCells(year, month), [year, month]);
 
@@ -132,9 +154,12 @@ export function StaffCalendarView({
           const dateStr = c.dateStr;
           const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
           const dayShifts = shiftsByDate.get(dateStr) ?? [];
+          const dayRequests = requestsByDate.get(dateStr) ?? [];
           const isToday = dateStr === todayStr;
+          const totalCount = dayShifts.length + dayRequests.length;
           const visibleShifts = dayShifts.slice(0, CONFIRMED_SLOT_BUDGET);
-          const hasOverflow = dayShifts.length > CONFIRMED_SLOT_BUDGET;
+          const visibleRequests = dayRequests.slice(0, Math.max(0, CONFIRMED_SLOT_BUDGET - visibleShifts.length));
+          const hasOverflow = totalCount > CONFIRMED_SLOT_BUDGET;
           return (
             <button
               key={i}
@@ -147,7 +172,7 @@ export function StaffCalendarView({
               <span className={`block text-center text-[11px] font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
               {hasOverflow ? (
                 <span
-                  title={`他${dayShifts.length - CONFIRMED_SLOT_BUDGET}件`}
+                  title={`他${totalCount - CONFIRMED_SLOT_BUDGET}件`}
                   className="absolute right-0 top-0 h-0 w-0 border-r-[14px] border-b-[14px] border-r-accent border-b-transparent"
                 />
               ) : null}
@@ -158,6 +183,14 @@ export function StaffCalendarView({
                     className="truncate rounded-full bg-emerald-100 px-1.5 py-px text-[8px] font-medium leading-tight text-emerald-900"
                   >
                     {s.companyName} {s.isAllDay ? "終日" : s.isUndecided ? "未定" : s.startTime}
+                  </span>
+                ))}
+                {visibleRequests.map((r) => (
+                  <span
+                    key={r.id}
+                    className="truncate rounded-full bg-amber-100 px-1.5 py-px text-[8px] font-medium leading-tight text-amber-900"
+                  >
+                    {r.companyName} {r.desire === "WORK" ? "出勤希望" : "休み希望"}
                   </span>
                 ))}
               </div>
@@ -178,6 +211,7 @@ export function StaffCalendarView({
         <DayDetailPanel
           date={selectedDay}
           shifts={shiftsByDate.get(selectedDay) ?? []}
+          requests={requestsByDate.get(selectedDay) ?? []}
           onRequest={() => {
             setWizardInitialDate(selectedDay);
             setSelectedDay(null);
@@ -214,11 +248,13 @@ function formatDateJa(dateStr: string) {
 function DayDetailPanel({
   date,
   shifts,
+  requests,
   onRequest,
   onClose,
 }: {
   date: string;
   shifts: ShiftRow[];
+  requests: PendingRequestRow[];
   onRequest: () => void;
   onClose: () => void;
 }) {
@@ -232,7 +268,7 @@ function DayDetailPanel({
           </button>
         </div>
 
-        {shifts.length === 0 ? (
+        {shifts.length === 0 && requests.length === 0 ? (
           <p className="mb-4 text-sm text-muted">この日の予定はありません。</p>
         ) : (
           <ul className="mb-4 flex flex-col gap-2">
@@ -240,6 +276,14 @@ function DayDetailPanel({
               <li key={s.id} className="rounded-lg border border-border bg-white/60 p-3 text-sm">
                 <p className="font-medium">{s.companyName}</p>
                 <p className="text-muted">{s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}</p>
+              </li>
+            ))}
+            {requests.map((r) => (
+              <li key={r.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+                <p className="font-medium">
+                  {r.companyName} ／ {r.desire === "WORK" ? "出勤希望" : "休み希望"}
+                </p>
+                <p className="text-amber-800">会社の回答待ちです。</p>
               </li>
             ))}
           </ul>

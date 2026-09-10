@@ -263,12 +263,18 @@ function ItemDetailModal({
         <p className="mb-1 font-serif-jp text-lg font-bold text-primary">{item.pointsCost}pt</p>
         {item.description ? <p className="mb-3 text-sm text-muted">{item.description}</p> : null}
 
-        {isRedeemed ? (
-          <p className="text-sm text-muted">この商品はすでに交換済みです。</p>
-        ) : !canRedeem ? (
-          <p className="text-sm text-muted">
-            {outOfStock ? "現在在庫切れです。" : `あと${item.pointsCost - balance}pt貯めると交換できます。`}
-          </p>
+        {!canRedeem ? (
+          <button
+            type="button"
+            disabled
+            className="w-full cursor-not-allowed rounded-lg bg-border px-4 py-2 text-sm font-semibold text-muted"
+          >
+            {isRedeemed
+              ? "この商品はすでに交換済みです"
+              : outOfStock
+                ? "現在在庫切れです"
+                : `あと${item.pointsCost - balance}pt貯めると交換できます`}
+          </button>
         ) : (
           <div className="flex flex-col gap-3">
             <p className="text-sm">お届け先を入力して交換してください。</p>

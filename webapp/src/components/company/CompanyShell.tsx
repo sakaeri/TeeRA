@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/actions/auth";
+import { useClickOutside } from "@/lib/useClickOutside";
 
 const NAV = [
   { href: "/company", label: "ダッシュボード" },
@@ -39,6 +40,7 @@ export function CompanyShell({
 }) {
   const pathname = usePathname();
   const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useClickOutside<HTMLDivElement>(profileOpen, () => setProfileOpen(false));
   const initial = userName.slice(0, 1);
 
   return (
@@ -61,7 +63,7 @@ export function CompanyShell({
             </span>
             {teeBalance} Tee
           </Link>
-          <div className="relative">
+          <div className="relative" ref={profileRef}>
             <button
               type="button"
               aria-label="プロフィールメニュー"

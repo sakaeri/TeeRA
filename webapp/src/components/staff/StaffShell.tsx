@@ -4,12 +4,63 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/actions/auth";
+import { useClickOutside } from "@/lib/useClickOutside";
+
+// 会社側の「＋」メニュー内のアイコン(CalendarView.tsx)と同じviewBox 24・
+// strokeWidth 1.8の線画スタイルに揃えたナビゲーションアイコン。
+function CalendarIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3 9h18" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8 3v4M16 3v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MegaphoneIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <path
+        d="M3 10v4a1 1 0 001 1h2l3 4V5L6 9H4a1 1 0 00-1 1z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M11 6.5l7-3v17l-7-3" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M7 15v2.5a1.5 1.5 0 003 0V16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ClockIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 7v5l3.5 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function GearIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M12 3v2.2M12 18.8V21M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M3 12h2.2M18.8 12H21M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 const NAV = [
-  { href: "/staff", label: "シフトカレンダー", icon: "🗓" },
-  { href: "/staff/recruitments", label: "募集一覧", icon: "📣" },
-  { href: "/staff/timecard", label: "タイムカード", icon: "⏱" },
-  { href: "/staff/contracts", label: "所属先設定", icon: "⚙" },
+  { href: "/staff", label: "シフトカレンダー", Icon: CalendarIcon },
+  { href: "/staff/recruitments", label: "募集一覧", Icon: MegaphoneIcon },
+  { href: "/staff/timecard", label: "タイムカード", Icon: ClockIcon },
+  { href: "/staff/contracts", label: "所属先設定", Icon: GearIcon },
 ];
 
 function todayLabel() {
@@ -34,6 +85,7 @@ export function StaffShell({
 }) {
   const pathname = usePathname();
   const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useClickOutside<HTMLDivElement>(profileOpen, () => setProfileOpen(false));
   const initial = userName.slice(0, 1);
 
   return (
@@ -53,7 +105,7 @@ export function StaffShell({
             </span>
             {pointsBalance} ポイント
           </Link>
-          <div className="relative">
+          <div className="relative" ref={profileRef}>
             <button
               type="button"
               aria-label="プロフィールメニュー"
@@ -119,7 +171,7 @@ export function StaffShell({
                   : "border-border bg-white/60 text-foreground"
               }`}
             >
-              <span>{item.icon}</span>
+              <item.Icon className="h-4 w-4 shrink-0" />
               {item.label}
             </Link>
           );

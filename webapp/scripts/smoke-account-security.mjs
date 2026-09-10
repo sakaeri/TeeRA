@@ -141,10 +141,12 @@ try {
   log("現在のパスワードが誤っていればエラーになる", body.includes("正しくありません"));
 
   // --- ログイン中のパスワード変更: 成功 ---
+  // bcrypt(cost 12)を2回(compare+hash)行うため、固定waitだと環境負荷次第で
+  // 間に合わないことがある — 固定時間ではなくメッセージの出現自体を待つ。
   await page.fill("#currentPassword", "newpassword123");
   await page.fill("#newPassword", "yetanotherpassword123");
   await page.getByRole("button", { name: "パスワードを変更する" }).click();
-  await page.waitForTimeout(800);
+  await page.getByText("パスワードを変更しました。").waitFor({ timeout: 5000 }).catch(() => {});
   body = await page.textContent("body");
   log("正しい現パスワードで変更に成功する", body.includes("パスワードを変更しました。"));
 

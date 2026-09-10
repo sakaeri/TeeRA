@@ -312,6 +312,18 @@ export async function listShiftRequests(params: { companyId: string; status?: "P
   });
 }
 
+// 提出済みのシフト希望が会社側でどう反映されるか（マッチ/却下）待ちの間、
+// スタッフ本人のカレンダーにも「回答待ち」として見えるようにする。マッチ
+// 済みになった時点で実際のShiftが作られそちらに表示が移るため、ここでは
+// PENDINGのみを対象とする。
+export async function listOwnPendingShiftRequests(params: { staffUserId: string; companyIds: string[] }) {
+  return prisma.shiftRequest.findMany({
+    where: { staffUserId: params.staffUserId, companyId: { in: params.companyIds }, status: "PENDING" },
+    include: { company: true },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
 // Company matches a (portion of a) staff request to an actual shift slot.
 // No conflict check here by design (see module doc comment above) — matching
 // a WORK request the staff themselves submitted is treated as pre-confirmed.
