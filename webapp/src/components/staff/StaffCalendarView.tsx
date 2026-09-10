@@ -237,6 +237,7 @@ export function StaffCalendarView({
           date={selectedDay}
           shifts={shiftsByDate.get(selectedDay) ?? []}
           requests={requestsByDate.get(selectedDay) ?? []}
+          onNavigate={setSelectedDay}
           onRequest={() => {
             setWizardInitialDate(selectedDay);
             setSelectedDay(null);
@@ -263,9 +264,9 @@ export function StaffCalendarView({
 }
 
 function formatDateJa(dateStr: string) {
-  const [y, m, d] = dateStr.split("-").map(Number);
+  const [, m, d] = dateStr.split("-").map(Number);
   const dow = new Date(`${dateStr}T00:00:00Z`).getUTCDay();
-  return `${y}年${m}月${d}日（${WEEKDAYS[dow]}）`;
+  return `${m}月${d}日（${WEEKDAYS[dow]}）`;
 }
 
 // 日付をタップすると、予定の有無に関わらず詳細パネルが開く。予定が無い
@@ -274,51 +275,95 @@ function DayDetailPanel({
   date,
   shifts,
   requests,
+  onNavigate,
   onRequest,
   onClose,
 }: {
   date: string;
   shifts: ShiftRow[];
   requests: PendingRequestRow[];
+  onNavigate: (dateStr: string) => void;
   onRequest: () => void;
   onClose: () => void;
 }) {
+  function shift(days: number) {
+    const d = new Date(date + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + days);
+    onNavigate(d.toISOString().slice(0, 10));
+  }
+
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-serif-jp text-lg font-bold text-primary">{formatDateJa(date)}</h3>
+    <div
+      className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => shift(-1)}
+              aria-label="前の日"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-background hover:text-primary"
+            >
+              <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+                <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <h3 className="font-serif-jp text-lg font-bold text-primary">{formatDateJa(date)}</h3>
+            <button
+              type="button"
+              onClick={() => shift(1)}
+              aria-label="次の日"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-background hover:text-primary"
+            >
+              <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+                <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
           <button type="button" onClick={onClose} className="text-muted">
             ✕
           </button>
         </div>
 
         {shifts.length === 0 && requests.length === 0 ? (
-          <p className="mb-4 text-sm text-muted">この日の予定はありません。</p>
+          <p className="mb-5 rounded-xl bg-background/60 px-4 py-6 text-center text-sm text-muted">この日の予定はありません。</p>
         ) : (
-          <ul className="mb-4 flex flex-col gap-2">
+          <ul className="mb-5 flex flex-col gap-2.5">
             {shifts.map((s) => (
-              <li key={s.id} className="rounded-lg border border-border bg-white/60 p-3 text-sm">
-                <div className="flex items-center gap-1.5">
-                  {isReportOverdue(s) ? (
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" aria-label="未報告" />
-                  ) : null}
-                  <p className="font-medium">{s.companyName}</p>
+              <li key={s.id} className="rounded-xl border border-border bg-white/60 p-3.5 text-sm shadow-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    {isReportOverdue(s) ? (
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" aria-label="未報告" />
+                    ) : null}
+                    <p className="font-semibold">{s.companyName}</p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">確定</span>
                 </div>
-                <p className="text-muted">{s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}</p>
-                {isReportOverdue(s) ? <p className="text-xs text-red-600">業務報告が未提出です。</p> : null}
+                <p className="mt-1 text-muted">{s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}</p>
+                {isReportOverdue(s) ? <p className="mt-1.5 text-xs font-medium text-red-600">業務報告が未提出です。</p> : null}
               </li>
             ))}
             {requests.map((r) =>
               r.desire === "OFF" ? (
-                <li key={r.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
-                  <p className="font-medium text-gray-700">{r.companyName} ／ 休み希望</p>
-                  <p className="text-muted">休み希望として登録されています（会社の操作は不要です）。</p>
+                <li key={r.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3.5 text-sm shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-semibold text-gray-700">{r.companyName}</p>
+                    <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700">休み希望</span>
+                  </div>
+                  <p className="mt-1 text-muted">会社の操作は不要です。</p>
                 </li>
               ) : (
-                <li key={r.id} className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm">
-                  <p className="font-medium text-orange-900">{r.companyName} ／ 出勤希望</p>
-                  <p className="text-orange-800">会社の回答待ちです。</p>
+                <li key={r.id} className="rounded-xl border border-orange-200 bg-orange-50 p-3.5 text-sm shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-semibold text-orange-900">{r.companyName}</p>
+                    <span className="shrink-0 rounded-full bg-orange-200 px-2 py-0.5 text-xs font-medium text-orange-900">出勤希望</span>
+                  </div>
+                  <p className="mt-1 text-orange-800">会社の回答待ちです。</p>
                 </li>
               ),
             )}
@@ -328,7 +373,7 @@ function DayDetailPanel({
         <button
           type="button"
           onClick={onRequest}
-          className="w-full rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary"
+          className="w-full rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/5"
         >
           この日にシフト希望を出す
         </button>

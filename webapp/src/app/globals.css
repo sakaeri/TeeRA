@@ -47,12 +47,18 @@ body {
       border-color 150ms ease,
       color 150ms ease;
   }
-  button:not(:disabled):hover,
-  a:hover {
-    /* mid-gray, not black — shifts light backgrounds darker and dark
-       backgrounds (e.g. the primary-green sidebar) lighter, so it stays
-       visible at both ends instead of vanishing into dark-on-dark. */
-    box-shadow: inset 0 0 0 999px rgba(128, 128, 128, 0.3);
+  /* touch devices have no real pointer to leave, so :hover can get "stuck"
+     on whatever was last tapped (e.g. a calendar day cell) until the next
+     tap elsewhere — scoping to devices with an actual hover-capable
+     pointer keeps this a mouse-only effect and avoids that stuck state. */
+  @media (hover: hover) and (pointer: fine) {
+    button:not(:disabled):hover,
+    a:hover {
+      /* mid-gray, not black — shifts light backgrounds darker and dark
+         backgrounds (e.g. the primary-green sidebar) lighter, so it stays
+         visible at both ends instead of vanishing into dark-on-dark. */
+      box-shadow: inset 0 0 0 999px rgba(128, 128, 128, 0.3);
+    }
   }
   button:not(:disabled):active,
   a:active {
