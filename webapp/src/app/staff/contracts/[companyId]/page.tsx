@@ -8,6 +8,13 @@ import { prisma } from "@/lib/prisma";
 import { StaffContractsView } from "@/components/staff/StaffContractsView";
 
 const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
+const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
+  PART_TIME: "アルバイト",
+  FIXED_TERM_EMPLOYEE: "契約社員",
+  FULL_TIME: "正社員",
+  CONTRACTOR: "業務委託",
+  DISPATCH_STAFF: "派遣社員",
+};
 
 export default async function StaffCompanyContractsPage({ params }: PageProps<"/staff/contracts/[companyId]">) {
   const { userId } = await requireCompanyStaffRole();
@@ -20,20 +27,46 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
   });
   if (!myMembership) notFound();
 
-  const [allContracts, company, taskRates, clientRelationships] = await Promise.all([
+  const [allContracts, company, taskRates, clientRelationships, myPlacements] = await Promise.all([
     listStaffContracts(userId, companyId),
     prisma.company.findUniqueOrThrow({ where: { id: companyId } }),
     listStaffTaskRatesForStaff(companyId, userId),
     listClients(companyId),
+    prisma.staffPlacement.findMany({
+      where: { staffUserId: userId, active: true, companyRelationship: { agencyCompanyId: companyId, status: "ACTIVE" } },
+      select: { companyRelationshipId: true },
+    }),
   ]);
 
   const today = new Date();
   const rateToday = new Date(`${todayJst()}T23:59:59.999Z`);
   const myContracts = allContracts.filter((c) => c.status !== "PENDING_CONSENT");
   const pendingContracts = allContracts.filter((c) => c.status === "PENDING_CONSENT");
+  // 配属先一覧はこの会社とつながっている依頼主全部ではなく、本人が実際に
+  // 配属記録(StaffPlacement)を持つ依頼主だけを参考情報として出す
+  // (依頼主が正式なCompanyアカウントと連携する前の仮登録＝proxyNameの
+  // 段階でも配属自体はあり得るため、clientCompanyIdではなく
+  // companyRelationshipIdで突き合わせる)。
+  const placedRelationshipIds = new Set(myPlacements.map((p) => p.companyRelationshipId));
   const clientNames = clientRelationships
-    .filter((r) => r.status === "ACTIVE")
+    .filter((r) => r.status === "ACTIVE" && placedRelationshipIds.has(r.id))
     .map((r) => r.clientCompany?.name ?? r.proxyName ?? "取引先");
+
+  const activeContract = allContracts.find((c) => c.status === "ACTIVE") ?? null;
+  const baseWage = activeContract
+    ? {
+        employmentTypeLabel: EMPLOYMENT_TYPE_LABEL[activeContract.template.employmentType] ?? activeContract.template.employmentType,
+        jobDescription: activeContract.template.jobDescription,
+        currentLabel: `${WAGE_TYPE_LABEL[activeContract.template.wageType]}${
+          resolveContractWageVersion(activeContract.wageVersions, today)?.wageAmount ?? activeContract.wageAmountSnapshot
+        }円`,
+        versions: activeContract.wageVersions.map((v) => ({
+          id: v.id,
+          label: `${WAGE_TYPE_LABEL[activeContract.template.wageType]}${v.wageAmount}円`,
+          effectiveFrom: v.effectiveFrom.toISOString().slice(0, 10),
+        })),
+      }
+    : null;
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-10">
@@ -97,6 +130,7 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
           accountNumber: myMembership.accountNumber ?? "",
           accountHolderName: myMembership.accountHolderName ?? "",
         }}
+        baseWage={baseWage}
         taskRates={taskRates.map((r) => {
           const current = resolveRateVersion(r.versions, rateToday);
           return {

@@ -31,6 +31,13 @@ type TaskRate = {
   versions: { id: string; label: string; effectiveFrom: string }[];
 };
 
+type BaseWage = {
+  employmentTypeLabel: string;
+  jobDescription: string;
+  currentLabel: string;
+  versions: { id: string; label: string; effectiveFrom: string }[];
+};
+
 type WizardStep = "review" | "id" | "bank" | "done";
 
 export function StaffContractsView({
@@ -41,6 +48,7 @@ export function StaffContractsView({
   idDocumentFrontUrl,
   idDocumentBackUrl,
   bankInfo,
+  baseWage,
   taskRates,
   clientNames,
 }: {
@@ -58,6 +66,7 @@ export function StaffContractsView({
   idDocumentFrontUrl: string | null;
   idDocumentBackUrl: string | null;
   bankInfo: BankInfo;
+  baseWage: BaseWage | null;
   taskRates: TaskRate[];
   clientNames: string[];
 }) {
@@ -335,11 +344,41 @@ export function StaffContractsView({
         ) : null}
       </section>
 
-      {taskRates.length > 0 ? (
+      {baseWage || taskRates.length > 0 ? (
         <section className="rounded-2xl border border-border bg-white/60 p-6">
           <h2 className="mb-1 font-serif-jp text-lg font-bold text-primary">単価</h2>
-          <p className="mb-4 text-xs text-muted">業務内容ごとの単価です（閲覧のみ・変更は会社にお問い合わせください）。</p>
+          <p className="mb-4 text-xs text-muted">閲覧のみです。変更は会社にお問い合わせください。</p>
           <ul className="flex flex-col gap-2">
+            {baseWage ? (
+              <li className="rounded-lg border border-border bg-background/40 p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">
+                    基本給・{baseWage.employmentTypeLabel}{" "}
+                    <span className="text-xs font-normal text-muted">（{baseWage.jobDescription}）</span>
+                  </span>
+                  <span className="text-muted">{baseWage.currentLabel}</span>
+                </div>
+                {baseWage.versions.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setExpandedRateId(expandedRateId === "__base__" ? null : "__base__")}
+                    className="mt-2 text-xs text-muted hover:text-primary"
+                  >
+                    {expandedRateId === "__base__" ? "▲ 履歴を閉じる" : `▼ 履歴（${baseWage.versions.length}件）`}
+                  </button>
+                ) : null}
+                {expandedRateId === "__base__" ? (
+                  <ul className="mt-2 flex flex-col text-xs text-muted">
+                    {baseWage.versions.map((v) => (
+                      <li key={v.id} className="flex items-center justify-between border-t border-border/50 py-1">
+                        <span>{v.effectiveFrom} 〜</span>
+                        <span>{v.label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            ) : null}
             {taskRates.map((r) => (
               <li key={r.id} className="rounded-lg border border-border/60 p-3 text-sm">
                 <div className="flex items-center justify-between">
