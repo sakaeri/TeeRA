@@ -160,7 +160,7 @@ export function StaffShell({
         </div>
       </header>
 
-      <nav className="flex flex-wrap gap-2 px-4 py-3">
+      <nav className="flex flex-wrap gap-2 px-4 py-2">
         {NAV.map((item) => {
           const active =
             pathname === item.href || (item.href !== "/staff" && pathname.startsWith(`${item.href}/`));
@@ -169,14 +169,14 @@ export function StaffShell({
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-2 text-sm sm:px-3 ${
+              className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm sm:px-3.5 ${
                 active
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border bg-white/60 text-foreground"
               }`}
             >
               <span className="relative flex shrink-0">
-                <item.Icon className="h-4 w-4 shrink-0" />
+                <item.Icon className="h-5 w-5 shrink-0" />
                 {badgeCount > 0 ? (
                   <span className="absolute -right-1.5 -top-1.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-red-600 px-0.5 text-[9px] font-bold leading-none text-white">
                     {badgeCount > 99 ? "99+" : badgeCount}

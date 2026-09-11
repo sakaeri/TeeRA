@@ -15,6 +15,7 @@ type ShiftRow = {
   isAllDay: boolean;
   isUndecided: boolean;
   approvalStatus: string | null;
+  taskName: string | null;
 };
 
 type PendingRequestRow = {
@@ -171,19 +172,26 @@ export function StaffCalendarView({
       </div>
 
       {companies.length > 1 ? (
-        <div className="mb-2 flex justify-center sm:mb-3">
-          <select
-            value={companyFilter}
-            onChange={(e) => setCompanyFilter(e.target.value)}
-            className="rounded-lg border border-border px-2 py-1.5 text-xs"
-          >
-            <option value="">すべての配属先</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+        <div className="mb-2 flex items-center justify-center gap-1.5 sm:mb-3">
+          <label className="text-xs text-muted" htmlFor="staff-calendar-company-filter">
+            所属先絞り込み
+          </label>
+          <span className="relative inline-flex items-center">
+            <select
+              id="staff-calendar-company-filter"
+              value={companyFilter}
+              onChange={(e) => setCompanyFilter(e.target.value)}
+              className="appearance-none rounded-lg border border-border py-1.5 pl-2 pr-6 text-xs"
+            >
+              <option value="">すべての所属先</option>
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute right-2 text-[9px] text-muted">▼</span>
+          </span>
         </div>
       ) : null}
 
@@ -226,7 +234,7 @@ export function StaffCalendarView({
                 {visibleShifts.map((s) => (
                   <span
                     key={s.id}
-                    className="block w-full truncate rounded bg-emerald-100 px-1.5 py-px text-[8px] font-medium leading-tight text-emerald-900"
+                    className="block w-full truncate rounded bg-emerald-100 px-1.5 py-px text-center text-[8px] font-medium leading-tight text-emerald-900"
                   >
                     {isReportOverdue(s) ? (
                       <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" aria-label="未報告" />
@@ -238,14 +246,14 @@ export function StaffCalendarView({
                   r.desire === "OFF" ? (
                     <span
                       key={r.id}
-                      className="block w-full truncate rounded bg-gray-200 px-1.5 py-px text-[8px] font-medium leading-tight text-gray-700"
+                      className="block w-full rounded bg-gray-200 px-0.5 py-px text-center text-[8px] font-medium leading-tight text-gray-700"
                     >
                       休み
                     </span>
                   ) : (
                     <span
                       key={r.id}
-                      className="block w-full truncate rounded bg-orange-100 px-1.5 py-px text-[8px] font-medium leading-tight text-orange-900"
+                      className="block w-full rounded bg-orange-100 px-0.5 py-px text-center text-[8px] font-medium leading-tight text-orange-900"
                     >
                       希望申請中
                     </span>
@@ -383,6 +391,7 @@ function DayDetailPanel({
                   <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">確定</span>
                 </div>
                 <p className="mt-1 text-muted">{s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}</p>
+                {s.taskName ? <p className="mt-0.5 text-muted">業務内容：{s.taskName}</p> : null}
                 {isReportOverdue(s) ? <p className="mt-1.5 text-xs font-medium text-red-600">業務報告が未提出です。</p> : null}
               </li>
             ))}

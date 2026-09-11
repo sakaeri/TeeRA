@@ -7,7 +7,6 @@ import { todayJst } from "@/lib/date";
 import { useClickOutside } from "@/lib/useClickOutside";
 import {
   createAssignedShiftAction,
-  dismissShiftRequestAction,
   createPublicRecruitmentAction,
   updateMaxEntriesAction,
   deleteRecruitmentAction,
@@ -35,6 +34,7 @@ type ShiftRow = {
   publicRecruitmentId?: string | null;
   originLabel?: string; // source=INHOUSEのみ意味を持つ: 自社／配属：◯◯／公開募集
   approvalStatus: string | null;
+  taskName?: string | null;
 };
 
 type ShiftHistoryRow = {
@@ -793,6 +793,7 @@ function DayDetailModal({
                         >
                           {workplaceLabel}
                         </span>
+                        {s.taskName ? <span className="truncate">{s.taskName}</span> : null}
                         {s.note ? <span className="truncate">（{s.note}）</span> : null}
                       </span>
                     </span>
@@ -2901,12 +2902,15 @@ function ShiftRequestsSection({
   requests: ShiftRequestRow[];
   onNavigate: (dateStr: string) => void;
 }) {
-  const [pending, startTransition] = useTransition();
+  const todayStr = todayJst();
+  // 日付が今日より前になった希望は、対応する意味が無いのでここには出さない
+  // （明示的な「見送る」操作は不要 — 過ぎた日は自動的に一覧から消える）。
   const workRequests = requests.filter((r) => r.desire === "WORK");
 
   const byDate = new Map<string, { requestId: string; staffName: string; note: string | null }[]>();
   for (const r of workRequests) {
     for (const d of r.dates) {
+      if (d < todayStr) continue;
       if (!byDate.has(d)) byDate.set(d, []);
       byDate.get(d)!.push({ requestId: r.id, staffName: r.staffName, note: r.note });
     }
@@ -2946,14 +2950,6 @@ function ShiftRequestsSection({
                           className="text-xs text-primary underline"
                         >
                           確認
-                        </button>
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => startTransition(() => dismissShiftRequestAction(row.requestId))}
-                          className="text-xs text-muted underline"
-                        >
-                          見送る
                         </button>
                       </div>
                     </li>

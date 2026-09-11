@@ -212,14 +212,19 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
 
   // 休み希望は会社の確認・マッチングが不要なので、やることリストには
   // 出勤希望のみを出す。
+  const today = new Date(`${todayJst()}T00:00:00.000Z`);
   for (const sr of shiftRequests.filter((r) => r.desire === "WORK")) {
-    const dateStr = sr.dates[0]?.toISOString().slice(0, 10) ?? "";
+    // 1件のShiftRequestが複数日をまとめて持てるため、最初の1日だけでなく
+    // 希望日を全て列挙する（じゃないと2日目以降の希望が無かったことになる）。
+    // 過ぎた日は対応する意味が無いので混ぜない。
+    const dateStrs = sr.dates.filter((d) => d >= today).map((d) => d.toISOString().slice(0, 10));
+    const dateLabel = dateStrs.join("、");
     items.push({
       id: `shift-${sr.id}`,
       kind: "シフト",
-      text: `${sr.staff.name}さんの希望シフト（${dateStr}）が未確定です`,
+      text: `${sr.staff.name}さんの希望シフト（${dateLabel}）が未確定です`,
       actionLabel: "カレンダーで確認",
-      actionHref: dateStr ? `/company/calendar?date=${dateStr}` : "/company/calendar",
+      actionHref: dateStrs[0] ? `/company/calendar?date=${dateStrs[0]}` : "/company/calendar",
     });
   }
 

@@ -6,7 +6,6 @@ import { canManageShifts } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import {
   createAssignedShift,
-  dismissShiftRequest,
   cancelShift,
 } from "@/lib/domain/shifts";
 import {
@@ -83,15 +82,6 @@ export async function createAssignedShiftAction(input: {
   revalidatePath("/company/calendar");
   revalidatePath("/company");
   return { status: "created" as const, count: createdShiftIds.length };
-}
-
-export async function dismissShiftRequestAction(shiftRequestId: string) {
-  const { membership } = await requireCompanyAdminOrEditor();
-  const shiftRequest = await prisma.shiftRequest.findUniqueOrThrow({ where: { id: shiftRequestId } });
-  if (!canManageShifts(membership, shiftRequest.teamId)) throw new Error("forbidden");
-
-  await dismissShiftRequest(shiftRequestId);
-  revalidatePath("/company/calendar");
 }
 
 // オーダーとして作成する — 無料なのでTee残高のチェックは不要（公開募集への

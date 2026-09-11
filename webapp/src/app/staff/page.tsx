@@ -101,6 +101,7 @@ export default async function StaffHomePage({
           isAllDay: s.isAllDay,
           isUndecided: s.isUndecided,
           approvalStatus: s.workReport?.approvalStatus ?? null,
+          taskName: s.taskName ?? s.workReport?.taskName ?? null,
         }))}
         pendingRequests={requestRows}
       />

@@ -100,6 +100,7 @@ export default async function CompanyCalendarPage({
           publicRecruitmentId: s.publicRecruitmentId,
           originLabel: s.source === "CLIENT" ? undefined : originLabel(staffOrigins.get(s.staffUserId)),
           approvalStatus: s.workReport?.approvalStatus ?? null,
+          taskName: s.taskName ?? s.workReport?.taskName ?? null,
         }))}
         shiftHistory={shiftHistory.map((s) => ({
           id: s.id,

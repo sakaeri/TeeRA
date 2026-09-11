@@ -105,6 +105,10 @@ export async function findPendingOffRequest(staffUserId: string, date: Date) {
 // 時間だけ選んで確定する独立操作は廃止し、実際のシフト作成/アサイン
 // そのものを確定操作として扱う(どの依頼主のどの業務にマッチするのかが
 // わかった状態でしか確定できないようにするため)。
+// 1件のShiftRequestが複数日をまとめて持てるため(dates: DateTime[])、その
+// うちの1日だけが確定した場合は対象の日だけを切り出して別行にする —
+// status/matchedShiftIdは行単位なので、そのまま更新すると未確定のまま
+// 残っているはずの他の日まで一緒にMATCHED扱いになってしまう。
 export async function autoResolveMatchingWorkRequest(
   tx: Tx,
   params: { staffUserId: string; companyId: string; date: Date; shiftId: string },
@@ -118,10 +122,31 @@ export async function autoResolveMatchingWorkRequest(
       dates: { has: params.date },
     },
   });
-  if (request) {
+  if (!request) return;
+
+  const remainingDates = request.dates.filter((d) => d.getTime() !== params.date.getTime());
+
+  if (remainingDates.length === 0) {
     await tx.shiftRequest.update({
       where: { id: request.id },
       data: { status: "MATCHED", matchedShiftId: params.shiftId },
+    });
+  } else {
+    await tx.shiftRequest.update({
+      where: { id: request.id },
+      data: { dates: remainingDates },
+    });
+    await tx.shiftRequest.create({
+      data: {
+        staffUserId: request.staffUserId,
+        companyId: request.companyId,
+        teamId: request.teamId,
+        desire: "WORK",
+        dates: [params.date],
+        note: request.note,
+        status: "MATCHED",
+        matchedShiftId: params.shiftId,
+      },
     });
   }
 }
@@ -372,13 +397,6 @@ export async function listOwnPendingShiftRequests(params: { staffUserId: string;
     where: { staffUserId: params.staffUserId, companyId: { in: params.companyIds }, status: "PENDING" },
     include: { company: true },
     orderBy: { createdAt: "desc" },
-  });
-}
-
-export async function dismissShiftRequest(shiftRequestId: string) {
-  return prisma.shiftRequest.update({
-    where: { id: shiftRequestId },
-    data: { status: "DISMISSED" },
   });
 }
 
