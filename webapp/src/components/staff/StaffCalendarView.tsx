@@ -402,7 +402,7 @@ function DayDetailPanel({
                     <p className="font-semibold text-gray-700">{r.companyName}</p>
                     <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700">休み希望</span>
                   </div>
-                  <p className="mt-1 text-muted">会社の操作は不要です。</p>
+                  <p className="mt-1 text-muted">休み希望を申請済みです。</p>
                 </li>
               ) : (
                 <li key={r.id} className="rounded-xl border border-orange-200 bg-orange-50 p-3.5 text-sm shadow-sm">
@@ -417,13 +417,15 @@ function DayDetailPanel({
           </ul>
         )}
 
-        <button
-          type="button"
-          onClick={onRequest}
-          className="w-full rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/5"
-        >
-          この日にシフト希望を出す
-        </button>
+        {date >= todayJst() ? (
+          <button
+            type="button"
+            onClick={onRequest}
+            className="w-full rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/5"
+          >
+            ＋シフト希望を作成
+          </button>
+        ) : null}
       </div>
     </div>
   );

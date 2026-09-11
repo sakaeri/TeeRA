@@ -116,6 +116,7 @@ export default async function CompanyCalendarPage({
           .map((t) => ({ id: t.id, name: t.name, clientIds: t.clientLinks.map((l) => l.companyRelationshipId) }))}
         shiftRequests={shiftRequests.map((r) => ({
           id: r.id,
+          staffUserId: r.staffUserId,
           staffName: r.staff.name,
           desire: r.desire,
           dates: r.dates.map((d) => d.toISOString().slice(0, 10)),

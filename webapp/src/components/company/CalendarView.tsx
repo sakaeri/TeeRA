@@ -67,6 +67,7 @@ type Team = { id: string; name: string; clientIds: string[] };
 
 type ShiftRequestRow = {
   id: string;
+  staffUserId: string;
   staffName: string;
   desire: string;
   dates: string[];
@@ -165,6 +166,7 @@ export function CalendarView({
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<string | null>(initialSelectedDate ?? null);
   const [showAssignForm, setShowAssignForm] = useState(false);
+  const [assignFormStaffUserId, setAssignFormStaffUserId] = useState<string | undefined>(undefined);
   const [showRecruitForm, setShowRecruitForm] = useState(false);
   const [sharingImage, setSharingImage] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
@@ -510,7 +512,11 @@ export function CalendarView({
           clients={clients}
           placementRates={placementRates}
           defaultDate={selectedDate ?? todayStr}
-          onClose={() => setShowAssignForm(false)}
+          defaultStaffUserId={assignFormStaffUserId}
+          onClose={() => {
+            setShowAssignForm(false);
+            setAssignFormStaffUserId(undefined);
+          }}
         />
       ) : null}
 
@@ -523,7 +529,16 @@ export function CalendarView({
         />
       ) : null}
 
-      <ShiftRequestsSection requests={shiftRequests} onNavigate={setSelectedDate} />
+      <ShiftRequestsSection
+        requests={shiftRequests}
+        clientOrders={clientRecruitments}
+        onNavigate={setSelectedDate}
+        onCreateShift={(date, staffUserId) => {
+          setSelectedDate(date);
+          setAssignFormStaffUserId(staffUserId);
+          setShowAssignForm(true);
+        }}
+      />
     </div>
   );
 }
@@ -2083,6 +2098,7 @@ function AssignShiftModal({
   clients,
   placementRates,
   defaultDate,
+  defaultStaffUserId,
   onClose,
 }: {
   staffOptions: StaffOption[];
@@ -2090,6 +2106,7 @@ function AssignShiftModal({
   clients: { id: string; name: string }[];
   placementRates: TaskNameRow[];
   defaultDate: string;
+  defaultStaffUserId?: string;
   onClose: () => void;
 }) {
   const [teamId, setTeamId] = useState("");
@@ -2108,17 +2125,19 @@ function AssignShiftModal({
         .map((r) => [r.taskName, r]),
     ).values(),
   );
+  // シフト希望の一覧から「このスタッフ・この日でシフト作成」を選んだ場合は
+  // スタッフが既に確定しているので、スタッフ選択ステップ自体を飛ばす。
   const steps: AssignStep[] = [
     ...(teams.length > 0 ? (["team"] as const) : []),
     "workplace",
     "task",
-    "staff",
+    ...(defaultStaffUserId ? [] : (["staff"] as const)),
     "datetime",
     "confirm",
   ];
   const [step, setStep] = useState<AssignStep>(steps[0]);
   const [clientSearch, setClientSearch] = useState("");
-  const [staffUserId, setStaffUserId] = useState("");
+  const [staffUserId, setStaffUserId] = useState(defaultStaffUserId ?? "");
   const [dates, setDates] = useState<string[]>([defaultDate]);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("18:00");
@@ -2897,22 +2916,26 @@ function RecruitmentFormModal({
 // 時間だけ選んで確定する旧「マッチさせる」操作は廃止した。
 function ShiftRequestsSection({
   requests,
+  clientOrders,
   onNavigate,
+  onCreateShift,
 }: {
   requests: ShiftRequestRow[];
+  clientOrders: ClientRecruitmentRow[];
   onNavigate: (dateStr: string) => void;
+  onCreateShift: (dateStr: string, staffUserId: string) => void;
 }) {
   const todayStr = todayJst();
   // 日付が今日より前になった希望は、対応する意味が無いのでここには出さない
   // （明示的な「見送る」操作は不要 — 過ぎた日は自動的に一覧から消える）。
   const workRequests = requests.filter((r) => r.desire === "WORK");
 
-  const byDate = new Map<string, { requestId: string; staffName: string; note: string | null }[]>();
+  const byDate = new Map<string, { requestId: string; staffUserId: string; staffName: string; note: string | null }[]>();
   for (const r of workRequests) {
     for (const d of r.dates) {
       if (d < todayStr) continue;
       if (!byDate.has(d)) byDate.set(d, []);
-      byDate.get(d)!.push({ requestId: r.id, staffName: r.staffName, note: r.note });
+      byDate.get(d)!.push({ requestId: r.id, staffUserId: r.staffUserId, staffName: r.staffName, note: r.note });
     }
   }
   const sortedDates = [...byDate.keys()].sort();
@@ -2928,6 +2951,7 @@ function ShiftRequestsSection({
             const rows = byDate.get(date)!;
             const dt = new Date(`${date}T00:00:00Z`);
             const dateLabel = `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
+            const dayOrders = clientOrders.filter((o) => o.date === date && o.filled < o.maxEntries);
             return (
               <li key={date} className="rounded-lg border border-orange-200 bg-orange-50/60 p-3">
                 <p className="mb-2 font-semibold">
@@ -2937,19 +2961,36 @@ function ShiftRequestsSection({
                   {rows.map((row) => (
                     <li
                       key={row.requestId}
-                      className="flex items-center justify-between gap-2 rounded-lg bg-white/70 px-3 py-2"
+                      className="flex flex-col gap-1.5 rounded-lg bg-white/70 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0">
                         <span className="font-medium">{row.staffName}さん</span>
                         {row.note ? <span className="ml-2 truncate text-xs text-muted">メモ: {row.note}</span> : null}
                       </div>
-                      <div className="flex shrink-0 items-center gap-3">
+                      <div className="flex shrink-0 flex-wrap items-center gap-3">
                         <button
                           type="button"
                           onClick={() => onNavigate(date)}
                           className="text-xs text-primary underline"
                         >
                           確認
+                        </button>
+                        {dayOrders.map((order) => (
+                          <QuickOrderAssignButton
+                            key={order.id}
+                            recruitmentId={order.id}
+                            remaining={order.maxEntries - order.filled}
+                            staffUserId={row.staffUserId}
+                            staffName={row.staffName}
+                            label={dayOrders.length > 1 ? `オーダーへアサイン（${order.title}）` : "オーダーへアサイン"}
+                          />
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => onCreateShift(date, row.staffUserId)}
+                          className="text-xs font-semibold text-primary underline"
+                        >
+                          シフト作成
                         </button>
                       </div>
                     </li>
@@ -2961,6 +3002,171 @@ function ShiftRequestsSection({
         </ul>
       )}
     </div>
+  );
+}
+
+// シフト希望の一覧から、スタッフ・日付が既に確定した状態でオーダーへ
+// クイックアサインするための専用ボタン — RecruitmentAssignControlsと
+// 同じ確認/休み希望/重複の警告フローだが、スタッフ選択プルダウンが無く
+// staffUserIdが固定な点だけが違う。
+function QuickOrderAssignButton({
+  recruitmentId,
+  remaining,
+  staffUserId,
+  staffName,
+  label,
+}: {
+  recruitmentId: string;
+  remaining: number;
+  staffUserId: string;
+  staffName: string;
+  label: string;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [conflicts, setConflicts] = useState<{ id: string; startTime: string | null; endTime: string | null }[] | null>(null);
+  const [offRequestWarning, setOffRequestWarning] = useState(false);
+  const [overrideChecked, setOverrideChecked] = useState(false);
+  const [offConfirmChecked, setOffConfirmChecked] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function assign(overrideShiftIds?: string[], confirmedDespiteOffRequest?: boolean) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await assignStaffToRecruitmentAction({
+          recruitmentId,
+          staffUserId,
+          overrideShiftIds,
+          confirmedDespiteOffRequest,
+        });
+        if (result.status === "off_request") {
+          setOffRequestWarning(true);
+        } else if (result.status === "conflict") {
+          setConflicts(result.conflicts);
+        } else {
+          setConflicts(null);
+          setOffRequestWarning(false);
+          setConfirming(false);
+          setOverrideChecked(false);
+          setOffConfirmChecked(false);
+        }
+      } catch {
+        setError("アサインに失敗しました。");
+      }
+    });
+  }
+
+  if (remaining <= 0) return null;
+
+  return (
+    <>
+      <button type="button" onClick={() => setConfirming(true)} className="text-xs text-primary underline">
+        {label}
+      </button>
+
+      {confirming && !conflicts && !offRequestWarning ? (
+        <Modal title="アサインの確認" onClose={() => setConfirming(false)}>
+          <p className="mb-4 text-sm text-muted">{staffName}さんをこのオーダーにアサインします。よろしいですか？</p>
+          {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setConfirming(false)} className="rounded-lg border border-border px-4 py-2 text-sm">
+              キャンセル
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => assign()}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              確定
+            </button>
+          </div>
+        </Modal>
+      ) : null}
+
+      {offRequestWarning ? (
+        <Modal
+          title="休み希望が出ています"
+          onClose={() => {
+            setOffRequestWarning(false);
+            setConfirming(false);
+            setOffConfirmChecked(false);
+          }}
+        >
+          <p className="mb-4 text-sm text-muted">
+            {staffName}さんはこの日に休み希望を出しています。それでもアサインしますか？
+          </p>
+          <label className="mb-4 flex items-center gap-1.5 text-sm">
+            <input type="checkbox" checked={offConfirmChecked} onChange={(e) => setOffConfirmChecked(e.target.checked)} />
+            スタッフ本人と確認済み
+          </label>
+          {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOffRequestWarning(false);
+                setConfirming(false);
+                setOffConfirmChecked(false);
+              }}
+              className="rounded-lg border border-border px-4 py-2 text-sm"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              disabled={pending || !offConfirmChecked}
+              onClick={() => assign(undefined, true)}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              確認のうえアサインする
+            </button>
+          </div>
+        </Modal>
+      ) : null}
+
+      {conflicts ? (
+        <Modal
+          title="他のシフトと重複しています"
+          onClose={() => {
+            setConflicts(null);
+            setConfirming(false);
+          }}
+        >
+          <ul className="mb-3 list-disc pl-4 text-sm text-muted">
+            {conflicts.map((c) => (
+              <li key={c.id}>{c.startTime ? `${c.startTime}〜${c.endTime}` : "終日/未定"}</li>
+            ))}
+          </ul>
+          <label className="mb-4 flex items-center gap-1.5 text-sm">
+            <input type="checkbox" checked={overrideChecked} onChange={(e) => setOverrideChecked(e.target.checked)} />
+            スタッフ本人と確認済み
+          </label>
+          {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setConflicts(null);
+                setConfirming(false);
+              }}
+              className="rounded-lg border border-border px-4 py-2 text-sm"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              disabled={pending || !overrideChecked}
+              onClick={() => assign(conflicts.map((c) => c.id))}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              重複を確認のうえアサインする
+            </button>
+          </div>
+        </Modal>
+      ) : null}
+    </>
   );
 }
 
