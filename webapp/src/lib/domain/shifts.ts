@@ -352,7 +352,7 @@ export async function listStaffShiftsForMonth(params: {
       date: { gte: start, lt: end },
       status: { notIn: ["SUPERSEDED", "CANCELLED"] },
     },
-    include: { company: true, workReport: true },
+    include: { company: true, workReport: true, companyRelationship: { include: { clientCompany: true } } },
     orderBy: [{ date: "asc" }, { startTime: "asc" }],
   });
 }

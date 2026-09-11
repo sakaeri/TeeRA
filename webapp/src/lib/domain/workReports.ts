@@ -168,7 +168,7 @@ export async function listOwnShiftsNeedingReport(staffUserId: string, companyIds
       status: "CONFIRMED",
       date: { lte: today },
     },
-    include: { company: true, workReport: true },
+    include: { company: true, workReport: true, companyRelationship: { include: { clientCompany: true } } },
     orderBy: { date: "desc" },
     take: 30,
   });

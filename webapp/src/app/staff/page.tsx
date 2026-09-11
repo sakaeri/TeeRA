@@ -53,6 +53,7 @@ export default async function StaffHomePage({
       date: s.date.toISOString().slice(0, 10),
       companyId: s.companyId,
       companyName: s.company.name,
+      workplaceName: s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? null,
       startTime: s.startTime,
       endTime: s.endTime,
       taskName: s.workReport?.taskName ?? s.taskName,
@@ -81,7 +82,7 @@ export default async function StaffHomePage({
   );
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-1 py-4 sm:px-6 sm:py-10">
+    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-1 pb-4 pt-0 sm:block sm:px-6 sm:py-10">
       <h1 className="mb-6 hidden font-serif-jp text-2xl font-bold sm:block">シフトカレンダー</h1>
       <StaffNoticesSection
         notices={unreadNotices.map((n) => ({ id: n.id, message: n.message, createdAt: n.createdAt.toISOString() }))}
@@ -96,6 +97,7 @@ export default async function StaffHomePage({
           date: s.date.toISOString().slice(0, 10),
           companyId: s.companyId,
           companyName: s.company.name,
+          workplaceName: s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? null,
           startTime: s.startTime,
           endTime: s.endTime,
           isAllDay: s.isAllDay,

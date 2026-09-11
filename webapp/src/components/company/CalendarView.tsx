@@ -352,6 +352,18 @@ export function CalendarView({
           </Link>
         </div>
       ) : null}
+
+      <ShiftRequestsSection
+        requests={shiftRequests}
+        clientOrders={clientRecruitments}
+        onNavigate={setSelectedDate}
+        onCreateShift={(date, staffUserId) => {
+          setSelectedDate(date);
+          setAssignFormStaffUserId(staffUserId);
+          setShowAssignForm(true);
+        }}
+      />
+
       <div className="rounded-2xl bg-white p-4">
       <div className="mb-2 flex items-center justify-center gap-2">
         {atHistoryCutoff ? (
@@ -463,7 +475,7 @@ export function CalendarView({
                 {tagEntries.map((tag) => (
                   <span
                     key={tag.id}
-                    className={`truncate rounded-full px-1.5 py-px text-[8px] font-medium leading-tight ${tag.className}`}
+                    className={`block truncate rounded-full px-1.5 py-px text-center text-[8px] font-medium leading-tight ${tag.className}`}
                   >
                     {tag.label}
                   </span>
@@ -529,16 +541,6 @@ export function CalendarView({
         />
       ) : null}
 
-      <ShiftRequestsSection
-        requests={shiftRequests}
-        clientOrders={clientRecruitments}
-        onNavigate={setSelectedDate}
-        onCreateShift={(date, staffUserId) => {
-          setSelectedDate(date);
-          setAssignFormStaffUserId(staffUserId);
-          setShowAssignForm(true);
-        }}
-      />
     </div>
   );
 }
@@ -2939,13 +2941,31 @@ function ShiftRequestsSection({
     }
   }
   const sortedDates = [...byDate.keys()].sort();
+  const totalCount = [...byDate.values()].reduce((sum, rows) => sum + rows.length, 0);
+  // 一覧の下部に置くとカレンダーの下にスクロールしないと気付かれにくい
+  // ため、カレンダーの上に折りたたみ式で置く。件数があるうちは開いた
+  // 状態で気付きやすくし、対応すべきものが無い時はセクションごと非表示
+  // にしてカレンダーの視認性を保つ。
+  const [isOpen, setIsOpen] = useState(true);
+
+  if (totalCount === 0) return null;
 
   return (
-    <div className="mt-8 rounded-xl border border-border bg-white/60 p-5">
-      <h3 className="mb-3 font-semibold">シフト希望（未確定の出勤希望）</h3>
-      {sortedDates.length === 0 ? (
-        <p className="text-sm text-muted">未確定の出勤希望はありません。</p>
-      ) : (
+    <div className="mb-4 rounded-xl border border-border bg-white/60">
+      <button
+        type="button"
+        onClick={() => setIsOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-5 py-3 text-left font-semibold"
+      >
+        <span>
+          シフト希望　{totalCount}件
+        </span>
+        <span className={`text-muted transition-transform ${isOpen ? "rotate-180" : ""}`} aria-hidden>
+          ▼
+        </span>
+      </button>
+      {isOpen ? (
+        <div className="border-t border-border px-5 pb-5 pt-4">
         <ul className="flex flex-col gap-3 text-sm">
           {sortedDates.map((date) => {
             const rows = byDate.get(date)!;
@@ -3000,7 +3020,8 @@ function ShiftRequestsSection({
             );
           })}
         </ul>
-      )}
+        </div>
+      ) : null}
     </div>
   );
 }

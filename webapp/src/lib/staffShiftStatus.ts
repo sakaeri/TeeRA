@@ -9,6 +9,7 @@ export type ShiftRow = {
   date: string;
   companyId: string;
   companyName: string;
+  workplaceName: string | null;
   startTime: string | null;
   endTime: string | null;
   taskName: string | null;

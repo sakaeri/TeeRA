@@ -112,6 +112,7 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
       <p className="mb-2 text-sm text-muted">
         {shift.startTime ? `${shift.startTime}〜${shift.endTime}` : "終日/未定"}
       </p>
+      {shift.workplaceName ? <p className="mb-2 text-sm text-muted">勤務先：{shift.workplaceName}</p> : null}
 
       {shift.approvalStatus === "NEEDS_CONFIRMATION" ? (
         <div className="flex flex-col gap-2 rounded-lg border border-accent/40 bg-accent/10 p-3">

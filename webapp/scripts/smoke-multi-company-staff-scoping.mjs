@@ -145,7 +145,7 @@ try {
 
   await staff.goto("http://localhost:3000/staff");
   let mainText = await staff.locator("main").textContent();
-  let gridText = await staff.locator(".grid.grid-cols-7").textContent();
+  let gridText = await staff.locator(".grid.grid-cols-7.flex-1").textContent();
   log("カレンダーはアクティブ会社に関わらずA社・B社とも表示される", gridText.includes(shortA) && gridText.includes(shortB));
   log("A社アクティブ時: A社のお知らせが表示される", mainText.includes("A社からのお知らせ"));
   log("A社アクティブ時: B社のお知らせは表示されない", !mainText.includes("B社からのお知らせ"));
@@ -154,7 +154,7 @@ try {
   // 常に含まれるため、main全体ではなくカレンダーの日付グリッドだけを見る）
   await staff.locator("select").selectOption({ label: companyAName });
   await staff.waitForTimeout(200);
-  gridText = await staff.locator(".grid.grid-cols-7").textContent();
+  gridText = await staff.locator(".grid.grid-cols-7.flex-1").textContent();
   log("配属先セレクトでA社に絞るとB社のシフトは消える", gridText.includes(shortA) && !gridText.includes(shortB));
 
   await staff.goto("http://localhost:3000/staff/timecard");
@@ -180,7 +180,7 @@ try {
 
   await staff.goto("http://localhost:3000/staff");
   mainText = await staff.locator("main").textContent();
-  gridText = await staff.locator(".grid.grid-cols-7").textContent();
+  gridText = await staff.locator(".grid.grid-cols-7.flex-1").textContent();
   log("B社アクティブ時もカレンダーはA社・B社とも表示される", gridText.includes(shortA) && gridText.includes(shortB));
   log("B社アクティブ時: B社のお知らせが表示される", mainText.includes("B社からのお知らせ"));
   log("B社アクティブ時: A社のお知らせは表示されない", !mainText.includes("A社からのお知らせ"));

@@ -104,10 +104,11 @@ try {
 
   // use the admin's own authenticated browser session (a bare `fetch()` here
   // has no cookies, so it would just hit the unauthenticated response) to
-  // confirm the shift request list at the bottom of the page dropped this
-  // now-resolved request.
+  // confirm the shift request section at the top of the page dropped this
+  // now-resolved request — with none left pending, the whole collapsible
+  // section is hidden entirely rather than showing an empty-state message.
   const requestsAfterMatch = await admin.evaluate((url) => fetch(url).then((r) => r.text()), "http://localhost:3000/company/calendar?y=2026&m=9");
-  log("シフト作成に伴い出勤希望が自動的に対応済みになる", requestsAfterMatch.includes("未確定の出勤希望はありません"));
+  log("シフト作成に伴い出勤希望が自動的に対応済みになる", !requestsAfterMatch.includes("シフト希望　"));
 
   // --- admin: create an overlapping assigned shift on same day -> expect conflict
   // (the day-detail modal for this date is still open above, so its date is

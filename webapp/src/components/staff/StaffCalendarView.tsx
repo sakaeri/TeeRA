@@ -10,6 +10,7 @@ type ShiftRow = {
   date: string;
   companyId: string;
   companyName: string;
+  workplaceName: string | null;
   startTime: string | null;
   endTime: string | null;
   isAllDay: boolean;
@@ -37,9 +38,10 @@ function weekdayColor(dow: number) {
 }
 
 // 日セルの狭い枠に会社名を出すための短縮 — 「株式会社」等の法人格は前株
-// でも後株でも付くうえ、ほとんどの会社名の頭に来るため、単純に先頭5文字
-// を切ると「株式会社◯」ばかりになって見分けが付かない。法人格を先に
-// 取り除いてから5文字に切ることで、識別に効く部分を優先して表示する。
+// でも後株でも付くうえ、ほとんどの会社名の頭に来るため、単純に先頭を
+// 切ると「株式会社◯」ばかりになって見分けが付かない。法人格を先に
+// 取り除いて識別に効く部分を優先し、枠に入りきらない分はCSS側の
+// truncateで省略する（文字数を固定で打ち切るわけではない）。
 const CORPORATE_LABELS = [
   "株式会社",
   "有限会社",
@@ -66,7 +68,7 @@ function shortCompanyName(name: string) {
     }
   }
   stripped = stripped.trim();
-  return (stripped || name).slice(0, 5);
+  return stripped || name;
 }
 
 // 「未報告」の赤丸は、業務時間を過ぎてから初めて意味を持つ警告 —
@@ -141,9 +143,12 @@ export function StaffCalendarView({
   const prev = month === 1 ? { y: year - 1, m: 12 } : { y: year, m: month - 1 };
   const next = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
   const CONFIRMED_SLOT_BUDGET = 5;
+  // 月によって5行/6行と変わっても月カード全体の縦幅は一定に保ち（＋ボタンの
+  // 裏まで届くように)、その差は週の行の高さ側で吸収する。
+  const weeks = Math.max(1, Math.ceil(cells.length / 7));
 
   return (
-    <div className="rounded-2xl bg-white p-1.5 sm:p-4">
+    <div className="flex flex-1 flex-col rounded-2xl bg-white p-1.5 sm:block sm:p-4">
       <div className="mb-2 flex items-center justify-center gap-2">
         <Link
           href={`?y=${prev.y}&m=${prev.m}`}
@@ -201,9 +206,14 @@ export function StaffCalendarView({
             {w}
           </div>
         ))}
+      </div>
+      <div
+        className="grid flex-1 grid-cols-7 gap-0.5 sm:grid-rows-none sm:gap-1"
+        style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` }}
+      >
         {cells.map((c, i) => {
           if (!c.dateStr) {
-            return <div key={i} className="h-[70px] sm:h-[100px]" />;
+            return <div key={i} className="h-full sm:h-[100px]" />;
           }
           const dateStr = c.dateStr;
           const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
@@ -219,7 +229,7 @@ export function StaffCalendarView({
               key={i}
               type="button"
               onClick={() => setSelectedDay(dateStr)}
-              className={`relative flex h-[70px] flex-col items-stretch justify-start overflow-hidden rounded-lg p-1 text-left sm:h-[100px] sm:rounded-xl sm:rounded-tr-none sm:p-1.5 ${
+              className={`relative flex h-full flex-col items-stretch justify-start overflow-hidden rounded-lg p-1 text-left sm:h-[100px] sm:rounded-xl sm:rounded-tr-none sm:p-1.5 ${
                 isToday ? "bg-accent/25" : "bg-white/40"
               }`}
             >
@@ -253,7 +263,7 @@ export function StaffCalendarView({
                   ) : (
                     <span
                       key={r.id}
-                      className="block w-full rounded bg-orange-100 px-0.5 py-px text-center text-[8px] font-medium leading-tight text-orange-900"
+                      className="block w-full truncate rounded bg-orange-100 px-0 py-px text-center text-[8px] font-medium leading-tight tracking-tighter text-orange-900"
                     >
                       希望申請中
                     </span>
@@ -391,6 +401,7 @@ function DayDetailPanel({
                   <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">確定</span>
                 </div>
                 <p className="mt-1 text-muted">{s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}</p>
+                {s.workplaceName ? <p className="mt-0.5 text-muted">勤務先：{s.workplaceName}</p> : null}
                 {s.taskName ? <p className="mt-0.5 text-muted">業務内容：{s.taskName}</p> : null}
                 {isReportOverdue(s) ? <p className="mt-1.5 text-xs font-medium text-red-600">業務報告が未提出です。</p> : null}
               </li>
