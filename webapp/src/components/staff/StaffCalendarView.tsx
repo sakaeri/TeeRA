@@ -405,11 +405,30 @@ function RequestWizard({
   const [dates, setDates] = useState<string[]>(initialDate ? [initialDate] : []);
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  // 勤務先が1つしかない場合は①のステップを飛ばして②から始める（多くの
+  // スタッフは所属先が1つだけなので、わざわざ選ばせる意味が無い）。
+  const skipCompanyStep = companies.length <= 1;
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(skipCompanyStep ? 2 : 1);
 
   const cells = useMemo(() => buildMonthCells(year, month), [year, month]);
+  const selectedCompanyName = companies.find((c) => c.id === companyId)?.name ?? "";
 
   function toggleDate(dateStr: string) {
     setDates((prev) => (prev.includes(dateStr) ? prev.filter((d) => d !== dateStr) : [...prev, dateStr].sort()));
+  }
+
+  function submit() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await submitShiftRequestAction({ companyId, desire, dates, note: note || undefined });
+        onClose();
+      } catch {
+        setError("申請に失敗しました。");
+      }
+    });
   }
 
   return (
@@ -422,98 +441,169 @@ function RequestWizard({
           </button>
         </div>
 
-        <label className="mb-3 flex flex-col gap-1 text-xs text-muted">
-          勤務先
-          {companies.length > 1 ? (
-            <select
-              value={companyId}
-              onChange={(e) => setCompanyId(e.target.value)}
-              className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
-            >
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <p className="text-sm text-foreground">{companies[0]?.name}</p>
-          )}
-        </label>
-
-        <div className="mb-3 flex gap-2 text-sm">
-          <button
-            type="button"
-            onClick={() => setDesire("WORK")}
-            className={`flex-1 rounded-lg border px-3 py-2 ${
-              desire === "WORK" ? "border-primary bg-primary/10 text-primary" : "border-border"
-            }`}
-          >
-            出勤希望
-          </button>
-          <button
-            type="button"
-            onClick={() => setDesire("OFF")}
-            className={`flex-1 rounded-lg border px-3 py-2 ${
-              desire === "OFF" ? "border-primary bg-primary/10 text-primary" : "border-border"
-            }`}
-          >
-            休み希望
-          </button>
+        <div className="mb-5 flex items-center gap-1.5">
+          {([1, 2, 3, 4] as const).map((s) => (
+            <span key={s} className={`h-1.5 flex-1 rounded-full ${s <= step ? "bg-primary" : "bg-border"}`} />
+          ))}
         </div>
 
-        <p className="mb-1 text-xs text-muted">日付を複数選択できます（{year}年{month}月）</p>
-        <div className="mb-3 grid grid-cols-7 gap-1">
-          {WEEKDAYS.map((w, i) => (
-            <div key={w} className={`py-0.5 text-center text-[10px] font-semibold ${weekdayColor(i)}`}>
-              {w}
+        {step === 1 ? (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm font-semibold">申請先を選んでください</p>
+            <div className="flex flex-col gap-2">
+              {companies.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setCompanyId(c.id)}
+                  className={`rounded-lg border px-4 py-3 text-left text-sm ${
+                    companyId === c.id ? "border-primary bg-primary/10 font-semibold text-primary" : "border-border"
+                  }`}
+                >
+                  {c.name}
+                </button>
+              ))}
             </div>
-          ))}
-          {cells.map((c, i) => {
-            if (!c.dateStr) return <div key={i} />;
-            const dateStr = c.dateStr;
-            const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
-            const selected = dates.includes(dateStr);
-            return (
+            <button
+              type="button"
+              disabled={!companyId}
+              onClick={() => setStep(2)}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              次へ
+            </button>
+          </div>
+        ) : step === 2 ? (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm font-semibold">出勤希望・休み希望を選んでください</p>
+            <div className="flex gap-2 text-sm">
               <button
-                key={i}
                 type="button"
-                onClick={() => toggleDate(dateStr)}
-                className={`rounded-lg py-1.5 text-xs ${
-                  selected
-                    ? "bg-primary font-semibold text-primary-foreground"
-                    : `hover:bg-background ${weekdayColor(dow)}`
+                onClick={() => setDesire("WORK")}
+                className={`flex-1 rounded-lg border px-3 py-3 ${
+                  desire === "WORK" ? "border-primary bg-primary/10 text-primary" : "border-border"
                 }`}
               >
-                {c.day}
+                出勤希望
               </button>
-            );
-          })}
-        </div>
+              <button
+                type="button"
+                onClick={() => setDesire("OFF")}
+                className={`flex-1 rounded-lg border px-3 py-3 ${
+                  desire === "OFF" ? "border-primary bg-primary/10 text-primary" : "border-border"
+                }`}
+              >
+                休み希望
+              </button>
+            </div>
+            <div className="flex gap-2">
+              {!skipCompanyStep ? (
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="rounded-lg border border-border px-4 py-2 text-sm"
+                >
+                  戻る
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setStep(3)}
+                className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+              >
+                次へ
+              </button>
+            </div>
+          </div>
+        ) : step === 3 ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm font-semibold">日付を選んでください（複数選択できます）</p>
+            <p className="text-xs text-muted">{year}年{month}月</p>
+            <div className="grid grid-cols-7 gap-1">
+              {WEEKDAYS.map((w, i) => (
+                <div key={w} className={`py-0.5 text-center text-[10px] font-semibold ${weekdayColor(i)}`}>
+                  {w}
+                </div>
+              ))}
+              {cells.map((c, i) => {
+                if (!c.dateStr) return <div key={i} />;
+                const dateStr = c.dateStr;
+                const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
+                const selected = dates.includes(dateStr);
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => toggleDate(dateStr)}
+                    className={`rounded-lg py-1.5 text-xs ${
+                      selected
+                        ? "bg-primary font-semibold text-primary-foreground"
+                        : `hover:bg-background ${weekdayColor(dow)}`
+                    }`}
+                  >
+                    {c.day}
+                  </button>
+                );
+              })}
+            </div>
 
-        {dates.length > 0 ? <p className="mb-3 text-xs text-muted">{dates.length}日を選択中</p> : null}
+            {dates.length > 0 ? <p className="text-xs text-muted">{dates.length}日を選択中</p> : null}
 
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="備考（任意）"
-          className="mb-4 w-full rounded-lg border border-border px-3 py-2 text-sm"
-          rows={3}
-        />
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="備考（任意）"
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+              rows={3}
+            />
 
-        <button
-          type="button"
-          disabled={pending || dates.length === 0 || !companyId}
-          onClick={() =>
-            startTransition(async () => {
-              await submitShiftRequestAction({ companyId, desire, dates, note: note || undefined });
-              onClose();
-            })
-          }
-          className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-        >
-          申請する
-        </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                className="rounded-lg border border-border px-4 py-2 text-sm"
+              >
+                戻る
+              </button>
+              <button
+                type="button"
+                disabled={dates.length === 0}
+                onClick={() => setStep(4)}
+                className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                次へ
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm font-semibold">この内容で申請します</p>
+            <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-background/40 p-3 text-sm">
+              <p>勤務先：{selectedCompanyName}</p>
+              <p>種別：{desire === "WORK" ? "出勤希望" : "休み希望"}</p>
+              <p>日付：{dates.join("、")}</p>
+              {note ? <p>備考：{note}</p> : null}
+            </div>
+            {error ? <p className="text-xs text-red-600">{error}</p> : null}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setStep(3)}
+                className="rounded-lg border border-border px-4 py-2 text-sm"
+              >
+                戻る
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={submit}
+                className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                申請する
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

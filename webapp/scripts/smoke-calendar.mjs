@@ -51,12 +51,18 @@ try {
   await staff.waitForURL("http://localhost:3000/staff");
 
   // --- staff: submit shift request for a date (day 15, taken from the
-  // wizard's mini calendar grid for the currently-viewed month)
+  // wizard's mini calendar grid for the currently-viewed month). The
+  // request wizard is now a 4-step flow (勤務先→出勤/休み→日付/備考→確認);
+  // this staff has only one company so step①(勤務先選択) is skipped.
   await staff.locator("button.fixed.bottom-8.right-8").click();
-  await staff.click("text=出勤希望");
   const wizard = staff.locator("div.fixed.inset-0.z-30");
+  await wizard.getByRole("button", { name: "出勤希望", exact: true }).click();
+  await wizard.getByRole("button", { name: "次へ" }).click();
+  await staff.waitForTimeout(200);
   await wizard.getByRole("button", { name: "15", exact: true }).click();
-  await wizard.getByRole("button", { name: "申請する" }).click();
+  await wizard.getByRole("button", { name: "次へ" }).click();
+  await staff.waitForTimeout(200);
+  await wizard.getByRole("button", { name: "申請する", exact: true }).click();
   await staff.waitForTimeout(800);
 
   // --- admin: go to calendar for Sept 2026, see pending request grouped by
