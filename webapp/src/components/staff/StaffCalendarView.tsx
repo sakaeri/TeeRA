@@ -35,6 +35,39 @@ function weekdayColor(dow: number) {
   return "text-foreground";
 }
 
+// 日セルの狭い枠に会社名を出すための短縮 — 「株式会社」等の法人格は前株
+// でも後株でも付くうえ、ほとんどの会社名の頭に来るため、単純に先頭5文字
+// を切ると「株式会社◯」ばかりになって見分けが付かない。法人格を先に
+// 取り除いてから5文字に切ることで、識別に効く部分を優先して表示する。
+const CORPORATE_LABELS = [
+  "株式会社",
+  "有限会社",
+  "合同会社",
+  "合資会社",
+  "合名会社",
+  "一般社団法人",
+  "一般財団法人",
+  "医療法人",
+  "社会福祉法人",
+  "学校法人",
+];
+
+function shortCompanyName(name: string) {
+  let stripped = name;
+  for (const label of CORPORATE_LABELS) {
+    if (stripped.startsWith(label)) {
+      stripped = stripped.slice(label.length);
+      break;
+    }
+    if (stripped.endsWith(label)) {
+      stripped = stripped.slice(0, -label.length);
+      break;
+    }
+  }
+  stripped = stripped.trim();
+  return (stripped || name).slice(0, 5);
+}
+
 // 「未報告」の赤丸は、業務時間を過ぎてから初めて意味を持つ警告 —
 // 未来日やまだ終了時刻前の当日シフトを「未報告」扱いにすると、単なる
 // ノイズになる（会社画面のCalendarView.tsxと同じ考え方）。
@@ -162,7 +195,7 @@ export function StaffCalendarView({
         ))}
         {cells.map((c, i) => {
           if (!c.dateStr) {
-            return <div key={i} className="h-[68px] sm:h-[100px]" />;
+            return <div key={i} className="h-[70px] sm:h-[100px]" />;
           }
           const dateStr = c.dateStr;
           const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
@@ -178,7 +211,7 @@ export function StaffCalendarView({
               key={i}
               type="button"
               onClick={() => setSelectedDay(dateStr)}
-              className={`relative flex h-[68px] flex-col items-stretch justify-start overflow-hidden rounded-lg p-1 text-left sm:h-[100px] sm:rounded-xl sm:rounded-tr-none sm:p-1.5 ${
+              className={`relative flex h-[70px] flex-col items-stretch justify-start overflow-hidden rounded-lg p-1 text-left sm:h-[100px] sm:rounded-xl sm:rounded-tr-none sm:p-1.5 ${
                 isToday ? "bg-accent/25" : "bg-white/40"
               }`}
             >
@@ -198,7 +231,7 @@ export function StaffCalendarView({
                     {isReportOverdue(s) ? (
                       <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" aria-label="未報告" />
                     ) : null}
-                    {s.companyName} {s.isAllDay ? "終日" : s.isUndecided ? "未定" : s.startTime}
+                    {shortCompanyName(s.companyName)}
                   </span>
                 ))}
                 {visibleRequests.map((r) =>
@@ -207,14 +240,14 @@ export function StaffCalendarView({
                       key={r.id}
                       className="block w-full truncate rounded bg-gray-200 px-1.5 py-px text-[8px] font-medium leading-tight text-gray-700"
                     >
-                      {r.companyName} 休み
+                      休み
                     </span>
                   ) : (
                     <span
                       key={r.id}
                       className="block w-full truncate rounded bg-orange-100 px-1.5 py-px text-[8px] font-medium leading-tight text-orange-900"
                     >
-                      {r.companyName} 出勤希望
+                      希望申請中
                     </span>
                   ),
                 )}
@@ -441,11 +474,18 @@ function RequestWizard({
           </button>
         </div>
 
-        <div className="mb-5 flex items-center gap-1.5">
+        <div className="mb-3 flex items-center gap-1.5">
           {([1, 2, 3, 4] as const).map((s) => (
             <span key={s} className={`h-1.5 flex-1 rounded-full ${s <= step ? "bg-primary" : "bg-border"}`} />
           ))}
         </div>
+
+        {step > 1 ? (
+          <p className="mb-4 text-sm font-medium text-primary">
+            {selectedCompanyName}
+            {step > 2 ? `・${desire === "WORK" ? "出勤希望" : "休み希望"}` : ""}
+          </p>
+        ) : null}
 
         {step === 1 ? (
           <div className="flex flex-col gap-4">

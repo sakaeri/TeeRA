@@ -33,6 +33,11 @@ const adminBEmail = `mcs-adminB-${Date.now()}@example.com`;
 const staffEmail = `mcs-staff-${Date.now()}@example.com`;
 const companyAName = `絞込確認A社${Date.now()}`;
 const companyBName = `絞込確認B社${Date.now()}`;
+// カレンダーの日セルは狭いので会社名を5文字に短縮して表示する
+// （StaffCalendarView.tsxのshortCompanyName、法人格の接頭辞が無いこの
+// テスト名ではそのまま先頭5文字になる）。
+const shortA = companyAName.slice(0, 5);
+const shortB = companyBName.slice(0, 5);
 
 async function setupCompanyContract(admin, companyId, staffUserId, taskName, wageAmount) {
   await admin.goto("http://localhost:3000/company/settings?tab=contracts");
@@ -141,7 +146,7 @@ try {
   await staff.goto("http://localhost:3000/staff");
   let mainText = await staff.locator("main").textContent();
   let gridText = await staff.locator(".grid.grid-cols-7").textContent();
-  log("カレンダーはアクティブ会社に関わらずA社・B社とも表示される", gridText.includes(companyAName) && gridText.includes(companyBName));
+  log("カレンダーはアクティブ会社に関わらずA社・B社とも表示される", gridText.includes(shortA) && gridText.includes(shortB));
   log("A社アクティブ時: A社のお知らせが表示される", mainText.includes("A社からのお知らせ"));
   log("A社アクティブ時: B社のお知らせは表示されない", !mainText.includes("B社からのお知らせ"));
 
@@ -150,7 +155,7 @@ try {
   await staff.locator("select").selectOption({ label: companyAName });
   await staff.waitForTimeout(200);
   gridText = await staff.locator(".grid.grid-cols-7").textContent();
-  log("配属先セレクトでA社に絞るとB社のシフトは消える", gridText.includes(companyAName) && !gridText.includes(companyBName));
+  log("配属先セレクトでA社に絞るとB社のシフトは消える", gridText.includes(shortA) && !gridText.includes(shortB));
 
   await staff.goto("http://localhost:3000/staff/timecard");
   mainText = await staff.locator("main").textContent();
@@ -176,7 +181,7 @@ try {
   await staff.goto("http://localhost:3000/staff");
   mainText = await staff.locator("main").textContent();
   gridText = await staff.locator(".grid.grid-cols-7").textContent();
-  log("B社アクティブ時もカレンダーはA社・B社とも表示される", gridText.includes(companyAName) && gridText.includes(companyBName));
+  log("B社アクティブ時もカレンダーはA社・B社とも表示される", gridText.includes(shortA) && gridText.includes(shortB));
   log("B社アクティブ時: B社のお知らせが表示される", mainText.includes("B社からのお知らせ"));
   log("B社アクティブ時: A社のお知らせは表示されない", !mainText.includes("A社からのお知らせ"));
 
