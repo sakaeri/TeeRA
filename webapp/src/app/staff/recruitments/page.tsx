@@ -14,6 +14,7 @@ export default async function StaffRecruitmentsPage() {
           id: r.id,
           title: r.title,
           companyName: r.company.name,
+          visibility: r.visibility,
           date: r.date.toISOString().slice(0, 10),
           startTime: r.startTime,
           endTime: r.endTime,

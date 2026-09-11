@@ -160,11 +160,13 @@ try {
   const recruitmentId = psql(`select id from "PublicRecruitment" where "companyId"='${companyAId}' and title='${recruitmentTitle}';`);
 
   // 無関係スタッフZが応募 → Teeは消費されたまま（ロック解除されない）
+  // 一覧の行は日付/会社名/残数だけの折りたたみ表示になったため、
+  // 業務内容(title)ではなくdata-testid（recruitmentId）で行を特定する。
   await staffZ.goto("http://localhost:3000/staff/recruitments");
-  const zItem = staffZ.locator("li", { hasText: recruitmentTitle });
-  await zItem.click();
+  const zItem = staffZ.locator(`[data-testid="recruitment-${recruitmentId}"]`);
+  await zItem.locator("button").first().click();
   await staffZ.waitForTimeout(200);
-  await staffZ.getByRole("button", { name: "応募する" }).click();
+  await zItem.getByRole("button", { name: "応募する" }).click();
   await staffZ.waitForTimeout(800);
 
   state = psql(`select "lockedTee" from "PublicRecruitment" where id='${recruitmentId}';`);
@@ -174,10 +176,10 @@ try {
 
   // A社自身のスタッフXが残り1枠に応募 → その場でその1枠分(10Tee)が即返金される
   await staffX.goto("http://localhost:3000/staff/recruitments");
-  const xItem = staffX.locator("li", { hasText: recruitmentTitle });
-  await xItem.click();
+  const xItem = staffX.locator(`[data-testid="recruitment-${recruitmentId}"]`);
+  await xItem.locator("button").first().click();
   await staffX.waitForTimeout(200);
-  await staffX.getByRole("button", { name: "応募する" }).click();
+  await xItem.getByRole("button", { name: "応募する" }).click();
   await staffX.waitForTimeout(800);
 
   state = psql(`select "lockedTee" from "PublicRecruitment" where id='${recruitmentId}';`);

@@ -191,9 +191,10 @@ try {
 
   await staff.goto("http://localhost:3000/staff/recruitments");
   await staff.waitForTimeout(300);
-  await staff.locator("li", { hasText: publicTitle }).click();
+  const publicRecItem = staff.locator(`[data-testid="recruitment-${publicRecId}"]`);
+  await publicRecItem.locator("button").first().click();
   await staff.waitForTimeout(200);
-  await staff.getByRole("button", { name: "応募する" }).click();
+  await publicRecItem.getByRole("button", { name: "応募する" }).click();
   await staff.waitForTimeout(600);
 
   const publicApplyEntry = psql(`select count(*) from "RecruitmentEntry" where "publicRecruitmentId"='${publicRecId}' and "staffUserId"='${staffUserId}';`);

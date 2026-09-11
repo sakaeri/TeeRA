@@ -388,41 +388,28 @@ function DayDetailPanel({
         {shifts.length === 0 && requests.length === 0 ? (
           <p className="mb-5 rounded-xl bg-background/60 px-4 py-6 text-center text-sm text-muted">この日の予定はありません。</p>
         ) : (
-          <ul className="mb-5 flex flex-col gap-2.5">
+          <ul className="mb-5 flex flex-col gap-2">
             {shifts.map((s) => (
-              <li key={s.id} className="rounded-xl border border-border bg-white/60 p-3.5 text-sm shadow-sm">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    {isReportOverdue(s) ? (
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" aria-label="未報告" />
-                    ) : null}
-                    <p className="font-semibold">{s.companyName}</p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">確定</span>
-                </div>
-                <p className="mt-1 text-muted">{s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}</p>
-                {s.workplaceName ? <p className="mt-0.5 text-muted">勤務先：{s.workplaceName}</p> : null}
-                {s.taskName ? <p className="mt-0.5 text-muted">業務内容：{s.taskName}</p> : null}
-                {isReportOverdue(s) ? <p className="mt-1.5 text-xs font-medium text-red-600">業務報告が未提出です。</p> : null}
-              </li>
+              <DetailAccordionItem
+                key={s.id}
+                dotClassName={isReportOverdue(s) ? "bg-red-500" : "bg-emerald-500"}
+                primary={s.workplaceName ?? s.companyName}
+                secondary={s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
+              >
+                <p>所属会社：{s.companyName}</p>
+                {s.taskName ? <p>業務内容：{s.taskName}</p> : null}
+                {isReportOverdue(s) ? <p className="font-medium text-red-600">業務報告が未提出です。</p> : null}
+              </DetailAccordionItem>
             ))}
             {requests.map((r) =>
               r.desire === "OFF" ? (
-                <li key={r.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3.5 text-sm shadow-sm">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold text-gray-700">{r.companyName}</p>
-                    <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700">休み希望</span>
-                  </div>
-                  <p className="mt-1 text-muted">休み希望を申請済みです。</p>
-                </li>
+                <DetailAccordionItem key={r.id} dotClassName="bg-gray-400" primary="休み申請済み">
+                  <p>所属会社：{r.companyName}</p>
+                </DetailAccordionItem>
               ) : (
-                <li key={r.id} className="rounded-xl border border-orange-200 bg-orange-50 p-3.5 text-sm shadow-sm">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold text-orange-900">{r.companyName}</p>
-                    <span className="shrink-0 rounded-full bg-orange-200 px-2 py-0.5 text-xs font-medium text-orange-900">出勤希望</span>
-                  </div>
-                  <p className="mt-1 text-orange-800">会社の回答待ちです。</p>
-                </li>
+                <DetailAccordionItem key={r.id} dotClassName="bg-orange-500" primary="会社の回答待ちです">
+                  <p>所属会社：{r.companyName}</p>
+                </DetailAccordionItem>
               ),
             )}
           </ul>
@@ -439,6 +426,49 @@ function DayDetailPanel({
         ) : null}
       </div>
     </div>
+  );
+}
+
+// 「一目で状況が分かる見出し」＋「タップして開く詳細」の2段構成。会社名
+// や備考などの二次情報を毎回全部並べると縦に長く煩雑になるため、まず
+// 状況（勤務先・時間／休み希望・出勤希望の別）だけを見せ、詳細は▼で
+// 開いた時だけ出す。
+function DetailAccordionItem({
+  dotClassName,
+  primary,
+  secondary,
+  children,
+}: {
+  dotClassName: string;
+  primary: string;
+  secondary?: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <li className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2.5 px-4 py-3 text-left"
+      >
+        <span className={`h-2 w-2 shrink-0 rounded-full ${dotClassName}`} aria-hidden />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-foreground">{primary}</span>
+          {secondary ? <span className="block text-xs text-muted">{secondary}</span> : null}
+        </span>
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open ? (
+        <div className="flex flex-col gap-1 border-t border-black/5 px-4 py-3 text-xs text-muted">{children}</div>
+      ) : null}
+    </li>
   );
 }
 

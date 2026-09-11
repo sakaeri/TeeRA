@@ -57,10 +57,10 @@ function GearIcon({ className }: { className?: string }) {
 }
 
 const NAV = [
-  { href: "/staff", label: "シフトカレンダー", Icon: CalendarIcon },
-  { href: "/staff/recruitments", label: "募集一覧", Icon: MegaphoneIcon },
+  { href: "/staff", label: "カレンダー", Icon: CalendarIcon },
+  { href: "/staff/recruitments", label: "募集", Icon: MegaphoneIcon },
   { href: "/staff/timecard", label: "タイムカード", Icon: ClockIcon },
-  { href: "/staff/contracts", label: "所属先設定", Icon: GearIcon },
+  { href: "/staff/contracts", label: "設定", Icon: GearIcon },
 ];
 
 function todayLabel() {
@@ -160,7 +160,7 @@ export function StaffShell({
         </div>
       </header>
 
-      <nav className="flex flex-wrap gap-2 px-4 py-2.5">
+      <nav className="flex items-stretch justify-around border-b border-border/60 bg-white/40 px-1 py-1.5 sm:justify-start sm:gap-1 sm:px-4">
         {NAV.map((item) => {
           const active =
             pathname === item.href || (item.href !== "/staff" && pathname.startsWith(`${item.href}/`));
@@ -169,21 +169,23 @@ export function StaffShell({
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-3 text-sm sm:px-4 ${
-                active
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-white/60 text-foreground"
-              }`}
+              className="flex flex-1 flex-col items-center gap-1 rounded-xl py-1.5 sm:flex-none sm:px-3"
             >
-              <span className="relative flex shrink-0">
-                <item.Icon className="h-6 w-6 shrink-0" />
+              <span
+                className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${
+                  active ? "bg-primary text-primary-foreground" : "text-muted"
+                }`}
+              >
+                <item.Icon className="h-5 w-5 shrink-0" />
                 {badgeCount > 0 ? (
-                  <span className="absolute -right-1.5 -top-1.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-red-600 px-0.5 text-[9px] font-bold leading-none text-white">
+                  <span className="absolute -right-1 -top-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-red-600 px-0.5 text-[9px] font-bold leading-none text-white">
                     {badgeCount > 99 ? "99+" : badgeCount}
                   </span>
                 ) : null}
               </span>
-              <span className="hidden sm:inline">{item.label}</span>
+              <span className={`text-[11px] font-medium ${active ? "text-primary" : "text-muted"}`}>
+                {item.label}
+              </span>
             </Link>
           );
         })}

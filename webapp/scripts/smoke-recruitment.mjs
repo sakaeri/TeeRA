@@ -96,15 +96,20 @@ try {
   let calBody = await admin.locator(".fixed.inset-0.z-20").first().innerText();
   log("recruitment listed with 残り3名", calBody.includes("残り3名"));
 
-  // staff applies
+  // staff applies — the list row only shows date/company/remaining until
+  // tapped open, so locate it via a stable data-testid rather than the
+  // 業務内容(title), which is now tucked inside the ▼ detail.
+  const recruitmentId = psql(`select id from "PublicRecruitment" where "companyId"='${companyId}' and title='${recruitmentTitle}';`);
   await staff.goto("http://localhost:3000/staff/recruitments");
-  let staffBody = await staff.textContent("body");
-  log("staff sees open recruitment", staffBody.includes(recruitmentTitle));
+  const recruitmentItem = staff.locator(`[data-testid="recruitment-${recruitmentId}"]`);
+  let staffBody = await recruitmentItem.innerText();
+  log("staff sees open recruitment", staffBody.includes("募集テスト株式会社"));
 
-  const recruitmentItem = staff.locator("li", { hasText: recruitmentTitle });
-  await recruitmentItem.click();
+  await recruitmentItem.locator("button").first().click();
   await staff.waitForTimeout(200);
-  await staff.getByRole("button", { name: "応募する" }).click();
+  staffBody = await recruitmentItem.innerText();
+  log("expanded detail shows 業務内容", staffBody.includes(recruitmentTitle));
+  await recruitmentItem.getByRole("button", { name: "応募する" }).click();
   await staff.waitForTimeout(800);
   staffBody = await staff.textContent("body");
   log("staff shows applied", staffBody.includes("応募済み"));
