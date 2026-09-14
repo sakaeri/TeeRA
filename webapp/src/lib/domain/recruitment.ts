@@ -398,6 +398,26 @@ async function isStaffEligibleForRecruitment(params: {
 // 派遣会社が能動的にアサインする操作なので、シフト作成でのアサインと同じく
 // 配属記録(StaffPlacement)を自動登録する — 以後そのスタッフは同じ依頼主の
 // 非公開募集(オーダー)にも自己応募できるようになる。
+// (publicRecruitmentId, staffUserId)は@@uniqueなので、一度アサイン/応募して
+// 後からシフトを解除（=REJECTEDへ）した相手を再び追加しようとすると、素朴に
+// createするだけではDBのユニーク制約違反になってしまう（解除済みでも行自体は
+// 残っているため）。REJECTEDの古い行が見つかった場合はそれをCONFIRMEDへ
+// 巻き戻して再利用し、無ければ新規作成する。
+async function upsertRecruitmentEntry(tx: Tx, publicRecruitmentId: string, staffUserId: string) {
+  const existing = await tx.recruitmentEntry.findUnique({
+    where: { publicRecruitmentId_staffUserId: { publicRecruitmentId, staffUserId } },
+  });
+  if (existing && existing.status === "REJECTED") {
+    return tx.recruitmentEntry.update({
+      where: { id: existing.id },
+      data: { status: "CONFIRMED", confirmedAt: new Date(), resultingShiftId: null },
+    });
+  }
+  return tx.recruitmentEntry.create({
+    data: { publicRecruitmentId, staffUserId, status: "CONFIRMED", confirmedAt: new Date() },
+  });
+}
+
 export async function assignStaffToRecruitment(params: {
   recruitmentId: string;
   staffUserId: string;
@@ -475,14 +495,7 @@ export async function assignStaffToRecruitment(params: {
       throw new Error("recruitment_full");
     }
 
-    const entry = await tx.recruitmentEntry.create({
-      data: {
-        publicRecruitmentId: recruitment.id,
-        staffUserId: params.staffUserId,
-        status: "CONFIRMED",
-        confirmedAt: new Date(),
-      },
-    });
+    const entry = await upsertRecruitmentEntry(tx, recruitment.id, params.staffUserId);
 
     // 依頼主詳細＞単価タブで見つけて単価設定できるよう、業務内容の登録
     // （単価は付けない）も一緒に行っておく。
@@ -621,14 +634,7 @@ export async function applyToRecruitment(params: { recruitmentId: string; staffU
       throw new Error("recruitment_full");
     }
 
-    const entry = await tx.recruitmentEntry.create({
-      data: {
-        publicRecruitmentId: recruitment.id,
-        staffUserId: params.staffUserId,
-        status: "CONFIRMED",
-        confirmedAt: new Date(),
-      },
-    });
+    const entry = await upsertRecruitmentEntry(tx, recruitment.id, params.staffUserId);
 
     const shift = await tx.shift.create({
       data: {
