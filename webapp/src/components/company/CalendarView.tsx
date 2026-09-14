@@ -1379,7 +1379,7 @@ function OrderCard({
   const remaining = Math.max(r.maxEntries - r.filled, 0);
 
   return (
-    <li className="rounded-lg border border-border p-3">
+    <li className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-1.5">
@@ -1396,14 +1396,14 @@ function OrderCard({
           </p>
           {r.note ? <p className="text-xs text-muted">備考：{r.note}</p> : null}
         </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+        <div className="flex items-center gap-1.5">
+          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
             {r.filled}/{r.maxEntries}
           </span>
           <button
             type="button"
             onClick={onEdit}
-            className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-background"
+            className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-muted hover:bg-background hover:text-primary"
           >
             <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5">
               <path
@@ -1419,7 +1419,7 @@ function OrderCard({
       </div>
 
       {assignedShifts.length > 0 ? (
-        <div className="mt-2">
+        <div className="mt-3 border-t border-black/5 pt-2.5">
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
@@ -1464,12 +1464,13 @@ function OrderCard({
         <button
           type="button"
           onClick={() => setShowAssign(true)}
-          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-background"
+          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/40 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:border-primary hover:bg-primary/5"
         >
-          ＋ スタッフを追加
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[11px] leading-none">＋</span>
+          スタッフを追加
         </button>
       ) : r.status === "PUBLISHED" && isPastDay ? (
-        <p className="mt-2 text-xs text-muted">過去の日付のため変更できません。</p>
+        <p className="mt-3 text-xs text-muted">過去の日付のため変更できません。</p>
       ) : null}
 
       {showAssign ? (
@@ -2990,25 +2991,25 @@ function ShiftRequestsSection({
             const dateLabel = `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
             const dayOrders = clientOrders.filter((o) => o.date === date && o.filled < o.maxEntries);
             return (
-              <li key={date} className="rounded-lg border border-orange-200 bg-orange-50/60 p-3">
-                <p className="mb-2 font-semibold">
+              <li key={date} className="rounded-2xl bg-orange-50/50 p-4 shadow-sm ring-1 ring-orange-200/70">
+                <p className="mb-2.5 font-semibold text-orange-900">
                   {dateLabel}　{rows.length}名
                 </p>
-                <ul className="flex flex-col gap-1.5">
+                <ul className="flex flex-col gap-2">
                   {rows.map((row) => (
                     <li
                       key={row.requestId}
-                      className="flex flex-col gap-1.5 rounded-lg bg-white/70 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                      className="flex flex-col gap-2 rounded-xl bg-white px-3.5 py-2.5 shadow-sm ring-1 ring-black/5 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0">
                         <span className="font-medium">{row.staffName}さん</span>
                         {row.note ? <span className="ml-2 truncate text-xs text-muted">メモ: {row.note}</span> : null}
                       </div>
-                      <div className="flex shrink-0 flex-wrap items-center gap-3">
+                      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => onNavigate(date)}
-                          className="text-xs text-primary underline"
+                          className="rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground hover:border-primary hover:text-primary"
                         >
                           確認
                         </button>
@@ -3025,7 +3026,7 @@ function ShiftRequestsSection({
                         <button
                           type="button"
                           onClick={() => onCreateShift(date, row.staffUserId)}
-                          className="text-xs font-semibold text-primary underline"
+                          className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/15"
                         >
                           シフト作成
                         </button>
@@ -3101,7 +3102,11 @@ function QuickOrderAssignButton({
 
   return (
     <>
-      <button type="button" onClick={() => setConfirming(true)} className="text-xs text-primary underline">
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800 hover:bg-sky-100"
+      >
         {label}
       </button>
 
