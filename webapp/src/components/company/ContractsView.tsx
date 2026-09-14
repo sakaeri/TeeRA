@@ -414,14 +414,23 @@ export function TemplateModal({
   companyName,
   editingTemplate,
   generateForStaff,
+  duplicateAsNew,
   onClose,
+  onSaved,
   readOnly,
 }: {
   clients: ClientOption[];
   companyName: string;
   editingTemplate?: Template;
   generateForStaff?: { userId: string; name: string };
+  // trueの場合、editingTemplateの内容を初期値として引き継ぎつつ、更新では
+  // なく新規の独立したテンプレートとして保存する（招待モーダルからの
+  // 「このテンプレートを複製して新規作成」用）。
+  duplicateAsNew?: boolean;
   onClose: () => void;
+  // 新規作成・複製が完了した時に作成されたテンプレートを受け取る（招待
+  // モーダル側でセレクトを自動選択させるために使う）。
+  onSaved?: (template: { id: string; title: string }) => void;
   // 契約内容の閲覧専用（スタッフ詳細＞契約書管理の「詳細確認」）。常にプレビュー
   // 表示に固定し、編集・保存のボタンを出さない — 誤って共有テンプレートを
   // 書き換えてしまわないようにするため。
@@ -431,7 +440,9 @@ export function TemplateModal({
   const [customTitle, setCustomTitle] = useState(
     generateForStaff && editingTemplate
       ? `${editingTemplate.title}（${generateForStaff.name}様）`
-      : (editingTemplate?.title ?? ""),
+      : duplicateAsNew && editingTemplate
+        ? `${editingTemplate.title}（複製）`
+        : (editingTemplate?.title ?? ""),
   );
   const [employmentType, setEmploymentType] = useState(editingTemplate?.employmentType ?? "PART_TIME");
   const [workplaceNote, setWorkplaceNote] = useState(editingTemplate?.workplaceNote ?? "");
@@ -534,11 +545,13 @@ export function TemplateModal({
 
     if (generateForStaff) {
       await generateStaffContractAction(payload, generateForStaff.userId);
-    } else if (editingTemplate) {
-      await updateTemplateAction(editingTemplate.id, payload);
-    } else {
-      await createTemplateAction(payload);
+      return null;
     }
+    if (editingTemplate && !duplicateAsNew) {
+      await updateTemplateAction(editingTemplate.id, payload);
+      return null;
+    }
+    return createTemplateAction(payload);
   }
 
   return (
@@ -551,7 +564,9 @@ export function TemplateModal({
           <h3 className="font-serif-jp text-lg font-bold text-primary">
             {generateForStaff
               ? `契約書を生成${preview ? "" : "（" + generateForStaff.name + "様）"}`
-              : `雇用契約書${preview ? "" : "テンプレート"}${editingTemplate && !preview ? "の編集" : ""}`}
+              : `雇用契約書${preview ? "" : "テンプレート"}${
+                  editingTemplate && !preview ? (duplicateAsNew ? "の複製" : "の編集") : ""
+                }`}
           </h3>
           <button type="button" onClick={onClose} className="text-muted">
             ✕
@@ -997,17 +1012,18 @@ export function TemplateModal({
               disabled={pending || !canSubmit}
               onClick={() =>
                 startTransition(async () => {
-                  await submitTemplate();
+                  const created = await submitTemplate();
+                  if (created) onSaved?.(created);
                   onClose();
                 })
               }
               className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
-              {generateForStaff ? "生成する" : editingTemplate ? "更新する" : "テンプレートを生成"}
+              {generateForStaff ? "生成する" : editingTemplate && !duplicateAsNew ? "更新する" : "テンプレートを生成"}
             </button>
           </div>
         ) : null}
-        {editingTemplate?.status === "LOCKED" && !generateForStaff && !readOnly ? (
+        {editingTemplate?.status === "LOCKED" && !generateForStaff && !duplicateAsNew && !readOnly ? (
           <p className="mt-2 text-xs text-muted">
             このテンプレートは契約中のスタッフがいるため、更新すると複製として新しく保存されます（元のテンプレートはそのまま残ります）。
           </p>

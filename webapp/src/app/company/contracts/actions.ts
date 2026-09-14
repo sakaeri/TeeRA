@@ -30,8 +30,10 @@ export async function createTemplateAction(input: CreateTemplateInput) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
 
-  await createTemplate({ ...input, companyId: membership.companyId });
+  const template = await createTemplate({ ...input, companyId: membership.companyId });
   revalidatePath("/company/settings");
+  revalidatePath("/company/roster");
+  return template;
 }
 
 export async function updateTemplateAction(

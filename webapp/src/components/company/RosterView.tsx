@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import {
   inviteStaffAction,
   createProxyStaffAction,
@@ -14,7 +13,8 @@ import { StaffDetailPanel } from "@/components/company/StaffDetailPanel";
 import { ClientDetailPanel } from "@/components/company/ClientDetailPanel";
 import { useClickOutside } from "@/lib/useClickOutside";
 import { CopyUrlField } from "@/components/CopyUrlField";
-import type { Template } from "@/components/company/ContractsView";
+import { TemplateModal, type Template, type ClientOption } from "@/components/company/ContractsView";
+import { todayJst } from "@/lib/date";
 
 type StaffRow = {
   membershipId: string;
@@ -422,6 +422,9 @@ export function RosterView({
       {showInviteStaffModal ? (
         <InviteStaffModal
           templates={templates}
+          contractTemplates={contractTemplates}
+          clients={clients.map((c) => ({ id: c.id, name: c.name }))}
+          companyName={companyName}
           isCompanyScopeAdmin={isCompanyScopeAdmin}
           myManagedTeams={myManagedTeams}
           onClose={() => setShowInviteStaffModal(false)}
@@ -436,11 +439,17 @@ export function RosterView({
 
 function InviteStaffModal({
   templates,
+  contractTemplates,
+  clients,
+  companyName,
   isCompanyScopeAdmin,
   myManagedTeams,
   onClose,
 }: {
   templates: ContractTemplateOption[];
+  contractTemplates: Template[];
+  clients: ClientOption[];
+  companyName: string;
   isCompanyScopeAdmin: boolean;
   myManagedTeams: Team[];
   onClose: () => void;
@@ -450,7 +459,9 @@ function InviteStaffModal({
   const [teamId, setTeamId] = useState("");
   const [pending, startTransition] = useTransition();
   const [url, setUrl] = useState<string | null>(null);
+  const [templateModalMode, setTemplateModalMode] = useState<"new" | "duplicate" | null>(null);
   const selectedTemplate = templates.find((t) => t.id === templateId);
+  const selectedFullTemplate = contractTemplates.find((t) => t.id === templateId);
   const needsTeamChoice = !isCompanyScopeAdmin && myManagedTeams.length > 1;
   const effectiveTeamId = isCompanyScopeAdmin
     ? undefined
@@ -524,15 +535,51 @@ function InviteStaffModal({
                 </label>
               </div>
             ) : null}
+            <div className="mt-2 flex gap-3 text-xs">
+              <button
+                type="button"
+                onClick={() => setTemplateModalMode("new")}
+                className="font-semibold text-primary underline"
+              >
+                ＋ 新規テンプレートを作成する
+              </button>
+              {selectedFullTemplate ? (
+                <button
+                  type="button"
+                  onClick={() => setTemplateModalMode("duplicate")}
+                  className="font-semibold text-primary underline"
+                >
+                  このテンプレートを複製して新規作成
+                </button>
+              ) : null}
+            </div>
           </div>
         ) : (
           <div className="mb-4 rounded-lg border border-dashed border-border bg-background p-3 text-xs text-muted">
-            契約書テンプレートがまだありません。先に作成すると、招待と同時に契約書も発行できます。
-            <Link href="/company/settings?tab=contracts" target="_blank" className="ml-1 font-semibold text-primary underline">
-              テンプレートを作成する →
-            </Link>
+            契約書テンプレートがまだありません。
+            <button
+              type="button"
+              onClick={() => setTemplateModalMode("new")}
+              className="ml-1 font-semibold text-primary underline"
+            >
+              ＋ 新規テンプレートを作成する
+            </button>
           </div>
         )}
+
+        {templateModalMode ? (
+          <TemplateModal
+            clients={clients}
+            companyName={companyName}
+            editingTemplate={templateModalMode === "duplicate" ? selectedFullTemplate : undefined}
+            duplicateAsNew={templateModalMode === "duplicate"}
+            onSaved={(created) => {
+              setTemplateId(created.id);
+              setContractStartDate(todayJst());
+            }}
+            onClose={() => setTemplateModalMode(null)}
+          />
+        ) : null}
 
         {!url ? (
           <button
