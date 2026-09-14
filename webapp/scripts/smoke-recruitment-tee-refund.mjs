@@ -145,6 +145,8 @@ try {
   const editModal = adminA.locator(".fixed.inset-0.z-20").nth(1);
   await editModal.getByRole("button", { name: "公開募集に切り替える" }).click();
   await editModal.locator('input[type="number"]').last().fill("1200");
+  await editModal.getByRole("button", { name: "＋勤務地" }).click();
+  await editModal.locator("span:has-text('勤務地') + input").fill("東京都渋谷区1-2-3");
   const confirmBoxes = editModal.locator('input[type="checkbox"]');
   await confirmBoxes.nth(0).check();
   await confirmBoxes.nth(1).check();
@@ -221,6 +223,8 @@ try {
   const editModal2 = adminA.locator(".fixed.inset-0.z-20").nth(1);
   await editModal2.getByRole("button", { name: "公開募集に切り替える" }).click();
   await editModal2.locator('input[type="number"]').last().fill("1200");
+  await editModal2.getByRole("button", { name: "＋勤務地" }).click();
+  await editModal2.locator("span:has-text('勤務地') + input").fill("東京都渋谷区1-2-3");
   const confirmBoxes2 = editModal2.locator('input[type="checkbox"]');
   await confirmBoxes2.nth(0).check();
   await confirmBoxes2.nth(1).check();

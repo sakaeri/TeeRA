@@ -144,6 +144,10 @@ try {
   const editModal = admin.locator(".fixed.inset-0.z-20").nth(1);
   await editModal.getByRole("button", { name: "公開募集に切り替える" }).click();
   await editModal.locator('input[type="number"]').last().fill("1200");
+  // 所属外の応募者にも分かるよう、公開募集への切り替えには勤務地の入力が
+  // 必須になっている。
+  await editModal.getByRole("button", { name: "＋勤務地" }).click();
+  await editModal.locator("span:has-text('勤務地') + input").fill("東京都渋谷区1-2-3");
   const confirmBoxes = editModal.locator('input[type="checkbox"]');
   await confirmBoxes.nth(0).check();
   await confirmBoxes.nth(1).check();

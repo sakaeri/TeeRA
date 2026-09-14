@@ -184,6 +184,20 @@ export async function deleteRecruitmentAction(recruitmentId: string) {
   revalidatePath("/company/calendar");
 }
 
+// 起こりうる失敗理由を日本語に変換する — Next.jsは本番ビルドでServer
+// Actionから素通しで投げた例外のmessageを握りつぶしてしまうため
+// （セキュリティ上の既定動作）、ここで必ず捕まえて{status:"error"}として
+// 返す。これをせず投げっぱなしにすると、呼び出し元には理由の分からない
+// 空の失敗表示しか届かない（本番でだけ再現していた「追加できませんでした」
+// の原因）。
+const ASSIGN_ERROR_LABEL: Record<string, string> = {
+  recruitment_full: "満員になりました",
+  recruitment_not_open: "募集が終了しています",
+  recruitment_in_past: "日付が過ぎています",
+  staff_not_in_company: "自社のスタッフではありません",
+  forbidden: "権限がありません",
+};
+
 export async function assignStaffToRecruitmentAction(input: {
   recruitmentId: string;
   staffUserId: string;
@@ -194,19 +208,31 @@ export async function assignStaffToRecruitmentAction(input: {
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: input.recruitmentId } });
   if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
 
-  const result = await assignStaffToRecruitment({
-    recruitmentId: input.recruitmentId,
-    staffUserId: input.staffUserId,
-    assignerCompanyId: membership.companyId,
-    assignedByUserId: userId,
-    overrideShiftIds: input.overrideShiftIds,
-    confirmedDespiteOffRequest: input.confirmedDespiteOffRequest,
-  });
-  if (result.status === "created") {
-    revalidatePath("/company/calendar");
-    revalidatePath("/company");
+  try {
+    const result = await assignStaffToRecruitment({
+      recruitmentId: input.recruitmentId,
+      staffUserId: input.staffUserId,
+      assignerCompanyId: membership.companyId,
+      assignedByUserId: userId,
+      overrideShiftIds: input.overrideShiftIds,
+      confirmedDespiteOffRequest: input.confirmedDespiteOffRequest,
+    });
+    if (result.status === "created") {
+      revalidatePath("/company/calendar");
+      revalidatePath("/company");
+    }
+    return result;
+  } catch (error) {
+    // 同じスタッフを重複して追加しようとした場合（一覧が更新される前に
+    // 連続でボタンを押した等）はDBのユニーク制約違反になる。
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+      return { status: "error" as const, reason: "既に追加されています" };
+    }
+    if (error instanceof Error) {
+      return { status: "error" as const, reason: ASSIGN_ERROR_LABEL[error.message] ?? error.message };
+    }
+    throw error;
   }
-  return result;
 }
 
 export async function cancelShiftAction(shiftId: string) {

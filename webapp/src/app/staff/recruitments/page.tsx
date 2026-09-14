@@ -10,21 +10,26 @@ export default async function StaffRecruitmentsPage() {
     <main className="mx-auto w-full max-w-4xl px-6 py-10">
       <h1 className="mb-6 font-serif-jp text-2xl font-bold">募集一覧</h1>
       <RecruitmentListView
-        recruitments={recruitments.map((r) => ({
-          id: r.id,
-          title: r.title,
-          companyName: r.company.name,
-          visibility: r.visibility,
-          date: r.date.toISOString().slice(0, 10),
-          startTime: r.startTime,
-          endTime: r.endTime,
-          hourlyWage: r.isAffiliated ? null : r.hourlyWage,
-          wageType: r.isAffiliated ? null : r.wageType,
-          extraItems: r.isAffiliated ? [] : (r.extraItems as { label: string; value: string }[]),
-          maxEntries: r.maxEntries,
-          filled: r.entries.filter((e) => e.status !== "REJECTED").length,
-          alreadyApplied: r.entries.some((e) => e.staffUserId === userId && e.status !== "REJECTED"),
-        }))}
+        recruitments={recruitments
+          .map((r) => ({
+            id: r.id,
+            title: r.title,
+            companyName: r.company.name,
+            visibility: r.visibility,
+            date: r.date.toISOString().slice(0, 10),
+            startTime: r.startTime,
+            endTime: r.endTime,
+            hourlyWage: r.isAffiliated ? null : r.hourlyWage,
+            wageType: r.isAffiliated ? null : r.wageType,
+            extraItems: r.isAffiliated ? [] : (r.extraItems as { label: string; value: string }[]),
+            maxEntries: r.maxEntries,
+            filled: r.entries.filter((e) => e.status !== "REJECTED").length,
+            alreadyApplied: r.entries.some((e) => e.staffUserId === userId && e.status !== "REJECTED"),
+          }))
+          // 満員で自分も応募していない募集は、応募できない一覧をスクロールする
+          // だけの雑音になるため出さない（自分が応募済みのものは満員でも
+          // 自分の応募状況を確認できるよう残す）。
+          .filter((r) => r.alreadyApplied || r.filled < r.maxEntries)}
       />
     </main>
   );

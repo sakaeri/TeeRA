@@ -58,6 +58,8 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
         const isFull = remaining <= 0;
         const isApplied = applied[r.id] || r.alreadyApplied;
         const open = openId === r.id;
+        const location = r.extraItems.find((i) => i.label === "勤務地")?.value;
+        const otherExtraItems = r.extraItems.filter((i) => i.label !== "勤務地");
         return (
           <li
             key={r.id}
@@ -96,6 +98,7 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
                   </svg>
                 </span>
               </div>
+              {location ? <span className="text-xs text-muted">勤務地：{location}</span> : null}
             </button>
             {open ? (
               <div className="flex flex-col gap-2 border-t border-black/5 px-4 py-3 text-sm">
@@ -114,7 +117,7 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
                     {r.hourlyWage}円
                   </p>
                 ) : null}
-                {r.extraItems.map((item) => (
+                {otherExtraItems.map((item) => (
                   <p key={item.label}>
                     <span className="mr-1 text-xs text-muted">{item.label}</span>
                     {item.value}

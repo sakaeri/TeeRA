@@ -885,7 +885,7 @@ const RECRUITMENT_STATUS_LABEL: Record<string, string> = {
   DELETED: "削除済み",
 };
 
-const RECRUITMENT_QUICK_ADD_ITEMS = ["応募条件", "服装", "持ち物", "集合場所"];
+const RECRUITMENT_QUICK_ADD_ITEMS = ["勤務地", "応募条件", "服装", "持ち物", "集合場所"];
 
 // オーダー/公開募集カードの編集用ポップアップ。内容編集・削除・停止・
 // 公開募集への切り替えをここに集約する（以前はカレンダー下部に別パネルが
@@ -923,6 +923,10 @@ function OrderEditModal({
   // 対になる — 削除や公開切り替えなど他の操作は引き続きcanManage限定）。
   const canReduceMaxEntries = recruitment.status === "PUBLISHED";
   const allAgreed = agreedScope && agreedAccuracy && agreedLiability;
+  // 所属していない応募者は勤務地が分からないと応募の判断ができないため、
+  // 公開募集への切り替え時は必須項目として扱う（オーダーは既に関係のある
+  // スタッフ向けなので対象外）。
+  const hasLocation = extraItems.some((i) => i.label === "勤務地" && i.value.trim() !== "");
 
   function addItem(label: string, value = "") {
     setExtraItems((prev) => (prev.some((i) => i.label === label) ? prev : [...prev, { label, value }]));
@@ -1221,6 +1225,11 @@ function OrderEditModal({
             {remaining > affordableMaxEntries ? (
               <p className="mb-2 text-xs text-red-600">Tee残高が不足しているため開始できません。</p>
             ) : null}
+            {!hasLocation ? (
+              <p className="mb-2 text-xs text-red-600">
+                所属していない応募者にも分かるよう、「＋勤務地」で勤務地を入力してください。
+              </p>
+            ) : null}
 
             <p className="mb-2 text-xs font-semibold text-foreground">公開前の確認事項</p>
             <div className="mb-3 flex flex-col gap-2">
@@ -1264,7 +1273,7 @@ function OrderEditModal({
 
             <button
               type="button"
-              disabled={pending || !wageAmount || remaining > affordableMaxEntries || !allAgreed}
+              disabled={pending || !wageAmount || remaining > affordableMaxEntries || !hasLocation || !allAgreed}
               onClick={switchToPublic}
               className="mb-2 w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50"
             >
@@ -1571,6 +1580,9 @@ function MultiAssignModal({
         } else if (result.status === "off_request") {
           doneRef.current = [...doneRef.current, { name: target.name, ok: false, reason: "休み希望が出ています" }];
           processFrom(index + 1);
+        } else if (result.status === "error") {
+          doneRef.current = [...doneRef.current, { name: target.name, ok: false, reason: result.reason }];
+          processFrom(index + 1);
         } else {
           doneRef.current = [...doneRef.current, { name: target.name, ok: true }];
           processFrom(index + 1);
@@ -1605,7 +1617,10 @@ function MultiAssignModal({
           staffUserId: target.id,
           overrideShiftIds: (conflicts ?? []).map((c) => c.id),
         });
-        doneRef.current = [...doneRef.current, { name: target.name, ok: result.status === "created" }];
+        doneRef.current = [
+          ...doneRef.current,
+          { name: target.name, ok: result.status === "created", reason: result.status === "error" ? result.reason : undefined },
+        ];
       } catch {
         doneRef.current = [...doneRef.current, { name: target.name, ok: false }];
       }
@@ -1746,6 +1761,8 @@ function RecruitmentAssignControls({
           setOffRequestWarning(true);
         } else if (result.status === "conflict") {
           setConflicts(result.conflicts);
+        } else if (result.status === "error") {
+          setError(result.reason);
         } else {
           setConflicts(null);
           setOffRequestWarning(false);
@@ -3065,6 +3082,8 @@ function QuickOrderAssignButton({
           setOffRequestWarning(true);
         } else if (result.status === "conflict") {
           setConflicts(result.conflicts);
+        } else if (result.status === "error") {
+          setError(result.reason);
         } else {
           setConflicts(null);
           setOffRequestWarning(false);
