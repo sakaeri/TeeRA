@@ -14,6 +14,7 @@ import {
   saveRecruitmentPublicDraftAction,
   assignStaffToRecruitmentAction,
   cancelShiftAction,
+  dismissShiftRequestAction,
 } from "@/app/company/calendar/actions";
 import { registerPlacementTaskNameAction } from "@/app/company/contracts/actions";
 
@@ -3030,6 +3031,7 @@ function ShiftRequestsSection({
                         >
                           シフト作成
                         </button>
+                        <DismissShiftRequestButton requestId={row.requestId} date={date} staffName={row.staffName} />
                       </div>
                     </li>
                   ))}
@@ -3041,6 +3043,70 @@ function ShiftRequestsSection({
         </div>
       ) : null}
     </div>
+  );
+}
+
+// シフト希望を「今回は対応しない」と明示するための操作 — 過去日になれば
+// 自動的に一覧から消えるが、対応するつもりのない希望がそれまでずっと
+// 残り続けるのは邪魔なので、明示的に片付けられるようにする。本人には
+// 通知はしないが、カレンダー上で「見送られました」と分かるようにする
+// （黙って消すと理由が分からず混乱するため）。
+function DismissShiftRequestButton({
+  requestId,
+  date,
+  staffName,
+}: {
+  requestId: string;
+  date: string;
+  staffName: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function confirm() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await dismissShiftRequestAction(requestId, date);
+        setOpen(false);
+      } catch {
+        setError("見送りに失敗しました。");
+      }
+    });
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-full px-3 py-1 text-xs font-medium text-muted hover:bg-background hover:text-red-600"
+      >
+        見送る
+      </button>
+      {open ? (
+        <Modal title="この希望を見送りますか？" onClose={() => setOpen(false)}>
+          <p className="mb-4 text-sm text-muted">
+            {staffName}さんのこの日の希望を見送ります。一覧から消え、スタッフ側には「見送られました」と表示されます。
+          </p>
+          {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-border px-4 py-2 text-sm">
+              キャンセル
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={confirm}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              見送る
+            </button>
+          </div>
+        </Modal>
+      ) : null}
+    </>
   );
 }
 

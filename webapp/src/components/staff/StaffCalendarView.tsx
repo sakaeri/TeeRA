@@ -25,6 +25,7 @@ type PendingRequestRow = {
   companyId: string;
   companyName: string;
   desire: "WORK" | "OFF";
+  status: "PENDING" | "MATCHED" | "DISMISSED";
 };
 
 type Company = { id: string; name: string };
@@ -260,6 +261,13 @@ export function StaffCalendarView({
                     >
                       休み
                     </span>
+                  ) : r.status === "DISMISSED" ? (
+                    <span
+                      key={r.id}
+                      className="block w-full truncate rounded bg-gray-200 px-0.5 py-px text-center text-[8px] font-medium leading-tight text-gray-700"
+                    >
+                      見送り
+                    </span>
                   ) : (
                     <span
                       key={r.id}
@@ -404,6 +412,10 @@ function DayDetailPanel({
             {requests.map((r) =>
               r.desire === "OFF" ? (
                 <DetailAccordionItem key={r.id} dotClassName="bg-gray-400" primary="休み申請済み">
+                  <p>所属会社：{r.companyName}</p>
+                </DetailAccordionItem>
+              ) : r.status === "DISMISSED" ? (
+                <DetailAccordionItem key={r.id} dotClassName="bg-gray-400" primary="今回は見送られました">
                   <p>所属会社：{r.companyName}</p>
                 </DetailAccordionItem>
               ) : (

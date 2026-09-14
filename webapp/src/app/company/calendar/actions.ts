@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import {
   createAssignedShift,
   cancelShift,
+  dismissShiftRequest,
 } from "@/lib/domain/shifts";
 import {
   createPublicRecruitment,
@@ -241,5 +242,15 @@ export async function cancelShiftAction(shiftId: string) {
   if (!canManageShifts(membership, shift.teamId)) throw new Error("forbidden");
 
   await cancelShift({ shiftId, actorCompanyId: membership.companyId });
+  revalidatePath("/company/calendar");
+}
+
+export async function dismissShiftRequestAction(requestId: string, date: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  await dismissShiftRequest({
+    requestId,
+    companyId: membership.companyId,
+    date: new Date(`${date}T00:00:00.000Z`),
+  });
   revalidatePath("/company/calendar");
 }

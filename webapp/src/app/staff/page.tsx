@@ -78,6 +78,7 @@ export default async function StaffHomePage({
       companyId: r.companyId,
       companyName: r.company.name,
       desire: r.desire,
+      status: r.status,
     })),
   );
 

@@ -388,15 +388,58 @@ export async function listShiftRequests(params: { companyId: string; status?: "P
   });
 }
 
-// 提出済みのシフト希望が会社側でどう反映されるか（マッチ/却下）待ちの間、
+// 提出済みのシフト希望が会社側でどう反映されるか（マッチ/見送り）待ちの間、
 // スタッフ本人のカレンダーにも「回答待ち」として見えるようにする。マッチ
-// 済みになった時点で実際のShiftが作られそちらに表示が移るため、ここでは
-// PENDINGのみを対象とする。
+// 済みになった時点で実際のShiftが作られそちらに表示が移るため対象外。
+// DISMISSED（会社が見送った）は、本人に何も知らせず消してしまうと「消えた
+// 理由が分からない」ため、軽い「今回は見送られました」表示のためにここでも
+// 取得する。
 export async function listOwnPendingShiftRequests(params: { staffUserId: string; companyIds: string[] }) {
   return prisma.shiftRequest.findMany({
-    where: { staffUserId: params.staffUserId, companyId: { in: params.companyIds }, status: "PENDING" },
+    where: {
+      staffUserId: params.staffUserId,
+      companyId: { in: params.companyIds },
+      status: { in: ["PENDING", "DISMISSED"] },
+    },
     include: { company: true },
     orderBy: { createdAt: "desc" },
+  });
+}
+
+// 会社側の「見送る」操作 — 複数日をまとめて持つ1行のうち、この日付分だけを
+// DISMISSEDへ切り出す（autoResolveMatchingWorkRequestと同じ、1行=複数日
+// なので特定の日だけ確定/見送りする時は行を分割する必要があるパターン）。
+export async function dismissShiftRequest(params: { requestId: string; companyId: string; date: Date }) {
+  return prisma.$transaction(async (tx) => {
+    const request = await tx.shiftRequest.findFirst({
+      where: {
+        id: params.requestId,
+        companyId: params.companyId,
+        desire: "WORK",
+        status: "PENDING",
+        dates: { has: params.date },
+      },
+    });
+    if (!request) throw new Error("shift_request_not_found");
+
+    const remainingDates = request.dates.filter((d) => d.getTime() !== params.date.getTime());
+
+    if (remainingDates.length === 0) {
+      await tx.shiftRequest.update({ where: { id: request.id }, data: { status: "DISMISSED" } });
+    } else {
+      await tx.shiftRequest.update({ where: { id: request.id }, data: { dates: remainingDates } });
+      await tx.shiftRequest.create({
+        data: {
+          staffUserId: request.staffUserId,
+          companyId: request.companyId,
+          teamId: request.teamId,
+          desire: "WORK",
+          dates: [params.date],
+          note: request.note,
+          status: "DISMISSED",
+        },
+      });
+    }
   });
 }
 
