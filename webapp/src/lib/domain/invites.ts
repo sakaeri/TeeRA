@@ -40,6 +40,30 @@ export async function createInvite(params: {
   });
 }
 
+// 招待モーダルに「発行済み・未使用の招待」を一覧表示し、使われないまま
+// 残った古いURLを管理者が手動で無効化できるようにするためのもの
+// （開発指示書上は再発行で自動的に無効化される前提のコメントが残って
+// いたが、実際には無効化されておらず、古いURLがいつまでも有効なままに
+// なっていた）。自動的な無効化にはしていない — 同じチーム/役職宛に
+// 複数人へ同時に招待URLを発行するのは正当な運用のため。
+export async function listPendingInvites(companyId: string, kind: InviteKind) {
+  return prisma.inviteToken.findMany({
+    where: { companyId, kind, usedAt: null, expiresAt: { gt: new Date() } },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function revokeInvite(params: { inviteId: string; companyId: string }) {
+  const invite = await prisma.inviteToken.findFirstOrThrow({
+    where: { id: params.inviteId, companyId: params.companyId },
+  });
+  if (invite.usedAt) throw new Error("already_used");
+  return prisma.inviteToken.update({
+    where: { id: invite.id },
+    data: { expiresAt: new Date() },
+  });
+}
+
 export type InviteLookup = Awaited<ReturnType<typeof lookupInvite>>;
 
 export async function lookupInvite(token: string) {

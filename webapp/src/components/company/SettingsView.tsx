@@ -526,7 +526,15 @@ function TeamsSection({
               {inviteFormTeamId === team.id ? (
                 <TeamInviteForm
                   teamId={team.id}
-                  staffOptions={staff.filter((s) => !team.members.some((m) => m.userId === s.userId))}
+                  // 既に一般メンバーとしてこのチームに所属している人も、ここから
+                  // マネージャー/リーダーへ直接昇格できるように含める（既に
+                  // マネージャー/リーダーの人だけ除外する）。以前は所属済みなら
+                  // 誰でも一律除外していたため、一般メンバーを直接昇格させる
+                  // 方法がUI上に存在しなかった。
+                  staffOptions={staff.filter((s) => {
+                    const existingRole = team.members.find((m) => m.userId === s.userId)?.role;
+                    return existingRole !== "TEAM_MANAGER" && existingRole !== "TEAM_LEADER";
+                  })}
                   onDone={() => setInviteFormTeamId(null)}
                 />
               ) : (

@@ -129,24 +129,39 @@ export async function deleteTemplate(templateId: string) {
 // テンプレートを複数人で共有する場合（assignExistingTemplate参照）は人に
 // よって開始日が違うことがあるため、個別に指定できるようにしてある。
 export async function startStaffContract(params: { templateId: string; staffUserId: string; contractStartDate?: Date }) {
-  const template = await prisma.contractTemplate.findUniqueOrThrow({ where: { id: params.templateId } });
-  const contractStartDate = params.contractStartDate ?? template.contractStartDate;
+  const contract = await prisma.$transaction(async (tx) => {
+    // 同じテンプレート×スタッフへのリクエストが別タブ/2人の管理者から
+    // ほぼ同時に来た場合、重複したPENDING_CONSENT契約が作られてしまう
+    // （スタッフ側の同意ウィザードも二重に出てしまう）のを防ぐため、この
+    // 組み合わせに対するトランザクションスコープのアドバイザリロックを
+    // 取ってから確認する。後勝ちの呼び出しは先勝ちのCOMMIT後にロックが
+    // 解放されてから既存の契約を見つけ、新規作成せずそれを返す。
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${params.templateId} || ':' || ${params.staffUserId}))`;
 
-  const contract = await prisma.staffContract.create({
-    data: {
-      templateId: template.id,
-      staffUserId: params.staffUserId,
-      wageAmountSnapshot: template.wageAmount,
-      contractStartDate,
-      contractEndDate: template.contractEndDate,
-      status: "PENDING_CONSENT",
-      wageVersions: {
-        create: { wageAmount: template.wageAmount, effectiveFrom: contractStartDate },
+    const existing = await tx.staffContract.findFirst({
+      where: { templateId: params.templateId, staffUserId: params.staffUserId, status: "PENDING_CONSENT" },
+    });
+    if (existing) return existing;
+
+    const template = await tx.contractTemplate.findUniqueOrThrow({ where: { id: params.templateId } });
+    const contractStartDate = params.contractStartDate ?? template.contractStartDate;
+
+    return tx.staffContract.create({
+      data: {
+        templateId: template.id,
+        staffUserId: params.staffUserId,
+        wageAmountSnapshot: template.wageAmount,
+        contractStartDate,
+        contractEndDate: template.contractEndDate,
+        status: "PENDING_CONSENT",
+        wageVersions: {
+          create: { wageAmount: template.wageAmount, effectiveFrom: contractStartDate },
+        },
       },
-    },
+    });
   });
 
-  await recomputeTemplateLock(template.id);
+  await recomputeTemplateLock(contract.templateId);
   return contract;
 }
 
