@@ -219,7 +219,10 @@ export function StaffCalendarView({
           const dateStr = c.dateStr;
           const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
           const dayShifts = shiftsByDate.get(dateStr) ?? [];
-          const dayRequests = requestsByDate.get(dateStr) ?? [];
+          // 見送り済みはもう対応する必要のない過去の記録でしかなく、複数
+          // 件溜まるとカレンダーの枠を圧迫して見た目も良くないため、日
+          // セルのバッジには出さない（日付詳細を開けば確認できる）。
+          const dayRequests = (requestsByDate.get(dateStr) ?? []).filter((r) => r.status !== "DISMISSED");
           const isToday = dateStr === todayStr;
           const totalCount = dayShifts.length + dayRequests.length;
           const visibleShifts = dayShifts.slice(0, CONFIRMED_SLOT_BUDGET);
@@ -260,13 +263,6 @@ export function StaffCalendarView({
                       className="block w-full rounded bg-gray-200 px-0.5 py-px text-center text-[8px] font-medium leading-tight text-gray-700"
                     >
                       休み
-                    </span>
-                  ) : r.status === "DISMISSED" ? (
-                    <span
-                      key={r.id}
-                      className="block w-full truncate rounded bg-gray-200 px-0.5 py-px text-center text-[8px] font-medium leading-tight text-gray-700"
-                    >
-                      見送り
                     </span>
                   ) : (
                     <span
