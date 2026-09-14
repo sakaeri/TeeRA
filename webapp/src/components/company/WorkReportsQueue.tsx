@@ -22,6 +22,7 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
   const [clockIn, setClockIn] = useState("");
   const [clockOut, setClockOut] = useState("");
   const [breakMinutes, setBreakMinutes] = useState("0");
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   function startCorrect(r: Row) {
     setCorrectingId(r.id);
@@ -30,15 +31,37 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
     setBreakMinutes(String(r.breakMinutes));
   }
 
+  function approve(reportId: string) {
+    setErrors((prev) => ({ ...prev, [reportId]: "" }));
+    startTransition(async () => {
+      const result = await approveWorkReportAction(reportId);
+      if (result.status === "error") setErrors((prev) => ({ ...prev, [reportId]: result.reason }));
+    });
+  }
+
+  function reject(reportId: string) {
+    setErrors((prev) => ({ ...prev, [reportId]: "" }));
+    startTransition(async () => {
+      const result = await rejectWorkReportAction(reportId);
+      if (result.status === "error") setErrors((prev) => ({ ...prev, [reportId]: result.reason }));
+    });
+  }
+
   function submitCorrect() {
     if (!correctingId || !clockIn || !clockOut) return;
+    const reportId = correctingId;
+    setErrors((prev) => ({ ...prev, [reportId]: "" }));
     startTransition(async () => {
-      await correctWorkReportAction({
-        workReportId: correctingId,
+      const result = await correctWorkReportAction({
+        workReportId: reportId,
         clockIn,
         clockOut,
         breakMinutes: Number(breakMinutes) || 0,
       });
+      if (result.status === "error") {
+        setErrors((prev) => ({ ...prev, [reportId]: result.reason }));
+        return;
+      }
       setCorrectingId(null);
     });
   }
@@ -66,11 +89,12 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
                 </p>
               ) : null}
               {r.comment ? <p className="text-sm text-muted">コメント: {r.comment}</p> : null}
+              {errors[r.id] ? <p className="mt-1 text-xs text-red-600">{errors[r.id]}</p> : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={() => startTransition(() => approveWorkReportAction(r.id))}
+                  onClick={() => approve(r.id)}
                   className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
                 >
                   承認する
@@ -78,7 +102,7 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={() => startTransition(() => rejectWorkReportAction(r.id))}
+                  onClick={() => reject(r.id)}
                   className="rounded-lg border border-border px-4 py-1.5 text-sm text-foreground/70 disabled:opacity-60"
                 >
                   差し戻す
@@ -143,6 +167,9 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
                 />
               </label>
             </div>
+            {correctingReport && errors[correctingReport.id] ? (
+              <p className="mt-2 text-xs text-red-600">{errors[correctingReport.id]}</p>
+            ) : null}
             <button
               type="button"
               disabled={pending || !clockIn || !clockOut}

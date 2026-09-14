@@ -52,13 +52,16 @@ export function StaffPointsView({
     startTransition(async () => {
       const result = await redeemPromoItemAction(id, address, phone);
       if (result.error) {
+        // モーダルを閉じてしまうと、その中にしか表示されないエラー文言が
+        // 一度も見えないまま消えてしまう（誰かが先に在庫/ポイントを使い
+        // 切った直後の失敗など）ため、失敗時は開いたままにする。
         setErrors((prev) => ({
           ...prev,
           [id]: result.error === "insufficient_points" ? "ポイントが不足しています。" : "在庫がありません。",
         }));
-      } else {
-        setRedeemedIds((prev) => new Set(prev).add(id));
+        return;
       }
+      setRedeemedIds((prev) => new Set(prev).add(id));
       setDetailItem(null);
     });
   }

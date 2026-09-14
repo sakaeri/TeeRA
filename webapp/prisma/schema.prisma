@@ -909,6 +909,11 @@ model SalarySlipLine {
   rate         Int
   amount       Int
   sortOrder    Int                @default(0)
+  // trueは管理者が単価/時間を手で直したSHIFT行 — regenerateShiftLinesは
+  // この行を上書き・削除しない。falseのまま（自動生成のまま一度も編集
+  // されていない）のSHIFT行は、単価未設定の解消などを反映するため
+  // 従来通り毎回作り直す。
+  isManuallyEdited Boolean         @default(false)
 
   salarySlip SalarySlip @relation(fields: [salarySlipId], references: [id], onDelete: Cascade)
   shift      Shift?     @relation(fields: [shiftId], references: [id], onDelete: SetNull)

@@ -113,9 +113,25 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
   const unresolved: UnresolvedSalaryShift[] = [];
 
   await prisma.$transaction(async (tx) => {
-    await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, kind: "SHIFT" } });
     // 雇用契約が無いスタッフは自動計上できない。
-    if (contracts.length === 0) return;
+    if (contracts.length === 0) {
+      await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, kind: "SHIFT" } });
+      return;
+    }
+
+    // 管理者が単価/時間を手動で直したSHIFT行（isManuallyEdited）は上書き
+    // しない — 以前は毎回全削除してから作り直していたため、手動編集が
+    // 保存直後の再描画で消えてしまっていた。まだ手を付けていない自動生成
+    // のままの行は、単価未設定の解消などを反映するため従来通り毎回
+    // 削除して作り直す。
+    const existingLines = await tx.salarySlipLine.findMany({
+      where: { salarySlipId: slip.id, kind: "SHIFT" },
+      select: { shiftId: true, isManuallyEdited: true },
+    });
+    const manuallyEditedShiftIds = new Set(existingLines.filter((l) => l.isManuallyEdited).map((l) => l.shiftId));
+    const autoShiftIds = new Set(existingLines.filter((l) => !l.isManuallyEdited).map((l) => l.shiftId));
+    const validShiftIds = new Set<string>();
+
     for (const r of reports) {
       const workedHours = Math.round((r.computedMinutes / 60) * 100) / 100;
       if (workedHours <= 0) continue;
@@ -151,6 +167,11 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
       // 月給は日々のシフト単位では自動計上しない（固定給のため、必要なら
       // 手動でカスタム行を追加する）。時給/日給のみ自動生成する。
       if (wage.wageType === "MONTHLY") continue;
+      validShiftIds.add(r.shiftId);
+      if (manuallyEditedShiftIds.has(r.shiftId)) continue;
+      if (autoShiftIds.has(r.shiftId)) {
+        await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, shiftId: r.shiftId, kind: "SHIFT" } });
+      }
       // 日給は「1シフト＝1日分」として単価をそのまま計上する（実働時間で
       // 掛け算しない）。時給*時間との整合を保つため hours*rate=amount の形は
       // 崩さず、日給の場合は hours=1 として扱う。
@@ -170,6 +191,13 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
         },
       });
     }
+
+    // 対象月の承認済み実績と対応しなくなったSHIFT行（業務報告の承認が
+    // 取り消された等）だけを削除する。まだ有効な行（＝手動編集済みかも
+    // しれない既存行）はここでは触らない。
+    await tx.salarySlipLine.deleteMany({
+      where: { salarySlipId: slip.id, kind: "SHIFT", shiftId: { notIn: Array.from(validShiftIds) } },
+    });
   });
 
   return { slip, unresolved };
@@ -273,7 +301,7 @@ export async function updateLine(lineId: string, changes: { hours?: number; rate
   const rate = changes.rate ?? line.rate;
   return prisma.salarySlipLine.update({
     where: { id: lineId },
-    data: { hours, rate, amount: Math.round(hours * rate) },
+    data: { hours, rate, amount: Math.round(hours * rate), isManuallyEdited: true },
   });
 }
 
