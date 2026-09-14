@@ -506,6 +506,9 @@ export function CalendarView({
           recruitments={recruitments.filter((r) => r.date === selectedDate)}
           clientOrders={clientRecruitments.filter((r) => r.date === selectedDate)}
           staffOptions={staffOptions}
+          requestedStaffUserIds={shiftRequests
+            .filter((r) => r.desire === "WORK" && r.dates.includes(selectedDate))
+            .map((r) => r.staffUserId)}
           affordableMaxEntries={affordableMaxEntries}
           onNavigate={setSelectedDate}
           onCreateShift={() => setShowAssignForm(true)}
@@ -677,6 +680,7 @@ function DayDetailModal({
   recruitments,
   clientOrders,
   staffOptions,
+  requestedStaffUserIds,
   affordableMaxEntries,
   onNavigate,
   onCreateShift,
@@ -688,6 +692,7 @@ function DayDetailModal({
   recruitments: RecruitmentRow[];
   clientOrders: ClientRecruitmentRow[];
   staffOptions: StaffOption[];
+  requestedStaffUserIds: string[];
   affordableMaxEntries: number;
   onNavigate: (dateStr: string) => void;
   onCreateShift: () => void;
@@ -859,6 +864,7 @@ function DayDetailModal({
                 assignedShifts={shifts.filter((s) => s.publicRecruitmentId === r.id)}
                 history={history.filter((h) => h.publicRecruitmentId === r.id)}
                 staffOptions={staffOptions}
+                requestedStaffUserIds={requestedStaffUserIds}
                 isPastDay={isPastDay}
                 onEdit={() => setEditingRecruitmentId(r.id)}
               />
@@ -1365,6 +1371,7 @@ function OrderCard({
   assignedShifts,
   history,
   staffOptions,
+  requestedStaffUserIds,
   isPastDay,
   onEdit,
 }: {
@@ -1372,6 +1379,7 @@ function OrderCard({
   assignedShifts: ShiftRow[];
   history: ShiftHistoryRow[];
   staffOptions: StaffOption[];
+  requestedStaffUserIds: string[];
   isPastDay: boolean;
   onEdit: () => void;
 }) {
@@ -1479,6 +1487,7 @@ function OrderCard({
           recruitmentId={r.id}
           remaining={remaining}
           staffOptions={staffOptions}
+          requestedStaffUserIds={requestedStaffUserIds}
           excludeIds={assignedShifts.map((s) => s.staffUserId)}
           onClose={() => setShowAssign(false)}
         />
@@ -1532,12 +1541,14 @@ function MultiAssignModal({
   recruitmentId,
   remaining,
   staffOptions,
+  requestedStaffUserIds,
   excludeIds,
   onClose,
 }: {
   recruitmentId: string;
   remaining: number;
   staffOptions: StaffOption[];
+  requestedStaffUserIds: string[];
   excludeIds: string[];
   onClose: () => void;
 }) {
@@ -1649,6 +1660,11 @@ function MultiAssignModal({
                     onChange={() => toggle(s.id)}
                   />
                   <span className="text-sm">{s.name}</span>
+                  {requestedStaffUserIds.includes(s.id) ? (
+                    <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-800">
+                      希望あり
+                    </span>
+                  ) : null}
                 </label>
               </li>
             ))}
