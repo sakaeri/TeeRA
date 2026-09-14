@@ -76,8 +76,16 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
         targetMonth: params.targetMonth,
       },
     },
+    include: { _count: { select: { issues: true } } },
   });
   if (slip.status !== "DRAFT") return { slip, unresolved: [] as UnresolvedSalaryShift[] };
+  // 一度でも発行された明細を「内容を修正する」で下書きに戻した場合は、
+  // SHIFT行の自動再生成をスキップする。ここでスキップしないと、発行後に
+  // 登録された遡及の単価変更（過去日付でeffectiveFromを持つ単価改定等）
+  // によって、発行済み金額と食い違う金額へ警告も無く黙って変わって
+  // しまう。まだ一度も発行していない下書きだけ、これまで通りシフト実績
+  // から毎回フレッシュに再生成する。
+  if (slip._count.issues > 0) return { slip, unresolved: [] as UnresolvedSalaryShift[] };
 
   const { start, end } = monthRange(params.targetMonth);
   const reports = await prisma.workReport.findMany({

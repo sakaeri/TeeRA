@@ -83,7 +83,16 @@ export async function redeemPromoItem(params: {
     const balance = latest?.balanceAfter ?? 0;
     if (balance < item.pointsCost) throw new Error("insufficient_points");
 
-    await tx.promoItem.update({ where: { id: item.id }, data: { stock: item.stock - 1 } });
+    // 在庫の減算はread→checkの後にwriteする形だと、2人が同時に最後の1個へ
+    // 交換した場合に両方成功して売り越しになる（TOCTOU）。updateManyの
+    // WHERE条件（stock>0のまま）で条件付き更新にし、Postgresの行ロックに
+    // より後勝ちの更新は先勝ちのCOMMIT後に再評価されるため、在庫切れの
+    // 場合はcount=0となり確実に検知できる。
+    const decremented = await tx.promoItem.updateMany({
+      where: { id: item.id, stock: { gt: 0 } },
+      data: { stock: { decrement: 1 } },
+    });
+    if (decremented.count === 0) throw new Error("out_of_stock");
 
     // Remember the address for next time, and snapshot it onto this order so a
     // later change doesn't retroactively alter an already-placed order.

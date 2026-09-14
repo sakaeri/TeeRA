@@ -210,12 +210,19 @@ async function awardApprovalPoints(tx: Tx, report: { id: string; staffUserId: st
   });
 }
 
+// 「PENDING→APPROVED」の遷移とポイント付与を1回だけ行うことを保証する
+// — 承認ボタンの二重クリック自体はクライアント側disabled={pending}で
+// 防げるが、2つのタブ/2人の管理者がほぼ同時に承認した場合はサーバー側の
+// ガードが無いと両方とも通ってポイントが二重付与されてしまう。
+// updateManyのWHERE条件（approvalStatusがまだAPPROVEDでないこと）は
+// Postgresの行ロックにより後勝ちのUPDATEが先勝ちのCOMMIT後に再評価される
+// ため、2つ目の呼び出しはcount=0となりポイント付与をスキップできる。
 export async function approveWorkReport(params: { workReportId: string; approverUserId: string }) {
-  const report = await prisma.workReport.findUniqueOrThrow({ where: { id: params.workReportId } });
-
   return prisma.$transaction(async (tx) => {
-    await tx.workReport.update({
-      where: { id: report.id },
+    const report = await tx.workReport.findUniqueOrThrow({ where: { id: params.workReportId } });
+
+    const result = await tx.workReport.updateMany({
+      where: { id: report.id, approvalStatus: { not: "APPROVED" } },
       data: {
         approvalStatus: "APPROVED",
         approverUserId: params.approverUserId,
@@ -223,7 +230,9 @@ export async function approveWorkReport(params: { workReportId: string; approver
       },
     });
 
-    await awardApprovalPoints(tx, report);
+    if (result.count > 0) {
+      await awardApprovalPoints(tx, report);
+    }
 
     return report;
   });
@@ -276,8 +285,8 @@ export async function confirmCorrectedWorkReport(params: { workReportId: string;
   if (report.approvalStatus !== "NEEDS_CONFIRMATION") throw new Error("not_pending_confirmation");
 
   return prisma.$transaction(async (tx) => {
-    await tx.workReport.update({
-      where: { id: report.id },
+    const result = await tx.workReport.updateMany({
+      where: { id: report.id, approvalStatus: "NEEDS_CONFIRMATION" },
       data: {
         approvalStatus: "APPROVED",
         approverUserId: report.correctedByUserId,
@@ -285,7 +294,9 @@ export async function confirmCorrectedWorkReport(params: { workReportId: string;
       },
     });
 
-    await awardApprovalPoints(tx, report);
+    if (result.count > 0) {
+      await awardApprovalPoints(tx, report);
+    }
 
     return report;
   });
