@@ -324,7 +324,7 @@ export function RosterView({
       ) : null}
 
       {tab === "staff" ? (
-        <div className="overflow-hidden rounded-xl border border-border">
+        <div className="hidden overflow-hidden rounded-xl border border-border sm:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-background/60 text-left text-xs text-muted">
@@ -384,6 +384,45 @@ export function RosterView({
               ) : null}
             </tbody>
           </table>
+        </div>
+      ) : null}
+
+      {tab === "staff" ? (
+        <div className="flex flex-col gap-2 sm:hidden">
+          {filteredStaff.map((s) => (
+            <button
+              key={s.membershipId}
+              type="button"
+              onClick={() => setSelectedStaffId(s.userId)}
+              className="flex flex-col gap-1.5 rounded-xl border border-border/60 bg-white p-3 text-left"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium">
+                  {s.name}
+                  {s.isProxy ? (
+                    <span className="ml-2 rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">仮</span>
+                  ) : null}
+                </span>
+                <span className={`shrink-0 rounded-md px-2 py-1 text-xs font-semibold ${CONTRACT_STATUS_STYLE[s.contractStatus]}`}>
+                  {s.contractStatus}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                <span>今月稼働 {s.monthlyHours}h</span>
+                <span>{s.contractLabel}</span>
+              </div>
+              {s.teams.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {s.teams.map((t) => (
+                    <span key={t.teamId} className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-900">
+                      {t.teamName}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </button>
+          ))}
+          {filteredStaff.length === 0 ? <p className="py-8 text-center text-muted">スタッフが登録されていません。</p> : null}
         </div>
       ) : null}
 
@@ -689,7 +728,8 @@ function RelationshipTable({
 }) {
   return (
     <div className="overflow-hidden rounded-xl border border-border">
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-max text-sm">
         <thead>
           <tr className="border-b border-border bg-background/60 text-left text-xs text-muted">
             <th className="px-4 py-3 font-semibold">名称</th>
@@ -723,6 +763,7 @@ function RelationshipTable({
           ) : null}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

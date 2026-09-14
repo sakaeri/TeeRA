@@ -168,7 +168,7 @@ export function WalletView({
         </button>
         {historyOpen ? (
           <div className="border-t border-border px-5 pb-4 pt-1 overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-max text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-muted">
                   <th className="py-1 font-normal">日時</th>

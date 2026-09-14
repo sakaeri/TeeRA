@@ -401,13 +401,13 @@ export function StaffDetailPanel({
           <p className="text-sm text-muted">読み込み中…</p>
         ) : (
           <>
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <h2 className="font-serif-jp text-xl font-bold">{data.name}</h2>
               {data.isProxy ? (
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="text-xs text-muted hover:text-red-600"
+                  className="shrink-0 text-xs text-muted hover:text-red-600"
                 >
                   スタッフ情報を削除
                 </button>
@@ -514,32 +514,32 @@ export function StaffDetailPanel({
               </div>
             )}
 
-            <div className="mb-4 flex gap-4 border-b border-border text-sm">
+            <div className="mb-4 flex gap-4 overflow-x-auto border-b border-border text-sm">
               <button
                 type="button"
                 onClick={() => setTab("history")}
-                className={`border-b-2 px-1 py-2 font-semibold ${tab === "history" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "history" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
                 稼働履歴
               </button>
               <button
                 type="button"
                 onClick={() => setTab("contracts")}
-                className={`border-b-2 px-1 py-2 font-semibold ${tab === "contracts" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "contracts" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
                 契約書管理
               </button>
               <button
                 type="button"
                 onClick={() => setTab("rates")}
-                className={`border-b-2 px-1 py-2 font-semibold ${tab === "rates" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "rates" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
                 業務内容単価
               </button>
               <button
                 type="button"
                 onClick={() => setTab("note")}
-                className={`border-b-2 px-1 py-2 font-semibold ${tab === "note" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "note" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
                 情報メモ
               </button>

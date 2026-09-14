@@ -200,8 +200,8 @@ function CompanyInfoSection({
   if (!editing) {
     return (
       <SectionCard title="会社情報">
-        <div className="flex items-center justify-between">
-          <div className="grid grid-cols-2 gap-x-10 gap-y-3 text-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 sm:gap-x-10">
             <div>
               <p className="text-xs text-muted">会社名</p>
               <p className="font-medium">{name}</p>
@@ -222,7 +222,7 @@ function CompanyInfoSection({
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="rounded-lg border border-accent bg-accent/20 px-4 py-2 text-sm font-semibold text-primary"
+            className="shrink-0 rounded-lg border border-accent bg-accent/20 px-4 py-2 text-sm font-semibold text-primary"
           >
             <span className="inline-block scale-x-[-1]">✎</span> 変更
           </button>
@@ -309,7 +309,8 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
 
   return (
     <SectionCard title="本部メンバー権限">
-      <table className="mb-4 w-full text-sm">
+      <div className="mb-4 overflow-x-auto">
+      <table className="w-full min-w-max text-sm">
         <thead>
           <tr className="border-b border-border text-left text-muted">
             <th className="py-2">氏名</th>
@@ -373,6 +374,7 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
           })}
         </tbody>
       </table>
+      </div>
       {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
 
       {removeConfirmTarget ? (
@@ -467,7 +469,8 @@ function TeamsSection({
             <div className="mb-3 font-semibold">{team.name}</div>
 
             {managers.length > 0 ? (
-              <table className="mb-2 w-full text-sm">
+              <div className="mb-2 overflow-x-auto">
+              <table className="w-full min-w-max text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-muted">
                     <th className="py-2">氏名</th>
@@ -514,6 +517,7 @@ function TeamsSection({
                   ))}
                 </tbody>
               </table>
+              </div>
             ) : (
               <p className="mb-2 text-xs text-muted">まだマネージャー/リーダーがいません。</p>
             )}

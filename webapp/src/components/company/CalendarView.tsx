@@ -265,8 +265,8 @@ export function CalendarView({
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           <h1 className="font-serif-jp text-2xl font-bold">シフトカレンダー</h1>
           {/* チーム・依頼主・派遣会社を1つの絞り込みにまとめる。実運用では
               チーム＝契約先の依頼主がほぼ1:1なので、依頼主/派遣会社を選ぶ
@@ -279,7 +279,7 @@ export function CalendarView({
               else if (v.startsWith("rel:")) router.push(calendarUrl({ team: "", rel: v.slice(4) }));
               else router.push(calendarUrl({ team: "", rel: "" }));
             }}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
+            className="w-full rounded-lg border border-border bg-white px-3 py-1.5 text-sm sm:w-auto"
           >
             <option value="">全社（すべて表示）</option>
             {teams.length > 0 ? (
@@ -311,7 +311,7 @@ export function CalendarView({
             ) : null}
           </select>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             href={`/api/calendar/pdf?y=${year}&m=${month}${selectedTeamId ? `&team=${selectedTeamId}` : ""}${selectedRelationshipId ? `&rel=${selectedRelationshipId}` : ""}`}
             target="_blank"
@@ -365,7 +365,7 @@ export function CalendarView({
         }}
       />
 
-      <div className="rounded-2xl bg-white p-4">
+      <div className="rounded-2xl bg-white p-2 sm:p-4">
       <div className="mb-2 flex items-center justify-center gap-2">
         {atHistoryCutoff ? (
           <span aria-label="前の月（無料プランの閲覧範囲外）" className="p-2 text-border">
@@ -720,8 +720,8 @@ function DayDetailModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg">
-        <div className="mb-4 flex items-center justify-between">
+      <div className="max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-4 shadow-lg sm:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -803,7 +803,7 @@ function DayDetailModal({
                 return (
                   <li
                     key={s.id}
-                    className="grid grid-cols-[1fr_120px_80px_auto] items-center gap-2 border-b border-border/50 py-2.5 last:border-b-0"
+                    className="flex flex-col gap-1.5 border-b border-border/50 py-2.5 last:border-b-0 sm:grid sm:grid-cols-[1fr_120px_80px_auto] sm:items-center sm:gap-2"
                   >
                     <span className="min-w-0">
                       <span className="block truncate font-semibold">{s.staffName}</span>
@@ -820,17 +820,19 @@ function DayDetailModal({
                         {s.note ? <span className="truncate">（{s.note}）</span> : null}
                       </span>
                     </span>
-                    <span className="text-muted">
-                      {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
-                    </span>
-                    {s.approvalStatus ? (
-                      <span className={`w-fit rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
-                        {APPROVAL_LABEL[s.approvalStatus] ?? s.approvalStatus}
+                    <div className="flex flex-wrap items-center gap-2 sm:contents">
+                      <span className="text-muted">
+                        {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
                       </span>
-                    ) : (
-                      <span className="w-fit rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
-                    )}
-                    {isPastDay ? null : <CancelShiftButton shiftId={s.id} staffName={s.staffName} />}
+                      {s.approvalStatus ? (
+                        <span className={`w-fit rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
+                          {APPROVAL_LABEL[s.approvalStatus] ?? s.approvalStatus}
+                        </span>
+                      ) : (
+                        <span className="w-fit rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
+                      )}
+                      {isPastDay ? null : <CancelShiftButton shiftId={s.id} staffName={s.staffName} />}
+                    </div>
                   </li>
                 );
               })}
@@ -2082,7 +2084,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-4 shadow-lg sm:p-6">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">{title}</h3>
           <button type="button" onClick={onClose} className="text-muted">

@@ -126,10 +126,10 @@ function TemplatesSection({
       <ul className="mt-4 flex flex-col gap-3">
         {templates.map((t) => (
           <li key={t.id} className="rounded-xl border border-border/60 p-4">
-            <div className="mb-1 flex items-center justify-between">
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <span className="font-medium">{t.title}</span>
               <span
-                className={`rounded-full px-2 py-0.5 text-xs ${
+                className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
                   t.status === "LOCKED" ? "bg-accent/20 text-accent" : "bg-primary/10 text-primary"
                 }`}
               >

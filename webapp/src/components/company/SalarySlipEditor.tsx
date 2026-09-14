@@ -54,7 +54,8 @@ export function SalarySlipEditor({
             {slip.status === "DRAFT" ? "下書き" : "発行済み"}
           </span>
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-max text-sm">
           <thead>
             <tr className="border-b border-border text-left text-muted">
               <th className="py-1">内容</th>
@@ -112,6 +113,7 @@ export function SalarySlipEditor({
             ))}
           </tbody>
         </table>
+        </div>
 
         {isEditable ? (
           <div className="mt-3 flex flex-wrap items-end gap-2">
