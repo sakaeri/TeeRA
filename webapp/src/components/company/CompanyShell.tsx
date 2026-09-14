@@ -7,12 +7,23 @@ import { logoutAction } from "@/app/actions/auth";
 import { useClickOutside } from "@/lib/useClickOutside";
 
 const NAV = [
-  { href: "/company", label: "ダッシュボード" },
-  { href: "/company/calendar", label: "シフトカレンダー" },
-  { href: "/company/roster", label: "スタッフ名簿" },
-  { href: "/company/payroll", label: "給料明細/請求書", matchPrefixes: ["/company/payroll", "/company/invoices"] },
-  { href: "/company/settings", label: "設定" },
+  { href: "/company", label: "ダッシュボード", mobileLabel: "ホーム" },
+  { href: "/company/calendar", label: "シフトカレンダー", mobileLabel: "カレンダー" },
+  { href: "/company/roster", label: "スタッフ名簿", mobileLabel: "名簿" },
+  {
+    href: "/company/payroll",
+    label: "給料明細/請求書",
+    mobileLabel: "給与/請求",
+    matchPrefixes: ["/company/payroll", "/company/invoices"],
+  },
+  { href: "/company/settings", label: "設定", mobileLabel: "設定" },
 ];
+
+function isNavItemActive(item: (typeof NAV)[number], pathname: string) {
+  return item.matchPrefixes
+    ? item.matchPrefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+    : pathname === item.href;
+}
 
 function todayLabel() {
   const d = new Date();
@@ -45,13 +56,13 @@ export function CompanyShell({
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <header className="flex items-center justify-between gap-6 border-b-2 border-accent bg-primary px-6 py-3 text-primary-foreground">
-        <div className="flex items-center gap-4">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-accent bg-primary px-4 py-3 text-primary-foreground sm:gap-6 sm:px-6">
+        <div className="flex items-center gap-2 sm:gap-4">
           <div className="font-serif-jp text-lg font-bold tracking-wide">TeeRA</div>
-          <span className="text-xs opacity-70">{todayLabel()}</span>
+          <span className="hidden text-xs opacity-70 sm:inline">{todayLabel()}</span>
         </div>
-        <div className="flex items-center gap-3 text-sm">
-          <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs">
+        <div className="flex items-center gap-2 text-sm sm:gap-3">
+          <span className="inline-block max-w-[32vw] truncate rounded-full bg-white/10 px-3 py-1.5 text-xs sm:max-w-[40vw]">
             {companyName} ・ {roleLabel}
           </span>
           <Link
@@ -73,7 +84,7 @@ export function CompanyShell({
               {initial}
             </button>
             {profileOpen ? (
-              <div className="absolute right-0 z-30 mt-2 w-72 rounded-xl bg-white p-4 text-foreground shadow-lg">
+              <div className="absolute right-0 z-30 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-xl bg-white p-4 text-foreground shadow-lg sm:w-72">
                 <div className="mb-3 flex items-center gap-3">
                   <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary font-serif-jp font-bold text-primary-foreground">
                     {initial}
@@ -119,12 +130,17 @@ export function CompanyShell({
         </div>
       </header>
 
-      <div className="flex flex-1">
-        <nav className="w-52 shrink-0 bg-primary py-6 text-primary-foreground">
+      {/*
+        デスクトップ用サイドバーをDOM上ではモバイル用タブバーより先に置く
+        （見た目の並び順はorderユーティリティで制御）。テキストベースの
+        既存スモークテスト（page.click("text=設定")等）はDOM順で最初に
+        一致した要素を対象にするため、先に書かれた方が可視状態のサイド
+        バー側になり、既存テストの挙動を変えずに済む。
+      */}
+      <div className="order-2 flex flex-1 flex-col sm:flex-row">
+        <nav className="hidden w-52 shrink-0 bg-primary py-6 text-primary-foreground sm:block">
           {NAV.map((item) => {
-            const active = item.matchPrefixes
-              ? item.matchPrefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))
-              : pathname === item.href;
+            const active = isNavItemActive(item, pathname);
             return (
               <Link
                 key={item.href}
@@ -139,8 +155,25 @@ export function CompanyShell({
             );
           })}
         </nav>
-        <div className="flex-1 bg-background">{children}</div>
+        <div className="flex flex-1 flex-col bg-background">{children}</div>
       </div>
+
+      <nav className="order-1 flex items-stretch justify-around border-b border-accent/60 bg-primary text-primary-foreground sm:hidden">
+        {NAV.map((item) => {
+          const active = isNavItemActive(item, pathname);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex-1 px-1 py-2.5 text-center text-[11px] font-medium ${
+                active ? "border-b-2 border-accent bg-white/10" : "opacity-75"
+              }`}
+            >
+              {item.mobileLabel}
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }

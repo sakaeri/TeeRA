@@ -120,7 +120,7 @@ export default async function PayrollPage({
   const staffAvailableForNewSlip = staff.filter((s) => !staffWithRecordIds.has(s.userId));
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-8 py-10">
+    <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-8 sm:py-10">
       <h1 className="mb-6 font-serif-jp text-2xl font-bold">給与計算</h1>
       <FinanceTabs active="payroll" invoicesEnabled={company.agencyEnabled} />
 

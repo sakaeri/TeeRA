@@ -36,7 +36,7 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
   ]);
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-8 py-10">
+    <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
       <RosterView
         staff={staff}
         companyName={company.name}

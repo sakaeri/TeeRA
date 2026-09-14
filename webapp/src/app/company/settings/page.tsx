@@ -51,7 +51,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
   const shiftById = new Map(shifts.map((s) => [s.id, s]));
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-8 py-10">
+    <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
       <SettingsView
         initialTab={initialTab}
         companyName={company.name}

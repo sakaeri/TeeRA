@@ -68,7 +68,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
   const initialReportDetailId = open === "reports" ? reportId : undefined;
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-8 py-10">
+    <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
       <DashboardView
         key={`${open ?? "default"}-${reportId ?? ""}`}
         kpis={kpis}

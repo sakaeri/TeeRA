@@ -232,27 +232,27 @@ export function DashboardView({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="font-serif-jp text-2xl font-bold">ダッシュボード</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setShowPromoModal(true)}
-            className="rounded-lg border border-primary bg-white px-4 py-2 text-sm font-semibold text-primary shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+            className="flex-1 rounded-lg border border-primary bg-white px-4 py-2 text-sm font-semibold text-primary shadow-md transition hover:-translate-y-0.5 hover:shadow-lg sm:flex-none"
           >
             ＋販促品を登録
           </button>
           <button
             type="button"
             onClick={() => setShowTodoForm(true)}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+            className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition hover:-translate-y-0.5 hover:shadow-lg sm:flex-none"
           >
             ＋やることリスト作成
           </button>
         </div>
       </div>
 
-      <section className="grid grid-cols-3 gap-4">
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         {KPI_CARDS.map((card) => {
           const count = kpis[card.key] + (card.extraKey ? kpis[card.extraKey] : 0);
           return card.tab || card.popup ? (
@@ -260,7 +260,7 @@ export function DashboardView({
               key={card.key}
               type="button"
               onClick={() => (card.popup ? setOpenPopup(card.popup) : setTab(card.tab as DashboardTab))}
-              className="rounded-2xl border border-border bg-white/60 p-5 text-left hover:border-primary"
+              className="rounded-2xl border border-border bg-white/60 p-3 text-left hover:border-primary sm:p-5"
             >
               <p className="text-sm text-muted">{card.label}</p>
               <p className="font-serif-jp text-2xl font-bold text-primary">
@@ -272,7 +272,7 @@ export function DashboardView({
             <Link
               key={card.key}
               href={card.href!}
-              className="rounded-2xl border border-border bg-white/60 p-5 hover:border-primary"
+              className="rounded-2xl border border-border bg-white/60 p-3 hover:border-primary sm:p-5"
             >
               <p className="text-sm text-muted">{card.label}</p>
               <p className="font-serif-jp text-2xl font-bold text-primary">
@@ -504,7 +504,7 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
           スタッフが業務報告のたびに貯まるポイントで交換できる商品です。ポイントは会社をまたいで共通なので、自社スタッフ以外（他社で働くスタッフ）からも注文が入ることがあります。モチベーションアップ・スタッフ獲得につながる景品を登録しましょう。
         </p>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <ImageDropzone label="商品画像" imageUrl={imageUrl} onChange={setImageUrl} required />
           <div className="flex flex-col gap-3">
             <label className="flex flex-col gap-1 text-xs">
@@ -1097,7 +1097,7 @@ function TodoSection({
       {tab === "promoList" ? (
         <div>
           <p className="mb-3 text-xs text-muted">登録済みの販促品一覧です（{promoItems.length}件）</p>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {promoItems.map((p) => (
               <div key={p.id} className="flex flex-col gap-2">
                 <div className="relative">
