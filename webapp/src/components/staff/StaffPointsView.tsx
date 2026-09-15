@@ -166,7 +166,13 @@ export function StaffPointsView({
               <li key={i.id}>
                 <button
                   type="button"
-                  onClick={() => setDetailItem(i)}
+                  onClick={() => {
+                    // 前回この商品の交換に失敗した時のエラー文言が、状況が
+                    // 変わった後（在庫が戻った等）に再度開いた時まで残って
+                    // しまわないよう、開くたびにクリアする。
+                    setErrors((prev) => ({ ...prev, [i.id]: "" }));
+                    setDetailItem(i);
+                  }}
                   className="block w-full rounded-xl border border-border bg-white/60 p-2 text-left text-sm hover:border-primary"
                 >
                   <div className="relative mb-2 aspect-square w-full overflow-hidden rounded-lg bg-background">

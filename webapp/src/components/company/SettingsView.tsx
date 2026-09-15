@@ -330,16 +330,22 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
                 <td className="py-2">
                   <select
                     defaultValue={a.role}
-                    disabled={pending}
-                    onChange={(e) =>
-                      startTransition(() =>
-                        setCompanyMemberRoleAction(
-                          a.userId,
-                          e.target.value as "COMPANY_ADMIN" | "COMPANY_EDITOR",
-                        ),
-                      )
-                    }
-                    className="rounded-lg border border-border px-2 py-1 text-sm"
+                    disabled={pending || isLastAdmin}
+                    title={isLastAdmin ? "本部管理者は最低1名必要です" : undefined}
+                    onChange={(e) => {
+                      setError(null);
+                      startTransition(async () => {
+                        try {
+                          await setCompanyMemberRoleAction(
+                            a.userId,
+                            e.target.value as "COMPANY_ADMIN" | "COMPANY_EDITOR",
+                          );
+                        } catch {
+                          setError("本部管理者は最低1名必要なため変更できませんでした。");
+                        }
+                      });
+                    }}
+                    className="rounded-lg border border-border px-2 py-1 text-sm disabled:opacity-60"
                   >
                     <option value="COMPANY_ADMIN">本部管理者</option>
                     <option value="COMPANY_EDITOR">本部編集者</option>

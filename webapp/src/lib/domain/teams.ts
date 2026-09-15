@@ -155,14 +155,31 @@ export async function setClientTeams(params: {
   ]);
 }
 
+// 本部管理者が0人になってしまう変更は拒否する — removeCompanyMemberRole
+// と同じ不変条件だが、こちらは編集者への降格（権限を外して一般スタッフに
+// する、ではなく本部内で役職だけ変える）経路のため、そちらのガードだけ
+// では防げていなかった。
 export async function setCompanyMemberRole(params: {
   companyId: string;
   userId: string;
   role: "COMPANY_ADMIN" | "COMPANY_EDITOR";
 }) {
-  return prisma.companyMembership.updateMany({
-    where: { companyId: params.companyId, userId: params.userId },
-    data: { role: params.role },
+  return prisma.$transaction(async (tx) => {
+    if (params.role !== "COMPANY_ADMIN") {
+      const target = await tx.companyMembership.findFirst({
+        where: { companyId: params.companyId, userId: params.userId },
+      });
+      if (target?.role === "COMPANY_ADMIN") {
+        const adminCount = await tx.companyMembership.count({
+          where: { companyId: params.companyId, role: "COMPANY_ADMIN" },
+        });
+        if (adminCount <= 1) throw new Error("last_admin");
+      }
+    }
+    return tx.companyMembership.updateMany({
+      where: { companyId: params.companyId, userId: params.userId },
+      data: { role: params.role },
+    });
   });
 }
 
