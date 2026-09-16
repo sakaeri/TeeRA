@@ -967,10 +967,10 @@ function TodoSection({
     <section className="rounded-2xl border border-border bg-white/60 p-3 sm:p-6">
       <div className="mb-3 flex gap-1 overflow-x-auto border-b border-border">
         {[
-          { key: "active", label: "やることリスト" },
-          { key: "resolved", label: "解決済みリスト" },
-          { key: "promoList", label: "販促品一覧" },
-          { key: "promoOrders", label: "販促品注文履歴" },
+          { key: "active", label: "やること" },
+          { key: "resolved", label: "解決済み" },
+          { key: "promoList", label: "販促品" },
+          { key: "promoOrders", label: "注文履歴" },
         ].map((t) => (
           <button
             key={t.key}
@@ -986,19 +986,18 @@ function TodoSection({
       {tab === "active" ? (
         <ul className="flex flex-col gap-2">
           {autoTodos.map((item) => (
-            <li
-              key={item.id}
-              className="flex flex-col items-start gap-2 rounded-lg border border-border/60 p-3 text-sm sm:flex-row sm:items-center sm:gap-3"
-            >
-              <div className="flex items-center gap-2">
-                <Tag kind={item.kind} />
-                <span>{item.text}</span>
-              </div>
+            <li key={item.id}>
               <Link
                 href={item.actionHref}
-                className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
+                className="flex flex-col items-start gap-2 rounded-lg border border-border/60 p-3 text-sm hover:border-primary/60 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
               >
-                {item.actionLabel}
+                <div className="flex items-center gap-2">
+                  <Tag kind={item.kind} />
+                  <span>{item.text}</span>
+                </div>
+                <span className="hidden shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs sm:inline-block">
+                  {item.actionLabel}
+                </span>
               </Link>
             </li>
           ))}

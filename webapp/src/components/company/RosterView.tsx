@@ -256,6 +256,7 @@ export function RosterView({
           value={teamFilter}
           defaultLabel="スタッフ一覧"
           teams={teams}
+          onActivate={() => setTab("staff")}
           onChange={(v) => {
             setTab("staff");
             setTeamFilter(v);
@@ -269,6 +270,7 @@ export function RosterView({
           value={teamFilter}
           defaultLabel="依頼主一覧"
           teams={teams}
+          onActivate={() => setTab("clients")}
           onChange={(v) => {
             setTab("clients");
             setTeamFilter(v);
@@ -282,6 +284,7 @@ export function RosterView({
           value={teamFilter}
           defaultLabel="派遣会社一覧"
           teams={teams}
+          onActivate={() => setTab("agencies")}
           onChange={(v) => {
             setTab("agencies");
             setTeamFilter(v);
@@ -802,18 +805,26 @@ function MobileTabSelect({
   value,
   defaultLabel,
   teams,
+  onActivate,
   onChange,
 }: {
   active: boolean;
   value: string;
   defaultLabel: string;
   teams: Team[];
+  onActivate: () => void;
   onChange: (value: string) => void;
 }) {
   return (
     <span className="relative shrink-0 sm:hidden">
       <select
         value={active ? value : ""}
+        // ネイティブselectは「今表示中の値と同じ選択肢」を選び直しても
+        // onChangeが発火しない(値が変わらないため)。非アクティブなタブの
+        // プレースホルダーを選んだだけではタブが切り替わらない不具合の
+        // 原因だったため、開こうとタップした瞬間(pointerdown)に即座に
+        // タブを切り替える — ちょうど普通のタブボタンと同じ挙動になる。
+        onPointerDown={onActivate}
         onChange={(e) => onChange(e.target.value)}
         className={`appearance-none whitespace-nowrap border-b-2 bg-transparent py-2 pl-3 pr-6 text-sm font-semibold ${
           active ? "border-accent text-primary" : "border-transparent text-muted"

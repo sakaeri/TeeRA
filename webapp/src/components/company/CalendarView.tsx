@@ -282,7 +282,7 @@ export function CalendarView({
               else if (v.startsWith("rel:")) router.push(calendarUrl({ team: "", rel: v.slice(4) }));
               else router.push(calendarUrl({ team: "", rel: "" }));
             }}
-            className="w-28 min-w-0 truncate rounded-lg border border-border bg-white px-2 py-1.5 text-xs sm:w-auto sm:px-3 sm:text-sm"
+            className="w-44 min-w-0 truncate rounded-lg border border-border bg-white px-2 py-1.5 text-xs sm:w-auto sm:px-3 sm:text-sm"
           >
             <option value="">全社（すべて表示）</option>
             {teams.length > 0 ? (
@@ -372,7 +372,7 @@ export function CalendarView({
         }}
       />
 
-      <div className="flex flex-1 flex-col rounded-2xl bg-white p-2 sm:block sm:p-4">
+      <div className="flex flex-1 flex-col bg-white p-1.5 sm:block sm:rounded-2xl sm:p-4">
       <div className="mb-2 flex items-center justify-center gap-2">
         {atHistoryCutoff ? (
           <span aria-label="前の月（無料プランの閲覧範囲外）" className="p-2 text-border">
@@ -488,7 +488,7 @@ export function CalendarView({
                 {tagEntries.map((tag) => (
                   <span
                     key={tag.id}
-                    className={`block w-full truncate rounded px-1.5 py-px text-center text-[8px] font-medium leading-tight ${tag.className}`}
+                    className={`block w-full overflow-hidden text-clip whitespace-nowrap rounded px-0 py-px text-center text-[8px] font-medium leading-tight tracking-tighter ${tag.className}`}
                   >
                     {tag.label}
                   </span>
@@ -833,10 +833,11 @@ function DayDetailModal({
                         {s.note ? <span className="truncate">（{s.note}）</span> : null}
                       </span>
                     </span>
-                    <div className="flex flex-wrap items-center gap-2 sm:contents">
+                    <div className="flex items-center justify-between gap-2 sm:contents">
                       <span className="text-muted">
                         {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
                       </span>
+                      <div className="flex shrink-0 items-center gap-2 sm:contents">
                       {s.approvalStatus ? (
                         <span className={`w-fit rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
                           {APPROVAL_LABEL[s.approvalStatus] ?? s.approvalStatus}
@@ -845,6 +846,7 @@ function DayDetailModal({
                         <span className="w-fit rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
                       )}
                       {isPastDay ? null : <CancelShiftButton shiftId={s.id} staffName={s.staffName} />}
+                      </div>
                     </div>
                   </li>
                 );

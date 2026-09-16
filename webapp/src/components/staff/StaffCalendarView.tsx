@@ -41,8 +41,8 @@ function weekdayColor(dow: number) {
 // 日セルの狭い枠に会社名を出すための短縮 — 「株式会社」等の法人格は前株
 // でも後株でも付くうえ、ほとんどの会社名の頭に来るため、単純に先頭を
 // 切ると「株式会社◯」ばかりになって見分けが付かない。法人格を先に
-// 取り除いて識別に効く部分を優先し、枠に入りきらない分はCSS側の
-// truncateで省略する（文字数を固定で打ち切るわけではない）。
+// 取り除いて識別に効く部分を優先し、枠に入りきらない分はCSS側で
+// （…を付けず、はみ出た分をそのまま切り捨てる形で）省略する。
 const CORPORATE_LABELS = [
   "株式会社",
   "有限会社",
@@ -248,7 +248,7 @@ export function StaffCalendarView({
                 {visibleShifts.map((s) => (
                   <span
                     key={s.id}
-                    className="block w-full truncate rounded bg-emerald-100 px-1.5 py-px text-center text-[8px] font-medium leading-tight text-emerald-900"
+                    className="block w-full overflow-hidden text-clip whitespace-nowrap rounded bg-emerald-100 px-0 py-px text-center text-[8px] font-medium leading-tight tracking-tighter text-emerald-900"
                   >
                     {isReportOverdue(s) ? (
                       <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" aria-label="未報告" />
@@ -267,7 +267,7 @@ export function StaffCalendarView({
                   ) : (
                     <span
                       key={r.id}
-                      className="block w-full truncate rounded bg-orange-100 px-0 py-px text-center text-[8px] font-medium leading-tight tracking-tighter text-orange-900"
+                      className="block w-full overflow-hidden text-clip whitespace-nowrap rounded bg-orange-100 px-0 py-px text-center text-[8px] font-medium leading-tight tracking-tighter text-orange-900"
                     >
                       希望申請中
                     </span>
