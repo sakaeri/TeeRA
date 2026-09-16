@@ -78,7 +78,7 @@ export default async function CompanyCalendarPage({
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-1 pb-4 pt-0 sm:block sm:px-8 sm:py-10">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col bg-white px-1 pb-4 pt-2 sm:block sm:bg-transparent sm:px-8 sm:py-10">
       <CalendarView
         year={year}
         month={month}

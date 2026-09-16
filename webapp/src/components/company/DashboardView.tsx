@@ -24,6 +24,7 @@ import {
 } from "@/components/company/ContractsView";
 import { ImageDropzone } from "@/components/ImageDropzone";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { useClickOutside } from "@/lib/useClickOutside";
 
 const WEEKDAYS_JA = ["日", "月", "火", "水", "木", "金", "土"];
 function formatDateJa(dateStr: string) {
@@ -483,6 +484,8 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
   const [stock, setStock] = useState(editingItem ? String(editingItem.stock) : "");
   const [description, setDescription] = useState(editingItem?.description ?? "");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const infoRef = useClickOutside<HTMLDivElement>(showInfo, () => setShowInfo(false));
 
   const canSubmit = Boolean(imageUrl) && Boolean(name) && Boolean(pointsCost) && Boolean(stock);
 
@@ -492,20 +495,32 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
         className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-1 flex items-center justify-between">
-          <h3 className="font-serif-jp text-lg font-bold text-primary">
-            販促品を{editingItem ? "編集" : "登録"}
-          </h3>
-          <button type="button" onClick={onClose} className="text-muted">
-            ✕
-          </button>
+        <div className="relative mb-4" ref={infoRef}>
+          <div className="flex items-center justify-between">
+            <h3 className="flex items-center gap-1.5 font-serif-jp text-lg font-bold text-primary">
+              販促品を{editingItem ? "編集" : "登録"}
+              <button
+                type="button"
+                onClick={() => setShowInfo((v) => !v)}
+                aria-label="説明を見る"
+                className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted/20 text-[10px] font-bold text-muted"
+              >
+                i
+              </button>
+            </h3>
+            <button type="button" onClick={onClose} className="text-muted">
+              ✕
+            </button>
+          </div>
+          {showInfo ? (
+            <div className="absolute inset-x-0 top-full z-10 mx-auto mt-1.5 w-64 max-w-[calc(100vw-4rem)] rounded-lg border border-border bg-white p-3 text-xs font-normal normal-case leading-relaxed text-muted shadow-md">
+              TeeRAで稼働するスタッフに販促品を提供し、自社をPRできる機能です。スタッフは業務報告のたびにポイントが貯まり、そのポイントでこの販促品と交換できます。ポイントは会社をまたいで共通のため、他社スタッフからの注文が入ることもあります。商品の価値に見合った交換ポイント数を設定してください。
+            </div>
+          ) : null}
         </div>
-        <p className="mb-4 text-xs text-muted">
-          スタッフが業務報告のたびに貯まるポイントで交換できる商品です。ポイントは会社をまたいで共通なので、自社スタッフ以外（他社で働くスタッフ）からも注文が入ることがあります。モチベーションアップ・スタッフ獲得につながる景品を登録しましょう。
-        </p>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <ImageDropzone label="商品画像" imageUrl={imageUrl} onChange={setImageUrl} required />
+          <ImageDropzone label="商品画像" imageUrl={imageUrl} onChange={setImageUrl} required size="md" />
           <div className="flex flex-col gap-3">
             <label className="flex flex-col gap-1 text-xs">
               <span>
@@ -557,9 +572,6 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
             />
           </label>
         </div>
-        <p className="mt-2 text-xs text-muted">
-          交換ポイント: スタッフが業務報告を行うとたまるポイントです。たまったポイントで、この販促品と交換できます。商品の価値に見合ったポイント数を設定してください。
-        </p>
 
         <button
           type="button"

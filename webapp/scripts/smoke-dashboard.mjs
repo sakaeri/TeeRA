@@ -76,7 +76,7 @@ try {
     !(await page.getByText("契約書を確認してください").isVisible().catch(() => false)),
   );
 
-  await page.click("text=解決済みリスト");
+  await page.locator("div.mb-3.flex.gap-1").getByText("解決済み", { exact: true }).click();
   body = await page.textContent("body");
   log("todo appears in 解決済み tab", body.includes("契約書を確認してください"));
   log(

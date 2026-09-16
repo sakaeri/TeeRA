@@ -268,7 +268,7 @@ export function CalendarView({
 
   return (
     <div className="flex flex-1 flex-col sm:block">
-      <div className="mb-4 flex items-center justify-between gap-2 sm:mb-6 sm:gap-4">
+      <div className="order-2 mb-4 flex items-center justify-between gap-2 sm:order-1 sm:mb-6 sm:gap-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           <h1 className="hidden shrink-0 font-serif-jp text-2xl font-bold sm:block">シフトカレンダー</h1>
           {/* チーム・依頼主・派遣会社を1つの絞り込みにまとめる。実運用では
@@ -353,7 +353,7 @@ export function CalendarView({
       </div>
 
       {atHistoryCutoff ? (
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-accent/10 px-3 py-2 text-xs text-primary">
+        <div className="order-2 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-accent/10 px-3 py-2 text-xs text-primary sm:order-1">
           <span>無料プランでは過去データの閲覧は直近3ヶ月までです。それ以前を見るにはプランのアップグレードが必要です。</span>
           <Link href="/company/wallet" className="shrink-0 font-semibold underline whitespace-nowrap">
             プランをアップグレードする
@@ -361,18 +361,20 @@ export function CalendarView({
         </div>
       ) : null}
 
-      <ShiftRequestsSection
-        requests={shiftRequests}
-        clientOrders={clientRecruitments}
-        onNavigate={setSelectedDate}
-        onCreateShift={(date, staffUserId) => {
-          setSelectedDate(date);
-          setAssignFormStaffUserId(staffUserId);
-          setShowAssignForm(true);
-        }}
-      />
+      <div className="order-1 sm:order-2">
+        <ShiftRequestsSection
+          requests={shiftRequests}
+          clientOrders={clientRecruitments}
+          onNavigate={setSelectedDate}
+          onCreateShift={(date, staffUserId) => {
+            setSelectedDate(date);
+            setAssignFormStaffUserId(staffUserId);
+            setShowAssignForm(true);
+          }}
+        />
+      </div>
 
-      <div className="flex flex-1 flex-col bg-white p-1.5 sm:block sm:rounded-2xl sm:p-4">
+      <div className="order-3 flex flex-1 flex-col bg-white p-1.5 sm:block sm:rounded-2xl sm:p-4">
       <div className="mb-2 flex items-center justify-center gap-2">
         {atHistoryCutoff ? (
           <span aria-label="前の月（無料プランの閲覧範囲外）" className="p-2 text-border">
@@ -3007,7 +3009,7 @@ function ShiftRequestsSection({
       <button
         type="button"
         onClick={() => setIsOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-5 py-3 text-left font-semibold"
+        className="flex w-full items-center justify-between px-5 py-3 text-left text-sm font-semibold"
       >
         <span>
           シフト希望　{totalCount}件
@@ -3022,7 +3024,7 @@ function ShiftRequestsSection({
         </svg>
       </button>
       {isOpen ? (
-        <div className="border-t border-border px-5 pb-5 pt-4">
+        <div className="max-h-[40vh] overflow-y-auto border-t border-border px-5 pb-5 pt-4">
         <ul className="flex flex-col gap-3 text-sm">
           {sortedDates.map((date) => {
             const rows = byDate.get(date)!;

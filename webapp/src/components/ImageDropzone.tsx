@@ -14,7 +14,7 @@ export function ImageDropzone({
   imageUrl: string;
   onChange: (url: string) => void;
   required?: boolean;
-  size?: "sm" | "lg";
+  size?: "sm" | "md" | "lg";
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -55,7 +55,7 @@ export function ImageDropzone({
           if (file) handleFile(file);
         }}
         className={`flex cursor-pointer flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border-2 border-dashed text-center ${
-          size === "sm" ? "h-16 w-16 p-1" : "aspect-square w-full p-3"
+          size === "sm" ? "h-16 w-16 p-1" : size === "md" ? "h-32 w-32 p-2" : "aspect-square w-full p-3"
         } ${dragOver ? "border-primary bg-primary/5" : "border-border"}`}
       >
         {imageUrl ? (
@@ -63,6 +63,15 @@ export function ImageDropzone({
           <img src={imageUrl} alt="" className="h-full w-full rounded-lg object-cover" />
         ) : size === "sm" ? (
           <span className="text-lg">🖼</span>
+        ) : size === "md" ? (
+          <>
+            <span className="text-xl">🖼</span>
+            <p className="text-[10px] text-muted">
+              画像を選択
+              <br />
+              or <span className="text-primary underline">browse</span>
+            </p>
+          </>
         ) : (
           <>
             <span className="text-2xl">🖼</span>

@@ -74,6 +74,22 @@ export function CompanyShell({
             </span>
             {teeBalance} Tee
           </Link>
+          <Link
+            href="/account"
+            aria-label="アカウント設定"
+            title="アカウント設定"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/90 text-primary hover:bg-white"
+          >
+            <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+              <path
+                d="M13.5 3.5l3 3L7 16H4v-3l9.5-9.5z"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </Link>
           <div className="relative" ref={profileRef}>
             <button
               type="button"
@@ -94,12 +110,6 @@ export function CompanyShell({
                     <p className="text-xs text-muted">{userEmail}</p>
                   </div>
                 </div>
-                <Link
-                  href="/account"
-                  className="mb-3 block rounded-lg border border-border px-4 py-2 text-center text-sm text-foreground hover:border-primary"
-                >
-                  アカウント設定
-                </Link>
                 {showStaffScreenLink ? (
                   <Link
                     href="/staff"

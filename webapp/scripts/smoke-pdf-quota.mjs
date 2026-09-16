@@ -147,7 +147,7 @@ try {
 
   // --- 31件目（請求書）: 無料枠が無いため1Tee課金される ---
   await admin.fill('input[type="date"]', `${thisMonth}-28`);
-  await admin.locator("label:has-text('支払期限') button").click();
+  await admin.locator('input[type="date"]').blur();
   await admin.waitForTimeout(400);
   await admin.getByRole("button", { name: "PDFで請求書を発行する", exact: true }).click();
   bodyText = await admin.textContent("body");
