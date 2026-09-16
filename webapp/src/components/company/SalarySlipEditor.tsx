@@ -59,7 +59,7 @@ export function SalarySlipEditor({
           <thead>
             <tr className="border-b border-border text-left text-muted">
               <th className="py-1">内容</th>
-              <th className="py-1">時間</th>
+              <th className="py-1">数量</th>
               <th className="py-1">単価</th>
               <th className="py-1">金額</th>
               <th className="py-1" />
@@ -80,7 +80,7 @@ export function SalarySlipEditor({
                       className="w-16 rounded border border-border px-1 py-0.5"
                     />
                   ) : (
-                    `${l.hours}h`
+                    l.hours
                   )}
                 </td>
                 <td className="py-1">
@@ -119,14 +119,14 @@ export function SalarySlipEditor({
           <div className="mt-3 flex flex-wrap items-end gap-2">
             <input
               type="text"
-              placeholder="内容（別の業務を追加）"
+              placeholder="内容"
               value={newLineDesc}
               onChange={(e) => setNewLineDesc(e.target.value)}
               className="rounded-lg border border-border px-2 py-1.5 text-sm"
             />
             <input
               type="number"
-              placeholder="時間"
+              placeholder="数量"
               value={newLineHours}
               onChange={(e) => setNewLineHours(e.target.value)}
               className="w-20 rounded-lg border border-border px-2 py-1.5 text-sm"
@@ -151,7 +151,8 @@ export function SalarySlipEditor({
               }
               className="rounded-lg border border-primary px-3 py-1.5 text-sm text-primary disabled:opacity-60"
             >
-              ＋追加
+              <span className="sm:hidden">＋</span>
+              <span className="hidden sm:inline">＋追加</span>
             </button>
           </div>
         ) : null}
@@ -482,7 +483,8 @@ function DeductionsSection({
             }}
             className="rounded-lg border border-primary px-3 py-1.5 text-sm text-primary disabled:opacity-60"
           >
-            ＋追加
+            <span className="sm:hidden">＋</span>
+            <span className="hidden sm:inline">＋追加</span>
           </button>
         </div>
       ) : null}

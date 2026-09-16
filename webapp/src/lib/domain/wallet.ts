@@ -32,10 +32,18 @@ export async function postLedgerEntry(
     throw new Error("insufficient_tee_balance");
   }
 
-  await tx.company.update({
-    where: { id: params.companyId },
+  // teeBalanceを読んだ時点の値をWHERE条件に含めることで楽観ロックにする —
+  // 同じ会社への2件の課金がほぼ同時に来た場合、後からUPDATEする側は
+  // teeBalanceが既に変わっているためcount=0になり、古い残高から計算した
+  // balanceAfterで上書きしてしまう（残高とTeeLedgerEntry合計がズレる）
+  // レースを防ぐ（redeemPromoItemの在庫ガードと同じ考え方）。
+  const result = await tx.company.updateMany({
+    where: { id: params.companyId, teeBalance: company.teeBalance },
     data: { teeBalance: balanceAfter },
   });
+  if (result.count === 0) {
+    throw new Error("insufficient_tee_balance");
+  }
 
   return tx.teeLedgerEntry.create({
     data: {

@@ -245,6 +245,9 @@ export function CalendarView({
   const prev = month === 1 ? { y: year - 1, m: 12 } : { y: year, m: month - 1 };
   const next = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
   const atHistoryCutoff = Boolean(historyCutoff && historyCutoff.year === year && historyCutoff.month === month);
+  // 月によって5行/6行と変わっても月カード全体の縦幅は一定に保ち、その差は
+  // 週の行の高さ側で吸収する（スタッフ画面のカレンダーと同じ方式）。
+  const weeks = Math.max(1, Math.ceil(cells.length / 7));
 
   const selectedShifts = selectedDate ? shiftsByDate.get(selectedDate) ?? [] : [];
 
@@ -264,7 +267,7 @@ export function CalendarView({
   }, [recruitments]);
 
   return (
-    <div>
+    <div className="flex flex-1 flex-col sm:block">
       <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           <h1 className="font-serif-jp text-2xl font-bold">シフトカレンダー</h1>
@@ -311,11 +314,11 @@ export function CalendarView({
             ) : null}
           </select>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           <Link
             href={`/api/calendar/pdf?y=${year}&m=${month}${selectedTeamId ? `&team=${selectedTeamId}` : ""}${selectedRelationshipId ? `&rel=${selectedRelationshipId}` : ""}`}
             target="_blank"
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-white px-2 py-1.5 text-xs hover:border-primary hover:text-primary sm:px-3"
           >
             <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 shrink-0">
               <path
@@ -333,14 +336,21 @@ export function CalendarView({
             type="button"
             disabled={sharingImage}
             onClick={shareAsImage}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:border-primary hover:text-primary disabled:opacity-60"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-white px-2 py-1.5 text-xs hover:border-primary hover:text-primary disabled:opacity-60 sm:px-3"
           >
             <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 shrink-0">
               <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
               <circle cx="8.5" cy="9.5" r="1.5" stroke="currentColor" strokeWidth="1.4" />
               <path d="M4 17l5-5 3 3 4-5 4 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            {sharingImage ? "画像を作成中…" : "画像でシフトを共有"}
+            {sharingImage ? (
+              "作成中…"
+            ) : (
+              <>
+                <span className="sm:hidden">画像で共有</span>
+                <span className="hidden sm:inline">画像でシフトを共有</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -365,7 +375,7 @@ export function CalendarView({
         }}
       />
 
-      <div className="rounded-2xl bg-white p-2 sm:p-4">
+      <div className="flex flex-1 flex-col rounded-2xl bg-white p-2 sm:block sm:p-4">
       <div className="mb-2 flex items-center justify-center gap-2">
         {atHistoryCutoff ? (
           <span aria-label="前の月（無料プランの閲覧範囲外）" className="p-2 text-border">
@@ -401,15 +411,20 @@ export function CalendarView({
         </Link>
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
         {WEEKDAYS.map((w, i) => (
           <div key={w} className={`py-1 text-center text-xs font-semibold ${weekdayColor(i)}`}>
             {w}
           </div>
         ))}
+      </div>
+      <div
+        className="grid flex-1 grid-cols-7 gap-0.5 sm:grid-rows-none sm:gap-1"
+        style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` }}
+      >
         {cells.map((c, i) => {
           if (!c.dateStr) {
-            return <div key={i} className="h-[100px]" />;
+            return <div key={i} className="h-full sm:h-[100px]" />;
           }
           const dow = new Date(c.dateStr + "T00:00:00Z").getUTCDay();
           const dayShifts = shiftsByDate.get(c.dateStr) ?? [];
@@ -461,7 +476,7 @@ export function CalendarView({
               key={i}
               type="button"
               onClick={() => setSelectedDate(c.dateStr)}
-              className={`relative flex h-[100px] flex-col items-stretch justify-start overflow-hidden rounded-xl rounded-tr-none p-1.5 text-left ${
+              className={`relative flex h-full flex-col items-stretch justify-start overflow-hidden rounded-lg p-1 text-left sm:h-[100px] sm:rounded-xl sm:rounded-tr-none sm:p-1.5 ${
                 isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "hover:bg-background"
               }`}
             >
@@ -2997,9 +3012,14 @@ function ShiftRequestsSection({
         <span>
           シフト希望　{totalCount}件
         </span>
-        <span className={`text-muted transition-transform ${isOpen ? "rotate-180" : ""}`} aria-hidden>
-          ▼
-        </span>
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          className={`h-4 w-4 shrink-0 text-muted transition-transform ${isOpen ? "rotate-180" : ""}`}
+          aria-hidden
+        >
+          <path d="M5 7.5l5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
       {isOpen ? (
         <div className="border-t border-border px-5 pb-5 pt-4">

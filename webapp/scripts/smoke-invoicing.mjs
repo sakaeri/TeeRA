@@ -138,7 +138,7 @@ try {
   const subtotalBefore = Number((await admin.getByText(/小計 [\d,]+円/).first().textContent()).match(/[\d,]+/)[0].replace(/,/g, ""));
   await admin.locator('input[placeholder="スタッフ名"]').fill("相殺");
   await admin.locator('input[placeholder*="相殺の場合"]').fill("端数調整");
-  await admin.locator('input[placeholder="時間"]').fill("1");
+  await admin.locator('input[placeholder="数量"]').fill("1");
   await admin.locator('input[placeholder="単価"]').fill("-1000");
   await admin.getByRole("button", { name: "＋追加" }).click();
   await admin.waitForTimeout(500);

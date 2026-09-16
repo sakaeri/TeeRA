@@ -91,7 +91,7 @@ export function InvoiceEditor({
           <thead>
             <tr className="border-b border-border text-left text-muted">
               <th className="py-1">スタッフ／内容</th>
-              <th className="py-1">時間</th>
+              <th className="py-1">数量</th>
               <th className="py-1">単価</th>
               <th className="py-1">税率</th>
               <th className="py-1">金額</th>
@@ -113,7 +113,7 @@ export function InvoiceEditor({
                       className="w-16 rounded border border-border px-1 py-0.5"
                     />
                   ) : (
-                    `${l.hours}h`
+                    l.hours
                   )}
                 </td>
                 <td className="py-1">
@@ -187,7 +187,7 @@ export function InvoiceEditor({
             />
             <input
               type="number"
-              placeholder="時間"
+              placeholder="数量"
               value={newLineHours}
               onChange={(e) => setNewLineHours(e.target.value)}
               className="w-20 rounded-lg border border-border px-2 py-1.5 text-sm"
@@ -227,7 +227,8 @@ export function InvoiceEditor({
               }
               className="rounded-lg border border-primary px-3 py-1.5 text-sm text-primary disabled:opacity-60"
             >
-              ＋追加
+              <span className="sm:hidden">＋</span>
+              <span className="hidden sm:inline">＋追加</span>
             </button>
           </div>
         ) : null}

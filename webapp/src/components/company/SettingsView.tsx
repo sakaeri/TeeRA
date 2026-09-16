@@ -20,6 +20,7 @@ import { ContractsView } from "@/components/company/ContractsView";
 import { WorkReportsQueue } from "@/components/company/WorkReportsQueue";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CopyUrlField } from "@/components/CopyUrlField";
+import { useClickOutside } from "@/lib/useClickOutside";
 
 type Admin = {
   userId: string;
@@ -164,7 +165,7 @@ function SectionCard({
   headerAction,
   children,
 }: {
-  title: string;
+  title: React.ReactNode;
   headerAction?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -305,11 +306,81 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [removeConfirmTarget, setRemoveConfirmTarget] = useState<{ userId: string; name: string } | null>(null);
+  const [detailTarget, setDetailTarget] = useState<Admin | null>(null);
   const adminCount = admins.filter((a) => a.role === "COMPANY_ADMIN").length;
+
+  const roleSelect = (a: Admin, isLastAdmin: boolean) => (
+    <select
+      defaultValue={a.role}
+      disabled={pending || isLastAdmin}
+      title={isLastAdmin ? "本部管理者は最低1名必要です" : undefined}
+      onChange={(e) => {
+        setError(null);
+        startTransition(async () => {
+          try {
+            await setCompanyMemberRoleAction(a.userId, e.target.value as "COMPANY_ADMIN" | "COMPANY_EDITOR");
+          } catch {
+            setError("本部管理者は最低1名必要なため変更できませんでした。");
+          }
+        });
+      }}
+      className="rounded-lg border border-border px-2 py-1 text-sm disabled:opacity-60"
+    >
+      <option value="COMPANY_ADMIN">本部管理者</option>
+      <option value="COMPANY_EDITOR">本部編集者</option>
+    </select>
+  );
+
+  const canWorkCheckbox = (a: Admin) => (
+    <label className="flex items-center gap-1.5 text-xs text-muted">
+      <input
+        type="checkbox"
+        defaultChecked={a.canWorkShifts}
+        disabled={pending}
+        onChange={(e) => startTransition(() => setMemberCanWorkShiftsAction(a.userId, e.target.checked))}
+      />
+      このメンバーはシフトにも入れる
+    </label>
+  );
+
+  const removeButton = (a: Admin, isLastAdmin: boolean) => (
+    <button
+      type="button"
+      disabled={pending || isLastAdmin}
+      title={isLastAdmin ? "本部管理者は最低1名必要です" : undefined}
+      onClick={() => {
+        setDetailTarget(null);
+        setRemoveConfirmTarget({ userId: a.userId, name: a.name });
+      }}
+      className="text-xs text-muted hover:text-red-600 disabled:opacity-40"
+    >
+      権限を外す
+    </button>
+  );
 
   return (
     <SectionCard title="本部メンバー権限">
-      <div className="mb-4 overflow-x-auto">
+      <ul className="mb-4 divide-y divide-border/60 rounded-lg border border-border sm:hidden">
+        {admins.map((a) => (
+          <li key={a.userId}>
+            <button
+              type="button"
+              onClick={() => setDetailTarget(a)}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm"
+            >
+              <span className="font-medium">{a.name}</span>
+              <span className="flex shrink-0 items-center gap-1 text-xs text-muted">
+                {a.role === "COMPANY_ADMIN" ? "本部管理者" : "本部編集者"}
+                <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5" aria-hidden>
+                  <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <div className="mb-4 hidden overflow-x-auto sm:block">
       <table className="w-full min-w-max text-sm">
         <thead>
           <tr className="border-b border-border text-left text-muted">
@@ -327,54 +398,9 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
               <tr key={a.userId} className="border-b border-border/60">
                 <td className="py-2">{a.name}</td>
                 <td className="py-2 text-muted">{a.email}</td>
-                <td className="py-2">
-                  <select
-                    defaultValue={a.role}
-                    disabled={pending || isLastAdmin}
-                    title={isLastAdmin ? "本部管理者は最低1名必要です" : undefined}
-                    onChange={(e) => {
-                      setError(null);
-                      startTransition(async () => {
-                        try {
-                          await setCompanyMemberRoleAction(
-                            a.userId,
-                            e.target.value as "COMPANY_ADMIN" | "COMPANY_EDITOR",
-                          );
-                        } catch {
-                          setError("本部管理者は最低1名必要なため変更できませんでした。");
-                        }
-                      });
-                    }}
-                    className="rounded-lg border border-border px-2 py-1 text-sm disabled:opacity-60"
-                  >
-                    <option value="COMPANY_ADMIN">本部管理者</option>
-                    <option value="COMPANY_EDITOR">本部編集者</option>
-                  </select>
-                </td>
-                <td className="py-2">
-                  <label className="flex items-center gap-1.5 text-xs text-muted">
-                    <input
-                      type="checkbox"
-                      defaultChecked={a.canWorkShifts}
-                      disabled={pending}
-                      onChange={(e) =>
-                        startTransition(() => setMemberCanWorkShiftsAction(a.userId, e.target.checked))
-                      }
-                    />
-                    このメンバーはシフトにも入れる
-                  </label>
-                </td>
-                <td className="py-2">
-                  <button
-                    type="button"
-                    disabled={pending || isLastAdmin}
-                    title={isLastAdmin ? "本部管理者は最低1名必要です" : undefined}
-                    onClick={() => setRemoveConfirmTarget({ userId: a.userId, name: a.name })}
-                    className="text-xs text-muted hover:text-red-600 disabled:opacity-40"
-                  >
-                    権限を外す
-                  </button>
-                </td>
+                <td className="py-2">{roleSelect(a, isLastAdmin)}</td>
+                <td className="py-2">{canWorkCheckbox(a)}</td>
+                <td className="py-2">{removeButton(a, isLastAdmin)}</td>
               </tr>
             );
           })}
@@ -382,6 +408,33 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
       </table>
       </div>
       {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
+
+      {detailTarget ? (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4 sm:hidden"
+          onClick={() => setDetailTarget(null)}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="font-serif-jp text-lg font-bold text-primary">{detailTarget.name}</h3>
+              <button type="button" onClick={() => setDetailTarget(null)} className="text-muted">
+                ✕
+              </button>
+            </div>
+            <div className="flex flex-col gap-4 text-sm">
+              <p className="text-muted">{detailTarget.email}</p>
+              <div>
+                <p className="mb-1 text-xs text-muted">権限</p>
+                {roleSelect(detailTarget, detailTarget.role === "COMPANY_ADMIN" && adminCount <= 1)}
+              </div>
+              {canWorkCheckbox(detailTarget)}
+              <div className="border-t border-border pt-3">
+                {removeButton(detailTarget, detailTarget.role === "COMPANY_ADMIN" && adminCount <= 1)}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {removeConfirmTarget ? (
         <ConfirmDialog
@@ -439,13 +492,35 @@ function TeamsSection({
   const [removeConfirmTarget, setRemoveConfirmTarget] = useState<{ teamId: string; userId: string; name: string } | null>(
     null,
   );
+  const [showInfo, setShowInfo] = useState(false);
+  const infoRef = useClickOutside<HTMLSpanElement>(showInfo, () => setShowInfo(false));
 
   const nextTeamRequiresTee = teams.length > 0;
   const canAffordNextTeam = !nextTeamRequiresTee || teeBalance >= TEAM_UNLOCK_TEE_COST;
 
   return (
     <SectionCard
-      title="チーム管理"
+      title={
+        <span className="flex items-center gap-1.5">
+          チーム管理
+          <span className="relative" ref={infoRef}>
+            <button
+              type="button"
+              onClick={() => setShowInfo((v) => !v)}
+              aria-label="説明を見る"
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted/20 text-[10px] font-bold text-muted"
+            >
+              i
+            </button>
+            {showInfo ? (
+              <div className="absolute left-0 top-full z-10 mt-1.5 w-64 rounded-lg border border-border bg-white p-3 text-xs font-normal normal-case leading-relaxed text-muted shadow-md">
+                ここに載るのはチームのマネージャー/リーダーだけです。一般スタッフのチーム所属はスタッフ名簿の各スタッフ詳細から、依頼主/派遣会社との紐付けは各企業詳細から変更できます。1チーム目は無料、2チーム目以降は1チームにつき{TEAM_UNLOCK_TEE_COST}
+                {" "}Teeで作成できます（プラン不問）。
+              </div>
+            ) : null}
+          </span>
+        </span>
+      }
       headerAction={
         <button
           type="button"
@@ -457,15 +532,9 @@ function TeamsSection({
         </button>
       }
     >
-      <p className="mb-1 text-xs text-muted">
-        ここに載るのはチームのマネージャー/リーダーだけです。一般スタッフのチーム所属はスタッフ名簿の各スタッフ詳細から、依頼主/派遣会社との紐付けは各企業詳細から変更できます。
-      </p>
-      <p className="mb-4 text-xs text-muted">
-        1チーム目は無料、2チーム目以降は1チームにつき{TEAM_UNLOCK_TEE_COST} Teeで作成できます（プラン不問）。
-        {nextTeamRequiresTee && !canAffordNextTeam ? (
-          <span className="ml-1 text-red-600">Tee残高が不足しています（残高: {teeBalance} Tee）。</span>
-        ) : null}
-      </p>
+      {nextTeamRequiresTee && !canAffordNextTeam ? (
+        <p className="mb-4 text-xs text-red-600">Tee残高が不足しています（残高: {teeBalance} Tee）。次のチーム作成には{TEAM_UNLOCK_TEE_COST} Tee必要です。</p>
+      ) : null}
 
       <div className="flex flex-col gap-6">
         {teams.map((team) => {

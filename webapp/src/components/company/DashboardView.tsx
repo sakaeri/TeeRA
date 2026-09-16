@@ -233,7 +233,7 @@ export function DashboardView({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="font-serif-jp text-2xl font-bold">ダッシュボード</h1>
+        <h1 className="hidden font-serif-jp text-2xl font-bold sm:block">ダッシュボード</h1>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -964,8 +964,8 @@ function TodoSection({
   const shipConfirmOrder = promoOrders.find((o) => o.id === shipConfirmId) ?? null;
 
   return (
-    <section className="rounded-2xl border border-border bg-white/60 p-6">
-      <div className="mb-3 flex gap-1 border-b border-border">
+    <section className="rounded-2xl border border-border bg-white/60 p-3 sm:p-6">
+      <div className="mb-3 flex gap-1 overflow-x-auto border-b border-border">
         {[
           { key: "active", label: "やることリスト" },
           { key: "resolved", label: "解決済みリスト" },
@@ -976,7 +976,7 @@ function TodoSection({
             key={t.key}
             type="button"
             onClick={() => setTab(t.key as DashboardTab)}
-            className={`border-b-2 px-3 py-2 text-sm font-semibold ${tab === t.key ? "border-accent text-primary" : "border-transparent text-muted"}`}
+            className={`shrink-0 whitespace-nowrap border-b-2 px-2 py-2 text-sm font-semibold sm:px-3 ${tab === t.key ? "border-accent text-primary" : "border-transparent text-muted"}`}
           >
             {t.label}
           </button>
@@ -986,9 +986,14 @@ function TodoSection({
       {tab === "active" ? (
         <ul className="flex flex-col gap-2">
           {autoTodos.map((item) => (
-            <li key={item.id} className="flex items-center gap-3 rounded-lg border border-border/60 p-3 text-sm">
-              <Tag kind={item.kind} />
-              <span className="flex-1">{item.text}</span>
+            <li
+              key={item.id}
+              className="flex flex-col items-start gap-2 rounded-lg border border-border/60 p-3 text-sm sm:flex-row sm:items-center sm:gap-3"
+            >
+              <div className="flex items-center gap-2">
+                <Tag kind={item.kind} />
+                <span>{item.text}</span>
+              </div>
               <Link
                 href={item.actionHref}
                 className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
@@ -999,26 +1004,30 @@ function TodoSection({
           ))}
           {openTodos.map((t) => (
             <li key={t.id} className="rounded-lg border border-border/60 p-3 text-sm">
-              <div className="flex items-center gap-3">
-                <Tag kind="リスト" />
-                <span className="flex-1">
-                  {t.title} — {t.recipientName}宛（期限 {t.dueDate}）
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setExpandedId(expandedId === t.id ? null : t.id)}
-                  className="shrink-0 text-xs text-muted underline"
-                >
-                  コメント（{t.comments.length}）
-                </button>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => startTransition(() => resolveTodoAction(t.id))}
-                  className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
-                >
-                  解決済みにする
-                </button>
+              <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+                <div className="flex items-center gap-2">
+                  <Tag kind="リスト" />
+                  <span>
+                    {t.title} — {t.recipientName}宛（期限 {t.dueDate}）
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-2 sm:ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(expandedId === t.id ? null : t.id)}
+                    className="text-xs text-muted underline"
+                  >
+                    コメント（{t.comments.length}）
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => startTransition(() => resolveTodoAction(t.id))}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
+                  >
+                    解決済みにする
+                  </button>
+                </div>
               </div>
               {expandedId === t.id ? (
                 <div className="mt-2 border-t border-border/50 pt-2">

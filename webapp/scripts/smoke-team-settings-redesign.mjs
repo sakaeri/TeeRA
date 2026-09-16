@@ -50,8 +50,12 @@ try {
     await createModal.getByRole("button", { name: "作成", exact: true }).click();
     await admin.waitForTimeout(400);
   }
+  await admin.getByLabel("説明を見る").click();
+  await admin.waitForTimeout(200);
   let body = await admin.textContent("body");
-  log("設定画面にマネージャー/リーダーの説明文が出る", body.includes("マネージャー/リーダーだけです"));
+  log("設定画面にマネージャー/リーダーの説明文が出る（ⓘポップアップ内）", body.includes("マネージャー/リーダーだけです"));
+  await admin.getByLabel("説明を見る").click();
+  await admin.waitForTimeout(200);
   log("マネージャー未登録のチームは「まだマネージャー/リーダーがいません」と出る", body.includes("まだマネージャー/リーダーがいません"));
 
   // --- ①「新しく招待する」でAチームのマネージャーを招待 ---

@@ -462,26 +462,32 @@ export async function assignStaffToRecruitment(params: {
   // 初めて配属されるのか、既につながりがあったのかで課金要否が変わるため。
   const alreadyKnown = await isStaffAlreadyKnownToCompany(recruitment.companyId, params.staffUserId);
 
-  if (!params.confirmedDespiteOffRequest) {
-    const offRequest = await findPendingOffRequest(params.staffUserId, recruitment.date);
-    if (offRequest) {
-      return { status: "off_request" as const, offRequest };
-    }
-  }
-
-  const conflicts = await findConflictingShifts({
-    staffUserId: params.staffUserId,
-    date: recruitment.date,
-    startTime: recruitment.startTime,
-    endTime: recruitment.endTime,
-    isAllDay: false,
-    isUndecided: recruitment.isUndecided,
-  });
-  if (conflicts.length > 0 && !params.overrideShiftIds?.length) {
-    return { status: "conflict" as const, conflicts };
-  }
-
   return prisma.$transaction(async (tx) => {
+    // 同じスタッフ×日付への重複チェックと実際のシフト作成の間に別の
+    // リクエストが割り込むと、両方とも「重複なし」を見たまま2件とも
+    // 作成されてしまう(TOCTOU) — createAssignedShiftと同じ考え方の
+    // アドバイザリロックで直列化してから再チェックする。
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${params.staffUserId} || ':' || ${recruitment.date.toISOString()}))`;
+
+    if (!params.confirmedDespiteOffRequest) {
+      const offRequest = await findPendingOffRequest(tx, params.staffUserId, recruitment.date);
+      if (offRequest) {
+        return { status: "off_request" as const, offRequest };
+      }
+    }
+
+    const conflicts = await findConflictingShifts(tx, {
+      staffUserId: params.staffUserId,
+      date: recruitment.date,
+      startTime: recruitment.startTime,
+      endTime: recruitment.endTime,
+      isAllDay: false,
+      isUndecided: recruitment.isUndecided,
+    });
+    if (conflicts.length > 0 && !params.overrideShiftIds?.length) {
+      return { status: "conflict" as const, conflicts };
+    }
+
     // Row-lock the recruitment so two concurrent fills of the same slot
     // serialize instead of both reading a stale filledCount and overbooking
     // it — the second transaction blocks here until the first commits, then

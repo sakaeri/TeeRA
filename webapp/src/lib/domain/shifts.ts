@@ -69,16 +69,19 @@ export function timeRangesOverlap(
   return aStart < bEnd && bStart < aEnd;
 }
 
-export async function findConflictingShifts(params: {
-  staffUserId: string;
-  date: Date;
-  startTime: string | null;
-  endTime: string | null;
-  isAllDay: boolean;
-  isUndecided: boolean;
-  excludeShiftId?: string;
-}) {
-  const sameDayShifts = await prisma.shift.findMany({
+export async function findConflictingShifts(
+  client: Tx | typeof prisma,
+  params: {
+    staffUserId: string;
+    date: Date;
+    startTime: string | null;
+    endTime: string | null;
+    isAllDay: boolean;
+    isUndecided: boolean;
+    excludeShiftId?: string;
+  },
+) {
+  const sameDayShifts = await client.shift.findMany({
     where: {
       staffUserId: params.staffUserId,
       date: params.date,
@@ -94,8 +97,8 @@ export async function findConflictingShifts(params: {
 // 挟むための判定。findConflictingShifts(シフトの重複)とは別の軸のチェック
 // — 休み希望自体は会社の承認を必要としない記録だが、それでもアサイン
 // しようとした場合だけ「本当にいいですか」と聞く。
-export async function findPendingOffRequest(staffUserId: string, date: Date) {
-  return prisma.shiftRequest.findFirst({
+export async function findPendingOffRequest(client: Tx | typeof prisma, staffUserId: string, date: Date) {
+  return client.shiftRequest.findFirst({
     where: { staffUserId, desire: "OFF", status: "PENDING", dates: { has: date } },
   });
 }
@@ -175,27 +178,35 @@ export async function createAssignedShift(params: {
   companyRelationshipId?: string; // set for 取引先オーダー (source becomes CLIENT, billable on that client's invoice)
   taskName?: string; // 業務内容 — 単価は保持しない。給与/請求計算時にその都度参照される
 }) {
-  if (!params.confirmedDespiteOffRequest) {
-    const offRequest = await findPendingOffRequest(params.staffUserId, params.date);
-    if (offRequest) {
-      return { status: "off_request" as const, offRequest };
+  return prisma.$transaction(async (tx) => {
+    // 同じスタッフ×日付への重複チェック(findConflictingShifts)とアサイン
+    // 作成の間に別のリクエストが割り込むと、両方とも「重複なし」を見た
+    // まま2件とも作成されてしまう(TOCTOU)。この組み合わせのアドバイザリ
+    // ロックで直列化し、後勝ちの呼び出しはロック取得後に再度チェックして
+    // 初めて見える重複を正しく検出できるようにする(startStaffContractと
+    // 同じ考え方)。
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${params.staffUserId} || ':' || ${params.date.toISOString()}))`;
+
+    if (!params.confirmedDespiteOffRequest) {
+      const offRequest = await findPendingOffRequest(tx, params.staffUserId, params.date);
+      if (offRequest) {
+        return { status: "off_request" as const, offRequest };
+      }
     }
-  }
 
-  const conflicts = await findConflictingShifts({
-    staffUserId: params.staffUserId,
-    date: params.date,
-    startTime: params.startTime,
-    endTime: params.endTime,
-    isAllDay: params.isAllDay,
-    isUndecided: params.isUndecided,
-  });
+    const conflicts = await findConflictingShifts(tx, {
+      staffUserId: params.staffUserId,
+      date: params.date,
+      startTime: params.startTime,
+      endTime: params.endTime,
+      isAllDay: params.isAllDay,
+      isUndecided: params.isUndecided,
+    });
 
-  if (conflicts.length > 0 && !params.overrideShiftIds?.length) {
-    return { status: "conflict" as const, conflicts };
-  }
+    if (conflicts.length > 0 && !params.overrideShiftIds?.length) {
+      return { status: "conflict" as const, conflicts };
+    }
 
-  const shift = await prisma.$transaction(async (tx) => {
     const created = await tx.shift.create({
       data: {
         companyId: params.companyId,
@@ -243,10 +254,8 @@ export async function createAssignedShift(params: {
       shiftId: created.id,
     });
 
-    return created;
+    return { status: "created" as const, shift: created };
   });
-
-  return { status: "created" as const, shift };
 }
 
 // companyRelationshipIdが指定された場合、絞り込み方向は関係の向きで決まる
