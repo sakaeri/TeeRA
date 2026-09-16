@@ -136,24 +136,23 @@ try {
   // 手動で項目を追加できる（今までaddCustomLineActionはUIから呼べなかった）。
   // 相殺はマイナス金額の明細行として表現する。
   const subtotalBefore = Number((await admin.getByText(/小計 [\d,]+円/).first().textContent()).match(/[\d,]+/)[0].replace(/,/g, ""));
-  await admin.locator('input[placeholder="スタッフ名"]').fill("相殺");
-  await admin.locator('input[placeholder*="相殺の場合"]').fill("端数調整");
-  await admin.locator('input[placeholder="数量"]').fill("1");
-  await admin.locator('input[placeholder="単価"]').fill("-1000");
   await admin.getByRole("button", { name: "＋追加" }).click();
+  await admin.waitForTimeout(300);
+  const addLineModal = admin.locator("div.fixed.inset-0.z-40").last();
+  await addLineModal.getByLabel("スタッフ名").fill("相殺");
+  await addLineModal.getByLabel("内容（相殺の場合はマイナス金額で）").fill("端数調整");
+  await addLineModal.getByLabel("数量").fill("1");
+  await addLineModal.getByLabel("単価").fill("-1000");
+  await addLineModal.getByRole("button", { name: "追加する" }).click();
   await admin.waitForTimeout(500);
   body = await admin.textContent("body");
   log("手動で明細行を追加できる（請求書側にaddCustomLineActionのUIが無かった）", body.includes("相殺") && body.includes("端数調整"));
   const subtotalAfter = Number((await admin.getByText(/小計 [\d,]+円/).first().textContent()).match(/[\d,]+/)[0].replace(/,/g, ""));
   log("マイナス金額の明細行が相殺として合計に反映される", subtotalAfter === subtotalBefore - 1000);
 
-  // set due date
+  // set due date (auto-saves onBlur, no separate 保存 button anymore)
   await admin.fill('input[type="date"]', "2026-09-30");
-  await admin.getByRole("button", { name: "保存" }).first().click();
-  await admin.waitForTimeout(400);
-  // the due-date save button is one of several "保存" buttons; find the date-specific one via label
-  const dueDateSaveBtn = admin.locator("label:has-text('支払期限') button");
-  await dueDateSaveBtn.click();
+  await admin.locator('input[type="date"]').blur();
   await admin.waitForTimeout(500);
 
   // 「確定する」という中間状態は廃止され、下書きからそのまま

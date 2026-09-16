@@ -36,9 +36,7 @@ export function SalarySlipEditor({
   willUseFreeQuota: boolean;
 }) {
   const [pending, startTransition] = useTransition();
-  const [newLineDesc, setNewLineDesc] = useState("");
-  const [newLineHours, setNewLineHours] = useState("");
-  const [newLineRate, setNewLineRate] = useState("");
+  const [showAddLineModal, setShowAddLineModal] = useState(false);
   const [showIssueConfirm, setShowIssueConfirm] = useState(false);
 
   const isEditable = slip.status === "DRAFT";
@@ -116,50 +114,33 @@ export function SalarySlipEditor({
         </div>
 
         {isEditable ? (
-          <div className="mt-3 flex flex-wrap items-end gap-2">
-            <input
-              type="text"
-              placeholder="内容"
-              value={newLineDesc}
-              onChange={(e) => setNewLineDesc(e.target.value)}
-              className="rounded-lg border border-border px-2 py-1.5 text-sm"
-            />
-            <input
-              type="number"
-              placeholder="数量"
-              value={newLineHours}
-              onChange={(e) => setNewLineHours(e.target.value)}
-              className="w-20 rounded-lg border border-border px-2 py-1.5 text-sm"
-            />
-            <input
-              type="number"
-              placeholder="単価"
-              value={newLineRate}
-              onChange={(e) => setNewLineRate(e.target.value)}
-              className="w-24 rounded-lg border border-border px-2 py-1.5 text-sm"
-            />
+          <div className="mt-3">
             <button
               type="button"
-              disabled={pending || !newLineDesc || !newLineHours || !newLineRate}
-              onClick={() =>
-                startTransition(async () => {
-                  await addCustomLineAction(slip.id, newLineDesc, Number(newLineHours), Number(newLineRate));
-                  setNewLineDesc("");
-                  setNewLineHours("");
-                  setNewLineRate("");
-                })
-              }
-              className="rounded-lg border border-primary px-3 py-1.5 text-sm text-primary disabled:opacity-60"
+              onClick={() => setShowAddLineModal(true)}
+              className="rounded-lg border border-primary px-3 py-1.5 text-sm text-primary"
             >
-              <span className="sm:hidden">＋</span>
-              <span className="hidden sm:inline">＋追加</span>
+              ＋追加
             </button>
           </div>
         ) : null}
       </section>
 
+      {showAddLineModal ? (
+        <AddLineModal
+          title="勤務内訳に行を追加"
+          onClose={() => setShowAddLineModal(false)}
+          onSubmit={(desc, hours, rate) =>
+            startTransition(async () => {
+              await addCustomLineAction(slip.id, desc, hours, rate);
+              setShowAddLineModal(false);
+            })
+          }
+        />
+      ) : null}
+
       <PaidLeaveSection slip={slip} isEditable={isEditable} pending={pending} startTransition={startTransition} />
-      <DeductionsSection slip={slip} isEditable={isEditable} pending={pending} startTransition={startTransition} />
+      <DeductionsSection slip={slip} isEditable={isEditable} startTransition={startTransition} />
 
       <section className="rounded-2xl border-2 border-primary bg-white/60 p-6">
         <div className="flex items-center justify-between text-sm">
@@ -233,6 +214,80 @@ export function SalarySlipEditor({
           </div>
         ) : null}
       </section>
+    </div>
+  );
+}
+
+function AddLineModal({
+  title,
+  onClose,
+  onSubmit,
+}: {
+  title: string;
+  onClose: () => void;
+  onSubmit: (desc: string, hours: number, rate: number) => void;
+}) {
+  const [desc, setDesc] = useState("");
+  const [hours, setHours] = useState("");
+  const [rate, setRate] = useState("");
+  const canSubmit = desc && hours && rate;
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">{title}</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <div className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-xs">
+            内容
+            <input
+              type="text"
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            数量
+            <input
+              type="number"
+              value={hours}
+              onChange={(e) => setHours(e.target.value)}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            単価
+            <input
+              type="number"
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+          </label>
+        </div>
+        <div className="mt-5 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-semibold"
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            disabled={!canSubmit}
+            onClick={() => onSubmit(desc, Number(hours), Number(rate))}
+            className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            追加する
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -406,17 +461,14 @@ function PaidLeaveSection({
 function DeductionsSection({
   slip,
   isEditable,
-  pending,
   startTransition,
 }: {
   slip: { id: string; deductions: Deduction[] };
   isEditable: boolean;
-  pending: boolean;
   startTransition: (fn: () => void | Promise<void>) => void;
 }) {
   const [deductions, setDeductions] = useState(slip.deductions);
-  const [newLabel, setNewLabel] = useState("");
-  const [newAmount, setNewAmount] = useState("");
+  const [showAddModal, setShowAddModal] = useState(false);
 
   function save(next: Deduction[]) {
     setDeductions(next);
@@ -455,39 +507,88 @@ function DeductionsSection({
         ))}
       </div>
       {isEditable ? (
-        <div className="mt-3 flex items-end gap-2">
-          <input
-            type="text"
-            placeholder="項目名"
-            value={newLabel}
-            onChange={(e) => setNewLabel(e.target.value)}
-            className="rounded-lg border border-border px-2 py-1.5 text-sm"
-          />
-          <input
-            type="number"
-            placeholder="金額"
-            value={newAmount}
-            onChange={(e) => setNewAmount(e.target.value)}
-            className="w-24 rounded-lg border border-border px-2 py-1.5 text-sm"
-          />
+        <div className="mt-3">
           <button
             type="button"
-            disabled={pending || !newLabel || !newAmount}
-            onClick={() => {
-              save([
-                ...deductions,
-                { id: `custom-${Date.now()}`, label: newLabel, amount: Number(newAmount) },
-              ]);
-              setNewLabel("");
-              setNewAmount("");
-            }}
-            className="rounded-lg border border-primary px-3 py-1.5 text-sm text-primary disabled:opacity-60"
+            onClick={() => setShowAddModal(true)}
+            className="rounded-lg border border-primary px-3 py-1.5 text-sm text-primary"
           >
-            <span className="sm:hidden">＋</span>
-            <span className="hidden sm:inline">＋追加</span>
+            ＋追加
           </button>
         </div>
       ) : null}
+
+      {showAddModal ? (
+        <AddDeductionModal
+          onClose={() => setShowAddModal(false)}
+          onSubmit={(label, amount) => {
+            save([...deductions, { id: `custom-${Date.now()}`, label, amount }]);
+            setShowAddModal(false);
+          }}
+        />
+      ) : null}
     </section>
+  );
+}
+
+function AddDeductionModal({
+  onClose,
+  onSubmit,
+}: {
+  onClose: () => void;
+  onSubmit: (label: string, amount: number) => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [amount, setAmount] = useState("");
+  const canSubmit = label && amount;
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">控除項目を追加</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <div className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-xs">
+            項目名
+            <input
+              type="text"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            金額
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+          </label>
+        </div>
+        <div className="mt-5 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-semibold"
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            disabled={!canSubmit}
+            onClick={() => onSubmit(label, Number(amount))}
+            className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            追加する
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -65,6 +65,7 @@ type RelationshipRow = {
   name: string;
   isProxy: boolean;
   staffCount: number;
+  teams: { id: string; name: string }[];
 };
 
 type Team = { id: string; name: string };
@@ -118,6 +119,8 @@ export function RosterView({
   const [showAddMenuInfo, setShowAddMenuInfo] = useState(false);
   const [teamFilter, setTeamFilter] = useState("");
   const filteredStaff = teamFilter ? staff.filter((s) => s.teams.some((t) => t.teamId === teamFilter)) : staff;
+  const filteredClients = teamFilter ? clients.filter((c) => c.teams.some((t) => t.id === teamFilter)) : clients;
+  const filteredAgencies = teamFilter ? agencies.filter((a) => a.teams.some((t) => t.id === teamFilter)) : agencies;
   const [proxyNamePromptFor, setProxyNamePromptFor] = useState<
     "client" | "agency" | "staff" | null
   >(null);
@@ -170,20 +173,18 @@ export function RosterView({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           <h1 className="hidden font-serif-jp text-2xl font-bold sm:block">スタッフ名簿</h1>
-          {tab === "staff" ? (
-            <select
-              value={teamFilter}
-              onChange={(e) => setTeamFilter(e.target.value)}
-              className="hidden rounded-lg border border-border bg-white px-3 py-1.5 text-sm sm:block"
-            >
-              <option value="">全社（すべて表示）</option>
-              {teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
+          <select
+            value={teamFilter}
+            onChange={(e) => setTeamFilter(e.target.value)}
+            className="hidden rounded-lg border border-border bg-white px-3 py-1.5 text-sm sm:block"
+          >
+            <option value="">全社（すべて表示）</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         {canShowAddButton ? (
@@ -250,39 +251,42 @@ export function RosterView({
         <TabButton active={tab === "staff"} onClick={() => setTab("staff")} className="hidden sm:inline-flex">
           スタッフ一覧
         </TabButton>
-        <span className="relative shrink-0 sm:hidden">
-          <select
-            value={teamFilter}
-            onChange={(e) => {
-              setTab("staff");
-              setTeamFilter(e.target.value);
-            }}
-            className={`appearance-none whitespace-nowrap border-b-2 bg-transparent py-2 pl-3 pr-6 text-sm font-semibold ${
-              tab === "staff" ? "border-accent text-primary" : "border-transparent text-muted"
-            }`}
-          >
-            <option value="">スタッフ一覧</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                スタッフ一覧：{t.name}
-              </option>
-            ))}
-          </select>
-          <svg
-            viewBox="0 0 20 20"
-            fill="none"
-            className="pointer-events-none absolute right-1 top-1/2 h-3 w-3 -translate-y-1/2 text-muted"
-            aria-hidden
-          >
-            <path d="M5 7.5l5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </span>
-        <TabButton active={tab === "clients"} onClick={() => setTab("clients")}>
+        <MobileTabSelect
+          active={tab === "staff"}
+          value={teamFilter}
+          defaultLabel="スタッフ一覧"
+          teams={teams}
+          onChange={(v) => {
+            setTab("staff");
+            setTeamFilter(v);
+          }}
+        />
+        <TabButton active={tab === "clients"} onClick={() => setTab("clients")} className="hidden sm:inline-flex">
           依頼主一覧
         </TabButton>
-        <TabButton active={tab === "agencies"} onClick={() => setTab("agencies")}>
+        <MobileTabSelect
+          active={tab === "clients"}
+          value={teamFilter}
+          defaultLabel="依頼主一覧"
+          teams={teams}
+          onChange={(v) => {
+            setTab("clients");
+            setTeamFilter(v);
+          }}
+        />
+        <TabButton active={tab === "agencies"} onClick={() => setTab("agencies")} className="hidden sm:inline-flex">
           派遣会社一覧
         </TabButton>
+        <MobileTabSelect
+          active={tab === "agencies"}
+          value={teamFilter}
+          defaultLabel="派遣会社一覧"
+          teams={teams}
+          onChange={(v) => {
+            setTab("agencies");
+            setTeamFilter(v);
+          }}
+        />
       </div>
 
       <div className="mb-4" />
@@ -456,11 +460,11 @@ export function RosterView({
       ) : null}
 
       {tab === "clients" ? (
-        <RelationshipTable rows={clients} onRowClick={(id) => openRelationship(id, "client")} />
+        <RelationshipTable rows={filteredClients} onRowClick={(id) => openRelationship(id, "client")} />
       ) : null}
 
       {tab === "agencies" ? (
-        <RelationshipTable rows={agencies} onRowClick={(id) => openRelationship(id, "agency")} />
+        <RelationshipTable rows={filteredAgencies} onRowClick={(id) => openRelationship(id, "agency")} />
       ) : null}
 
       {selectedStaffId ? (
@@ -793,6 +797,47 @@ function TabButton({
   );
 }
 
+function MobileTabSelect({
+  active,
+  value,
+  defaultLabel,
+  teams,
+  onChange,
+}: {
+  active: boolean;
+  value: string;
+  defaultLabel: string;
+  teams: Team[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <span className="relative shrink-0 sm:hidden">
+      <select
+        value={active ? value : ""}
+        onChange={(e) => onChange(e.target.value)}
+        className={`appearance-none whitespace-nowrap border-b-2 bg-transparent py-2 pl-3 pr-6 text-sm font-semibold ${
+          active ? "border-accent text-primary" : "border-transparent text-muted"
+        }`}
+      >
+        <option value="">{defaultLabel}</option>
+        {teams.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+      </select>
+      <svg
+        viewBox="0 0 20 20"
+        fill="none"
+        className="pointer-events-none absolute right-1 top-1/2 h-3 w-3 -translate-y-1/2 text-muted"
+        aria-hidden
+      >
+        <path d="M5 7.5l5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
+  );
+}
+
 function RelationshipTable({
   rows,
   onRowClick,
@@ -807,6 +852,7 @@ function RelationshipTable({
         <thead>
           <tr className="border-b border-border bg-background/60 text-left text-xs text-muted">
             <th className="px-4 py-3 font-semibold">名称</th>
+            <th className="px-4 py-3 font-semibold">チーム</th>
             <th className="px-4 py-3 font-semibold">スタッフ人数</th>
           </tr>
         </thead>
@@ -825,12 +871,25 @@ function RelationshipTable({
                   </span>
                 ) : null}
               </td>
+              <td className="px-4 py-3.5">
+                <div className="flex flex-wrap gap-1">
+                  {r.teams.length === 0 ? (
+                    <span className="text-muted">—</span>
+                  ) : (
+                    r.teams.map((t) => (
+                      <span key={t.id} className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-900">
+                        {t.name}
+                      </span>
+                    ))
+                  )}
+                </div>
+              </td>
               <td className="px-4 py-3.5 text-muted">{r.staffCount}名</td>
             </tr>
           ))}
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={2} className="py-8 text-center text-muted">
+              <td colSpan={3} className="py-8 text-center text-muted">
                 登録されていません。
               </td>
             </tr>

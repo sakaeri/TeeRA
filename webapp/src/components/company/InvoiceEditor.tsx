@@ -55,11 +55,7 @@ export function InvoiceEditor({
   const [note, setNoteState] = useState(invoice.note);
   const [regNumber, setRegNumber] = useState(invoice.invoiceRegistrationNumber);
   const [showIssueConfirm, setShowIssueConfirm] = useState(false);
-  const [newLineStaffName, setNewLineStaffName] = useState("");
-  const [newLineDesc, setNewLineDesc] = useState("");
-  const [newLineHours, setNewLineHours] = useState("");
-  const [newLineRate, setNewLineRate] = useState("");
-  const [newLineTaxRatePercent, setNewLineTaxRatePercent] = useState("10");
+  const [showAddLineModal, setShowAddLineModal] = useState(false);
 
   const isEditable = invoice.status === "DRAFT";
 
@@ -170,69 +166,29 @@ export function InvoiceEditor({
         </div>
 
         {isEditable ? (
-          <div className="mt-3 flex flex-wrap items-end gap-2">
-            <input
-              type="text"
-              placeholder="スタッフ名"
-              value={newLineStaffName}
-              onChange={(e) => setNewLineStaffName(e.target.value)}
-              className="w-28 rounded-lg border border-border px-2 py-1.5 text-sm"
-            />
-            <input
-              type="text"
-              placeholder="内容（相殺の場合はマイナス金額で）"
-              value={newLineDesc}
-              onChange={(e) => setNewLineDesc(e.target.value)}
-              className="rounded-lg border border-border px-2 py-1.5 text-sm"
-            />
-            <input
-              type="number"
-              placeholder="数量"
-              value={newLineHours}
-              onChange={(e) => setNewLineHours(e.target.value)}
-              className="w-20 rounded-lg border border-border px-2 py-1.5 text-sm"
-            />
-            <input
-              type="number"
-              placeholder="単価"
-              value={newLineRate}
-              onChange={(e) => setNewLineRate(e.target.value)}
-              className="w-24 rounded-lg border border-border px-2 py-1.5 text-sm"
-            />
-            <select
-              value={newLineTaxRatePercent}
-              onChange={(e) => setNewLineTaxRatePercent(e.target.value)}
-              className="rounded-lg border border-border px-2 py-1.5 text-sm"
-            >
-              <option value="10">10%</option>
-              <option value="8">8%</option>
-            </select>
+          <div className="mt-3">
             <button
               type="button"
-              disabled={pending || !newLineStaffName || !newLineDesc || !newLineHours || !newLineRate}
-              onClick={() =>
-                startTransition(async () => {
-                  await addCustomLineAction(invoice.id, {
-                    staffName: newLineStaffName,
-                    description: newLineDesc,
-                    hours: Number(newLineHours),
-                    rate: Number(newLineRate),
-                    taxRatePercent: Number(newLineTaxRatePercent),
-                  });
-                  setNewLineStaffName("");
-                  setNewLineDesc("");
-                  setNewLineHours("");
-                  setNewLineRate("");
-                })
-              }
-              className="rounded-lg border border-primary px-3 py-1.5 text-sm text-primary disabled:opacity-60"
+              onClick={() => setShowAddLineModal(true)}
+              className="rounded-lg border border-primary px-3 py-1.5 text-sm text-primary"
             >
-              <span className="sm:hidden">＋</span>
-              <span className="hidden sm:inline">＋追加</span>
+              ＋追加
             </button>
           </div>
         ) : null}
       </section>
+
+      {showAddLineModal ? (
+        <AddInvoiceLineModal
+          onClose={() => setShowAddLineModal(false)}
+          onSubmit={(fields) =>
+            startTransition(async () => {
+              await addCustomLineAction(invoice.id, fields);
+              setShowAddLineModal(false);
+            })
+          }
+        />
+      ) : null}
 
       <section className="rounded-2xl border border-border bg-white/60 p-6">
         <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">消費税区分</h2>
@@ -254,69 +210,42 @@ export function InvoiceEditor({
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-xs">
             インボイス登録番号
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={regNumber}
-                disabled={!isEditable}
-                onChange={(e) => setRegNumber(e.target.value)}
-                className="flex-1 rounded-lg border border-border px-2 py-1.5 text-sm"
-              />
-              {isEditable ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => startTransition(() => setInvoiceRegistrationNumberAction(invoice.id, regNumber))}
-                  className="rounded-lg border border-primary px-3 py-1.5 text-xs text-primary"
-                >
-                  保存
-                </button>
-              ) : null}
-            </div>
+            <input
+              type="text"
+              value={regNumber}
+              disabled={!isEditable}
+              onChange={(e) => setRegNumber(e.target.value)}
+              onBlur={() => {
+                if (isEditable) startTransition(() => setInvoiceRegistrationNumberAction(invoice.id, regNumber));
+              }}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
           </label>
           <label className="flex flex-col gap-1 text-xs">
             支払期限（必須）
-            <div className="flex gap-2">
-              <input
-                type="date"
-                value={dueDate}
-                disabled={!isEditable}
-                onChange={(e) => setDueDateState(e.target.value)}
-                className="rounded-lg border border-border px-2 py-1.5 text-sm"
-              />
-              {isEditable ? (
-                <button
-                  type="button"
-                  disabled={pending || !dueDate}
-                  onClick={() => startTransition(() => setDueDateAction(invoice.id, dueDate))}
-                  className="rounded-lg border border-primary px-3 py-1.5 text-xs text-primary"
-                >
-                  保存
-                </button>
-              ) : null}
-            </div>
+            <input
+              type="date"
+              value={dueDate}
+              disabled={!isEditable}
+              onChange={(e) => setDueDateState(e.target.value)}
+              onBlur={() => {
+                if (isEditable && dueDate) startTransition(() => setDueDateAction(invoice.id, dueDate));
+              }}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
           </label>
           <label className="flex flex-col gap-1 text-xs">
             備考
-            <div className="flex gap-2">
-              <textarea
-                value={note}
-                disabled={!isEditable}
-                onChange={(e) => setNoteState(e.target.value)}
-                rows={2}
-                className="flex-1 rounded-lg border border-border px-2 py-1.5 text-sm"
-              />
-              {isEditable ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => startTransition(() => setNoteAction(invoice.id, note))}
-                  className="self-start rounded-lg border border-primary px-3 py-1.5 text-xs text-primary"
-                >
-                  保存
-                </button>
-              ) : null}
-            </div>
+            <textarea
+              value={note}
+              disabled={!isEditable}
+              onChange={(e) => setNoteState(e.target.value)}
+              onBlur={() => {
+                if (isEditable) startTransition(() => setNoteAction(invoice.id, note));
+              }}
+              rows={2}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
           </label>
         </div>
       </section>
@@ -395,6 +324,102 @@ export function InvoiceEditor({
           </div>
         ) : null}
       </section>
+    </div>
+  );
+}
+
+function AddInvoiceLineModal({
+  onClose,
+  onSubmit,
+}: {
+  onClose: () => void;
+  onSubmit: (fields: { staffName: string; description: string; hours: number; rate: number; taxRatePercent: number }) => void;
+}) {
+  const [staffName, setStaffName] = useState("");
+  const [desc, setDesc] = useState("");
+  const [hours, setHours] = useState("");
+  const [rate, setRate] = useState("");
+  const [taxRatePercent, setTaxRatePercent] = useState("10");
+  const canSubmit = staffName && desc && hours && rate;
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">明細行を追加</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <div className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-xs">
+            スタッフ名
+            <input
+              type="text"
+              value={staffName}
+              onChange={(e) => setStaffName(e.target.value)}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            内容（相殺の場合はマイナス金額で）
+            <input
+              type="text"
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            数量
+            <input
+              type="number"
+              value={hours}
+              onChange={(e) => setHours(e.target.value)}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            単価
+            <input
+              type="number"
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            消費税区分
+            <select
+              value={taxRatePercent}
+              onChange={(e) => setTaxRatePercent(e.target.value)}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            >
+              <option value="10">10%</option>
+              <option value="8">8%</option>
+            </select>
+          </label>
+        </div>
+        <div className="mt-5 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-semibold"
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            disabled={!canSubmit}
+            onClick={() =>
+              onSubmit({ staffName, description: desc, hours: Number(hours), rate: Number(rate), taxRatePercent: Number(taxRatePercent) })
+            }
+            className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            追加する
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

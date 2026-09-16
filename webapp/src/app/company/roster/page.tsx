@@ -48,12 +48,14 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
           name: c.clientCompany?.name ?? c.proxyName ?? "(名称未設定)",
           isProxy: !c.clientCompany,
           staffCount: c._count.staffPlacements,
+          teams: c.teamLinks.map((l) => ({ id: l.team.id, name: l.team.name })),
         }))}
         agencies={agencies.map((a) => ({
           id: a.id,
           name: a.agencyCompany?.name ?? a.proxyName ?? "(名称未設定)",
           isProxy: !a.agencyCompany,
           staffCount: a._count.staffPlacements,
+          teams: a.teamLinks.map((l) => ({ id: l.team.id, name: l.team.name })),
         }))}
         teams={teams.map((t) => ({ id: t.id, name: t.name }))}
         isCompanyScopeAdmin={isCompanyScopeAdmin(membership)}

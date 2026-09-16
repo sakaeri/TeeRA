@@ -268,9 +268,9 @@ export function CalendarView({
 
   return (
     <div className="flex flex-1 flex-col sm:block">
-      <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-          <h1 className="font-serif-jp text-2xl font-bold">シフトカレンダー</h1>
+      <div className="mb-4 flex items-center justify-between gap-2 sm:mb-6 sm:gap-4">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+          <h1 className="hidden shrink-0 font-serif-jp text-2xl font-bold sm:block">シフトカレンダー</h1>
           {/* チーム・依頼主・派遣会社を1つの絞り込みにまとめる。実運用では
               チーム＝契約先の依頼主がほぼ1:1なので、依頼主/派遣会社を選ぶ
               こと自体が実質そのチームの絞り込みも兼ねるという前提。 */}
@@ -282,7 +282,7 @@ export function CalendarView({
               else if (v.startsWith("rel:")) router.push(calendarUrl({ team: "", rel: v.slice(4) }));
               else router.push(calendarUrl({ team: "", rel: "" }));
             }}
-            className="w-full rounded-lg border border-border bg-white px-3 py-1.5 text-sm sm:w-auto"
+            className="w-28 min-w-0 truncate rounded-lg border border-border bg-white px-2 py-1.5 text-xs sm:w-auto sm:px-3 sm:text-sm"
           >
             <option value="">全社（すべて表示）</option>
             {teams.length > 0 ? (
@@ -314,11 +314,13 @@ export function CalendarView({
             ) : null}
           </select>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Link
             href={`/api/calendar/pdf?y=${year}&m=${month}${selectedTeamId ? `&team=${selectedTeamId}` : ""}${selectedRelationshipId ? `&rel=${selectedRelationshipId}` : ""}`}
             target="_blank"
-            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-white px-2 py-1.5 text-xs hover:border-primary hover:text-primary sm:px-3"
+            aria-label="PDF出力"
+            title="PDF出力"
+            className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-white p-2 hover:border-primary hover:text-primary sm:px-3 sm:py-1.5 sm:text-xs"
           >
             <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 shrink-0">
               <path
@@ -330,27 +332,22 @@ export function CalendarView({
               <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
               <path d="M8 12h8M8 15.5h8M8 18.5h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
-            PDF出力
+            <span className="hidden sm:inline">PDF出力</span>
           </Link>
           <button
             type="button"
             disabled={sharingImage}
             onClick={shareAsImage}
-            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-white px-2 py-1.5 text-xs hover:border-primary hover:text-primary disabled:opacity-60 sm:px-3"
+            aria-label="画像でシフトを共有"
+            title="画像でシフトを共有"
+            className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-white p-2 hover:border-primary hover:text-primary disabled:opacity-60 sm:px-3 sm:py-1.5 sm:text-xs"
           >
             <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 shrink-0">
               <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
               <circle cx="8.5" cy="9.5" r="1.5" stroke="currentColor" strokeWidth="1.4" />
               <path d="M4 17l5-5 3 3 4-5 4 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            {sharingImage ? (
-              "作成中…"
-            ) : (
-              <>
-                <span className="sm:hidden">画像で共有</span>
-                <span className="hidden sm:inline">画像でシフトを共有</span>
-              </>
-            )}
+            <span className="hidden sm:inline">{sharingImage ? "作成中…" : "画像でシフトを共有"}</span>
           </button>
         </div>
       </div>
@@ -442,11 +439,11 @@ export function CalendarView({
 
           const recruitTag: TagEntry | null =
             recruitingCount > 0
-              ? { kind: "solid", id: "recruit", label: `募集中${recruitingCount}件`, className: "bg-amber-100 text-amber-900" }
+              ? { kind: "solid", id: "recruit", label: `募集${recruitingCount}件`, className: "bg-amber-100 text-amber-900" }
               : null;
           const orderTag: TagEntry | null =
             dayClientOrders.length > 0
-              ? { kind: "solid", id: "client-order", label: `オーダー${dayClientOrders.length}件`, className: "bg-sky-100 text-sky-900" }
+              ? { kind: "solid", id: "client-order", label: `オーダー${dayClientOrders.length}`, className: "bg-sky-100 text-sky-900" }
               : null;
 
           // Fixed row budget of 5 total: 募集中・オーダー (1 row each, only
@@ -491,7 +488,7 @@ export function CalendarView({
                 {tagEntries.map((tag) => (
                   <span
                     key={tag.id}
-                    className={`block truncate rounded-full px-1.5 py-px text-center text-[8px] font-medium leading-tight ${tag.className}`}
+                    className={`block w-full truncate rounded px-1.5 py-px text-center text-[8px] font-medium leading-tight ${tag.className}`}
                   >
                     {tag.label}
                   </span>
@@ -765,9 +762,10 @@ function DayDetailModal({
               <button
                 type="button"
                 onClick={onCreateShift}
-                className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary"
+                className="shrink-0 whitespace-nowrap rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary"
               >
-                ＋シフトを作成
+                <span className="sm:hidden">＋シフト</span>
+                <span className="hidden sm:inline">＋シフトを作成</span>
               </button>
             ) : null}
             <button type="button" onClick={onClose} className="text-muted">

@@ -11,7 +11,11 @@ import { computeInvoiceTotals } from "@/lib/domain/invoicing";
 export async function listClients(companyId: string) {
   return prisma.companyRelationship.findMany({
     where: { agencyCompanyId: companyId },
-    include: { clientCompany: true, _count: { select: { staffPlacements: { where: { active: true } } } } },
+    include: {
+      clientCompany: true,
+      _count: { select: { staffPlacements: { where: { active: true } } } },
+      teamLinks: { where: { team: { companyId } }, include: { team: true } },
+    },
     orderBy: { createdAt: "asc" },
   });
 }
@@ -21,7 +25,11 @@ export async function listClients(companyId: string) {
 export async function listAgencies(companyId: string) {
   return prisma.companyRelationship.findMany({
     where: { clientCompanyId: companyId },
-    include: { agencyCompany: true, _count: { select: { staffPlacements: { where: { active: true } } } } },
+    include: {
+      agencyCompany: true,
+      _count: { select: { staffPlacements: { where: { active: true } } } },
+      teamLinks: { where: { team: { companyId } }, include: { team: true } },
+    },
     orderBy: { createdAt: "asc" },
   });
 }
