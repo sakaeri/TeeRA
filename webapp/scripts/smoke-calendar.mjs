@@ -72,9 +72,9 @@ try {
   // goes through the same day-detail flow as any other assignment).
   await admin.goto("http://localhost:3000/company/calendar?y=2026&m=9");
   let calBody = await admin.textContent("body");
-  log("pending shift request visible to admin", calBody.includes("カレンダースタッフ") && calBody.includes("9月15日"));
+  log("pending shift request visible to admin (日付＋人数のみ、氏名は出さない)", calBody.includes("9月15日") && calBody.includes("1名"));
 
-  await admin.getByRole("button", { name: "確認" }).click();
+  await admin.getByRole("button", { name: /9月15日/ }).click();
   await admin.waitForTimeout(300);
   let bodyText = await admin.textContent("body");
   log("確認で日別詳細が開き＋シフトを作成が表示される", bodyText.includes("＋シフトを作成"));

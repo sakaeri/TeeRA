@@ -45,6 +45,7 @@ export default async function StaffTimecardPage() {
           breakMinutes: s.workReport?.breakMinutes ?? 0,
           outcome: s.workReport?.outcome ?? null,
           approvalStatus: s.workReport?.approvalStatus ?? null,
+          rejectionReason: s.workReport?.rejectionReason ?? null,
           computedMinutes: s.workReport?.computedMinutes ?? 0,
           submittedAt: s.workReport?.submittedAt?.toISOString() ?? null,
         }))}

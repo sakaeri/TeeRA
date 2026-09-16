@@ -22,6 +22,8 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
   const [clockIn, setClockIn] = useState("");
   const [clockOut, setClockOut] = useState("");
   const [breakMinutes, setBreakMinutes] = useState("0");
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   function startCorrect(r: Row) {
@@ -39,11 +41,18 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
     });
   }
 
-  function reject(reportId: string) {
+  function submitReject() {
+    if (!rejectingId || !rejectionReason.trim()) return;
+    const reportId = rejectingId;
     setErrors((prev) => ({ ...prev, [reportId]: "" }));
     startTransition(async () => {
-      const result = await rejectWorkReportAction(reportId);
-      if (result.status === "error") setErrors((prev) => ({ ...prev, [reportId]: result.reason }));
+      const result = await rejectWorkReportAction(reportId, rejectionReason.trim());
+      if (result.status === "error") {
+        setErrors((prev) => ({ ...prev, [reportId]: result.reason }));
+        return;
+      }
+      setRejectingId(null);
+      setRejectionReason("");
     });
   }
 
@@ -67,6 +76,7 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
   }
 
   const correctingReport = reports.find((r) => r.id === correctingId) ?? null;
+  const rejectingReport = reports.find((r) => r.id === rejectingId) ?? null;
 
   return (
     <div className="rounded-2xl border border-border bg-white/60 p-6">
@@ -102,7 +112,10 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={() => reject(r.id)}
+                  onClick={() => {
+                    setRejectingId(r.id);
+                    setRejectionReason("");
+                  }}
                   className="rounded-lg border border-border px-4 py-1.5 text-sm text-foreground/70 disabled:opacity-60"
                 >
                   差し戻す
@@ -177,6 +190,42 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
               className="mt-3 self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
               保存
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {rejectingReport ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setRejectingId(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="font-serif-jp text-base font-bold text-primary">
+                差し戻す（{rejectingReport.staffName} — {rejectingReport.date}）
+              </h4>
+              <button type="button" onClick={() => setRejectingId(null)} aria-label="閉じる" className="text-muted hover:text-primary">
+                ✕
+              </button>
+            </div>
+            <label className="flex flex-col gap-0.5 text-xs text-muted">
+              差し戻す理由（スタッフに表示されます）
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="例：業務内容を具体的に記入してください"
+                className="rounded-lg border border-border px-3 py-2 text-sm"
+                rows={3}
+              />
+            </label>
+            {rejectingReport && errors[rejectingReport.id] ? (
+              <p className="mt-2 text-xs text-red-600">{errors[rejectingReport.id]}</p>
+            ) : null}
+            <button
+              type="button"
+              disabled={pending || !rejectionReason.trim()}
+              onClick={submitReject}
+              className="mt-3 self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              差し戻す
             </button>
           </div>
         </div>

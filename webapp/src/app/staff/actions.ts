@@ -70,6 +70,8 @@ export async function submitWorkReportAction(input: {
   comment?: string;
   taskName?: string;
   breakMinutes?: number;
+  clockInTime?: string;
+  clockOutTime?: string;
 }) {
   const { userId } = await requireCompanyStaffRole();
   await assertOwnShift(input.shiftId, userId);
@@ -80,6 +82,8 @@ export async function submitWorkReportAction(input: {
     comment: input.comment,
     taskName: input.taskName,
     breakMinutes: input.breakMinutes,
+    clockInTime: input.clockInTime,
+    clockOutTime: input.clockOutTime,
   });
   revalidatePath("/staff/timecard");
   revalidatePath("/staff");

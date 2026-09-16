@@ -44,13 +44,13 @@ export async function approveWorkReportAction(workReportId: string) {
   }
 }
 
-export async function rejectWorkReportAction(workReportId: string) {
+export async function rejectWorkReportAction(workReportId: string, reason: string) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   try {
     const report = await assertCanApprove(workReportId, membership.companyId, null);
     if (!canManage(membership, report.shift.teamId)) throw new Error("forbidden");
 
-    await rejectWorkReport({ workReportId, approverUserId: userId });
+    await rejectWorkReport({ workReportId, approverUserId: userId, reason });
     revalidatePath("/company/settings");
     revalidatePath("/company");
     return { status: "ok" as const };

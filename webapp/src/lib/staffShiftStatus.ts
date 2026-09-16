@@ -20,6 +20,7 @@ export type ShiftRow = {
   breakMinutes: number;
   outcome: string | null;
   approvalStatus: string | null;
+  rejectionReason: string | null;
   computedMinutes: number;
   submittedAt: string | null;
 };

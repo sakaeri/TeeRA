@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition, type TouchEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { todayJst } from "@/lib/date";
@@ -171,6 +171,8 @@ export function CalendarView({
   const [showRecruitForm, setShowRecruitForm] = useState(false);
   const [sharingImage, setSharingImage] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
 
   const todayStr = todayJst();
 
@@ -245,6 +247,26 @@ export function CalendarView({
   const prev = month === 1 ? { y: year - 1, m: 12 } : { y: year, m: month - 1 };
   const next = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
   const atHistoryCutoff = Boolean(historyCutoff && historyCutoff.year === year && historyCutoff.month === month);
+
+  // モバイルでのスワイプによる月送り — 縦スクロールと誤検知しないよう、
+  // 横移動が縦移動より明確に大きい場合のみ月を切り替える。無料プランの
+  // 閲覧制限にかかっている月では、スワイプでも前月へは戻れないようにする。
+  const SWIPE_THRESHOLD_PX = 60;
+  function handleTouchStart(e: TouchEvent) {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  }
+  function handleTouchEnd(e: TouchEvent) {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    touchStartX.current = null;
+    touchStartY.current = null;
+    if (Math.abs(dx) < SWIPE_THRESHOLD_PX || Math.abs(dx) < Math.abs(dy)) return;
+    if (dx > 0 && atHistoryCutoff) return;
+    const target = dx < 0 ? next : prev;
+    router.push(`?y=${target.y}&m=${target.m}${filterQuery}`);
+  }
   // 月によって5行/6行と変わっても月カード全体の縦幅は一定に保ち、その差は
   // 週の行の高さ側で吸収する（スタッフ画面のカレンダーと同じ方式）。
   const weeks = Math.max(1, Math.ceil(cells.length / 7));
@@ -362,16 +384,7 @@ export function CalendarView({
       ) : null}
 
       <div className="order-1 sm:order-2">
-        <ShiftRequestsSection
-          requests={shiftRequests}
-          clientOrders={clientRecruitments}
-          onNavigate={setSelectedDate}
-          onCreateShift={(date, staffUserId) => {
-            setSelectedDate(date);
-            setAssignFormStaffUserId(staffUserId);
-            setShowAssignForm(true);
-          }}
-        />
+        <ShiftRequestsSection requests={shiftRequests} onNavigate={setSelectedDate} />
       </div>
 
       <div className="order-3 flex flex-1 flex-col bg-white p-1.5 sm:block sm:rounded-2xl sm:p-4">
@@ -410,6 +423,11 @@ export function CalendarView({
         </Link>
       </div>
 
+      <div
+        className="flex flex-1 flex-col sm:contents"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
       <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
         {WEEKDAYS.map((w, i) => (
           <div key={w} className={`py-1 text-center text-xs font-semibold ${weekdayColor(i)}`}>
@@ -501,6 +519,7 @@ export function CalendarView({
         })}
       </div>
       </div>
+      </div>
 
       {/* 画像共有用の非表示コンテンツ — PDF出力と同じ日別リスト構成にして、
           共有される「中身」が画像/PDFで一致するようにする（オンスクリーンの
@@ -524,8 +543,15 @@ export function CalendarView({
             .filter((r) => r.desire === "WORK" && r.dates.includes(selectedDate))
             .map((r) => r.staffUserId)}
           affordableMaxEntries={affordableMaxEntries}
+          dayShiftRequests={shiftRequests
+            .filter((r) => r.desire === "WORK" && r.dates.includes(selectedDate))
+            .map((r) => ({ requestId: r.id, staffUserId: r.staffUserId, staffName: r.staffName, note: r.note }))}
           onNavigate={setSelectedDate}
           onCreateShift={() => setShowAssignForm(true)}
+          onCreateShiftForStaff={(staffUserId) => {
+            setAssignFormStaffUserId(staffUserId);
+            setShowAssignForm(true);
+          }}
           onClose={() => setSelectedDate(null)}
         />
       ) : null}
@@ -696,8 +722,10 @@ function DayDetailModal({
   staffOptions,
   requestedStaffUserIds,
   affordableMaxEntries,
+  dayShiftRequests,
   onNavigate,
   onCreateShift,
+  onCreateShiftForStaff,
   onClose,
 }: {
   dateStr: string;
@@ -708,8 +736,10 @@ function DayDetailModal({
   staffOptions: StaffOption[];
   requestedStaffUserIds: string[];
   affordableMaxEntries: number;
+  dayShiftRequests: { requestId: string; staffUserId: string; staffName: string; note: string | null }[];
   onNavigate: (dateStr: string) => void;
   onCreateShift: () => void;
+  onCreateShiftForStaff: (staffUserId: string) => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"shifts" | "client" | "recruit">("shifts");
@@ -809,6 +839,36 @@ function DayDetailModal({
 
         {tab === "shifts" ? (
           <>
+          {dayShiftRequests.length > 0 ? (
+            <ul className="mb-3 flex flex-col gap-2 text-sm">
+              {dayShiftRequests.map((row) => (
+                <li
+                  key={row.requestId}
+                  className="flex flex-col gap-2 rounded-xl bg-orange-50/50 px-3.5 py-2.5 ring-1 ring-orange-200/70 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <span className="font-medium">{row.staffName}さん</span>
+                    {row.note ? <span className="ml-2 truncate text-xs text-muted">メモ: {row.note}</span> : null}
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                    <OrderAssignDropdown
+                      orders={clientOrders.filter((o) => o.filled < o.maxEntries)}
+                      staffUserId={row.staffUserId}
+                      staffName={row.staffName}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onCreateShiftForStaff(row.staffUserId)}
+                      className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/15"
+                    >
+                      シフト作成
+                    </button>
+                    <DismissShiftRequestButton requestId={row.requestId} date={dateStr} staffName={row.staffName} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {shifts.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted">この日のシフトはありません。</p>
           ) : (
@@ -2972,14 +3032,10 @@ function RecruitmentFormModal({
 // 時間だけ選んで確定する旧「マッチさせる」操作は廃止した。
 function ShiftRequestsSection({
   requests,
-  clientOrders,
   onNavigate,
-  onCreateShift,
 }: {
   requests: ShiftRequestRow[];
-  clientOrders: ClientRecruitmentRow[];
   onNavigate: (dateStr: string) => void;
-  onCreateShift: (dateStr: string, staffUserId: string) => void;
 }) {
   const todayStr = todayJst();
   // 日付が今日より前になった希望は、対応する意味が無いのでここには出さない
@@ -3025,57 +3081,23 @@ function ShiftRequestsSection({
       </button>
       {isOpen ? (
         <div className="max-h-[40vh] overflow-y-auto border-t border-border px-5 pb-5 pt-4">
-        <ul className="flex flex-col gap-3 text-sm">
+        <ul className="flex flex-col gap-2 text-sm">
           {sortedDates.map((date) => {
             const rows = byDate.get(date)!;
             const dt = new Date(`${date}T00:00:00Z`);
             const dateLabel = `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
-            const dayOrders = clientOrders.filter((o) => o.date === date && o.filled < o.maxEntries);
             return (
-              <li key={date} className="rounded-2xl bg-orange-50/50 p-4 shadow-sm ring-1 ring-orange-200/70">
-                <p className="mb-2.5 font-semibold text-orange-900">
-                  {dateLabel}　{rows.length}名
-                </p>
-                <ul className="flex flex-col gap-2">
-                  {rows.map((row) => (
-                    <li
-                      key={row.requestId}
-                      className="flex flex-col gap-2 rounded-xl bg-white px-3.5 py-2.5 shadow-sm ring-1 ring-black/5 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="min-w-0">
-                        <span className="font-medium">{row.staffName}さん</span>
-                        {row.note ? <span className="ml-2 truncate text-xs text-muted">メモ: {row.note}</span> : null}
-                      </div>
-                      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => onNavigate(date)}
-                          className="rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground hover:border-primary hover:text-primary"
-                        >
-                          確認
-                        </button>
-                        {dayOrders.map((order) => (
-                          <QuickOrderAssignButton
-                            key={order.id}
-                            recruitmentId={order.id}
-                            remaining={order.maxEntries - order.filled}
-                            staffUserId={row.staffUserId}
-                            staffName={row.staffName}
-                            label={dayOrders.length > 1 ? `オーダーへアサイン（${order.title}）` : "オーダーへアサイン"}
-                          />
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => onCreateShift(date, row.staffUserId)}
-                          className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/15"
-                        >
-                          シフト作成
-                        </button>
-                        <DismissShiftRequestButton requestId={row.requestId} date={date} staffName={row.staffName} />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+              <li key={date}>
+                <button
+                  type="button"
+                  onClick={() => onNavigate(date)}
+                  className="flex w-full items-center justify-between rounded-xl bg-orange-50/50 px-4 py-3 text-left shadow-sm ring-1 ring-orange-200/70 hover:bg-orange-100/60"
+                >
+                  <span className="font-semibold text-orange-900">{dateLabel}</span>
+                  <span className="rounded-full bg-orange-200/70 px-2.5 py-1 text-xs font-semibold text-orange-900">
+                    {rows.length}名
+                  </span>
+                </button>
               </li>
             );
           })}
@@ -3154,19 +3176,16 @@ function DismissShiftRequestButton({
 // クイックアサインするための専用ボタン — RecruitmentAssignControlsと
 // 同じ確認/休み希望/重複の警告フローだが、スタッフ選択プルダウンが無く
 // staffUserIdが固定な点だけが違う。
-function QuickOrderAssignButton({
-  recruitmentId,
-  remaining,
+function OrderAssignDropdown({
+  orders,
   staffUserId,
   staffName,
-  label,
 }: {
-  recruitmentId: string;
-  remaining: number;
+  orders: ClientRecruitmentRow[];
   staffUserId: string;
   staffName: string;
-  label: string;
 }) {
+  const [recruitmentId, setRecruitmentId] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [conflicts, setConflicts] = useState<{ id: string; startTime: string | null; endTime: string | null }[] | null>(null);
   const [offRequestWarning, setOffRequestWarning] = useState(false);
@@ -3197,6 +3216,7 @@ function QuickOrderAssignButton({
           setConfirming(false);
           setOverrideChecked(false);
           setOffConfirmChecked(false);
+          setRecruitmentId("");
         }
       } catch {
         setError("アサインに失敗しました。");
@@ -3204,24 +3224,45 @@ function QuickOrderAssignButton({
     });
   }
 
-  if (remaining <= 0) return null;
+  if (orders.length === 0) return null;
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setConfirming(true)}
-        className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800 hover:bg-sky-100"
+      <select
+        value={recruitmentId}
+        onChange={(e) => {
+          setRecruitmentId(e.target.value);
+          if (e.target.value) setConfirming(true);
+        }}
+        className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800"
       >
-        {label}
-      </button>
+        <option value="">オーダーへアサイン</option>
+        {orders.map((order) => (
+          <option key={order.id} value={order.id}>
+            {order.title}（残り{order.maxEntries - order.filled}）
+          </option>
+        ))}
+      </select>
 
-      {confirming && !conflicts && !offRequestWarning ? (
-        <Modal title="アサインの確認" onClose={() => setConfirming(false)}>
+      {confirming && recruitmentId && !conflicts && !offRequestWarning ? (
+        <Modal
+          title="アサインの確認"
+          onClose={() => {
+            setConfirming(false);
+            setRecruitmentId("");
+          }}
+        >
           <p className="mb-4 text-sm text-muted">{staffName}さんをこのオーダーにアサインします。よろしいですか？</p>
           {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setConfirming(false)} className="rounded-lg border border-border px-4 py-2 text-sm">
+            <button
+              type="button"
+              onClick={() => {
+                setConfirming(false);
+                setRecruitmentId("");
+              }}
+              className="rounded-lg border border-border px-4 py-2 text-sm"
+            >
               キャンセル
             </button>
             <button
@@ -3241,6 +3282,7 @@ function QuickOrderAssignButton({
           title="休み希望が出ています"
           onClose={() => {
             setOffRequestWarning(false);
+            setRecruitmentId("");
             setConfirming(false);
             setOffConfirmChecked(false);
           }}
@@ -3260,6 +3302,7 @@ function QuickOrderAssignButton({
                 setOffRequestWarning(false);
                 setConfirming(false);
                 setOffConfirmChecked(false);
+                setRecruitmentId("");
               }}
               className="rounded-lg border border-border px-4 py-2 text-sm"
             >
@@ -3283,6 +3326,7 @@ function QuickOrderAssignButton({
           onClose={() => {
             setConflicts(null);
             setConfirming(false);
+            setRecruitmentId("");
           }}
         >
           <ul className="mb-3 list-disc pl-4 text-sm text-muted">
@@ -3301,6 +3345,7 @@ function QuickOrderAssignButton({
               onClick={() => {
                 setConflicts(null);
                 setConfirming(false);
+                setRecruitmentId("");
               }}
               className="rounded-lg border border-border px-4 py-2 text-sm"
             >

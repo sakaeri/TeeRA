@@ -665,7 +665,11 @@ function ShortagePopup({ entries, onClose }: { entries: ShortageEntry[]; onClose
       onClose={onClose}
     >
       {entries.map((r) => (
-        <div key={r.id} className="flex items-center justify-between rounded-xl border border-border/60 p-4 text-sm">
+        <Link
+          key={r.id}
+          href={`/company/calendar?date=${r.date}`}
+          className="flex flex-col items-start gap-2 rounded-xl border border-border/60 p-4 text-sm hover:border-primary/60 sm:flex-row sm:items-center sm:justify-between"
+        >
           <div>
             <p className="font-medium">{formatDateJa(r.date)}</p>
             <p className="text-muted">
@@ -673,13 +677,10 @@ function ShortagePopup({ entries, onClose }: { entries: ShortageEntry[]; onClose
               {r.maxEntries}）
             </p>
           </div>
-          <Link
-            href={`/company/calendar?date=${r.date}`}
-            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
-          >
+          <span className="hidden shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground sm:inline-block">
             カレンダーで確認
-          </Link>
-        </div>
+          </span>
+        </Link>
       ))}
       {entries.length === 0 ? <p className="text-center text-muted">欠員のあるシフトはありません。</p> : null}
     </PopupShell>
@@ -699,7 +700,11 @@ function UnconfirmedShiftPopup({ entries, onClose }: { entries: UnconfirmedShift
       onClose={onClose}
     >
       {entries.map((r) => (
-        <div key={r.id} className="flex items-center justify-between rounded-xl border border-border/60 p-4 text-sm">
+        <Link
+          key={r.id}
+          href={`/company/calendar?date=${r.dates[0]}`}
+          className="flex flex-col items-start gap-2 rounded-xl border border-border/60 p-4 text-sm hover:border-primary/60 sm:flex-row sm:items-center sm:justify-between"
+        >
           <div>
             <p className="font-medium">
               {r.staffName}さん（{DESIRE_LABEL[r.desire] ?? r.desire}）
@@ -709,13 +714,10 @@ function UnconfirmedShiftPopup({ entries, onClose }: { entries: UnconfirmedShift
               {r.note ? ` ・${r.note}` : ""}
             </p>
           </div>
-          <Link
-            href={`/company/calendar?date=${r.dates[0]}`}
-            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
-          >
+          <span className="hidden shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground sm:inline-block">
             カレンダーで確認
-          </Link>
-        </div>
+          </span>
+        </Link>
       ))}
       {entries.length === 0 ? <p className="text-center text-muted">未確定の希望シフトはありません。</p> : null}
     </PopupShell>
@@ -757,6 +759,8 @@ function PendingReportsPopup({
 
 function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; onClose: () => void }) {
   const [pending, startTransition] = useTransition();
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
@@ -806,34 +810,66 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
         <p className="mb-1 mt-4 text-xs font-semibold text-muted">本人のコメント</p>
         <p className="text-sm">{entry.comment || "コメントはありません"}</p>
 
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() =>
-              startTransition(async () => {
-                await approveWorkReportAction(entry.id);
-                onClose();
-              })
-            }
-            className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-          >
-            承認する
-          </button>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() =>
-              startTransition(async () => {
-                await rejectWorkReportAction(entry.id);
-                onClose();
-              })
-            }
-            className="flex-1 rounded-lg border border-border px-4 py-2 text-sm text-foreground/70 disabled:opacity-60"
-          >
-            差し戻す
-          </button>
-        </div>
+        {rejecting ? (
+          <div className="mt-4">
+            <label className="flex flex-col gap-0.5 text-xs text-muted">
+              差し戻す理由（スタッフに表示されます）
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="例：業務内容を具体的に記入してください"
+                className="rounded-lg border border-border px-3 py-2 text-sm"
+                rows={3}
+              />
+            </label>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setRejecting(false)}
+                className="flex-1 rounded-lg border border-border px-4 py-2 text-sm text-foreground/70"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={pending || !rejectionReason.trim()}
+                onClick={() =>
+                  startTransition(async () => {
+                    await rejectWorkReportAction(entry.id, rejectionReason.trim());
+                    onClose();
+                  })
+                }
+                className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                差し戻す
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  await approveWorkReportAction(entry.id);
+                  onClose();
+                })
+              }
+              className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              承認する
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setRejecting(true)}
+              className="flex-1 rounded-lg border border-border px-4 py-2 text-sm text-foreground/70 disabled:opacity-60"
+            >
+              差し戻す
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

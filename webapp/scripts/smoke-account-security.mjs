@@ -121,8 +121,9 @@ try {
   body = await page.textContent("body");
   log("使用済みトークンは再利用できない", body.includes("無効か"));
 
-  // --- アカウント設定画面: ヘッダーの鉛筆アイコンから到達できる ---
+  // --- アカウント設定画面: プロフィールメニュー内の鉛筆アイコンから到達できる ---
   await page.goto("http://localhost:3000/company");
+  await page.click('button[aria-label="プロフィールメニュー"]');
   await page.click('a[aria-label="アカウント設定"]');
   await page.waitForURL("http://localhost:3000/account");
   body = await page.textContent("body");

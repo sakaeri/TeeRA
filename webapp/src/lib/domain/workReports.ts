@@ -6,6 +6,17 @@ import type { Prisma } from "@/generated/prisma/client";
 
 type Tx = Prisma.TransactionClient;
 
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+// 打刻の手動修正用 — referenceが表すJSTの暦日はそのまま保ち、時刻(HH:MM)
+// だけをhhmmで置き換える。日付をまたぐシフト（深夜〜早朝）でも、押し忘れ
+// を数十分〜数時間ずらすだけの軽微な補正である前提のため、暦日はいじらない。
+function withJstTime(reference: Date, hhmm: string): Date {
+  const [h, m] = hhmm.split(":").map(Number);
+  const jst = new Date(reference.getTime() + JST_OFFSET_MS);
+  return new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate(), h, m) - JST_OFFSET_MS);
+}
+
 // Approval routing (permission-rules-memo.md, bugfixed in chat29): approver
 // company is derived from the shift's source. INHOUSE -> the shift's own
 // company. CLIENT -> the client company that placed the order, UNLESS that
@@ -65,6 +76,11 @@ export async function submitWorkReport(params: {
   comment?: string;
   taskName?: string;
   breakMinutes?: number;
+  // 提出時にスタッフ自身が打刻時刻を手修正できるようにする（HH:MM）。
+  // 承認/差し戻しという既存のチェック機構が最終的な歯止めになるため、
+  // ここでは特別な検証やフラグ付けはせず、素直に上書きする。
+  clockInTime?: string;
+  clockOutTime?: string;
 }) {
   const existing = await prisma.workReport.findUnique({ where: { shiftId: params.shiftId } });
 
@@ -72,8 +88,11 @@ export async function submitWorkReport(params: {
     if (!existing?.clockIn || !existing?.clockOut) {
       throw new Error("clock_in_out_required");
     }
+    const clockIn = params.clockInTime ? withJstTime(existing.clockIn, params.clockInTime) : existing.clockIn;
+    const clockOut = params.clockOutTime ? withJstTime(existing.clockOut, params.clockOutTime) : existing.clockOut;
     const breakMinutes = params.breakMinutes ?? existing.breakMinutes;
-    const rawMinutes = Math.round((existing.clockOut.getTime() - existing.clockIn.getTime()) / 60000);
+    const rawMinutes = Math.round((clockOut.getTime() - clockIn.getTime()) / 60000);
+    if (rawMinutes <= 0) throw new Error("invalid_time_range");
     const computedMinutes = Math.max(rawMinutes - breakMinutes, 0);
     if (params.taskName) {
       // 業務報告で選ばれた（または新規入力された）業務内容を単価表にも登録
@@ -101,6 +120,8 @@ export async function submitWorkReport(params: {
         outcome: "WORKED",
         comment: params.comment,
         taskName: params.taskName,
+        clockIn,
+        clockOut,
         breakMinutes,
         computedMinutes,
         approvalStatus: "PENDING",
@@ -238,13 +259,14 @@ export async function approveWorkReport(params: { workReportId: string; approver
   });
 }
 
-export async function rejectWorkReport(params: { workReportId: string; approverUserId: string }) {
+export async function rejectWorkReport(params: { workReportId: string; approverUserId: string; reason: string }) {
   return prisma.workReport.update({
     where: { id: params.workReportId },
     data: {
       approvalStatus: "REJECTED",
       approverUserId: params.approverUserId,
       approvedAt: new Date(),
+      rejectionReason: params.reason,
     },
   });
 }

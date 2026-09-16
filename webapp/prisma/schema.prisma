@@ -721,6 +721,8 @@ model WorkReport {
   approvalStatus    ApprovalStatus    @default(PENDING)
   approverUserId    String?
   approvedAt        DateTime?
+  // 差し戻し（REJECTED）の理由。企業が「差し戻す」時に必須で入力させる。
+  rejectionReason   String?
   // 差し戻し時に企業が打刻・休憩時間を手修正した場合の記録（誰が・いつ）。
   // NEEDS_CONFIRMATION状態のときのみ意味を持つ。
   correctedByUserId String?

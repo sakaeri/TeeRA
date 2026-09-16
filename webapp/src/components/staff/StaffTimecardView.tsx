@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   clockInAction,
   clockOutAction,
@@ -17,6 +17,16 @@ const APPROVAL_LABEL: Record<string, string> = {
   APPROVED: "承認済み",
   REJECTED: "差し戻し",
   NEEDS_CONFIRMATION: "要確認",
+};
+
+// 会社側カレンダーのAPPROVAL_PILLと配色を揃える（PENDING=amber/APPROVED=
+// sky/REJECTED=rose）。NEEDS_CONFIRMATIONはスタッフ側にしか出ない状態
+// なので、これまで通りaccent系のままにする。
+const APPROVAL_PILL: Record<string, string> = {
+  PENDING: "bg-amber-100 text-amber-800",
+  APPROVED: "bg-sky-100 text-sky-800",
+  REJECTED: "bg-rose-100 text-rose-800",
+  NEEDS_CONFIRMATION: "bg-accent/20 text-accent",
 };
 
 const NEW_TASK_NAME_SENTINEL = "__new__";
@@ -74,17 +84,40 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
   );
   const [error, setError] = useState<string | null>(null);
   const [breakMinutes, setBreakMinutes] = useState("0");
+  // 打刻時刻は自動記録だが、押し忘れ・押し間違いを本人が直せるよう提出前
+  // に限り手修正を許す（承認/差し戻しという既存のチェックが最終的な歯止め
+  // になるため）。
+  const [clockInEdit, setClockInEdit] = useState(shift.clockInTime ?? "");
+  const [clockOutEdit, setClockOutEdit] = useState(shift.clockOutTime ?? "");
+  // このカードは出勤→退勤の間もshift.id単位で同じコンポーネントインスタンス
+  // のまま再利用されるため、useStateの初期値だけでは打刻直後の新しい
+  // clockInTime/clockOutTimeを拾えない（初期化はマウント時の1回きり）。
+  // props側の値が変わったタイミングで追従させる。
+  useEffect(() => {
+    setClockInEdit(shift.clockInTime ?? "");
+  }, [shift.clockInTime]);
+  useEffect(() => {
+    setClockOutEdit(shift.clockOutTime ?? "");
+  }, [shift.clockOutTime]);
 
   const finalized = shift.outcome && shift.outcome !== "WORKED";
   const readyToSubmit = shift.clockIn && shift.clockOut;
-  // 休憩を確定させる前の実働時間プレビュー — サーバー側のcomputedMinutes
-  // は退勤時点では休憩0分のままなので、入力中の休憩分数を反映してここで
-  // 再計算する（実際の値は提出時にサーバー側で確定する）。
+  // 休憩を確定させる前の実働時間プレビュー — 手修正した打刻時刻(HH:MM)を
+  // 使って計算する。日付をまたぐ場合（退勤が出勤より前の時刻）は翌日
+  // 退勤とみなして24時間分を足す。
+  function hhmmToMinutes(hhmm: string) {
+    const [h, m] = hhmm.split(":").map(Number);
+    return h * 60 + m;
+  }
   const liveComputedMinutes =
-    shift.clockIn && shift.clockOut
+    clockInEdit && clockOutEdit
       ? Math.max(
-          Math.round((new Date(shift.clockOut).getTime() - new Date(shift.clockIn).getTime()) / 60000) -
-            (Number(breakMinutes) || 0),
+          (() => {
+            const start = hhmmToMinutes(clockInEdit);
+            let end = hhmmToMinutes(clockOutEdit);
+            if (end < start) end += 24 * 60;
+            return end - start - (Number(breakMinutes) || 0);
+          })(),
           0,
         )
       : 0;
@@ -99,20 +132,30 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
 
   return (
     <li className="rounded-xl border border-border bg-white/60 p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="font-medium">
-          {shift.date} — {shift.companyName}
-        </span>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="min-w-0 font-medium">{shift.date}</span>
         {shift.approvalStatus ? (
-          <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
+              APPROVAL_PILL[shift.approvalStatus] ?? "bg-accent/20 text-accent"
+            }`}
+          >
             {APPROVAL_LABEL[shift.approvalStatus] ?? shift.approvalStatus}
           </span>
         ) : null}
       </div>
-      <p className="mb-2 text-sm text-muted">
-        {shift.startTime ? `${shift.startTime}〜${shift.endTime}` : "終日/未定"}
-      </p>
+      <p className="mb-1 text-sm text-muted">{shift.companyName}</p>
+      {submitted ? null : (
+        <p className="mb-2 text-sm text-muted">
+          {shift.startTime ? `${shift.startTime}〜${shift.endTime}` : "終日/未定"}
+        </p>
+      )}
       {shift.workplaceName ? <p className="mb-2 text-sm text-muted">勤務先：{shift.workplaceName}</p> : null}
+      {shift.approvalStatus === "REJECTED" && shift.rejectionReason ? (
+        <p className="mb-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">
+          差し戻し理由：{shift.rejectionReason}
+        </p>
+      ) : null}
 
       {shift.approvalStatus === "NEEDS_CONFIRMATION" ? (
         <div className="flex flex-col gap-2 rounded-lg border border-accent/40 bg-accent/10 p-3">
@@ -140,10 +183,13 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
           {shift.outcome === "ABSENT" ? "欠勤として報告済みです。" : "勤務先からのキャンセルとして報告済みです。"}
         </p>
       ) : submitted ? (
-        <p className="text-sm text-muted">
-          業務報告を提出済みです。{shift.taskName ? `（${shift.taskName}／` : "（"}
-          実働 {(shift.computedMinutes / 60).toFixed(1)} 時間）
-        </p>
+        <>
+          {shift.taskName ? <p className="mb-1 text-sm text-muted">{shift.taskName}</p> : null}
+          <p className="text-sm text-muted">
+            {shift.clockInTime ?? "--:--"}〜{shift.clockOutTime ?? "--:--"}（実働{" "}
+            {(shift.computedMinutes / 60).toFixed(1)} 時間／休憩{shift.breakMinutes}分）
+          </p>
+        </>
       ) : (
         <>
           {!shift.clockIn ? (
@@ -166,6 +212,27 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
             </button>
           ) : (
             <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-col gap-0.5 text-xs text-muted">
+                  出勤時刻
+                  <input
+                    type="time"
+                    value={clockInEdit}
+                    onChange={(e) => setClockInEdit(e.target.value)}
+                    className="rounded-lg border border-border px-2 py-2 text-sm"
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5 text-xs text-muted">
+                  退勤時刻
+                  <input
+                    type="time"
+                    value={clockOutEdit}
+                    onChange={(e) => setClockOutEdit(e.target.value)}
+                    className="rounded-lg border border-border px-2 py-2 text-sm"
+                  />
+                </label>
+              </div>
+              <p className="text-xs text-muted">押し忘れ・押し間違いがあれば時刻を修正できます。</p>
               <div>
                 <p className="mb-1 text-xs text-muted">休憩時間</p>
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -251,7 +318,7 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
               {error ? <p className="text-xs text-red-600">{error}</p> : null}
               <button
                 type="button"
-                disabled={pending}
+                disabled={pending || !clockInEdit || !clockOutEdit}
                 onClick={() =>
                   startTransition(async () => {
                     try {
@@ -261,6 +328,8 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
                         comment: comment || undefined,
                         taskName: taskName.trim() || undefined,
                         breakMinutes: Number(breakMinutes) || 0,
+                        clockInTime: clockInEdit,
+                        clockOutTime: clockOutEdit,
                       });
                     } catch {
                       setError("提出に失敗しました。");

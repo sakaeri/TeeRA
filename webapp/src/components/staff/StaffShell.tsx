@@ -92,7 +92,7 @@ export function StaffShell({
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-accent bg-primary px-4 py-3 text-primary-foreground">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-accent bg-primary px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] text-primary-foreground">
         <div className="flex items-center gap-2">
           <div className="font-serif-jp text-lg font-bold tracking-wide">TeeRA</div>
           <span className="text-xs opacity-70">{todayLabel()}</span>
@@ -107,22 +107,6 @@ export function StaffShell({
             </span>
             {pointsBalance} ポイント
           </Link>
-          <Link
-            href="/account"
-            aria-label="アカウント設定"
-            title="アカウント設定"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/90 text-primary hover:bg-white"
-          >
-            <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
-              <path
-                d="M13.5 3.5l3 3L7 16H4v-3l9.5-9.5z"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </Link>
           <div className="relative" ref={profileRef}>
             <button
               type="button"
@@ -134,14 +118,32 @@ export function StaffShell({
             </button>
             {profileOpen ? (
               <div className="absolute right-0 z-30 mt-2 w-64 rounded-xl bg-white p-4 text-foreground shadow-lg">
-                <div className="mb-3 flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary font-serif-jp font-bold text-primary-foreground">
-                    {initial}
-                  </span>
-                  <div>
-                    <p className="font-semibold">{userName}</p>
-                    <p className="text-xs text-muted">{userEmail}</p>
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary font-serif-jp font-bold text-primary-foreground">
+                      {initial}
+                    </span>
+                    <div>
+                      <p className="font-semibold">{userName}</p>
+                      <p className="text-xs text-muted">{userEmail}</p>
+                    </div>
                   </div>
+                  <Link
+                    href="/account"
+                    aria-label="アカウント設定"
+                    title="アカウント設定"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted hover:bg-background hover:text-primary"
+                  >
+                    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+                      <path
+                        d="M13.5 3.5l3 3L7 16H4v-3l9.5-9.5z"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </Link>
                 </div>
                 {showCompanyScreenLink ? (
                   <Link

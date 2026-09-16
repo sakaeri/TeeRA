@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition, type TouchEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { submitShiftRequestAction } from "@/app/staff/actions";
 import { todayJst, nowJstHHMM } from "@/lib/date";
 
@@ -110,11 +111,14 @@ export function StaffCalendarView({
   shifts: ShiftRow[];
   pendingRequests: PendingRequestRow[];
 }) {
+  const router = useRouter();
   const [showWizard, setShowWizard] = useState(false);
   const [wizardInitialDate, setWizardInitialDate] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [companyFilter, setCompanyFilter] = useState("");
   const todayStr = todayJst();
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
 
   const filteredShifts = companyFilter ? shifts.filter((s) => s.companyId === companyFilter) : shifts;
   const filteredRequests = companyFilter
@@ -143,6 +147,25 @@ export function StaffCalendarView({
 
   const prev = month === 1 ? { y: year - 1, m: 12 } : { y: year, m: month - 1 };
   const next = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
+
+  // モバイルでのスワイプによる月送り — 縦スクロールと誤検知しないよう、
+  // 横移動が縦移動より明確に大きい場合のみ月を切り替える。
+  const SWIPE_THRESHOLD_PX = 60;
+  function handleTouchStart(e: TouchEvent) {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  }
+  function handleTouchEnd(e: TouchEvent) {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    touchStartX.current = null;
+    touchStartY.current = null;
+    if (Math.abs(dx) < SWIPE_THRESHOLD_PX || Math.abs(dx) < Math.abs(dy)) return;
+    const target = dx < 0 ? next : prev;
+    router.push(`?y=${target.y}&m=${target.m}`);
+  }
+
   const CONFIRMED_SLOT_BUDGET = 5;
   // 月によって5行/6行と変わっても月カード全体の縦幅は一定に保ち（＋ボタンの
   // 裏まで届くように)、その差は週の行の高さ側で吸収する。
@@ -201,6 +224,11 @@ export function StaffCalendarView({
         </div>
       ) : null}
 
+      <div
+        className="flex flex-1 flex-col sm:contents"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
       <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
         {WEEKDAYS.map((w, i) => (
           <div key={w} className={`py-1 text-center text-xs font-semibold ${weekdayColor(i)}`}>
@@ -277,6 +305,7 @@ export function StaffCalendarView({
             </button>
           );
         })}
+      </div>
       </div>
 
       <button
