@@ -278,6 +278,10 @@ model CompanyRelationship {
   proxyName       String?
   status          RelationshipStatus @default(ACTIVE)
   createdAt       DateTime           @default(now())
+  // 配属先の住所・ルール（遅刻連絡ルール、ロッカー使用ルールなど）。
+  // RelationshipNoteとは異なり、こちらは配属されているスタッフ本人にも
+  // 「配属先一覧」で表示される（自社内専用メモとは別軸の共有情報）。
+  staffSharedNote String?
 
   ownerCompany  Company  @relation("OwnerSide", fields: [ownerCompanyId], references: [id], onDelete: Cascade)
   agencyCompany Company? @relation("AgencySide", fields: [agencyCompanyId], references: [id], onDelete: SetNull)

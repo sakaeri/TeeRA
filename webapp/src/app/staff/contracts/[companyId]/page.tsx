@@ -48,9 +48,13 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
   // 段階でも配属自体はあり得るため、clientCompanyIdではなく
   // companyRelationshipIdで突き合わせる)。
   const placedRelationshipIds = new Set(myPlacements.map((p) => p.companyRelationshipId));
-  const clientNames = clientRelationships
+  const clients = clientRelationships
     .filter((r) => r.status === "ACTIVE" && placedRelationshipIds.has(r.id))
-    .map((r) => r.clientCompany?.name ?? r.proxyName ?? "取引先");
+    .map((r) => ({
+      name: r.clientCompany?.name ?? r.proxyName ?? "取引先",
+      address: r.clientCompany?.address ?? null,
+      staffSharedNote: r.staffSharedNote,
+    }));
 
   const activeContract = allContracts.find((c) => c.status === "ACTIVE") ?? null;
   const baseWage = activeContract
@@ -147,7 +151,7 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
             })),
           };
         })}
-        clientNames={clientNames}
+        clientNames={clients}
       />
     </main>
   );

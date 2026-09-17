@@ -312,6 +312,8 @@ export async function getClientMonthDetail(params: {
     // 削除できる（deleteCompanyRelationship参照。招待の向きを間違えた場合の
     // 取り消し導線）。
     isOwner: relationship.ownerCompanyId === params.companyId,
+    address: counterpartCompany?.address ?? null,
+    staffSharedNote: relationship.staffSharedNote,
     teams: teamLinks.map((l) => ({ teamId: l.teamId, teamName: l.team.name })),
     placements: placements.map((p) => ({
       staffUserId: p.staffUserId,

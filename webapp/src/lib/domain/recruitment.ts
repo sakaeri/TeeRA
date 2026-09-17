@@ -7,6 +7,7 @@ import {
   findPendingOffRequest,
   isPastDate,
   supersedeShift,
+  timeRangesOverlap,
 } from "@/lib/domain/shifts";
 import { todayJst } from "@/lib/date";
 import type { WageType } from "@/generated/prisma/enums";
@@ -348,7 +349,36 @@ export async function listOpenRecruitmentsForStaff(params: { companyId: string; 
     orderBy: { date: "asc" },
   });
 
-  return recruitments.map((r) => ({ ...r, isAffiliated: affiliatedCompanyIds.has(r.companyId) }));
+  // 確定シフトと時間が重なる募集は、応募しても実行不可能なだけの雑音に
+  // なるため一覧から除外する（会社IDに関わらず、この人の確定シフト
+  // 全部が対象 — 自社/配属先どちらの確定シフトとぶつかっても同じく
+  // 応募できないため）。
+  const confirmedShifts = await prisma.shift.findMany({
+    where: {
+      staffUserId: params.staffUserId,
+      status: "CONFIRMED",
+      date: { gte: new Date(`${todayJst()}T00:00:00.000Z`) },
+    },
+    select: { date: true, startTime: true, endTime: true, isAllDay: true, isUndecided: true },
+  });
+  const shiftsByDate = new Map<string, typeof confirmedShifts>();
+  for (const s of confirmedShifts) {
+    const key = s.date.toISOString().slice(0, 10);
+    if (!shiftsByDate.has(key)) shiftsByDate.set(key, []);
+    shiftsByDate.get(key)!.push(s);
+  }
+
+  return recruitments
+    .map((r) => ({ ...r, isAffiliated: affiliatedCompanyIds.has(r.companyId) }))
+    .filter((r) => {
+      const sameDayShifts = shiftsByDate.get(r.date.toISOString().slice(0, 10)) ?? [];
+      return !sameDayShifts.some((s) =>
+        timeRangesOverlap(
+          { startTime: r.startTime, endTime: r.endTime, isAllDay: false, isUndecided: r.isUndecided },
+          s,
+        ),
+      );
+    });
 }
 
 // 自社所属、または（アクティブな取引先関係経由の）配属記録がある＝普段から

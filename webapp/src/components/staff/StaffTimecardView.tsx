@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
   clockInAction,
   clockOutAction,
@@ -92,13 +92,18 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
   // このカードは出勤→退勤の間もshift.id単位で同じコンポーネントインスタンス
   // のまま再利用されるため、useStateの初期値だけでは打刻直後の新しい
   // clockInTime/clockOutTimeを拾えない（初期化はマウント時の1回きり）。
-  // props側の値が変わったタイミングで追従させる。
-  useEffect(() => {
+  // レンダー中にprops側の値の変化を検知して同期する（Reactの推奨パターン
+  // — useEffectで追従させるとカスケードレンダーの警告になるため）。
+  const [prevClockInTime, setPrevClockInTime] = useState(shift.clockInTime);
+  if (shift.clockInTime !== prevClockInTime) {
+    setPrevClockInTime(shift.clockInTime);
     setClockInEdit(shift.clockInTime ?? "");
-  }, [shift.clockInTime]);
-  useEffect(() => {
+  }
+  const [prevClockOutTime, setPrevClockOutTime] = useState(shift.clockOutTime);
+  if (shift.clockOutTime !== prevClockOutTime) {
+    setPrevClockOutTime(shift.clockOutTime);
     setClockOutEdit(shift.clockOutTime ?? "");
-  }, [shift.clockOutTime]);
+  }
 
   const finalized = shift.outcome && shift.outcome !== "WORKED";
   const readyToSubmit = shift.clockIn && shift.clockOut;

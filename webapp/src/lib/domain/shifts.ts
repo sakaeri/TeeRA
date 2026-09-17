@@ -69,6 +69,27 @@ export function timeRangesOverlap(
   return aStart < bEnd && bStart < aEnd;
 }
 
+// findConflictingShiftsの重複警告用 — 現場移動時間を見込み、確定シフトの
+// 前後にこの分数だけ余白を持たせてから重複判定する（あくまで警告の閾値
+// であり、timeRangesOverlap自体の「隣接は重複ではない」という定義は
+// 変えない）。
+const CONFLICT_WARNING_BUFFER_MINUTES = 60;
+
+function timeRangesOverlapWithBuffer(
+  a: { startTime: string | null; endTime: string | null; isAllDay: boolean; isUndecided: boolean },
+  b: { startTime: string | null; endTime: string | null; isAllDay: boolean; isUndecided: boolean },
+  bufferMinutes: number,
+) {
+  if (a.isAllDay || a.isUndecided || b.isAllDay || b.isUndecided) return true;
+  if (!a.startTime || !a.endTime || !b.startTime || !b.endTime) return true;
+
+  const aStart = timeToMinutes(a.startTime) - bufferMinutes;
+  const aEnd = timeToMinutes(a.endTime) + bufferMinutes;
+  const bStart = timeToMinutes(b.startTime);
+  const bEnd = timeToMinutes(b.endTime);
+  return aStart < bEnd && bStart < aEnd;
+}
+
 export async function findConflictingShifts(
   client: Tx | typeof prisma,
   params: {
@@ -90,7 +111,10 @@ export async function findConflictingShifts(
     },
   });
 
-  return sameDayShifts.filter((s) => timeRangesOverlap(params, s));
+  // 警告であって強制ブロックではない（管理者は確認のうえ続行できる）ため、
+  // 現場移動時間を見込んで前後1時間の余白を持たせて判定する — ぴったり
+  // 隣接するシフトも「確認してください」の対象にする。
+  return sameDayShifts.filter((s) => timeRangesOverlapWithBuffer(params, s, CONFLICT_WARNING_BUFFER_MINUTES));
 }
 
 // 休み希望を出している日にアサインしようとした時、会社側に一度確認を

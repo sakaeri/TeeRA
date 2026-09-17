@@ -142,7 +142,7 @@ export async function addStaffTaskRateVersionAction(input: {
   if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
 
   const staffMembership = await prisma.companyMembership.findFirst({
-    where: { userId: input.staffUserId, companyId: membership.companyId, role: "STAFF" },
+    where: { userId: input.staffUserId, companyId: membership.companyId, OR: [{ role: "STAFF" }, { canWorkShifts: true }] },
   });
   if (!staffMembership) throw new Error("forbidden");
   await assertRelationshipOwned(membership.companyId, input.companyRelationshipId);
@@ -228,7 +228,7 @@ export async function generateStaffContractAction(input: CreateTemplateInput, st
   if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
 
   const staffMembership = await prisma.companyMembership.findFirst({
-    where: { userId: staffUserId, companyId: membership.companyId, role: "STAFF" },
+    where: { userId: staffUserId, companyId: membership.companyId, OR: [{ role: "STAFF" }, { canWorkShifts: true }] },
   });
   if (!staffMembership) throw new Error("forbidden");
 
@@ -251,7 +251,7 @@ export async function assignExistingTemplateAction(templateId: string, staffUser
 
   await prisma.contractTemplate.findFirstOrThrow({ where: { id: templateId, companyId: membership.companyId } });
   const staffMembership = await prisma.companyMembership.findFirst({
-    where: { userId: staffUserId, companyId: membership.companyId, role: "STAFF" },
+    where: { userId: staffUserId, companyId: membership.companyId, OR: [{ role: "STAFF" }, { canWorkShifts: true }] },
   });
   if (!staffMembership) throw new Error("forbidden");
 

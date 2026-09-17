@@ -26,10 +26,10 @@ export default async function StaffRecruitmentsPage() {
             filled: r.entries.filter((e) => e.status !== "REJECTED").length,
             alreadyApplied: r.entries.some((e) => e.staffUserId === userId && e.status !== "REJECTED"),
           }))
-          // 満員で自分も応募していない募集は、応募できない一覧をスクロールする
-          // だけの雑音になるため出さない（自分が応募済みのものは満員でも
-          // 自分の応募状況を確認できるよう残す）。
-          .filter((r) => r.alreadyApplied || r.filled < r.maxEntries)}
+          // 満員の募集、および自分が既に応募済みの募集は、スクロールする
+          // だけの雑音になるため出さない（確定シフトと時間が重なる募集は
+          // listOpenRecruitmentsForStaff側で既に除外済み）。
+          .filter((r) => !r.alreadyApplied && r.filled < r.maxEntries)}
       />
     </main>
   );

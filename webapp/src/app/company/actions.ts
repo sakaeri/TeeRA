@@ -622,3 +622,19 @@ export async function deleteRelationshipNoteAction(noteId: string) {
   await deleteRelationshipNote(noteId, membership.companyId);
   revalidatePath("/company/roster");
 }
+
+// 配属先のスタッフ共有メモ（住所・遅刻連絡ルール・ロッカー使用ルールなど）
+// — 情報メモ（自社内専用）とは別軸で、配属されているスタッフ本人の
+// 「配属先一覧」に表示される。編集できるのは常に派遣元（agencyCompanyId）
+// 側のみ（単価設定と同じ考え方 — 依頼主側から書き換えられると困る）。
+export async function updateRelationshipSharedNoteAction(companyRelationshipId: string, staffSharedNote: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const clientTeamIds = await getClientTeamIds(companyRelationshipId);
+  if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
+  await assertRelationshipAgencySide(companyRelationshipId, membership.companyId);
+  await prisma.companyRelationship.update({
+    where: { id: companyRelationshipId },
+    data: { staffSharedNote: staffSharedNote.trim() || null },
+  });
+  revalidatePath("/company/roster");
+}

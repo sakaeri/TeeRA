@@ -7,6 +7,7 @@ import {
   getClientMonthDetailAction,
   addRelationshipNoteAction,
   deleteRelationshipNoteAction,
+  updateRelationshipSharedNoteAction,
   inviteClientUpgradeAction,
   inviteAgencyUpgradeAction,
   setClientTeamsAction,
@@ -45,6 +46,8 @@ type ClientMonthDetail = {
   name: string;
   isProxy: boolean;
   isOwner: boolean;
+  address: string | null;
+  staffSharedNote: string | null;
   historyCutoff: { year: number; month: number } | null;
   teams: { teamId: string; teamName: string }[];
   placements: Placement[];
@@ -101,7 +104,7 @@ export function ClientDetailPanel({
   const initToday = todayJstParts();
   const [year, setYear] = useState(initToday.year);
   const [month, setMonth] = useState(initToday.month);
-  const [tab, setTab] = useState<"history" | "staff" | "rates" | "note">("history");
+  const [tab, setTab] = useState<"history" | "staff" | "rates" | "note" | "shared">("history");
   const [data, setData] = useState<ClientMonthDetail | null>(null);
   const [pending, startTransition] = useTransition();
   const [upgradeUrl, setUpgradeUrl] = useState<string | null>(null);
@@ -114,6 +117,21 @@ export function ClientDetailPanel({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showPlacementHistory, setShowPlacementHistory] = useState(false);
   const [unplaceConfirmTarget, setUnplaceConfirmTarget] = useState<Placement | null>(null);
+  const [editingSharedNote, setEditingSharedNote] = useState(false);
+  const [sharedNoteDraft, setSharedNoteDraft] = useState("");
+
+  function startEditSharedNote() {
+    setSharedNoteDraft(data?.staffSharedNote ?? "");
+    setEditingSharedNote(true);
+  }
+
+  function submitSharedNote() {
+    startTransition(async () => {
+      await updateRelationshipSharedNoteAction(relationshipId, sharedNoteDraft);
+      setEditingSharedNote(false);
+      await refresh();
+    });
+  }
 
   function submitUnplace() {
     const target = unplaceConfirmTarget;
@@ -334,6 +352,15 @@ export function ClientDetailPanel({
                   単価
                 </button>
               ) : null}
+              {kind === "client" ? (
+                <button
+                  type="button"
+                  onClick={() => setTab("shared")}
+                  className={`border-b-2 px-1 py-2 font-semibold ${tab === "shared" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                >
+                  配属先情報
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setTab("note")}
@@ -488,6 +515,62 @@ export function ClientDetailPanel({
                 knownTaskNames={knownTaskNames}
                 onChanged={refresh}
               />
+            ) : null}
+
+            {tab === "shared" ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-xs text-muted">
+                  ここに書いた内容は、配属先一覧としてこの配属先に配属されているスタッフ本人にも表示されます（住所・遅刻時の連絡ルール・ロッカーの使い方など）。
+                </p>
+                {data.address ? (
+                  <div className="rounded-lg border border-border p-3 text-sm">
+                    <p className="mb-1 text-xs font-semibold text-muted">住所</p>
+                    <p>{data.address}</p>
+                  </div>
+                ) : null}
+                {editingSharedNote ? (
+                  <div className="flex flex-col gap-2">
+                    <textarea
+                      value={sharedNoteDraft}
+                      onChange={(e) => setSharedNoteDraft(e.target.value)}
+                      placeholder="例：遅刻・欠勤の連絡は現場責任者へ直接電話してください。ロッカーは更衣室入って右側の空いている番号を使用可。"
+                      className="min-h-32 rounded-lg border border-border p-3 text-sm"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={submitSharedNote}
+                        className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                      >
+                        保存
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingSharedNote(false)}
+                        className="rounded-lg border border-border px-4 py-1.5 text-sm"
+                      >
+                        キャンセル
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-border p-3 text-sm">
+                    {data.staffSharedNote ? (
+                      <p className="whitespace-pre-wrap">{data.staffSharedNote}</p>
+                    ) : (
+                      <p className="text-muted">まだ登録されていません。</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={startEditSharedNote}
+                      className="mt-2 text-xs text-primary underline"
+                    >
+                      編集する
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : null}
 
             {tab === "note" ? (

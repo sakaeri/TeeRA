@@ -68,7 +68,7 @@ export function StaffContractsView({
   bankInfo: BankInfo;
   baseWage: BaseWage | null;
   taskRates: TaskRate[];
-  clientNames: string[];
+  clientNames: { name: string; address: string | null; staffSharedNote: string | null }[];
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -414,12 +414,15 @@ export function StaffContractsView({
 
       {clientNames.length > 0 ? (
         <section className="rounded-2xl border border-border bg-white/60 p-6">
-          <h2 className="mb-1 font-serif-jp text-lg font-bold text-primary">配属先一覧</h2>
-          <p className="mb-4 text-xs text-muted">{companyName}が業務を受けている依頼主です（参考情報）。</p>
-          <ul className="flex flex-wrap gap-2">
-            {clientNames.map((name, i) => (
-              <li key={i} className="rounded-full border border-border/60 bg-background/40 px-3 py-1.5 text-xs">
-                {name}
+          <h2 className="mb-4 font-serif-jp text-lg font-bold text-primary">配属先一覧</h2>
+          <ul className="flex flex-col gap-3">
+            {clientNames.map((c, i) => (
+              <li key={i} className="rounded-xl border border-border/60 bg-background/40 p-4 text-sm">
+                <p className="font-semibold">{c.name}</p>
+                {c.address ? <p className="mt-1 text-xs text-muted">住所：{c.address}</p> : null}
+                {c.staffSharedNote ? (
+                  <p className="mt-2 whitespace-pre-wrap text-xs text-muted">{c.staffSharedNote}</p>
+                ) : null}
               </li>
             ))}
           </ul>

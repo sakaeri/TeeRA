@@ -111,8 +111,9 @@ try {
   log("expanded detail shows 業務内容", staffBody.includes(recruitmentTitle));
   await recruitmentItem.getByRole("button", { name: "応募する" }).click();
   await staff.waitForTimeout(800);
-  staffBody = await staff.textContent("body");
-  log("staff shows applied", staffBody.includes("応募済み"));
+  // 応募済みの募集は一覧から消える仕様（他セッションの変更）— バッジで
+  // 残すのではなく丸ごと非表示にする。
+  log("応募済みの募集は一覧から消える", (await recruitmentItem.count()) === 0);
 
   const balanceAfterApply = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
   log("balance unchanged on apply (order entries stay free)", balanceAfterApply === 100);
