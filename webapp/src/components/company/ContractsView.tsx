@@ -245,12 +245,12 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   return (
     <div className="flex items-start gap-4 py-2.5">
       <span className="w-32 shrink-0 pt-2 text-xs font-semibold text-muted">{label}</span>
-      <div className="flex-1">{children}</div>
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }
 
-const fieldInput = "rounded-lg border border-border px-2 py-2 text-sm";
+const fieldInput = "w-full min-w-0 rounded-lg border border-border px-2 py-2 text-sm";
 
 // 「契約書を生成」フローの1段階目 — ベースにするテンプレートを選ぶ。ダッシュ
 // ボードの「契約書未確認」とスタッフ詳細の両方から使う共有モーダル。
@@ -888,82 +888,72 @@ export function TemplateModal({
             )}
           </Row>
 
-          <Row label="その他項目">
-            {preview ? (
-              extraItems.length > 0 ? (
-                <div className="flex flex-col gap-1.5">
-                  {extraItems.map((i) => (
-                    <p key={i.label} className="text-sm">
-                      <span className="font-semibold">{i.label}</span>
-                      {i.value ? `：${i.value}` : ""}
-                    </p>
-                  ))}
-                </div>
+          {extraItems.map((item) => (
+            <Row key={item.label} label={item.label}>
+              {preview ? (
+                <span className="text-sm">{item.value || "—"}</span>
               ) : (
-                <span className="text-sm">なし</span>
-              )
-            ) : (
-              <div className="flex flex-col gap-2">
-                {extraItems.length > 0 ? (
-                  <div className="flex flex-col gap-2">
-                    {extraItems.map((item) => (
-                      <div key={item.label} className="flex items-center gap-2">
-                        <span className="w-40 shrink-0 text-muted">{item.label}</span>
-                        <input
-                          type="text"
-                          value={item.value}
-                          onChange={(e) => updateChipValue(item.label, e.target.value)}
-                          placeholder="内容（任意）"
-                          className="flex-1 rounded-lg border border-border px-2 py-1.5 text-sm"
-                        />
-                        <button type="button" onClick={() => removeChip(item.label)} className="text-red-600">
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
+                <div className="flex items-start gap-2">
+                  <textarea
+                    value={item.value}
+                    onChange={(e) => updateChipValue(item.label, e.target.value)}
+                    placeholder="内容（任意）"
+                    rows={1}
+                    className="min-w-0 flex-1 resize-none rounded-lg border border-border px-2 py-1.5 text-sm"
+                  />
+                  <button type="button" onClick={() => removeChip(item.label)} className="shrink-0 text-red-600">
+                    ✕
+                  </button>
+                </div>
+              )}
+            </Row>
+          ))}
 
+          {!preview ? (
+            <Row label="項目を追加">
+              <div className="flex flex-col gap-2">
                 {showCustomChipForm ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col gap-2 rounded-lg border border-border/60 p-3">
                     <input
                       type="text"
                       value={customChipLabel}
                       onChange={(e) => setCustomChipLabel(e.target.value)}
                       placeholder="項目名"
-                      className="w-32 rounded-lg border border-border px-2 py-1.5 text-sm"
+                      className="w-full min-w-0 rounded-lg border border-border px-2 py-1.5 text-sm"
                     />
-                    <input
-                      type="text"
+                    <textarea
                       value={customChipValue}
                       onChange={(e) => setCustomChipValue(e.target.value)}
                       placeholder="内容（任意）"
-                      className="flex-1 rounded-lg border border-border px-2 py-1.5 text-sm"
+                      rows={2}
+                      className="w-full min-w-0 resize-none rounded-lg border border-border px-2 py-1.5 text-sm"
                     />
-                    <button
-                      type="button"
-                      disabled={!customChipLabel.trim()}
-                      onClick={() => {
-                        addChip(customChipLabel.trim(), customChipValue);
-                        setCustomChipLabel("");
-                        setCustomChipValue("");
-                        setShowCustomChipForm(false);
-                      }}
-                      className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
-                    >
-                      追加
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowCustomChipForm(false);
-                        setCustomChipLabel("");
-                        setCustomChipValue("");
-                      }}
-                      className="text-muted"
-                    >
-                      ✕
-                    </button>
+                    <div className="flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCustomChipForm(false);
+                          setCustomChipLabel("");
+                          setCustomChipValue("");
+                        }}
+                        className="text-sm text-muted"
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!customChipLabel.trim()}
+                        onClick={() => {
+                          addChip(customChipLabel.trim(), customChipValue);
+                          setCustomChipLabel("");
+                          setCustomChipValue("");
+                          setShowCustomChipForm(false);
+                        }}
+                        className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                      >
+                        追加
+                      </button>
+                    </div>
                   </div>
                 ) : null}
 
@@ -993,8 +983,8 @@ export function TemplateModal({
                   </button>
                 </div>
               </div>
-            )}
-          </Row>
+            </Row>
+          ) : null}
         </div>
 
         {!readOnly ? (
