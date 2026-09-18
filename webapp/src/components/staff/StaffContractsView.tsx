@@ -485,7 +485,7 @@ export function StaffContractsView({
         <div className="flex items-center justify-between">
           <p className="font-semibold">本人確認書類</p>
           <button type="button" onClick={() => setIdEditing((v) => !v)} className="text-xs text-primary hover:underline">
-            アップロード
+            {idEditing ? "閉じる" : "アップロード"}
           </button>
         </div>
         <div className="mt-1 flex flex-col gap-1">
