@@ -103,9 +103,15 @@ try {
   const versionCount = psql(`select count(*) from "CompanyPlacementRateVersion" where "placementRateId"='${placementRateId}';`);
   log("two versions now exist (old one preserved, not overwritten)", versionCount === "2");
 
-  await panel.getByRole("button", { name: /▼ 履歴/ }).click();
+  // 履歴には作成時点の初期値(1000円)は出さず、実際に改定した分(1500円)だけ
+  // を表示する（作成時点の1件が常に「履歴」に混ざって「変わってたの？」と
+  // 誤解させないための仕様 — 他セッションの変更）。
+  await panel.getByRole("button", { name: "▼ 履歴（1件）" }).click();
   let panelText = await panel.textContent();
-  log("history tab shows both the old (1000円) and new (1500円) versions", panelText.includes("時給1000円") && panelText.includes("時給1500円"));
+  log(
+    "history tab shows only the real amendment (1500円), not the creation baseline (1000円)",
+    panelText.includes("時給1500円") && !panelText.includes("時給1000円"),
+  );
   await panel.click("text=閉じる");
   await admin.waitForTimeout(200);
 

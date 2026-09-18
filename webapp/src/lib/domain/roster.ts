@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { createInvite } from "@/lib/domain/invites";
 import { todayJst, todayJstParts } from "@/lib/date";
-import { resolveRateVersion, resolveContractWageVersion } from "@/lib/domain/contracts";
+import { resolveRateVersion, resolveContractWageVersion, excludeBaselineVersion } from "@/lib/domain/contracts";
 import { getTotals } from "@/lib/domain/payroll";
 import { getPaidLeaveInfo } from "@/lib/domain/paidLeave";
 import type { TeamRole } from "@/generated/prisma/enums";
@@ -55,6 +55,15 @@ const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
   CONTRACTOR: "業務委託",
   DISPATCH_STAFF: "派遣社員",
 };
+
+// 契約の見出し表示は、管理用のテンプレート名（雛形A等）ではなく「雇用形態・
+// 業務内容」から機械的に生成する — どのテンプレートから生成したかに関わらず
+// 内容が一目でわかるようにするため（テンプレート名自体は雛形選択・管理画面
+// でのみ引き続き使う）。
+function contractDisplayTitle(employmentType: string, jobDescription: string) {
+  const label = EMPLOYMENT_TYPE_LABEL[employmentType] ?? employmentType;
+  return jobDescription ? `${label}・${jobDescription}` : label;
+}
 
 // Roster table summary: 今月稼働 (hours worked this month from approved WORKED
 // reports), 契約内容 (from the staff's active contract), 契約書 status pill.
@@ -353,7 +362,7 @@ export async function getStaffMonthDetail(params: {
       };
       return {
         id: c.id,
-        title: c.template.title,
+        title: contractDisplayTitle(c.template.employmentType, c.template.jobDescription),
         status: c.status,
         wageType: c.template.wageType,
         wageAmount: currentWage.wageAmount,
@@ -370,7 +379,7 @@ export async function getStaffMonthDetail(params: {
         contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
         contractEndDate: (c.contractEndDate ?? c.template.contractEndDate)?.toISOString().slice(0, 10) ?? null,
         noticeGivenAt: c.noticeGivenAt?.toISOString().slice(0, 10) ?? null,
-        wageVersions: c.wageVersions.map((v) => ({
+        wageVersions: excludeBaselineVersion(c.wageVersions).map((v) => ({
           id: v.id,
           label: `${WAGE_TYPE_LABEL[c.template.wageType]}${v.wageAmount}円`,
           effectiveFrom: v.effectiveFrom.toISOString().slice(0, 10),
@@ -419,7 +428,7 @@ export async function getStaffMonthDetail(params: {
           ? (r.companyRelationship?.clientCompany?.name ?? r.companyRelationship?.proxyName ?? "取引先")
           : "勤務先問わず",
         currentLabel: current ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円` : "単価未設定",
-        versions: r.versions.map((v) => ({
+        versions: excludeBaselineVersion(r.versions).map((v) => ({
           id: v.id,
           label: v.wageType && v.amount != null ? `${WAGE_TYPE_LABEL[v.wageType]}${v.amount}円` : "単価未設定（終了）",
           effectiveFrom: v.effectiveFrom.toISOString().slice(0, 10),

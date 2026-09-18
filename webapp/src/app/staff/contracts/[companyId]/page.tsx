@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireCompanyStaffRole } from "@/lib/auth/session";
-import { listStaffContracts, listStaffTaskRatesForStaff, resolveContractWageVersion, resolveRateVersion } from "@/lib/domain/contracts";
+import {
+  listStaffContracts,
+  listStaffTaskRatesForStaff,
+  resolveContractWageVersion,
+  resolveRateVersion,
+  excludeBaselineVersion,
+} from "@/lib/domain/contracts";
 import { listClients } from "@/lib/domain/relationships";
 import { todayJst } from "@/lib/date";
 import { prisma } from "@/lib/prisma";
@@ -15,6 +21,13 @@ const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
   CONTRACTOR: "業務委託",
   DISPATCH_STAFF: "派遣社員",
 };
+
+// 契約一覧の見出しは、管理用のテンプレート名ではなく「雇用形態・業務内容」
+// から機械的に生成する（会社側roster.tsのcontractDisplayTitleと同じ考え方）。
+function contractDisplayTitle(employmentType: string, jobDescription: string) {
+  const label = EMPLOYMENT_TYPE_LABEL[employmentType] ?? employmentType;
+  return jobDescription ? `${label}・${jobDescription}` : label;
+}
 
 export default async function StaffCompanyContractsPage({ params }: PageProps<"/staff/contracts/[companyId]">) {
   const { userId } = await requireCompanyStaffRole();
@@ -64,13 +77,48 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
         currentLabel: `${WAGE_TYPE_LABEL[activeContract.template.wageType]}${
           resolveContractWageVersion(activeContract.wageVersions, today)?.wageAmount ?? activeContract.wageAmountSnapshot
         }円`,
-        versions: activeContract.wageVersions.map((v) => ({
+        versions: excludeBaselineVersion(activeContract.wageVersions).map((v) => ({
           id: v.id,
           label: `${WAGE_TYPE_LABEL[activeContract.template.wageType]}${v.wageAmount}円`,
           effectiveFrom: v.effectiveFrom.toISOString().slice(0, 10),
         })),
       }
     : null;
+
+  // 契約中・過去分も同意前と同じ全文閲覧モーダルをいつでも開けるよう、
+  // pendingContractsと同じTemplate形のtemplateDetailを両方に持たせる。
+  function buildTemplateDetail(c: (typeof allContracts)[number]) {
+    return {
+      id: c.template.id,
+      title: c.template.title,
+      employmentType: c.template.employmentType,
+      workplaceType: c.template.workplaceType,
+      workplaceNote: c.template.workplaceNote,
+      clientName: null,
+      jobDescription: c.template.jobDescription,
+      scheduleType: c.template.scheduleType,
+      workStartTime: c.template.workStartTime,
+      workEndTime: c.template.workEndTime,
+      actualWorkMinutes: c.template.actualWorkMinutes,
+      breakMinutes: c.template.breakMinutes,
+      hasOvertime: c.template.hasOvertime,
+      overtimeNote: c.template.overtimeNote,
+      fixedWeekdays: c.template.fixedWeekdays,
+      shiftPatternNote: c.template.shiftPatternNote,
+      restNote: c.template.restNote,
+      wageType: c.template.wageType,
+      wageAmount: c.wageAmountSnapshot,
+      paymentClosingDay: c.template.paymentClosingDay,
+      paymentDay: c.template.paymentDay,
+      paymentMethod: c.template.paymentMethod,
+      contractPeriodType: c.template.contractPeriodType,
+      contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
+      contractEndDate: (c.contractEndDate ?? c.template.contractEndDate)?.toISOString().slice(0, 10) ?? null,
+      extraItems: (c.template.extraItems as { label: string; value: string }[] | null) ?? [],
+      status: c.template.status,
+      contractedStaffNames: [] as string[],
+    };
+  }
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-10">
@@ -86,44 +134,17 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
         companyName={company.name}
         myContracts={myContracts.map((c) => ({
           id: c.id,
-          title: c.template.title,
+          title: contractDisplayTitle(c.template.employmentType, c.template.jobDescription),
           status: c.status,
           wageAmountSnapshot: resolveContractWageVersion(c.wageVersions, today)?.wageAmount ?? c.wageAmountSnapshot,
           wageType: c.template.wageType,
           contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
+          templateDetail: buildTemplateDetail(c),
         }))}
         pendingContracts={pendingContracts.map((c) => ({
           id: c.id,
-          templateDetail: {
-            id: c.template.id,
-            title: c.template.title,
-            employmentType: c.template.employmentType,
-            workplaceType: c.template.workplaceType,
-            workplaceNote: c.template.workplaceNote,
-            clientName: null,
-            jobDescription: c.template.jobDescription,
-            scheduleType: c.template.scheduleType,
-            workStartTime: c.template.workStartTime,
-            workEndTime: c.template.workEndTime,
-            actualWorkMinutes: c.template.actualWorkMinutes,
-            breakMinutes: c.template.breakMinutes,
-            hasOvertime: c.template.hasOvertime,
-            overtimeNote: c.template.overtimeNote,
-            fixedWeekdays: c.template.fixedWeekdays,
-            shiftPatternNote: c.template.shiftPatternNote,
-            restNote: c.template.restNote,
-            wageType: c.template.wageType,
-            wageAmount: c.wageAmountSnapshot,
-            paymentClosingDay: c.template.paymentClosingDay,
-            paymentDay: c.template.paymentDay,
-            paymentMethod: c.template.paymentMethod,
-            contractPeriodType: c.template.contractPeriodType,
-            contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
-            contractEndDate: (c.contractEndDate ?? c.template.contractEndDate)?.toISOString().slice(0, 10) ?? null,
-            extraItems: (c.template.extraItems as { label: string; value: string }[] | null) ?? [],
-            status: c.template.status,
-            contractedStaffNames: [] as string[],
-          },
+          title: contractDisplayTitle(c.template.employmentType, c.template.jobDescription),
+          templateDetail: buildTemplateDetail(c),
         }))}
         idDocumentFrontUrl={myMembership.idDocumentFrontUrl}
         idDocumentBackUrl={myMembership.idDocumentBackUrl}
@@ -144,7 +165,7 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
               ? (r.companyRelationship?.clientCompany?.name ?? "取引先")
               : "勤務先問わず",
             currentLabel: current ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円` : "単価未設定",
-            versions: r.versions.map((v) => ({
+            versions: excludeBaselineVersion(r.versions).map((v) => ({
               id: v.id,
               label: v.wageType && v.amount != null ? `${WAGE_TYPE_LABEL[v.wageType]}${v.amount}円` : "単価未設定（終了）",
               effectiveFrom: v.effectiveFrom.toISOString().slice(0, 10),

@@ -12,6 +12,11 @@ const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "契約中",
   ENDED: "終了",
 };
+const STATUS_PILL: Record<string, string> = {
+  PENDING_CONSENT: "bg-amber-50 text-amber-700",
+  ACTIVE: "bg-emerald-50 text-emerald-700",
+  ENDED: "bg-gray-100 text-gray-600",
+};
 
 type BankInfo = {
   bankName: string;
@@ -21,7 +26,7 @@ type BankInfo = {
   accountHolderName: string;
 };
 
-type PendingContract = { id: string; templateDetail: Template };
+type PendingContract = { id: string; title: string; templateDetail: Template };
 
 type TaskRate = {
   id: string;
@@ -39,6 +44,18 @@ type BaseWage = {
 };
 
 type WizardStep = "review" | "id" | "bank" | "done";
+
+// 業務内容単価を勤務先ごとにグループ化する（同じ勤務先でも業務内容ごとに
+// 単価が違うことがあるため、勤務先→業務内容の階層で見せる）。
+function groupTaskRatesByWorkplace(taskRates: TaskRate[]): [string, TaskRate[]][] {
+  const groups = new Map<string, TaskRate[]>();
+  for (const r of taskRates) {
+    const group = groups.get(r.workplaceLabel);
+    if (group) group.push(r);
+    else groups.set(r.workplaceLabel, [r]);
+  }
+  return Array.from(groups.entries());
+}
 
 export function StaffContractsView({
   companyId,
@@ -61,6 +78,7 @@ export function StaffContractsView({
     wageAmountSnapshot: number;
     wageType: string;
     contractStartDate: string;
+    templateDetail: Template;
   }[];
   pendingContracts: PendingContract[];
   idDocumentFrontUrl: string | null;
@@ -84,6 +102,7 @@ export function StaffContractsView({
   const [bankEditing, setBankEditing] = useState(false);
   const [showPastContracts, setShowPastContracts] = useState(false);
   const [expandedRateId, setExpandedRateId] = useState<string | null>(null);
+  const [detailContract, setDetailContract] = useState<{ templateDetail: Template } | null>(null);
 
   // 同意アクションはrevalidatePathでこのページのサーバーデータを更新する
   // ため、pendingContractsのpropsはウィザードの途中でも変わりうる。ウィザ
@@ -162,7 +181,7 @@ export function StaffContractsView({
           {wizardStep === "review" ? (
             <div className="flex flex-col gap-3">
               <div className="rounded-lg border border-border/60 p-3 text-sm">
-                <p className="font-semibold">{activePending.templateDetail.title}</p>
+                <p className="font-semibold">{activePending.title}</p>
                 <p className="text-muted">
                   {WAGE_TYPE_LABEL[activePending.templateDetail.wageType]} {activePending.templateDetail.wageAmount}円
                 </p>
@@ -294,6 +313,16 @@ export function StaffContractsView({
         />
       ) : null}
 
+      {detailContract ? (
+        <TemplateModal
+          readOnly
+          companyName={companyName}
+          clients={[]}
+          editingTemplate={detailContract.templateDetail}
+          onClose={() => setDetailContract(null)}
+        />
+      ) : null}
+
       <section className="rounded-2xl border border-border bg-white/60 p-6">
         <h2 className="mb-4 font-serif-jp text-lg font-bold text-primary">契約中の雇用契約書</h2>
         {currentContracts.length === 0 ? (
@@ -301,14 +330,25 @@ export function StaffContractsView({
         ) : (
           <ul className="flex flex-col gap-2">
             {currentContracts.map((c) => (
-              <li key={c.id} className="flex items-center justify-between rounded-lg border border-border/60 p-3 text-sm">
-                <div>
-                  <p>{c.title}</p>
-                  <p className="text-xs text-muted">雇用開始日: {c.contractStartDate}</p>
-                </div>
-                <span className="text-muted">
-                  {WAGE_TYPE_LABEL[c.wageType]} {c.wageAmountSnapshot}円 ／ {STATUS_LABEL[c.status]}
-                </span>
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => setDetailContract(c)}
+                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-border/60 p-3 text-left text-sm hover:border-primary"
+                >
+                  <div>
+                    <p className="font-medium">{c.title}</p>
+                    <p className="text-xs text-muted">契約開始日: {c.contractStartDate}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_PILL[c.status]}`}>
+                      {STATUS_LABEL[c.status]}
+                    </span>
+                    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4 text-muted">
+                      <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                </button>
               </li>
             ))}
           </ul>
@@ -325,17 +365,25 @@ export function StaffContractsView({
             {showPastContracts ? (
               <ul className="mt-2 flex flex-col gap-2">
                 {pastContracts.map((c) => (
-                  <li
-                    key={c.id}
-                    className="flex items-center justify-between rounded-lg border border-border/50 bg-background/40 p-3 text-sm"
-                  >
-                    <div>
-                      <p>{c.title}</p>
-                      <p className="text-xs text-muted">雇用開始日: {c.contractStartDate}</p>
-                    </div>
-                    <span className="text-muted">
-                      {WAGE_TYPE_LABEL[c.wageType]} {c.wageAmountSnapshot}円 ／ {STATUS_LABEL[c.status]}
-                    </span>
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => setDetailContract(c)}
+                      className="flex w-full items-center justify-between gap-3 rounded-lg border border-border/50 bg-background/40 p-3 text-left text-sm hover:border-primary"
+                    >
+                      <div>
+                        <p className="font-medium">{c.title}</p>
+                        <p className="text-xs text-muted">契約開始日: {c.contractStartDate}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_PILL[c.status]}`}>
+                          {STATUS_LABEL[c.status]}
+                        </span>
+                        <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4 text-muted">
+                          <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -346,10 +394,9 @@ export function StaffContractsView({
 
       {baseWage || taskRates.length > 0 ? (
         <section className="rounded-2xl border border-border bg-white/60 p-6">
-          <h2 className="mb-1 font-serif-jp text-lg font-bold text-primary">単価</h2>
-          <p className="mb-4 text-xs text-muted">閲覧のみです。変更は会社にお問い合わせください。</p>
-          <ul className="flex flex-col gap-2">
-            {baseWage ? (
+          <h2 className="mb-4 font-serif-jp text-lg font-bold text-primary">業務単価</h2>
+          {baseWage ? (
+            <ul className="mb-4 flex flex-col gap-2">
               <li className="rounded-lg border border-border bg-background/40 p-3 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="font-medium">
@@ -378,37 +425,42 @@ export function StaffContractsView({
                   </ul>
                 ) : null}
               </li>
-            ) : null}
-            {taskRates.map((r) => (
-              <li key={r.id} className="rounded-lg border border-border/60 p-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">
-                    {r.workplaceLabel} <span className="text-xs font-normal text-muted">（{r.taskName}）</span>
-                  </span>
-                  <span className="text-muted">{r.currentLabel}</span>
-                </div>
-                {r.versions.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => setExpandedRateId(expandedRateId === r.id ? null : r.id)}
-                    className="mt-2 text-xs text-muted hover:text-primary"
-                  >
-                    {expandedRateId === r.id ? "▲ 履歴を閉じる" : `▼ 履歴（${r.versions.length}件）`}
-                  </button>
-                ) : null}
-                {expandedRateId === r.id ? (
-                  <ul className="mt-2 flex flex-col text-xs text-muted">
-                    {r.versions.map((v) => (
-                      <li key={v.id} className="flex items-center justify-between border-t border-border/50 py-1">
-                        <span>{v.effectiveFrom} 〜</span>
-                        <span>{v.label}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+            </ul>
+          ) : null}
+          {groupTaskRatesByWorkplace(taskRates).map(([workplaceLabel, rates]) => (
+            <div key={workplaceLabel} className="mb-4 last:mb-0">
+              <p className="mb-2 border-b border-border pb-1 text-sm font-semibold text-primary">{workplaceLabel}</p>
+              <ul className="flex flex-col gap-2">
+                {rates.map((r) => (
+                  <li key={r.id} className="rounded-lg border border-border/60 p-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{r.taskName}</span>
+                      <span className="text-muted">{r.currentLabel}</span>
+                    </div>
+                    {r.versions.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedRateId(expandedRateId === r.id ? null : r.id)}
+                        className="mt-2 text-xs text-muted hover:text-primary"
+                      >
+                        {expandedRateId === r.id ? "▲ 履歴を閉じる" : `▼ 履歴（${r.versions.length}件）`}
+                      </button>
+                    ) : null}
+                    {expandedRateId === r.id ? (
+                      <ul className="mt-2 flex flex-col text-xs text-muted">
+                        {r.versions.map((v) => (
+                          <li key={v.id} className="flex items-center justify-between border-t border-border/50 py-1">
+                            <span>{v.effectiveFrom} 〜</span>
+                            <span>{v.label}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </section>
       ) : null}
 

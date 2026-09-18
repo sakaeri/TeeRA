@@ -1,7 +1,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { resolveRateVersion } from "@/lib/domain/contracts";
+import { resolveRateVersion, excludeBaselineVersion } from "@/lib/domain/contracts";
 import { computeInvoiceTotals } from "@/lib/domain/invoicing";
 
 // 依頼主一覧 (from this company's perspective as the sending/agency side):
@@ -337,7 +337,7 @@ export async function getClientMonthDetail(params: {
         id: r.id,
         taskName: r.taskName,
         currentLabel: current ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円` : "単価未設定",
-        versions: r.versions.map((v) => ({
+        versions: excludeBaselineVersion(r.versions).map((v) => ({
           id: v.id,
           label: v.wageType && v.amount != null ? `${WAGE_TYPE_LABEL[v.wageType]}${v.amount}円` : "単価未設定（終了）",
           effectiveFrom: v.effectiveFrom.toISOString().slice(0, 10),

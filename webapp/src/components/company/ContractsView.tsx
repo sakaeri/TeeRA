@@ -580,7 +580,7 @@ export function TemplateModal({
         ) : null}
 
         {preview ? (
-          <p className="mb-3 text-xs text-muted">テンプレート名：{title}</p>
+          readOnly ? null : <p className="mb-3 text-xs text-muted">テンプレート名：{title}</p>
         ) : (
           <label className="mb-3 flex flex-col gap-1 text-xs">
             テンプレート名（管理用・スタッフには表示されません）

@@ -240,6 +240,19 @@ export function resolveContractWageVersion<T extends { wageAmount: number; effec
   return best;
 }
 
+// 単価・基本給の「履歴」表示から、作成時点に自動で積まれる最初の1件（改定
+// ではなく初期値）を取り除く純粋関数。effectiveFromの並び順はクエリごとに
+// asc/desc/未指定とまちまちなため、位置ではなくcreatedAtが最も古い1件を
+// 探して除く（同日に複数バージョンを積んでも、実際に改定した行は残る）。
+export function excludeBaselineVersion<T extends { createdAt: Date }>(versions: T[]): T[] {
+  if (versions.length <= 1) return [];
+  let baseline = versions[0];
+  for (const v of versions) {
+    if (v.createdAt < baseline.createdAt) baseline = v;
+  }
+  return versions.filter((v) => v !== baseline);
+}
+
 // 基本給の改定 — 業務内容単価と同じ「上書きせず開始日付きバージョンを積む
 // ＋お知らせ」運用。契約書を結び直す（同意）フローは使わず、指定日から
 // 新しい金額が有効になり、スタッフには非ブロッキングのお知らせだけを送る。
