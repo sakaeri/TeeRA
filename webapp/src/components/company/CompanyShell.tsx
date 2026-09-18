@@ -72,7 +72,7 @@ export function CompanyShell({
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
               T
             </span>
-            {teeBalance} Tee
+            {teeBalance.toLocaleString()} Tee
           </Link>
           <div className="relative" ref={profileRef}>
             <button

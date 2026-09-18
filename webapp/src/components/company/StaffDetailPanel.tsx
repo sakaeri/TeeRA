@@ -955,7 +955,13 @@ export function StaffDetailPanel({
       ) : null}
 
       {showNoteForm && data ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setShowNoteForm(false)}>
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowNoteForm(false);
+          }}
+        >
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">メモを作成</h4>
@@ -990,7 +996,13 @@ export function StaffDetailPanel({
       ) : null}
 
       {showGrantForm && data ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setShowGrantForm(false)}>
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowGrantForm(false);
+          }}
+        >
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">有給休暇を付与</h4>
@@ -1037,7 +1049,10 @@ export function StaffDetailPanel({
           return (
             <div
               className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
-              onClick={() => setEditingContractId(null)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingContractId(null);
+              }}
             >
               <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
                 <div className="mb-3 flex items-center justify-between">
@@ -1114,7 +1129,10 @@ export function StaffDetailPanel({
       {endingContract ? (
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
-          onClick={() => setEndingContract(null)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setEndingContract(null);
+          }}
         >
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
@@ -1192,7 +1210,13 @@ export function StaffDetailPanel({
       ) : null}
 
       {editingIdDocument && data ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setEditingIdDocument(false)}>
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditingIdDocument(false);
+          }}
+        >
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">本人確認書類をアップロード</h4>
@@ -1229,7 +1253,13 @@ export function StaffDetailPanel({
       ) : null}
 
       {editingBankInfo && data ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setEditingBankInfo(false)}>
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditingBankInfo(false);
+          }}
+        >
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">振込先情報を編集</h4>
@@ -1521,7 +1551,13 @@ function StaffTaskRatesTab({
       ) : null}
 
       {amendingRate ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setAmendingId(null)}>
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setAmendingId(null);
+          }}
+        >
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">
@@ -1574,7 +1610,13 @@ function StaffTaskRatesTab({
       ) : null}
 
       {showNewForm ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setShowNewForm(false)}>
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowNewForm(false);
+          }}
+        >
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">業務内容を追加</h4>

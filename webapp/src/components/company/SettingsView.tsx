@@ -123,13 +123,13 @@ export function SettingsView({
   return (
     <div>
       <h1 className="mb-6 font-serif-jp text-2xl font-bold">設定</h1>
-      <div className="mb-8 flex gap-1 border-b border-border">
+      <div className="mb-8 flex gap-1 overflow-x-auto border-b border-border">
         {TABS.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => router.push(`?tab=${t.key}`)}
-            className={`border-b-2 px-4 py-2 text-sm font-semibold ${
+            className={`shrink-0 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-semibold ${
               tab === t.key ? "border-accent text-primary" : "border-transparent text-muted"
             }`}
           >

@@ -669,7 +669,13 @@ export function ClientDetailPanel({
       ) : null}
 
       {showNoteForm && data ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setShowNoteForm(false)}>
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowNoteForm(false);
+          }}
+        >
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">メモを作成</h4>
@@ -878,7 +884,13 @@ function PlacementRatesTab({
       </ul>
 
       {amendingRate ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setAmendingId(null)}>
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setAmendingId(null);
+          }}
+        >
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">単価を変更（{amendingRate.taskName}）</h4>
@@ -929,7 +941,13 @@ function PlacementRatesTab({
       ) : null}
 
       {showNewForm ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setShowNewForm(false)}>
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowNewForm(false);
+          }}
+        >
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">業務内容を追加</h4>

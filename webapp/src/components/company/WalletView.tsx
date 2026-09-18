@@ -50,7 +50,7 @@ export function WalletView({
           </div>
           <p className="text-xs uppercase tracking-widest text-primary-foreground/60">現在の残高</p>
           <p className="mt-1 font-serif-jp text-5xl font-bold">
-            {teeBalance}
+            {teeBalance.toLocaleString()}
             <span className="ml-2 text-xl font-normal text-primary-foreground/70">Tee</span>
           </p>
           <button
@@ -171,7 +171,7 @@ export function WalletView({
             <table className="w-full min-w-max text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-muted">
-                  <th className="py-1 font-normal">日時</th>
+                  <th className="py-1 font-normal">日付</th>
                   <th className="py-1 font-normal">内容</th>
                   <th className="py-1 font-normal">増減</th>
                   <th className="py-1 font-normal">残高</th>
@@ -180,13 +180,13 @@ export function WalletView({
               <tbody>
                 {ledgerEntries.map((e) => (
                   <tr key={e.id} className="border-b border-border/60">
-                    <td className="py-1">{new Date(e.createdAt).toLocaleString("ja-JP")}</td>
+                    <td className="py-1">{new Date(e.createdAt).toLocaleDateString("ja-JP")}</td>
                     <td className="py-1">{e.label}</td>
                     <td className={`py-1 ${e.amount >= 0 ? "text-primary" : "text-red-600"}`}>
                       {e.amount >= 0 ? "+" : ""}
-                      {e.amount}
+                      {e.amount.toLocaleString()}
                     </td>
-                    <td className="py-1">{e.balanceAfter}</td>
+                    <td className="py-1">{e.balanceAfter.toLocaleString()}</td>
                   </tr>
                 ))}
                 {ledgerEntries.length === 0 ? (
