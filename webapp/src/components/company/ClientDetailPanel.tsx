@@ -745,7 +745,7 @@ function PlacementRatesTab({
   }
 
   function submitAmend(r: PlacementRate) {
-    if (!amendAmount) return;
+    if (!amendAmount || Number(amendAmount) <= 0) return;
     startTransition(async () => {
       await addPlacementRateVersionAction({
         companyRelationshipId: relationshipId,
@@ -772,7 +772,7 @@ function PlacementRatesTab({
   }
 
   function submitNewTask() {
-    if (!newTaskName.trim() || !newAmount) return;
+    if (!newTaskName.trim() || !newAmount || Number(newAmount) <= 0) return;
     startTransition(async () => {
       await addPlacementRateVersionAction({
         companyRelationshipId: relationshipId,
@@ -876,6 +876,7 @@ function PlacementRatesTab({
               </select>
               <input
                 type="number"
+                min="1"
                 value={amendAmount}
                 onChange={(e) => setAmendAmount(e.target.value)}
                 placeholder="金額"
@@ -893,7 +894,7 @@ function PlacementRatesTab({
             </div>
             <button
               type="button"
-              disabled={pending || !amendAmount}
+              disabled={pending || !amendAmount || Number(amendAmount) <= 0}
               onClick={() => submitAmend(amendingRate)}
               className="mt-3 self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
@@ -976,6 +977,7 @@ function PlacementRatesTab({
                 </select>
                 <input
                   type="number"
+                  min="1"
                   value={newAmount}
                   onChange={(e) => setNewAmount(e.target.value)}
                   placeholder="金額"
@@ -993,7 +995,7 @@ function PlacementRatesTab({
               </div>
               <button
                 type="button"
-                disabled={pending || !newTaskName.trim() || !newAmount}
+                disabled={pending || !newTaskName.trim() || !newAmount || Number(newAmount) <= 0}
                 onClick={submitNewTask}
                 className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
               >

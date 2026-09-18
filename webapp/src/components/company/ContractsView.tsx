@@ -510,7 +510,7 @@ export function TemplateModal({
     setExtraItems((prev) => prev.filter((i) => i.label !== label));
   }
 
-  const canSubmit = Boolean(jobDescription) && Boolean(wageAmount);
+  const canSubmit = Boolean(jobDescription) && Number(wageAmount) > 0;
 
   async function submitTemplate() {
     const payload = {
@@ -850,6 +850,7 @@ export function TemplateModal({
                 </select>
                 <input
                   type="number"
+                  min="1"
                   value={wageAmount}
                   onChange={(e) => setWageAmount(e.target.value)}
                   placeholder="例：1450"

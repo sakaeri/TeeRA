@@ -40,6 +40,10 @@ export type TemplateInput = {
   extraItems: { label: string; value: string }[];
 };
 
+function assertPositiveAmount(amount: number) {
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("invalid_wage_amount");
+}
+
 export async function listTemplates(companyId: string) {
   return prisma.contractTemplate.findMany({
     where: { companyId },
@@ -52,6 +56,7 @@ export async function listTemplates(companyId: string) {
 }
 
 export async function createTemplate(input: TemplateInput) {
+  assertPositiveAmount(input.wageAmount);
   return prisma.contractTemplate.create({ data: { ...input, extraItems: input.extraItems } });
 }
 
@@ -79,6 +84,8 @@ export async function updateOrDuplicateTemplate(params: {
   changes: Partial<TemplateInput>;
   duplicateTitle?: string;
 }) {
+  if (params.changes.wageAmount !== undefined) assertPositiveAmount(params.changes.wageAmount);
+
   const template = await prisma.contractTemplate.findUniqueOrThrow({
     where: { id: params.templateId },
   });
@@ -243,6 +250,7 @@ export async function addStaffContractWageVersion(params: {
   effectiveFrom: Date;
   createdByUserId: string;
 }) {
+  assertPositiveAmount(params.wageAmount);
   const contract = await prisma.staffContract.findUniqueOrThrow({
     where: { id: params.staffContractId },
     include: { template: true },
@@ -347,6 +355,7 @@ export async function addPlacementRateVersion(params: {
   effectiveFrom: Date;
   createdByUserId: string;
 }) {
+  assertPositiveAmount(params.amount);
   const rate = await registerPlacementTaskName({
     companyId: params.companyId,
     companyRelationshipId: params.companyRelationshipId,
@@ -471,6 +480,7 @@ export async function addStaffTaskRateVersion(params: {
   effectiveFrom: Date;
   createdByUserId: string;
 }) {
+  assertPositiveAmount(params.amount);
   const rate = await registerStaffTaskName({
     companyId: params.companyId,
     staffUserId: params.staffUserId,

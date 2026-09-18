@@ -266,7 +266,7 @@ export function StaffDetailPanel({
   }
 
   function submitEditWage(c: StaffMonthDetail["contracts"][number]) {
-    if (!editWageAmount) return;
+    if (!editWageAmount || Number(editWageAmount) <= 0) return;
     setEditWageError(null);
     startTransition(async () => {
       const result = await updateStaffContractWageAction(c.id, Number(editWageAmount), editWageEffectiveFrom);
@@ -274,7 +274,9 @@ export function StaffDetailPanel({
         setEditWageError(
           result.error === "monthly_wage_requires_month_start"
             ? "月給は月初（1日）からのみ改定できます。"
-            : "保存に失敗しました。",
+            : result.error === "invalid_wage_amount"
+              ? "賃金は1円以上で入力してください。"
+              : "保存に失敗しました。",
         );
         return;
       }
@@ -1057,6 +1059,7 @@ export function StaffDetailPanel({
                     <span className="text-sm">{WAGE_TYPE_OPTIONS.find((o) => o.value === editingContract.wageType)?.label}</span>
                     <input
                       type="number"
+                      min="1"
                       value={editWageAmount}
                       onChange={(e) => setEditWageAmount(e.target.value)}
                       placeholder="金額"
@@ -1080,7 +1083,7 @@ export function StaffDetailPanel({
                 {editWageError ? <p className="mt-1 text-xs text-red-600">{editWageError}</p> : null}
                 <button
                   type="button"
-                  disabled={pending || !editWageAmount}
+                  disabled={pending || !editWageAmount || Number(editWageAmount) <= 0}
                   onClick={() => submitEditWage(editingContract)}
                   className="mt-3 self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
                 >
@@ -1364,7 +1367,7 @@ function StaffTaskRatesTab({
   }
 
   function submitAmend(r: StaffTaskRate) {
-    if (!amendAmount) return;
+    if (!amendAmount || Number(amendAmount) <= 0) return;
     startTransition(async () => {
       await addStaffTaskRateVersionAction({
         staffUserId: userId,
@@ -1392,7 +1395,7 @@ function StaffTaskRatesTab({
   }
 
   function submitNewTask() {
-    if (!newTaskName.trim() || !newAmount) return;
+    if (!newTaskName.trim() || !newAmount || Number(newAmount) <= 0) return;
     startTransition(async () => {
       await addStaffTaskRateVersionAction({
         staffUserId: userId,
@@ -1542,6 +1545,7 @@ function StaffTaskRatesTab({
               </select>
               <input
                 type="number"
+                min="1"
                 value={amendAmount}
                 onChange={(e) => setAmendAmount(e.target.value)}
                 placeholder="金額"
@@ -1559,7 +1563,7 @@ function StaffTaskRatesTab({
             </div>
             <button
               type="button"
-              disabled={pending || !amendAmount}
+              disabled={pending || !amendAmount || Number(amendAmount) <= 0}
               onClick={() => submitAmend(amendingRate)}
               className="mt-3 self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
@@ -1657,6 +1661,7 @@ function StaffTaskRatesTab({
                 </select>
                 <input
                   type="number"
+                  min="1"
                   value={newAmount}
                   onChange={(e) => setNewAmount(e.target.value)}
                   placeholder="金額"
@@ -1674,7 +1679,7 @@ function StaffTaskRatesTab({
               </div>
               <button
                 type="button"
-                disabled={pending || !newTaskName.trim() || !newAmount}
+                disabled={pending || !newTaskName.trim() || !newAmount || Number(newAmount) <= 0}
                 onClick={submitNewTask}
                 className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
               >
