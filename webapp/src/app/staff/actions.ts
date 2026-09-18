@@ -7,6 +7,7 @@ import { applyToRecruitment } from "@/lib/domain/recruitment";
 import { clockIn, clockOut, submitWorkReport, confirmCorrectedWorkReport } from "@/lib/domain/workReports";
 import { markStaffNoticeRead } from "@/lib/domain/notices";
 import { updateMembershipIdDocument, updateMembershipBankInfo } from "@/lib/domain/roster";
+import { addStaffRelationshipNote } from "@/lib/domain/relationships";
 import { prisma } from "@/lib/prisma";
 
 async function assertOwnShift(shiftId: string, staffUserId: string) {
@@ -45,6 +46,14 @@ export async function updateMyBankInfoAction(
   const { userId } = await requireCompanyStaffRole();
   const membershipId = await myMembershipId(userId, companyId);
   await updateMembershipBankInfo({ membershipId, ...input });
+  revalidatePath(`/staff/contracts/${companyId}`);
+}
+
+// 勤務先の共有メモにスタッフ本人が投稿する。domain層のaddStaffRelationshipNote
+// が、その勤務先に有効な配属を持つ本人かどうかを再確認する。
+export async function addStaffRelationshipNoteAction(companyId: string, companyRelationshipId: string, content: string) {
+  const { userId } = await requireCompanyStaffRole();
+  await addStaffRelationshipNote({ companyRelationshipId, staffUserId: userId, content });
   revalidatePath(`/staff/contracts/${companyId}`);
 }
 

@@ -31,6 +31,7 @@ import {
   deleteCompanyRelationship,
   assertRelationshipParty,
   unplaceStaff,
+  updateRelationshipWorkplaceInfo,
 } from "@/lib/domain/relationships";
 import {
   createTeam,
@@ -604,15 +605,16 @@ async function assertRelationshipAgencySide(companyRelationshipId: string, compa
   return target;
 }
 
-// 情報メモは完全に自社内共有用（緊急連絡先・振込先・担当者の癖など）で、
-// 相手企業とは共有しない。関係の当事者であれば双方向どちらからでも
-// 書き込める（domain層のlistRelationshipNotes/addRelationshipNote/
-// deleteRelationshipNoteが自社のメモしか扱わないよう絞り込んでいる）。
-export async function addRelationshipNoteAction(companyRelationshipId: string, content: string) {
+// 情報メモ: 相手企業とは共有しない自社内の記録（domain層のlistRelationshipNotes/
+// addRelationshipNote/deleteRelationshipNoteが自社のメモしか扱わないよう
+// 絞り込んでいる）。visibleToStaff=trueにすると、配属されているスタッフ
+// 本人にも見えるようになる（旧「配属先情報」を統合）。関係の当事者であれば
+// 双方向どちらからでも書き込める。
+export async function addRelationshipNoteAction(companyRelationshipId: string, content: string, visibleToStaff: boolean) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
   await assertRelationshipParty(companyRelationshipId, membership.companyId);
-  await addRelationshipNote({ companyRelationshipId, companyId: membership.companyId, authorUserId: userId, content });
+  await addRelationshipNote({ companyRelationshipId, companyId: membership.companyId, authorUserId: userId, content, visibleToStaff });
   revalidatePath("/company/roster");
 }
 
@@ -623,18 +625,19 @@ export async function deleteRelationshipNoteAction(noteId: string) {
   revalidatePath("/company/roster");
 }
 
-// 配属先のスタッフ共有メモ（住所・遅刻連絡ルール・ロッカー使用ルールなど）
-// — 情報メモ（自社内専用）とは別軸で、配属されているスタッフ本人の
-// 「配属先一覧」に表示される。編集できるのは常に派遣元（agencyCompanyId）
-// 側のみ（単価設定と同じ考え方 — 依頼主側から書き換えられると困る）。
-export async function updateRelationshipSharedNoteAction(companyRelationshipId: string, staffSharedNote: string) {
+// 配属先情報の固定フォーム（勤務地・緊急連絡先）— 情報メモとは別軸で、
+// 配属されているスタッフ本人の「業務単価」勤務先詳細に表示される。編集
+// できるのは常に派遣元（agencyCompanyId）側のみ（単価設定と同じ考え方 —
+// 依頼主側から書き換えられると困る）。
+export async function updateRelationshipWorkplaceInfoAction(
+  companyRelationshipId: string,
+  workLocation: string,
+  emergencyContact: string,
+) {
   const { membership } = await requireCompanyAdminOrEditor();
   const clientTeamIds = await getClientTeamIds(companyRelationshipId);
   if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
   await assertRelationshipAgencySide(companyRelationshipId, membership.companyId);
-  await prisma.companyRelationship.update({
-    where: { id: companyRelationshipId },
-    data: { staffSharedNote: staffSharedNote.trim() || null },
-  });
+  await updateRelationshipWorkplaceInfo({ companyRelationshipId, workLocation, emergencyContact });
   revalidatePath("/company/roster");
 }

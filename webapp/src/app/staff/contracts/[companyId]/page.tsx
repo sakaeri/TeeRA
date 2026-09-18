@@ -8,7 +8,7 @@ import {
   resolveRateVersion,
   excludeBaselineVersion,
 } from "@/lib/domain/contracts";
-import { listClients } from "@/lib/domain/relationships";
+import { listClients, listStaffVisibleRelationshipNotes } from "@/lib/domain/relationships";
 import { todayJst } from "@/lib/date";
 import { prisma } from "@/lib/prisma";
 import { StaffContractsView } from "@/components/staff/StaffContractsView";
@@ -40,34 +40,49 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
   });
   if (!myMembership) notFound();
 
-  const [allContracts, company, taskRates, clientRelationships, myPlacements] = await Promise.all([
+  const [allContracts, company, taskRates, clientRelationships] = await Promise.all([
     listStaffContracts(userId, companyId),
     prisma.company.findUniqueOrThrow({ where: { id: companyId } }),
     listStaffTaskRatesForStaff(companyId, userId),
     listClients(companyId),
-    prisma.staffPlacement.findMany({
-      where: { staffUserId: userId, active: true, companyRelationship: { agencyCompanyId: companyId, status: "ACTIVE" } },
-      select: { companyRelationshipId: true },
-    }),
   ]);
 
   const today = new Date();
   const rateToday = new Date(`${todayJst()}T23:59:59.999Z`);
   const myContracts = allContracts.filter((c) => c.status !== "PENDING_CONSENT");
   const pendingContracts = allContracts.filter((c) => c.status === "PENDING_CONSENT");
-  // 配属先一覧はこの会社とつながっている依頼主全部ではなく、本人が実際に
-  // 配属記録(StaffPlacement)を持つ依頼主だけを参考情報として出す
-  // (依頼主が正式なCompanyアカウントと連携する前の仮登録＝proxyNameの
-  // 段階でも配属自体はあり得るため、clientCompanyIdではなく
-  // companyRelationshipIdで突き合わせる)。
-  const placedRelationshipIds = new Set(myPlacements.map((p) => p.companyRelationshipId));
-  const clients = clientRelationships
-    .filter((r) => r.status === "ACTIVE" && placedRelationshipIds.has(r.id))
-    .map((r) => ({
-      name: r.clientCompany?.name ?? r.proxyName ?? "取引先",
-      address: r.clientCompany?.address ?? null,
-      staffSharedNote: r.staffSharedNote,
-    }));
+
+  // 業務単価の「勤務先」見出しから開く詳細（勤務地・緊急連絡先・共有メモ）
+  // 用のデータを、自分の単価が設定されている勤務先ぶんだけ組み立てる。
+  const relationshipInfoById = new Map(
+    clientRelationships.map((r) => [
+      r.id,
+      { name: r.clientCompany?.name ?? r.proxyName ?? "取引先", workLocation: r.workLocation, emergencyContact: r.emergencyContact },
+    ]),
+  );
+  const myWorkplaceRelationshipIds = Array.from(
+    new Set(taskRates.map((r) => r.companyRelationshipId).filter((id): id is string => id !== null)),
+  );
+  const workplaceNotesById = new Map(
+    await Promise.all(
+      myWorkplaceRelationshipIds.map(
+        async (id) => [id, await listStaffVisibleRelationshipNotes(id, companyId)] as const,
+      ),
+    ),
+  );
+  const workplaces = myWorkplaceRelationshipIds
+    .map((id) => {
+      const info = relationshipInfoById.get(id);
+      if (!info) return null;
+      return {
+        companyRelationshipId: id,
+        name: info.name,
+        workLocation: info.workLocation,
+        emergencyContact: info.emergencyContact,
+        notes: workplaceNotesById.get(id) ?? [],
+      };
+    })
+    .filter((w): w is NonNullable<typeof w> => w !== null);
 
   const activeContract = allContracts.find((c) => c.status === "ACTIVE") ?? null;
   const baseWage = activeContract
@@ -161,8 +176,9 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
           return {
             id: r.id,
             taskName: r.taskName,
+            companyRelationshipId: r.companyRelationshipId,
             workplaceLabel: r.companyRelationshipId
-              ? (r.companyRelationship?.clientCompany?.name ?? "取引先")
+              ? (r.companyRelationship?.clientCompany?.name ?? r.companyRelationship?.proxyName ?? "取引先")
               : "勤務先問わず",
             currentLabel: current ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円` : "単価未設定",
             versions: excludeBaselineVersion(r.versions).map((v) => ({
@@ -172,7 +188,7 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
             })),
           };
         })}
-        clientNames={clients}
+        workplaces={workplaces}
       />
     </main>
   );

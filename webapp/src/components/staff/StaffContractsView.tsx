@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { consentContractAction } from "@/app/staff/contracts/actions";
-import { updateMyIdDocumentAction, updateMyBankInfoAction } from "@/app/staff/actions";
+import { updateMyIdDocumentAction, updateMyBankInfoAction, addStaffRelationshipNoteAction } from "@/app/staff/actions";
 import { ImageDropzone } from "@/components/ImageDropzone";
 import { TemplateModal, type Template } from "@/components/company/ContractsView";
 
@@ -31,6 +31,7 @@ type PendingContract = { id: string; title: string; templateDetail: Template };
 type TaskRate = {
   id: string;
   taskName: string;
+  companyRelationshipId: string | null;
   workplaceLabel: string;
   currentLabel: string;
   versions: { id: string; label: string; effectiveFrom: string }[];
@@ -43,18 +44,29 @@ type BaseWage = {
   versions: { id: string; label: string; effectiveFrom: string }[];
 };
 
+type Workplace = {
+  companyRelationshipId: string;
+  name: string;
+  workLocation: string | null;
+  emergencyContact: string | null;
+  notes: { id: string; content: string; createdAt: string }[];
+};
+
 type WizardStep = "review" | "id" | "bank" | "done";
 
 // 業務内容単価を勤務先ごとにグループ化する（同じ勤務先でも業務内容ごとに
-// 単価が違うことがあるため、勤務先→業務内容の階層で見せる）。
-function groupTaskRatesByWorkplace(taskRates: TaskRate[]): [string, TaskRate[]][] {
-  const groups = new Map<string, TaskRate[]>();
+// 単価が違うことがあるため、勤務先→業務内容の階層で見せる）。同名の勤務先
+// （表示ラベルの偶然の一致）を誤って一つにまとめないよう、companyRelationshipId
+// （無ければ勤務先問わずを表すラベル自体）をキーにする。
+function groupTaskRatesByWorkplace(taskRates: TaskRate[]): { key: string; label: string; companyRelationshipId: string | null; rates: TaskRate[] }[] {
+  const groups = new Map<string, { key: string; label: string; companyRelationshipId: string | null; rates: TaskRate[] }>();
   for (const r of taskRates) {
-    const group = groups.get(r.workplaceLabel);
-    if (group) group.push(r);
-    else groups.set(r.workplaceLabel, [r]);
+    const key = r.companyRelationshipId ?? r.workplaceLabel;
+    const group = groups.get(key);
+    if (group) group.rates.push(r);
+    else groups.set(key, { key, label: r.workplaceLabel, companyRelationshipId: r.companyRelationshipId, rates: [r] });
   }
-  return Array.from(groups.entries());
+  return Array.from(groups.values());
 }
 
 export function StaffContractsView({
@@ -67,7 +79,7 @@ export function StaffContractsView({
   bankInfo,
   baseWage,
   taskRates,
-  clientNames,
+  workplaces,
 }: {
   companyId: string;
   companyName: string;
@@ -86,7 +98,7 @@ export function StaffContractsView({
   bankInfo: BankInfo;
   baseWage: BaseWage | null;
   taskRates: TaskRate[];
-  clientNames: { name: string; address: string | null; staffSharedNote: string | null }[];
+  workplaces: Workplace[];
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -103,6 +115,8 @@ export function StaffContractsView({
   const [showPastContracts, setShowPastContracts] = useState(false);
   const [expandedRateId, setExpandedRateId] = useState<string | null>(null);
   const [detailContract, setDetailContract] = useState<{ templateDetail: Template } | null>(null);
+  const [openWorkplaceId, setOpenWorkplaceId] = useState<string | null>(null);
+  const [newNoteContent, setNewNoteContent] = useState("");
 
   // 同意アクションはrevalidatePathでこのページのサーバーデータを更新する
   // ため、pendingContractsのpropsはウィザードの途中でも変わりうる。ウィザ
@@ -161,6 +175,15 @@ export function StaffContractsView({
   function finishWizard() {
     setQueueIndex((i) => i + 1);
     setWizardStep("review");
+  }
+
+  function submitNewNote(workplaceCompanyRelationshipId: string) {
+    const content = newNoteContent.trim();
+    if (!content) return;
+    startTransition(async () => {
+      await addStaffRelationshipNoteAction(companyId, workplaceCompanyRelationshipId, content);
+      setNewNoteContent("");
+    });
   }
 
   return (
@@ -427,11 +450,24 @@ export function StaffContractsView({
               </li>
             </ul>
           ) : null}
-          {groupTaskRatesByWorkplace(taskRates).map(([workplaceLabel, rates]) => (
-            <div key={workplaceLabel} className="mb-4 last:mb-0">
-              <p className="mb-2 border-b border-border pb-1 text-sm font-semibold text-primary">{workplaceLabel}</p>
+          {groupTaskRatesByWorkplace(taskRates).map((group) => (
+            <div key={group.key} className="mb-4 last:mb-0">
+              {group.companyRelationshipId ? (
+                <button
+                  type="button"
+                  onClick={() => setOpenWorkplaceId(group.companyRelationshipId)}
+                  className="mb-2 flex w-full items-center justify-between gap-2 border-b border-border pb-1 text-left text-sm font-semibold text-primary hover:opacity-70"
+                >
+                  {group.label}
+                  <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4 shrink-0 text-muted">
+                    <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              ) : (
+                <p className="mb-2 border-b border-border pb-1 text-sm font-semibold text-primary">{group.label}</p>
+              )}
               <ul className="flex flex-col gap-2">
-                {rates.map((r) => (
+                {group.rates.map((r) => (
                   <li key={r.id} className="rounded-lg border border-border/60 p-3 text-sm">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{r.taskName}</span>
@@ -464,22 +500,79 @@ export function StaffContractsView({
         </section>
       ) : null}
 
-      {clientNames.length > 0 ? (
-        <section className="rounded-2xl border border-border bg-white/60 p-6">
-          <h2 className="mb-4 font-serif-jp text-lg font-bold text-primary">配属先一覧</h2>
-          <ul className="flex flex-col gap-3">
-            {clientNames.map((c, i) => (
-              <li key={i} className="rounded-xl border border-border/60 bg-background/40 p-4 text-sm">
-                <p className="font-semibold">{c.name}</p>
-                {c.address ? <p className="mt-1 text-xs text-muted">住所：{c.address}</p> : null}
-                {c.staffSharedNote ? (
-                  <p className="mt-2 whitespace-pre-wrap text-xs text-muted">{c.staffSharedNote}</p>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      {openWorkplaceId
+        ? (() => {
+            const workplace = workplaces.find((w) => w.companyRelationshipId === openWorkplaceId);
+            if (!workplace) return null;
+            return (
+              <div
+                className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4"
+                onClick={() => {
+                  setOpenWorkplaceId(null);
+                  setNewNoteContent("");
+                }}
+              >
+                <div
+                  className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="font-serif-jp text-lg font-bold text-primary">{workplace.name}</h3>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenWorkplaceId(null);
+                        setNewNoteContent("");
+                      }}
+                      className="text-muted"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="mb-4 flex flex-col gap-2 text-sm">
+                    <div>
+                      <p className="text-xs font-semibold text-muted">勤務地</p>
+                      <p>{workplace.workLocation || "未設定"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-muted">緊急連絡先</p>
+                      <p>{workplace.emergencyContact || "未設定"}</p>
+                    </div>
+                  </div>
+                  <div className="border-t border-border/60 pt-4">
+                    <p className="mb-2 text-xs font-semibold text-muted">共有メモ</p>
+                    <ul className="mb-3 flex flex-col gap-2">
+                      {workplace.notes.map((n) => (
+                        <li key={n.id} className="rounded-lg border border-border/60 p-3 text-sm">
+                          <p className="whitespace-pre-wrap">{n.content}</p>
+                          <p className="mt-1 text-xs text-muted">{n.createdAt}</p>
+                        </li>
+                      ))}
+                      {workplace.notes.length === 0 ? <p className="text-sm text-muted">まだメモはありません。</p> : null}
+                    </ul>
+                    <div className="flex flex-col gap-2">
+                      <textarea
+                        value={newNoteContent}
+                        onChange={(e) => setNewNoteContent(e.target.value)}
+                        placeholder="他のスタッフにも共有されます"
+                        rows={2}
+                        className="w-full resize-none rounded-lg border border-border px-3 py-2 text-sm"
+                      />
+                      <button
+                        type="button"
+                        disabled={pending || !newNoteContent.trim()}
+                        onClick={() => submitNewNote(workplace.companyRelationshipId)}
+                        className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                      >
+                        投稿する
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()
+        : null}
 
       <section className="rounded-lg border border-border p-3 text-sm">
         <div className="flex items-center justify-between">

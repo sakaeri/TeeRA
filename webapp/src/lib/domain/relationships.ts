@@ -312,8 +312,8 @@ export async function getClientMonthDetail(params: {
     // 削除できる（deleteCompanyRelationship参照。招待の向きを間違えた場合の
     // 取り消し導線）。
     isOwner: relationship.ownerCompanyId === params.companyId,
-    address: counterpartCompany?.address ?? null,
-    staffSharedNote: relationship.staffSharedNote,
+    workLocation: relationship.workLocation,
+    emergencyContact: relationship.emergencyContact,
     teams: teamLinks.map((l) => ({ teamId: l.teamId, teamName: l.team.name })),
     placements: placements.map((p) => ({
       staffUserId: p.staffUserId,
@@ -326,6 +326,7 @@ export async function getClientMonthDetail(params: {
       id: n.id,
       content: n.content,
       authorName: n.author.name,
+      visibleToStaff: n.visibleToStaff,
       createdAt: n.createdAt.toISOString().slice(0, 10),
     })),
     workedHours,
@@ -359,9 +360,10 @@ export async function getClientMonthDetail(params: {
 }
 
 // 情報メモ: StaffNoteと同じく、誰がいつ書いたか分かるよう追記式の一覧で
-// 持つ。更新はなく、削除のみ（誤記は削除して書き直す）。あくまで自社内
-// 共有用（緊急連絡先・振込先・担当者の癖など）なので、companyIdで書いた側
-// の会社に絞り込む — 相手企業には一切見えない（双方向可視化とは別軸）。
+// 持つ。更新はなく、削除のみ（誤記は削除して書き直す）。companyIdで書いた
+// 側の会社（常に派遣元=agencyCompanyId）に絞り込む — 相手企業には一切
+// 見えない（双方向可視化とは別軸）。visibleToStaff=trueの投稿だけ、配属
+// されているスタッフ本人にも見える（listStaffVisibleRelationshipNotes参照）。
 export async function listRelationshipNotes(companyRelationshipId: string, companyId: string) {
   return prisma.relationshipNote.findMany({
     where: { companyRelationshipId, companyId },
@@ -375,6 +377,7 @@ export async function addRelationshipNote(params: {
   companyId: string;
   authorUserId: string;
   content: string;
+  visibleToStaff: boolean;
 }) {
   const content = params.content.trim();
   if (!content) throw new Error("empty_content");
@@ -384,6 +387,7 @@ export async function addRelationshipNote(params: {
       companyId: params.companyId,
       authorUserId: params.authorUserId,
       content,
+      visibleToStaff: params.visibleToStaff,
     },
   });
 }
@@ -391,4 +395,61 @@ export async function addRelationshipNote(params: {
 export async function deleteRelationshipNote(id: string, companyId: string) {
   const note = await prisma.relationshipNote.findFirstOrThrow({ where: { id, companyId } });
   return prisma.relationshipNote.delete({ where: { id: note.id } });
+}
+
+// スタッフ本人向け: 共有ONの投稿だけを内容と日付のみで返す（投稿者名は
+// 出さない — 社内の誰が書いたかはスタッフの関知するところではないため）。
+// companyIdはagencyCompanyId固定（情報メモは常に派遣元の会社に紐づく）。
+export async function listStaffVisibleRelationshipNotes(companyRelationshipId: string, agencyCompanyId: string) {
+  const notes = await prisma.relationshipNote.findMany({
+    where: { companyRelationshipId, companyId: agencyCompanyId, visibleToStaff: true },
+    orderBy: { createdAt: "desc" },
+  });
+  return notes.map((n) => ({ id: n.id, content: n.content, createdAt: n.createdAt.toISOString().slice(0, 10) }));
+}
+
+// スタッフ本人が投稿する: 他のスタッフとの共有が前提のため常にvisibleToStaff
+// =true固定（会社への個別連絡は対象外 — チェック欄自体を出さない）。
+// 投稿できるのは、その勤務先(companyRelationshipId)に有効な配属
+// (StaffPlacement.active=true)を持つ本人だけ。
+export async function addStaffRelationshipNote(params: {
+  companyRelationshipId: string;
+  staffUserId: string;
+  content: string;
+}) {
+  const content = params.content.trim();
+  if (!content) throw new Error("empty_content");
+  const relationship = await prisma.companyRelationship.findFirstOrThrow({
+    where: { id: params.companyRelationshipId, agencyCompanyId: { not: null } },
+  });
+  const placement = await prisma.staffPlacement.findFirst({
+    where: { companyRelationshipId: params.companyRelationshipId, staffUserId: params.staffUserId, active: true },
+  });
+  if (!placement) throw new Error("forbidden");
+  return prisma.relationshipNote.create({
+    data: {
+      companyRelationshipId: params.companyRelationshipId,
+      companyId: relationship.agencyCompanyId!,
+      authorUserId: params.staffUserId,
+      content,
+      visibleToStaff: true,
+    },
+  });
+}
+
+// 配属先情報の固定フォーム（勤務地・緊急連絡先）の更新 — 会社側（派遣元）
+// のみ編集可能、スタッフは閲覧のみ。旧updateRelationshipSharedNoteと同じ
+// 権限（呼び出し側でassertRelationshipAgencySideを使う）。
+export async function updateRelationshipWorkplaceInfo(params: {
+  companyRelationshipId: string;
+  workLocation: string;
+  emergencyContact: string;
+}) {
+  return prisma.companyRelationship.update({
+    where: { id: params.companyRelationshipId },
+    data: {
+      workLocation: params.workLocation.trim() || null,
+      emergencyContact: params.emergencyContact.trim() || null,
+    },
+  });
 }

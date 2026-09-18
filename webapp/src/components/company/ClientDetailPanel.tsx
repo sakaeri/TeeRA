@@ -7,7 +7,7 @@ import {
   getClientMonthDetailAction,
   addRelationshipNoteAction,
   deleteRelationshipNoteAction,
-  updateRelationshipSharedNoteAction,
+  updateRelationshipWorkplaceInfoAction,
   inviteClientUpgradeAction,
   inviteAgencyUpgradeAction,
   setClientTeamsAction,
@@ -30,6 +30,7 @@ type RelationshipNote = {
   id: string;
   content: string;
   authorName: string;
+  visibleToStaff: boolean;
   createdAt: string;
 };
 
@@ -46,8 +47,8 @@ type ClientMonthDetail = {
   name: string;
   isProxy: boolean;
   isOwner: boolean;
-  address: string | null;
-  staffSharedNote: string | null;
+  workLocation: string | null;
+  emergencyContact: string | null;
   historyCutoff: { year: number; month: number } | null;
   teams: { teamId: string; teamName: string }[];
   placements: Placement[];
@@ -104,12 +105,13 @@ export function ClientDetailPanel({
   const initToday = todayJstParts();
   const [year, setYear] = useState(initToday.year);
   const [month, setMonth] = useState(initToday.month);
-  const [tab, setTab] = useState<"history" | "staff" | "rates" | "note" | "shared">("history");
+  const [tab, setTab] = useState<"history" | "staff" | "rates" | "note">("history");
   const [data, setData] = useState<ClientMonthDetail | null>(null);
   const [pending, startTransition] = useTransition();
   const [upgradeUrl, setUpgradeUrl] = useState<string | null>(null);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState("");
+  const [newNoteVisibleToStaff, setNewNoteVisibleToStaff] = useState(false);
   const [deleteNoteConfirmTarget, setDeleteNoteConfirmTarget] = useState<RelationshipNote | null>(null);
   const [editingTeams, setEditingTeams] = useState(false);
   const [teamSelection, setTeamSelection] = useState<Set<string>>(new Set());
@@ -117,18 +119,20 @@ export function ClientDetailPanel({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showPlacementHistory, setShowPlacementHistory] = useState(false);
   const [unplaceConfirmTarget, setUnplaceConfirmTarget] = useState<Placement | null>(null);
-  const [editingSharedNote, setEditingSharedNote] = useState(false);
-  const [sharedNoteDraft, setSharedNoteDraft] = useState("");
+  const [editingWorkplaceInfo, setEditingWorkplaceInfo] = useState(false);
+  const [workLocationDraft, setWorkLocationDraft] = useState("");
+  const [emergencyContactDraft, setEmergencyContactDraft] = useState("");
 
-  function startEditSharedNote() {
-    setSharedNoteDraft(data?.staffSharedNote ?? "");
-    setEditingSharedNote(true);
+  function startEditWorkplaceInfo() {
+    setWorkLocationDraft(data?.workLocation ?? "");
+    setEmergencyContactDraft(data?.emergencyContact ?? "");
+    setEditingWorkplaceInfo(true);
   }
 
-  function submitSharedNote() {
+  function submitWorkplaceInfo() {
     startTransition(async () => {
-      await updateRelationshipSharedNoteAction(relationshipId, sharedNoteDraft);
-      setEditingSharedNote(false);
+      await updateRelationshipWorkplaceInfoAction(relationshipId, workLocationDraft, emergencyContactDraft);
+      setEditingWorkplaceInfo(false);
       await refresh();
     });
   }
@@ -352,15 +356,6 @@ export function ClientDetailPanel({
                   単価
                 </button>
               ) : null}
-              {kind === "client" ? (
-                <button
-                  type="button"
-                  onClick={() => setTab("shared")}
-                  className={`border-b-2 px-1 py-2 font-semibold ${tab === "shared" ? "border-accent text-primary" : "border-transparent text-muted"}`}
-                >
-                  配属先情報
-                </button>
-              ) : null}
               <button
                 type="button"
                 onClick={() => setTab("note")}
@@ -461,7 +456,12 @@ export function ClientDetailPanel({
 
             {tab === "staff" ? (
               <div>
-                <p className="mb-2 text-xs font-medium text-muted">配属中スタッフ</p>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted">配属中スタッフ</p>
+                  <button type="button" onClick={() => setTab("note")} className="text-xs text-primary hover:underline">
+                    共有メモ
+                  </button>
+                </div>
                 <ul className="flex flex-col gap-2">
                   {data.placements
                     .filter((p) => p.active)
@@ -517,97 +517,110 @@ export function ClientDetailPanel({
               />
             ) : null}
 
-            {tab === "shared" ? (
-              <div className="flex flex-col gap-3">
-                <p className="text-xs text-muted">
-                  ここに書いた内容は、配属先一覧としてこの配属先に配属されているスタッフ本人にも表示されます（住所・遅刻時の連絡ルール・ロッカーの使い方など）。
-                </p>
-                {data.address ? (
-                  <div className="rounded-lg border border-border p-3 text-sm">
-                    <p className="mb-1 text-xs font-semibold text-muted">住所</p>
-                    <p>{data.address}</p>
-                  </div>
-                ) : null}
-                {editingSharedNote ? (
-                  <div className="flex flex-col gap-2">
-                    <textarea
-                      value={sharedNoteDraft}
-                      onChange={(e) => setSharedNoteDraft(e.target.value)}
-                      placeholder="例：遅刻・欠勤の連絡は現場責任者へ直接電話してください。ロッカーは更衣室入って右側の空いている番号を使用可。"
-                      className="min-h-32 rounded-lg border border-border p-3 text-sm"
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={submitSharedNote}
-                        className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-                      >
-                        保存
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingSharedNote(false)}
-                        className="rounded-lg border border-border px-4 py-1.5 text-sm"
-                      >
-                        キャンセル
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-border p-3 text-sm">
-                    {data.staffSharedNote ? (
-                      <p className="whitespace-pre-wrap">{data.staffSharedNote}</p>
-                    ) : (
-                      <p className="text-muted">まだ登録されていません。</p>
-                    )}
-                    <button
-                      type="button"
-                      onClick={startEditSharedNote}
-                      className="mt-2 text-xs text-primary underline"
-                    >
-                      編集する
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : null}
-
             {tab === "note" ? (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setShowNoteForm(true)}
-                    className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
-                  >
-                    ＋メモ作成
-                  </button>
-                </div>
-                <ul className="flex flex-col gap-2">
-                  {data.relationshipNotes.map((n) => (
-                    <li key={n.id} className="rounded-lg border border-border p-3 text-sm">
-                      <p className="whitespace-pre-wrap">{n.content}</p>
-                      <div className="mt-2 flex items-center justify-between text-xs text-muted">
-                        <span>
-                          {n.createdAt} {n.authorName}
-                        </span>
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => setDeleteNoteConfirmTarget(n)}
-                          aria-label="削除"
-                          className="hover:text-red-600 disabled:opacity-60"
-                        >
-                          ✕
+              <div className="flex flex-col gap-4">
+                {kind === "client" ? (
+                  <div className="flex flex-col gap-3 border-b border-border/60 pb-4">
+                    {editingWorkplaceInfo ? (
+                      <div className="flex flex-col gap-2">
+                        <label className="flex flex-col gap-1 text-xs text-muted">
+                          勤務地
+                          <input
+                            type="text"
+                            value={workLocationDraft}
+                            onChange={(e) => setWorkLocationDraft(e.target.value)}
+                            placeholder="例：東京都渋谷区1-2-3 ○○ビル3F"
+                            className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-xs text-muted">
+                          緊急連絡先
+                          <input
+                            type="text"
+                            value={emergencyContactDraft}
+                            onChange={(e) => setEmergencyContactDraft(e.target.value)}
+                            placeholder="例：現場責任者 090-1234-5678"
+                            className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+                          />
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={submitWorkplaceInfo}
+                            className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                          >
+                            保存
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingWorkplaceInfo(false)}
+                            className="rounded-lg border border-border px-4 py-1.5 text-sm"
+                          >
+                            キャンセル
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-border p-3 text-sm">
+                        <div className="flex flex-col gap-1">
+                          <p>
+                            <span className="text-xs font-semibold text-muted">勤務地：</span>
+                            {data.workLocation || "未設定"}
+                          </p>
+                          <p>
+                            <span className="text-xs font-semibold text-muted">緊急連絡先：</span>
+                            {data.emergencyContact || "未設定"}
+                          </p>
+                        </div>
+                        <button type="button" onClick={startEditWorkplaceInfo} className="mt-2 text-xs text-primary underline">
+                          編集する
                         </button>
                       </div>
-                    </li>
-                  ))}
-                  {data.relationshipNotes.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-muted">メモはまだありません。</p>
-                  ) : null}
-                </ul>
+                    )}
+                  </div>
+                ) : null}
+
+                <div>
+                  <div className="mb-2 flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setShowNoteForm(true)}
+                      className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+                    >
+                      ＋メモ作成
+                    </button>
+                  </div>
+                  <ul className="flex flex-col gap-2">
+                    {data.relationshipNotes.map((n) => (
+                      <li key={n.id} className="rounded-lg border border-border p-3 text-sm">
+                        {n.visibleToStaff ? (
+                          <span className="mb-1 inline-block rounded-full bg-accent/20 px-2 py-0.5 text-xs font-semibold text-accent">
+                            スタッフに共有中
+                          </span>
+                        ) : null}
+                        <p className="whitespace-pre-wrap">{n.content}</p>
+                        <div className="mt-2 flex items-center justify-between text-xs text-muted">
+                          <span>
+                            {n.createdAt} {n.authorName}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => setDeleteNoteConfirmTarget(n)}
+                            aria-label="削除"
+                            className="hover:text-red-600 disabled:opacity-60"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                    {data.relationshipNotes.length === 0 ? (
+                      <p className="py-6 text-center text-sm text-muted">メモはまだありません。</p>
+                    ) : null}
+                  </ul>
+                </div>
               </div>
             ) : null}
           </>
@@ -671,13 +684,24 @@ export function ClientDetailPanel({
               placeholder="この取引先に関するメモを入力"
               className="w-full rounded-lg border border-border px-3 py-2 text-sm text-foreground"
             />
+            {kind === "client" ? (
+              <label className="mt-2 flex items-center gap-2 text-xs text-muted">
+                <input
+                  type="checkbox"
+                  checked={newNoteVisibleToStaff}
+                  onChange={(e) => setNewNoteVisibleToStaff(e.target.checked)}
+                />
+                スタッフにも共有する（配属されている本人に表示されます）
+              </label>
+            ) : null}
             <button
               type="button"
               disabled={pending || !newNoteContent.trim()}
               onClick={() =>
                 startTransition(async () => {
-                  await addRelationshipNoteAction(data.relationshipId, newNoteContent);
+                  await addRelationshipNoteAction(data.relationshipId, newNoteContent, newNoteVisibleToStaff);
                   setNewNoteContent("");
+                  setNewNoteVisibleToStaff(false);
                   setShowNoteForm(false);
                   await refresh();
                 })

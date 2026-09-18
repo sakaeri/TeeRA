@@ -278,10 +278,12 @@ model CompanyRelationship {
   proxyName       String?
   status          RelationshipStatus @default(ACTIVE)
   createdAt       DateTime           @default(now())
-  // 配属先の住所・ルール（遅刻連絡ルール、ロッカー使用ルールなど）。
-  // RelationshipNoteとは異なり、こちらは配属されているスタッフ本人にも
-  // 「配属先一覧」で表示される（自社内専用メモとは別軸の共有情報）。
-  staffSharedNote String?
+  // 配属先のルール連絡先。配属先自身の住所（Company.address）は「本社所在
+  // 地≠実際の勤務地」のケースがあるため参照せず、この2項目は常に手入力
+  // ＋固定フォームにする。配属されているスタッフ本人にも「業務単価」の
+  // 勤務先詳細で表示される（社内専用メモとは別軸の共有情報）。
+  workLocation      String?
+  emergencyContact  String?
 
   ownerCompany  Company  @relation("OwnerSide", fields: [ownerCompanyId], references: [id], onDelete: Cascade)
   agencyCompany Company? @relation("AgencySide", fields: [agencyCompanyId], references: [id], onDelete: SetNull)
@@ -304,16 +306,19 @@ model CompanyRelationship {
 
 // 情報メモ (roster client-detail panel) — StaffNoteと同じ考え方。誰がいつ
 // 書いたか分かるよう追記式のエントリ一覧にしている。更新はなく削除のみ。
-// あくまで自社内共有用（緊急連絡先・振込先・担当者の癖など）で、相手企業と
-// 共有するものではない — companyIdで書いた側の会社に紐づけ、読み書きとも
-// 自社のメモしか扱えないようにする（双方向可視化とは別軸。共有していい
-// のは配属状況・稼働実績だけ、という決定）。
+// companyIdは常に派遣元（agencyCompanyId）— 相手企業とは無関係に自社の
+// メモとして持つ。visibleToStaff=trueの投稿だけ、配属されているスタッフ
+// 本人にも見える（元「配属先情報」を統合）。会社側投稿は都度選べるが、
+// スタッフ本人の投稿は常にtrue固定（他のスタッフとの共有が前提で、会社
+// への個別連絡はこの機能の対象外）。削除は会社側のみ可能 — スタッフは
+// 自分の投稿も削除できない。
 model RelationshipNote {
   id                    String   @id @default(cuid())
   companyRelationshipId String
   companyId             String
   content               String
   authorUserId          String
+  visibleToStaff        Boolean  @default(false)
   createdAt             DateTime @default(now())
 
   companyRelationship CompanyRelationship @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
