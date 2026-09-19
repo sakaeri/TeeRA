@@ -75,6 +75,7 @@ export function StaffShell({
   hasMultipleCompanies,
   showCompanyScreenLink,
   openRecruitmentCount,
+  contractSettingsBadgeCount,
   children,
 }: {
   userName: string;
@@ -83,6 +84,7 @@ export function StaffShell({
   hasMultipleCompanies: boolean;
   showCompanyScreenLink: boolean;
   openRecruitmentCount: number;
+  contractSettingsBadgeCount: number;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -117,15 +119,15 @@ export function StaffShell({
               {initial}
             </button>
             {profileOpen ? (
-              <div className="absolute right-0 z-30 mt-2 w-64 rounded-xl bg-white p-4 text-foreground shadow-lg">
+              <div className="absolute right-0 z-30 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-xl bg-white p-4 text-foreground shadow-lg">
                 <div className="mb-3 flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary font-serif-jp font-bold text-primary-foreground">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary font-serif-jp font-bold text-primary-foreground">
                       {initial}
                     </span>
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-semibold">{userName}</p>
-                      <p className="text-xs text-muted">{userEmail}</p>
+                      <p className="break-all text-xs text-muted">{userEmail}</p>
                     </div>
                   </div>
                   <Link
@@ -176,7 +178,12 @@ export function StaffShell({
         {NAV.map((item) => {
           const active =
             pathname === item.href || (item.href !== "/staff" && pathname.startsWith(`${item.href}/`));
-          const badgeCount = item.href === "/staff/recruitments" ? openRecruitmentCount : 0;
+          const badgeCount =
+            item.href === "/staff/recruitments"
+              ? openRecruitmentCount
+              : item.href === "/staff/contracts"
+                ? contractSettingsBadgeCount
+                : 0;
           return (
             <Link
               key={item.href}

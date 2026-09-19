@@ -167,7 +167,7 @@ export function computePendingReportEntries(data: DashboardData) {
     clockIn: r.clockIn ? formatJstTime(r.clockIn) : null,
     clockOut: r.clockOut ? formatJstTime(r.clockOut) : null,
     breakMinutes: r.breakMinutes,
-    computedHours: (r.computedMinutes / 60).toFixed(2),
+    computedHours: (r.computedMinutes / 60).toFixed(1),
     comment: r.comment,
     taskName: r.taskName ?? r.shift.taskName,
   }));

@@ -24,6 +24,7 @@ async function assertCanApprove(workReportId: string, companyId: string, teamId:
 const WORKREPORT_ERROR_LABEL: Record<string, string> = {
   forbidden: "権限がありません",
   not_pending_confirmation: "この業務報告は確認待ちの状態ではありません",
+  not_pending: "この業務報告は既に処理されています。画面を更新してください。",
 };
 
 export async function approveWorkReportAction(workReportId: string) {

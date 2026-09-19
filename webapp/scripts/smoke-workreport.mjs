@@ -79,6 +79,15 @@ try {
   staffBody = await staff.textContent("body");
   log("shows 退勤 button after clock-in", staffBody.includes("退勤"));
 
+  // 出勤・退勤がほぼ同時（同じ分内）だと、分単位に丸められる打刻修正の
+  // 仕組み上「実働0分」＝無効な時間帯として提出できなくなる（他セッション
+  // の変更で提出ボタンが無効化されるようになった）ため、出勤時刻を確実に
+  // 数時間前へ動かしてから退勤する（他のsmoke-*.mjsと同じ対策）。
+  const staffUserId = psql(`select id from "User" where email='${staffEmail}';`);
+  psql(`update "WorkReport" set "clockIn" = now() - interval '8 hours' where "staffUserId"='${staffUserId}';`);
+  await staff.reload();
+  await staff.waitForTimeout(400);
+
   await staff.getByRole("button", { name: "退勤" }).click();
   await staff.waitForTimeout(600);
   staffBody = await staff.textContent("body");

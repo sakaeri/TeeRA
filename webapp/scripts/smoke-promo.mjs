@@ -102,6 +102,15 @@ try {
   await staff.goto("http://localhost:3000/staff/timecard");
   await staff.getByRole("button", { name: "出勤" }).click();
   await staff.waitForTimeout(400);
+  // 出勤・退勤がほぼ同時（同じ分内）だと、分単位に丸められる打刻修正の
+  // 仕組み上「実働0分」＝無効な時間帯として提出できなくなる（他セッション
+  // の変更で提出ボタンが無効化されるようになった）。テストの本題（ポイント
+  // 付与）とは無関係なので、出勤時刻を確実に数分前へ動かしてから退勤する。
+  psql(
+    `update "WorkReport" set "clockIn" = "clockIn" - interval '10 minute' where "shiftId" in (select id from "Shift" where "companyId"='${companyId}' order by "createdAt" desc limit 1);`,
+  );
+  await staff.reload();
+  await staff.waitForTimeout(300);
   await staff.getByRole("button", { name: "退勤" }).click();
   await staff.waitForTimeout(400);
   await staff.getByRole("button", { name: "業務報告を提出する" }).click();

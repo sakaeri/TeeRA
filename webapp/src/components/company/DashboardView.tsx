@@ -761,6 +761,7 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
   const [pending, startTransition] = useTransition();
   const [rejecting, setRejecting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
@@ -810,6 +811,8 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
         <p className="mb-1 mt-4 text-xs font-semibold text-muted">本人のコメント</p>
         <p className="text-sm">{entry.comment || "コメントはありません"}</p>
 
+        {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
+
         {rejecting ? (
           <div className="mt-4">
             <label className="flex flex-col gap-0.5 text-xs text-muted">
@@ -835,7 +838,11 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
                 disabled={pending || !rejectionReason.trim()}
                 onClick={() =>
                   startTransition(async () => {
-                    await rejectWorkReportAction(entry.id, rejectionReason.trim());
+                    const result = await rejectWorkReportAction(entry.id, rejectionReason.trim());
+                    if (result.status === "error") {
+                      setError(result.reason);
+                      return;
+                    }
                     onClose();
                   })
                 }
@@ -852,7 +859,11 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
               disabled={pending}
               onClick={() =>
                 startTransition(async () => {
-                  await approveWorkReportAction(entry.id);
+                  const result = await approveWorkReportAction(entry.id);
+                  if (result.status === "error") {
+                    setError(result.reason);
+                    return;
+                  }
                   onClose();
                 })
               }

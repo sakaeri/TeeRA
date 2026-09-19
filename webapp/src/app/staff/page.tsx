@@ -71,17 +71,21 @@ export default async function StaffHomePage({
     .filter((s) => !isDone(s));
 
   // 1件のShiftRequestが複数日をまとめて持っているため、カレンダー表示用に
-  // 「1日=1行」へ展開する。
-  const requestRows = pendingRequests.flatMap((r) =>
-    r.dates.map((d) => ({
-      id: `${r.id}-${d.toISOString().slice(0, 10)}`,
-      date: d.toISOString().slice(0, 10),
-      companyId: r.companyId,
-      companyName: r.company.name,
-      desire: r.desire,
-      status: r.status,
-    })),
-  );
+  // 「1日=1行」へ展開する。過去日は会社側が対応し忘れていてもマッチしよう
+  // がなく無意味なので、会社側の一覧（ShiftRequestsSection）と同じく
+  // 除外する（会社の回答待ち表示がスタッフ側にだけ残り続けないように）。
+  const requestRows = pendingRequests
+    .flatMap((r) =>
+      r.dates.map((d) => ({
+        id: `${r.id}-${d.toISOString().slice(0, 10)}`,
+        date: d.toISOString().slice(0, 10),
+        companyId: r.companyId,
+        companyName: r.company.name,
+        desire: r.desire,
+        status: r.status,
+      })),
+    )
+    .filter((r) => r.date >= todayStr);
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col bg-white px-1 pb-4 pt-2 sm:block sm:bg-transparent sm:px-6 sm:py-10">

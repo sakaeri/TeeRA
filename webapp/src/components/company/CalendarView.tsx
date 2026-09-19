@@ -56,11 +56,13 @@ const APPROVAL_PILL: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-800",
   APPROVED: "bg-sky-100 text-sky-800",
   REJECTED: "bg-rose-100 text-rose-800",
+  NEEDS_CONFIRMATION: "bg-accent/20 text-accent",
 };
 const APPROVAL_LABEL: Record<string, string> = {
   PENDING: "未承認",
   APPROVED: "承認済み",
   REJECTED: "差戻し",
+  NEEDS_CONFIRMATION: "要確認",
 };
 
 type StaffOption = { id: string; name: string };
@@ -1029,8 +1031,12 @@ function OrderEditModal({
     startTransition(async () => {
       try {
         await updateMaxEntriesAction(recruitment.id, maxEntries);
-      } catch {
-        setError("変更できませんでした。");
+      } catch (e) {
+        if (e instanceof Error && e.message === "insufficient_tee_balance") {
+          setError("Tee残高が不足しているため変更できません。");
+        } else {
+          setError("変更できませんでした。");
+        }
       }
     });
   }
@@ -1122,7 +1128,7 @@ function OrderEditModal({
               <input
                 type="number"
                 min={recruitment.filled}
-                max={isPastDay ? recruitment.maxEntries : undefined}
+                max={isPastDay ? recruitment.maxEntries : recruitment.visibility === "PUBLIC" ? affordableMaxEntries : undefined}
                 value={maxEntries}
                 disabled={!canReduceMaxEntries}
                 onChange={(e) => setMaxEntries(Number(e.target.value))}
@@ -1132,7 +1138,10 @@ function OrderEditModal({
                 <button
                   type="button"
                   disabled={
-                    pending || maxEntries === recruitment.maxEntries || (isPastDay && maxEntries > recruitment.maxEntries)
+                    pending ||
+                    maxEntries === recruitment.maxEntries ||
+                    (isPastDay && maxEntries > recruitment.maxEntries) ||
+                    (recruitment.visibility === "PUBLIC" && maxEntries > affordableMaxEntries)
                   }
                   onClick={saveMaxEntries}
                   className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-background disabled:opacity-50"
@@ -1141,6 +1150,20 @@ function OrderEditModal({
                 </button>
               ) : null}
             </div>
+            {recruitment.visibility === "PUBLIC" && maxEntries > affordableMaxEntries ? (
+              <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 p-3">
+                <p className="text-xs text-foreground">
+                  現在の残高では最大{affordableMaxEntries}名までです。{affordableMaxEntries + 1}
+                  名以上にする場合はチャージしてください。
+                </p>
+                <Link
+                  href="/company/wallet"
+                  className="shrink-0 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+                >
+                  チャージする
+                </Link>
+              </div>
+            ) : null}
           </Field>
         ) : null}
 
@@ -2484,6 +2507,19 @@ function AssignShiftModal({
               ＋ 新しい業務内容を追加する
             </button>
           )}
+
+          {clientTaskOptions.length === 0 && !showNewTaskForm ? (
+            <button
+              type="button"
+              onClick={() => {
+                setTaskName("");
+                goNext();
+              }}
+              className="text-xs text-muted hover:text-primary"
+            >
+              業務内容を選ばずに次へ
+            </button>
+          ) : null}
         </div>
       </Modal>
     );

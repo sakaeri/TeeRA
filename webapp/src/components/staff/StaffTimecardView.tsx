@@ -108,24 +108,19 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
   const finalized = shift.outcome && shift.outcome !== "WORKED";
   const readyToSubmit = shift.clockIn && shift.clockOut;
   // 休憩を確定させる前の実働時間プレビュー — 手修正した打刻時刻(HH:MM)を
-  // 使って計算する。日付をまたぐ場合（退勤が出勤より前の時刻）は翌日
-  // 退勤とみなして24時間分を足す。
+  // 使って計算する。サーバー側（withJstTime）は日付をまたがず、出勤・退勤を
+  // それぞれ元の暦日のまま扱う（翌日退勤とはみなさない）ため、ここでも同じ
+  // 計算にして、プレビューと実際の送信結果が食い違わないようにする。
   function hhmmToMinutes(hhmm: string) {
     const [h, m] = hhmm.split(":").map(Number);
     return h * 60 + m;
   }
-  const liveComputedMinutes =
+  const liveRawMinutes =
     clockInEdit && clockOutEdit
-      ? Math.max(
-          (() => {
-            const start = hhmmToMinutes(clockInEdit);
-            let end = hhmmToMinutes(clockOutEdit);
-            if (end < start) end += 24 * 60;
-            return end - start - (Number(breakMinutes) || 0);
-          })(),
-          0,
-        )
+      ? hhmmToMinutes(clockOutEdit) - hhmmToMinutes(clockInEdit) - (Number(breakMinutes) || 0)
       : 0;
+  const liveComputedMinutes = Math.max(liveRawMinutes, 0);
+  const hasInvalidTimeRange = Boolean(clockInEdit && clockOutEdit && liveRawMinutes <= 0);
   // 提出済み（差し戻し以外）は編集フォームを出さず、読み取り専用の
   // 報告内容にする。承認済みかどうかは上のバッジで分かるので、ここでは
   // 「何を報告したか」だけ分かれば十分（差し戻し=REJECTEDだけは修正して
@@ -266,6 +261,9 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
                 </div>
               </div>
               <p className="text-sm text-muted">実働 {(liveComputedMinutes / 60).toFixed(1)} 時間</p>
+              {hasInvalidTimeRange ? (
+                <p className="text-xs text-red-600">退勤時刻が出勤時刻より前になっています。時刻を見直してください。</p>
+              ) : null}
               <label className="flex flex-col gap-0.5 text-xs text-muted">
                 業務内容
                 {taskNameMode === "pick" ? (
@@ -323,7 +321,7 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
               {error ? <p className="text-xs text-red-600">{error}</p> : null}
               <button
                 type="button"
-                disabled={pending || !clockInEdit || !clockOutEdit}
+                disabled={pending || !clockInEdit || !clockOutEdit || hasInvalidTimeRange}
                 onClick={() =>
                   startTransition(async () => {
                     try {

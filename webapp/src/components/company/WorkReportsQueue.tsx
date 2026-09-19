@@ -86,12 +86,12 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
         <ul className="flex flex-col gap-3">
           {reports.map((r) => (
             <li key={r.id} className="rounded-xl border border-border/60 p-4">
-              <div className="mb-1 flex items-center justify-between">
-                <span className="font-medium">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="min-w-0 font-medium">
                   {r.staffName} — {r.date}
                   {r.taskName ? <span className="ml-1.5 font-normal text-muted">（{r.taskName}）</span> : null}
                 </span>
-                <span className="text-xs text-muted">{r.outcome}</span>
+                <span className="shrink-0 whitespace-nowrap text-xs text-muted">{r.outcome}</span>
               </div>
               {r.outcome === "出勤した" ? (
                 <p className="text-sm text-muted">

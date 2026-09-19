@@ -238,30 +238,34 @@ async function awardApprovalPoints(tx: Tx, report: { id: string; staffUserId: st
 // updateManyのWHERE条件（approvalStatusがまだAPPROVEDでないこと）は
 // Postgresの行ロックにより後勝ちのUPDATEが先勝ちのCOMMIT後に再評価される
 // ため、2つ目の呼び出しはcount=0となりポイント付与をスキップできる。
+// 承認・差し戻しとも、企業から動かせるのはPENDING（未承認の自己申告）から
+// だけに限定する — NEEDS_CONFIRMATION（差し戻し後の企業修正・スタッフ確認
+// 待ち）やREJECTED・APPROVEDから企業が直接動かせてしまうと、古い画面から
+// の操作（レース条件）でスタッフの確認ステップを飛び越えて承認できてしまう
+// （correctAndReturnWorkReportのコメント参照）。
 export async function approveWorkReport(params: { workReportId: string; approverUserId: string }) {
   return prisma.$transaction(async (tx) => {
     const report = await tx.workReport.findUniqueOrThrow({ where: { id: params.workReportId } });
 
     const result = await tx.workReport.updateMany({
-      where: { id: report.id, approvalStatus: { not: "APPROVED" } },
+      where: { id: report.id, approvalStatus: "PENDING" },
       data: {
         approvalStatus: "APPROVED",
         approverUserId: params.approverUserId,
         approvedAt: new Date(),
       },
     });
+    if (result.count === 0) throw new Error("not_pending");
 
-    if (result.count > 0) {
-      await awardApprovalPoints(tx, report);
-    }
+    await awardApprovalPoints(tx, report);
 
     return report;
   });
 }
 
 export async function rejectWorkReport(params: { workReportId: string; approverUserId: string; reason: string }) {
-  return prisma.workReport.update({
-    where: { id: params.workReportId },
+  const result = await prisma.workReport.updateMany({
+    where: { id: params.workReportId, approvalStatus: "PENDING" },
     data: {
       approvalStatus: "REJECTED",
       approverUserId: params.approverUserId,
@@ -269,6 +273,7 @@ export async function rejectWorkReport(params: { workReportId: string; approverU
       rejectionReason: params.reason,
     },
   });
+  if (result.count === 0) throw new Error("not_pending");
 }
 
 // 差し戻し時に企業が打刻・休憩時間を手修正する。企業は直接APPROVEDには

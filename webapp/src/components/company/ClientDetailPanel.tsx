@@ -74,11 +74,13 @@ const APPROVAL_PILL: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-800",
   APPROVED: "bg-sky-100 text-sky-800",
   REJECTED: "bg-rose-100 text-rose-800",
+  NEEDS_CONFIRMATION: "bg-accent/20 text-accent",
 };
 const APPROVAL_LABEL: Record<string, string> = {
   PENDING: "未承認",
   APPROVED: "承認済み",
   REJECTED: "差戻し",
+  NEEDS_CONFIRMATION: "要確認",
 };
 
 function timeLabel(d: ClientMonthDetail["days"][number]) {
@@ -332,18 +334,18 @@ export function ClientDetailPanel({
               )
             ) : null}
 
-            <div className="mb-4 flex gap-4 border-b border-border text-sm">
+            <div className="mb-4 flex gap-4 overflow-x-auto border-b border-border text-sm">
               <button
                 type="button"
                 onClick={() => setTab("history")}
-                className={`border-b-2 px-1 py-2 font-semibold ${tab === "history" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "history" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
                 稼働履歴
               </button>
               <button
                 type="button"
                 onClick={() => setTab("staff")}
-                className={`border-b-2 px-1 py-2 font-semibold ${tab === "staff" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "staff" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
                 スタッフ一覧
               </button>
@@ -351,7 +353,7 @@ export function ClientDetailPanel({
                 <button
                   type="button"
                   onClick={() => setTab("rates")}
-                  className={`border-b-2 px-1 py-2 font-semibold ${tab === "rates" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                  className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "rates" ? "border-accent text-primary" : "border-transparent text-muted"}`}
                 >
                   単価
                 </button>
@@ -359,7 +361,7 @@ export function ClientDetailPanel({
               <button
                 type="button"
                 onClick={() => setTab("note")}
-                className={`border-b-2 px-1 py-2 font-semibold ${tab === "note" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "note" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
                 情報メモ
               </button>

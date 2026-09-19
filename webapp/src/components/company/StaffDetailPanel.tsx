@@ -117,11 +117,13 @@ const APPROVAL_PILL: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-800",
   APPROVED: "bg-sky-100 text-sky-800",
   REJECTED: "bg-rose-100 text-rose-800",
+  NEEDS_CONFIRMATION: "bg-accent/20 text-accent",
 };
 const APPROVAL_LABEL: Record<string, string> = {
   PENDING: "未承認",
   APPROVED: "承認済み",
   REJECTED: "差戻し",
+  NEEDS_CONFIRMATION: "要確認",
 };
 const CONTRACT_STATUS_LABEL: Record<string, string> = {
   ACTIVE: "確認済み",

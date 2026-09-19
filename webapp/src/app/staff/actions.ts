@@ -137,6 +137,11 @@ export async function applyToRecruitmentAction(recruitmentId: string) {
   try {
     await applyToRecruitment({ recruitmentId, staffUserId: userId });
   } catch (error) {
+    // 連続タップ等でほぼ同時に2回応募すると、DBのユニーク制約違反になる
+    // （会社側assignStaffToRecruitmentActionと同じ考え方）。
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+      return { error: "既に応募済みです" };
+    }
     if (error instanceof Error) {
       return { error: error.message };
     }
