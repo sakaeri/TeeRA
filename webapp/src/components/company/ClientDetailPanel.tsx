@@ -334,7 +334,7 @@ export function ClientDetailPanel({
               )
             ) : null}
 
-            <div className="mb-4 flex gap-4 overflow-x-auto border-b border-border text-sm">
+            <div className="mb-4 flex shrink-0 gap-4 overflow-x-auto border-b border-border text-sm">
               <button
                 type="button"
                 onClick={() => setTab("history")}
