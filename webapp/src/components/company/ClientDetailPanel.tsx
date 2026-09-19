@@ -334,18 +334,18 @@ export function ClientDetailPanel({
               )
             ) : null}
 
-            <div className="mb-4 flex gap-2 overflow-x-auto border-b border-border text-sm">
+            <div className="mb-4 flex gap-4 overflow-x-auto border-b border-border text-sm">
               <button
                 type="button"
                 onClick={() => setTab("history")}
-                className={`shrink-0 whitespace-nowrap border-b-2 px-0.5 py-2 font-semibold ${tab === "history" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "history" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
                 稼働履歴
               </button>
               <button
                 type="button"
                 onClick={() => setTab("staff")}
-                className={`shrink-0 whitespace-nowrap border-b-2 px-0.5 py-2 font-semibold ${tab === "staff" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "staff" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
                 スタッフ一覧
               </button>
@@ -353,7 +353,7 @@ export function ClientDetailPanel({
                 <button
                   type="button"
                   onClick={() => setTab("rates")}
-                  className={`shrink-0 whitespace-nowrap border-b-2 px-0.5 py-2 font-semibold ${tab === "rates" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                  className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "rates" ? "border-accent text-primary" : "border-transparent text-muted"}`}
                 >
                   単価
                 </button>
@@ -361,7 +361,7 @@ export function ClientDetailPanel({
               <button
                 type="button"
                 onClick={() => setTab("note")}
-                className={`shrink-0 whitespace-nowrap border-b-2 px-0.5 py-2 font-semibold ${tab === "note" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "note" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
                 社内メモ
               </button>

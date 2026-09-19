@@ -518,32 +518,32 @@ export function StaffDetailPanel({
               </div>
             )}
 
-            <div className="mb-4 flex gap-2 overflow-x-auto border-b border-border text-sm">
+            <div className="mb-4 flex gap-4 overflow-x-auto border-b border-border text-sm">
               <button
                 type="button"
                 onClick={() => setTab("history")}
-                className={`shrink-0 whitespace-nowrap border-b-2 px-0.5 py-2 font-semibold ${tab === "history" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "history" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
                 稼働履歴
               </button>
               <button
                 type="button"
                 onClick={() => setTab("contracts")}
-                className={`shrink-0 whitespace-nowrap border-b-2 px-0.5 py-2 font-semibold ${tab === "contracts" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "contracts" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
                 契約書管理
               </button>
               <button
                 type="button"
                 onClick={() => setTab("rates")}
-                className={`shrink-0 whitespace-nowrap border-b-2 px-0.5 py-2 font-semibold ${tab === "rates" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "rates" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
                 業務内容単価
               </button>
               <button
                 type="button"
                 onClick={() => setTab("note")}
-                className={`shrink-0 whitespace-nowrap border-b-2 px-0.5 py-2 font-semibold ${tab === "note" ? "border-accent text-primary" : "border-transparent text-muted"}`}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-2 font-semibold ${tab === "note" ? "border-accent text-primary" : "border-transparent text-muted"}`}
               >
                 社内メモ
               </button>
