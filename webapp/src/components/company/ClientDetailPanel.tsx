@@ -458,12 +458,7 @@ export function ClientDetailPanel({
 
             {tab === "staff" ? (
               <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-xs font-medium text-muted">配属中スタッフ</p>
-                  <button type="button" onClick={() => setTab("note")} className="text-xs text-primary hover:underline">
-                    共有メモ
-                  </button>
-                </div>
+                <p className="mb-2 text-xs font-medium text-muted">配属中スタッフ</p>
                 <ul className="flex flex-col gap-2">
                   {data.placements
                     .filter((p) => p.active)
@@ -699,7 +694,7 @@ export function ClientDetailPanel({
                   checked={newNoteVisibleToStaff}
                   onChange={(e) => setNewNoteVisibleToStaff(e.target.checked)}
                 />
-                スタッフにも共有する（配属されている本人に表示されます）
+                スタッフにも共有する
               </label>
             ) : null}
             <button

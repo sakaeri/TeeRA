@@ -415,7 +415,7 @@ export function StaffContractsView({
         ) : null}
       </section>
 
-      {baseWage || taskRates.length > 0 ? (
+      {baseWage || taskRates.length > 0 || workplaces.length > 0 ? (
         <section className="rounded-2xl border border-border bg-white/60 p-6">
           <h2 className="mb-4 font-serif-jp text-lg font-bold text-primary">業務単価</h2>
           {baseWage ? (
@@ -497,6 +497,21 @@ export function StaffContractsView({
               </ul>
             </div>
           ))}
+          {workplaces
+            .filter((w) => !taskRates.some((r) => r.companyRelationshipId === w.companyRelationshipId))
+            .map((w) => (
+              <button
+                key={w.companyRelationshipId}
+                type="button"
+                onClick={() => setOpenWorkplaceId(w.companyRelationshipId)}
+                className="mb-2 flex w-full items-center justify-between gap-2 border-b border-border pb-1 text-left text-sm font-semibold text-primary last:mb-0 hover:opacity-70"
+              >
+                {w.name}
+                <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4 shrink-0 text-muted">
+                  <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            ))}
         </section>
       ) : null}
 

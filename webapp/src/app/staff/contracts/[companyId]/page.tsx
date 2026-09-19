@@ -40,11 +40,15 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
   });
   if (!myMembership) notFound();
 
-  const [allContracts, company, taskRates, clientRelationships] = await Promise.all([
+  const [allContracts, company, taskRates, clientRelationships, myPlacements] = await Promise.all([
     listStaffContracts(userId, companyId),
     prisma.company.findUniqueOrThrow({ where: { id: companyId } }),
     listStaffTaskRatesForStaff(companyId, userId),
     listClients(companyId),
+    prisma.staffPlacement.findMany({
+      where: { staffUserId: userId, active: true, companyRelationship: { agencyCompanyId: companyId, status: "ACTIVE" } },
+      select: { companyRelationshipId: true },
+    }),
   ]);
 
   const today = new Date();
@@ -53,7 +57,11 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
   const pendingContracts = allContracts.filter((c) => c.status === "PENDING_CONSENT");
 
   // 業務単価の「勤務先」見出しから開く詳細（勤務地・緊急連絡先・共有メモ）
-  // 用のデータを、自分の単価が設定されている勤務先ぶんだけ組み立てる。
+  // 用のデータを組み立てる。個別単価が設定されている勤務先だけでなく、
+  // 配属記録(StaffPlacement)がある勤務先も対象にする — 配属はされていても
+  // 個別単価までは設定していない（基本給・勤務先問わずの単価で運用）
+  // ケースが普通にあるため、単価の有無だけで絞ると配属先が一覧から
+  // 消えてしまう。
   const relationshipInfoById = new Map(
     clientRelationships.map((r) => [
       r.id,
@@ -61,7 +69,10 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
     ]),
   );
   const myWorkplaceRelationshipIds = Array.from(
-    new Set(taskRates.map((r) => r.companyRelationshipId).filter((id): id is string => id !== null)),
+    new Set([
+      ...taskRates.map((r) => r.companyRelationshipId).filter((id): id is string => id !== null),
+      ...myPlacements.map((p) => p.companyRelationshipId),
+    ]),
   );
   const workplaceNotesById = new Map(
     await Promise.all(
