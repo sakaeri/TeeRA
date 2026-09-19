@@ -6,6 +6,7 @@ import {
   listClientRecruitments,
   affordableMaxEntries,
   resolveStaffOrigins,
+  settlePastRecruitments,
 } from "@/lib/domain/recruitment";
 import { listStaff } from "@/lib/domain/roster";
 import { listTeams } from "@/lib/domain/teams";
@@ -49,6 +50,11 @@ export default async function CompanyCalendarPage({
   const teamId = isAdmin || (requestedTeamId && myTeamIds.includes(requestedTeamId)) ? requestedTeamId : undefined;
   const restrictToTeamIds = isAdmin ? undefined : myTeamIds;
 
+  // 過去日になっても埋まらなかった公開募集の枠を、このページを開いた
+  // タイミングで自動精算する（未使用分のTeeを返金）— 以降のlistPublic
+  // Recruitmentsに結果を反映させるため、Promise.allより前に完了させる。
+  await settlePastRecruitments(membership.companyId);
+
   const [shifts, shiftHistory, staff, teams, shiftRequests, recruitments, clientRecruitments] = await Promise.all([
     listShiftsForMonth({ companyId: membership.companyId, year, month, teamId, restrictToTeamIds, companyRelationshipId: relationshipId }),
     listShiftHistoryForMonth({ companyId: membership.companyId, year, month, teamId, restrictToTeamIds }),
@@ -78,7 +84,7 @@ export default async function CompanyCalendarPage({
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col bg-white px-1 pb-4 pt-2 sm:block sm:bg-transparent sm:px-8 sm:py-10">
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col bg-white px-1 pb-4 pt-2 sm:block sm:bg-transparent sm:px-8 sm:py-10">
       <CalendarView
         year={year}
         month={month}

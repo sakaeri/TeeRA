@@ -359,7 +359,7 @@ export async function getClientMonthDetail(params: {
   };
 }
 
-// 情報メモ: StaffNoteと同じく、誰がいつ書いたか分かるよう追記式の一覧で
+// 社内メモ: StaffNoteと同じく、誰がいつ書いたか分かるよう追記式の一覧で
 // 持つ。更新はなく、削除のみ（誤記は削除して書き直す）。companyIdで書いた
 // 側の会社（常に派遣元=agencyCompanyId）に絞り込む — 相手企業には一切
 // 見えない（双方向可視化とは別軸）。visibleToStaff=trueの投稿だけ、配属
@@ -399,7 +399,7 @@ export async function deleteRelationshipNote(id: string, companyId: string) {
 
 // スタッフ本人向け: 共有ONの投稿だけを内容と日付のみで返す（投稿者名は
 // 出さない — 社内の誰が書いたかはスタッフの関知するところではないため）。
-// companyIdはagencyCompanyId固定（情報メモは常に派遣元の会社に紐づく）。
+// companyIdはagencyCompanyId固定（社内メモは常に派遣元の会社に紐づく）。
 export async function listStaffVisibleRelationshipNotes(companyRelationshipId: string, agencyCompanyId: string) {
   const notes = await prisma.relationshipNote.findMany({
     where: { companyRelationshipId, companyId: agencyCompanyId, visibleToStaff: true },

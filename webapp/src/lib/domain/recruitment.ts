@@ -161,7 +161,7 @@ export async function publishRecruitment(recruitmentId: string) {
 export async function updateMaxEntries(params: {
   recruitmentId: string;
   newMaxEntries: number;
-  updatedByUserId: string;
+  updatedByUserId?: string;
 }) {
   return prisma.$transaction(async (tx) => {
     const recruitment = await tx.publicRecruitment.findUniqueOrThrow({
@@ -214,6 +214,27 @@ export async function updateMaxEntries(params: {
       data: { maxEntries: newMaxEntries, lockedTee: newLockedTee },
     });
   });
+}
+
+// 日付が過ぎても掲載中(PUBLISHED)のまま埋まらなかった枠は、会社側が
+// 「編集」から手動で人数上限を減らさない限りTeeがロックされたままになる
+// —が、これを毎回手動でやらせるのは手間なので、カレンダー画面を開いた
+// タイミングで裏側で自動精算する（updateMaxEntriesと同じ「減らす方向だけ
+// 安全」のロジックをそのまま使い、埋まった数まで自動で下げてTeeを返金）。
+// システム起因の変更なのでupdatedByUserIdは付けない。
+export async function settlePastRecruitments(companyId: string) {
+  const stale = await prisma.publicRecruitment.findMany({
+    where: { companyId, status: "PUBLISHED", visibility: "PUBLIC", date: { lt: new Date(`${todayJst()}T00:00:00.000Z`) } },
+    select: { id: true, maxEntries: true },
+  });
+  for (const r of stale) {
+    const filledCount = await prisma.recruitmentEntry.count({
+      where: { publicRecruitmentId: r.id, status: { not: "REJECTED" } },
+    });
+    if (filledCount < r.maxEntries) {
+      await updateMaxEntries({ recruitmentId: r.id, newMaxEntries: filledCount });
+    }
+  }
 }
 
 // 削除: 間違えた/重複した募集を消す操作。停止(一時中断からの再開)は使い道が

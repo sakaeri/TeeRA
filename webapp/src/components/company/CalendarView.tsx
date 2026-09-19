@@ -495,7 +495,7 @@ export function CalendarView({
               key={i}
               type="button"
               onClick={() => setSelectedDate(c.dateStr)}
-              className={`relative flex h-full flex-col items-stretch justify-start overflow-hidden rounded-lg p-1 text-left sm:h-[100px] sm:rounded-xl sm:rounded-tr-none sm:p-1.5 ${
+              className={`relative flex h-full flex-col items-stretch justify-start overflow-hidden rounded-lg rounded-tr-none p-1 text-left sm:h-[100px] sm:rounded-xl sm:rounded-tr-none sm:p-1.5 ${
                 isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "hover:bg-background"
               }`}
             >
@@ -538,7 +538,7 @@ export function CalendarView({
           dateStr={selectedDate}
           shifts={selectedShifts}
           history={shiftHistory.filter((h) => h.date === selectedDate)}
-          recruitments={recruitments.filter((r) => r.date === selectedDate)}
+          recruitments={recruitments.filter((r) => r.date === selectedDate && r.status === "PUBLISHED")}
           clientOrders={clientRecruitments.filter((r) => r.date === selectedDate)}
           staffOptions={staffOptions}
           requestedStaffUserIds={shiftRequests
@@ -1511,21 +1511,26 @@ function OrderCard({
           <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
             {r.filled}/{r.maxEntries}
           </span>
-          <button
-            type="button"
-            onClick={onEdit}
-            className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-muted hover:bg-background hover:text-primary"
-          >
-            <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5">
-              <path
-                d="M13.5 3.5L16.5 6.5L7 16H4V13L13.5 3.5Z"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-            </svg>
-            編集
-          </button>
+          {/* 過去日は人数上限を減らす（Tee返金）操作だけ残るため、既に
+              filled=maxEntriesで減らす余地がない場合は編集で出来ることが
+              何もない — その場合はボタンごと出さない。 */}
+          {!isPastDay || remaining > 0 ? (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-muted hover:bg-background hover:text-primary"
+            >
+              <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5">
+                <path
+                  d="M13.5 3.5L16.5 6.5L7 16H4V13L13.5 3.5Z"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              編集
+            </button>
+          ) : null}
         </div>
       </div>
 

@@ -124,7 +124,7 @@ try {
   log("③ オーナーでない派遣会社側から単価が保存できる（以前はforbiddenで弾かれていた）", rateSet === "1");
 
   // --- ④ notes: 完全に自社限定、相手には一切見えない ---
-  await agencyPanel.getByRole("button", { name: "情報メモ" }).click();
+  await agencyPanel.getByRole("button", { name: "社内メモ" }).click();
   await agency.waitForTimeout(200);
   await agencyPanel.getByRole("button", { name: "＋メモ作成" }).click();
   await agency.waitForTimeout(200);
@@ -141,7 +141,7 @@ try {
   await client.click(`text=${agencyCompanyName}`);
   await client.waitForTimeout(300);
   const clientPanel = client.locator("div.fixed.inset-0.z-30").last();
-  await clientPanel.getByRole("button", { name: "情報メモ" }).click();
+  await clientPanel.getByRole("button", { name: "社内メモ" }).click();
   await client.waitForTimeout(200);
   let clientNoteBody = await clientPanel.textContent();
   log("④ 依頼主側からは派遣会社が書いたメモが一切見えない", !clientNoteBody.includes("依頼主の緊急連絡先") && clientNoteBody.includes("メモはまだありません"));
@@ -161,7 +161,7 @@ try {
   await agency.click(`text=${clientCompanyName}`);
   await agency.waitForTimeout(300);
   const agencyPanel2 = agency.locator("div.fixed.inset-0.z-30").last();
-  await agencyPanel2.getByRole("button", { name: "情報メモ" }).click();
+  await agencyPanel2.getByRole("button", { name: "社内メモ" }).click();
   await agency.waitForTimeout(200);
   agencyNoteBody = await agencyPanel2.textContent();
   log("④ 派遣会社側からは依頼主が書いたメモが一切見えない（自分のメモだけ見える）", agencyNoteBody.includes("依頼主の緊急連絡先") && !agencyNoteBody.includes("電話が繋がりにくい"));

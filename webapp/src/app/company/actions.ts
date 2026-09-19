@@ -605,7 +605,7 @@ async function assertRelationshipAgencySide(companyRelationshipId: string, compa
   return target;
 }
 
-// 情報メモ: 相手企業とは共有しない自社内の記録（domain層のlistRelationshipNotes/
+// 社内メモ: 相手企業とは共有しない自社内の記録（domain層のlistRelationshipNotes/
 // addRelationshipNote/deleteRelationshipNoteが自社のメモしか扱わないよう
 // 絞り込んでいる）。visibleToStaff=trueにすると、配属されているスタッフ
 // 本人にも見えるようになる（旧「配属先情報」を統合）。関係の当事者であれば
@@ -625,7 +625,7 @@ export async function deleteRelationshipNoteAction(noteId: string) {
   revalidatePath("/company/roster");
 }
 
-// 配属先情報の固定フォーム（勤務地・緊急連絡先）— 情報メモとは別軸で、
+// 配属先情報の固定フォーム（勤務地・緊急連絡先）— 社内メモとは別軸で、
 // 配属されているスタッフ本人の「業務単価」勤務先詳細に表示される。編集
 // できるのは常に派遣元（agencyCompanyId）側のみ（単価設定と同じ考え方 —
 // 依頼主側から書き換えられると困る）。

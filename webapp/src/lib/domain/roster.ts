@@ -456,7 +456,7 @@ export async function getStaffMonthDetail(params: {
   };
 }
 
-// 情報メモ: 誰がいつ書いたか分かるよう追記式の一覧で持つ。更新はなく、
+// 社内メモ: 誰がいつ書いたか分かるよう追記式の一覧で持つ。更新はなく、
 // 削除のみ（誤記は削除して書き直す）。
 export async function listStaffNotes(membershipId: string) {
   return prisma.staffNote.findMany({

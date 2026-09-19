@@ -255,12 +255,17 @@ try {
   state2 = psql(`select "lockedTee" from "PublicRecruitment" where id='${recruitment2Id}';`);
   log("管理者が自社スタッフを直接アサインしても即座に返金される（ロック0に）", state2 === "0");
 
-  // ② 日付が過ぎた公開募集でも、未使用分の人数上限を減らして返金できる
+  // ② 日付が過ぎた公開募集は、会社側が何もしなくてもカレンダー画面を開いた
+  // だけで自動的に未使用分の人数上限が減らされ、Teeが返金される
+  // （settlePastRecruitments — 手動での「編集→人数上限を減らす」操作を
+  // 待たずに済ませるための遅延精算）。
   // （UIから直接は過去日の公開募集を作れないため、SQLで直接その状態を再現する）
   // 日付はJST基準で計算してから渡す — Postgres側のcurrent_dateはUTC基準
   // （このDBのTIMEZONE設定はEtc/UTC）なので、JST 0時〜9時台はcurrent_date
   // が「JSTの前日」を指してしまい、テストが期待する日付とずれる。
   const yesterday = new Date(Date.now() + JST_OFFSET_MS - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  // ②-a: 誰も応募しなかった過去の募集（2枠まるまる未使用）→ 全額自動返金
   const pastRecruitmentId = psql(
     `with ins as (insert into "PublicRecruitment" (id, "companyId", title, date, "maxEntries", "perEntryTeeCost", "lockedTee", status, visibility, "publishedAt", "publicOpenedAt", "isUndecided", "extraItems", "createdAt", "updatedAt") ` +
       `values (gen_random_uuid()::text, '${companyAId}', '過去の公開募集テスト', '${yesterday}'::date, 2, 10, 20, 'PUBLISHED', 'PUBLIC', now(), now(), true, '[]'::jsonb, now(), now()) returning id) select id from ins;`,
@@ -269,7 +274,43 @@ try {
     `update "Company" set "teeBalance" = "teeBalance" - 20 where id = '${companyAId}';` +
       `insert into "TeeLedgerEntry" (id, "companyId", type, amount, "balanceAfter", "publicRecruitmentId", "createdAt") values (gen_random_uuid()::text, '${companyAId}', 'LOCK_RECRUITMENT', -20, (select "teeBalance" from "Company" where id='${companyAId}'), '${pastRecruitmentId}', now());`,
   );
-  const balanceBeforePastFix = Number(psql(`select "teeBalance" from "Company" where id='${companyAId}';`));
+
+  // ②-b: 3枠のうち1枠だけ埋まった過去の募集 → 埋まった分は残し、未使用の
+  // 2枠分だけ自動返金される（全額返金ではないことも確認する）
+  // 登録時にメールは小文字化されて保存されるため、大文字を含む
+  // staffZEmailそのままでは一致しない。
+  const staffZId = psql(`select id from "User" where email='${staffZEmail.toLowerCase()}';`);
+  const partialPastRecruitmentId = psql(
+    `with ins as (insert into "PublicRecruitment" (id, "companyId", title, date, "maxEntries", "perEntryTeeCost", "lockedTee", status, visibility, "publishedAt", "publicOpenedAt", "isUndecided", "extraItems", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyAId}', '過去の公開募集テスト（一部充足）', '${yesterday}'::date, 3, 10, 30, 'PUBLISHED', 'PUBLIC', now(), now(), true, '[]'::jsonb, now(), now()) returning id) select id from ins;`,
+  );
+  psql(
+    `insert into "RecruitmentEntry" (id, "publicRecruitmentId", "staffUserId", status, "appliedAt") values (gen_random_uuid()::text, '${partialPastRecruitmentId}', '${staffZId}', 'APPLIED', now());` +
+      `update "Company" set "teeBalance" = "teeBalance" - 30 where id = '${companyAId}';` +
+      `insert into "TeeLedgerEntry" (id, "companyId", type, amount, "balanceAfter", "publicRecruitmentId", "createdAt") values (gen_random_uuid()::text, '${companyAId}', 'LOCK_RECRUITMENT', -30, (select "teeBalance" from "Company" where id='${companyAId}'), '${partialPastRecruitmentId}', now());`,
+  );
+
+  const balanceBeforeAutoSettle = Number(psql(`select "teeBalance" from "Company" where id='${companyAId}';`));
+
+  // 特にその過去日を開かなくても、カレンダーを開いた時点で会社全体の
+  // 過去募集がまとめて精算される（同じ会社の別月ページでも良い）ことを
+  // 確認するため、あえて「今日」のカレンダーを開く。
+  await adminA.goto(`http://localhost:3000/company/calendar?date=${today}`);
+  await adminA.waitForTimeout(600);
+
+  const autoSettled = psql(`select "lockedTee", "maxEntries" from "PublicRecruitment" where id='${pastRecruitmentId}';`);
+  log("誰も応募しなかった過去の募集は、カレンダーを開くだけで人数上限0まで自動的に減る", autoSettled === "0|0");
+
+  const partialAutoSettled = psql(
+    `select "lockedTee", "maxEntries" from "PublicRecruitment" where id='${partialPastRecruitmentId}';`,
+  );
+  log("一部だけ充足した過去の募集は、埋まった1枠分だけ残して自動精算される（全額ではない）", partialAutoSettled === "10|1");
+
+  const balanceAfterAutoSettle = Number(psql(`select "teeBalance" from "Company" where id='${companyAId}';`));
+  log("2件分の未使用枠（20+20=40Tee）がまとめて自動的に返金される", balanceAfterAutoSettle === balanceBeforeAutoSettle + 40);
+
+  // 完全に精算済み（残り0名）の過去募集は、編集で出来ることが何も無いため
+  // 編集ボタンごと表示されない。
   await adminA.goto(`http://localhost:3000/company/calendar?date=${yesterday}`);
   await adminA.waitForTimeout(600);
   await adminA
@@ -278,25 +319,11 @@ try {
     .getByRole("button", { name: /^募集一覧/ })
     .click();
   await adminA.waitForTimeout(300);
-  await adminA.locator(".fixed.inset-0.z-20").first().getByRole("button", { name: "編集" }).click();
-  await adminA.waitForTimeout(300);
-  const pastEditModal = adminA.locator(".fixed.inset-0.z-20").nth(1);
-  const pastBody = await pastEditModal.innerText();
-  log("過去日の公開募集にも編集ポップアップが開く", pastBody.includes("募集人数の上限"));
-
-  const maxEntriesInput = pastEditModal.locator('input[type=number]').first();
-  log("人数上限の入力欄は無効化されていない（減らす操作はできる）", await maxEntriesInput.isEnabled());
-  const maxAttr = await maxEntriesInput.getAttribute("max");
-  log("過去日は現在の人数上限より増やせないようmax属性が付く", maxAttr === "2");
-
-  await maxEntriesInput.fill("0");
-  await pastEditModal.getByRole("button", { name: "変更する" }).click();
-  await adminA.waitForTimeout(600);
-
-  const pastLockedAfter = psql(`select "lockedTee", "maxEntries" from "PublicRecruitment" where id='${pastRecruitmentId}';`);
-  log("過去日の募集でも人数上限を0に減らすと全額返金される", pastLockedAfter === "0|0");
-  const balanceAfterPastFix = Number(psql(`select "teeBalance" from "Company" where id='${companyAId}';`));
-  log("過去日の返金で残高が20戻る", balanceAfterPastFix === balanceBeforePastFix + 20);
+  const recruitListBody = adminA.locator(".fixed.inset-0.z-20").first();
+  log(
+    "完全に自動精算済みの過去募集には編集ボタンが出ない",
+    (await recruitListBody.getByRole("button", { name: "編集" }).count()) === 0,
+  );
 
   console.log(process.exitCode ? "RECRUITMENT TEE REFUND SMOKE TEST HAD FAILURES" : "RECRUITMENT TEE REFUND SMOKE TEST PASSED");
 } catch (err) {
