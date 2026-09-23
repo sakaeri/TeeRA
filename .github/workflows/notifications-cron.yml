@@ -1,0 +1,49 @@
+name: Email notifications cron
+
+# Vercelの無料(Hobby)プランのCronは1日1回までしか使えないため、代わりに
+# GitHub Actionsの定期実行でTeeRA側の受付口(/api/cron/notifications)を叩く。
+# 事前にリポジトリのSettings > Secrets and variablesで以下を設定すること:
+#   - APP_BASE_URL: 本番URL（例: https://teera-tau.vercel.app）
+#   - CRON_SECRET:  Vercel側の環境変数CRON_SECRETと同じ値
+on:
+  schedule:
+    # 勤務開始1時間前リマインド — 5分おき
+    - cron: "*/5 * * * *"
+    # シフト希望のたまり — 毎日8:00 JST (23:00 UTC 前日)
+    - cron: "0 23 * * *"
+    # 未提出の業務報告・契約書の同意待ちリマインド — 毎週月曜9:00 JST (0:00 UTC 月曜)
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "手動実行する場合のジョブ名"
+        required: true
+        type: choice
+        options:
+          - shift-start-reminders
+          - shift-request-digest
+          - weekly-digest
+
+jobs:
+  call-notifications-endpoint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine which job to run
+        id: resolve
+        run: |
+          if [ -n "${{ github.event.inputs.job }}" ]; then
+            echo "job=${{ github.event.inputs.job }}" >> "$GITHUB_OUTPUT"
+          else
+            case "${{ github.event.schedule }}" in
+              "*/5 * * * *") echo "job=shift-start-reminders" >> "$GITHUB_OUTPUT" ;;
+              "0 23 * * *") echo "job=shift-request-digest" >> "$GITHUB_OUTPUT" ;;
+              "0 0 * * 1") echo "job=weekly-digest" >> "$GITHUB_OUTPUT" ;;
+              *) echo "job=" >> "$GITHUB_OUTPUT" ;;
+            esac
+          fi
+      - name: Call notifications endpoint
+        if: steps.resolve.outputs.job != ''
+        run: |
+          curl -sS -f -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_BASE_URL }}/api/cron/notifications?job=${{ steps.resolve.outputs.job }}"

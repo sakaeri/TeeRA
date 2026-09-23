@@ -7,6 +7,7 @@ import {
   updateCompanyInvoiceRegistrationNumberAction,
   updateCompanyAddressAction,
   updateCompanyPhoneNumberAction,
+  updateCompanyNotificationEmailAction,
   setCompanyMemberRoleAction,
   setMemberCanWorkShiftsAction,
   removeCompanyMemberRoleAction,
@@ -96,6 +97,7 @@ export function SettingsView({
   invoiceRegistrationNumber,
   address,
   phoneNumber,
+  notificationEmail,
   admins,
   teams,
   staff,
@@ -109,6 +111,7 @@ export function SettingsView({
   invoiceRegistrationNumber: string;
   address: string;
   phoneNumber: string;
+  notificationEmail: string;
   admins: Admin[];
   teams: Team[];
   staff: StaffOption[];
@@ -145,6 +148,7 @@ export function SettingsView({
             invoiceRegistrationNumber={invoiceRegistrationNumber}
             address={address}
             phoneNumber={phoneNumber}
+            notificationEmail={notificationEmail}
           />
           <AdminsSection admins={admins} />
           <TeamsSection teams={teams} staff={staff} teeBalance={teeBalance} />
@@ -185,17 +189,20 @@ function CompanyInfoSection({
   invoiceRegistrationNumber,
   address,
   phoneNumber,
+  notificationEmail,
 }: {
   companyName: string;
   invoiceRegistrationNumber: string;
   address: string;
   phoneNumber: string;
+  notificationEmail: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(companyName);
   const [regNumber, setRegNumber] = useState(invoiceRegistrationNumber);
   const [addressValue, setAddressValue] = useState(address);
   const [phoneValue, setPhoneValue] = useState(phoneNumber);
+  const [notificationEmailValue, setNotificationEmailValue] = useState(notificationEmail);
   const [pending, startTransition] = useTransition();
 
   if (!editing) {
@@ -218,6 +225,10 @@ function CompanyInfoSection({
             <div>
               <p className="text-xs text-muted">登録番号（インボイス番号）</p>
               <p className="font-medium">{regNumber || "未登録"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">通知メールアドレス</p>
+              <p className="font-medium">{notificationEmailValue || "未設定（通知メールは送信されません）"}</p>
             </div>
           </div>
           <button
@@ -271,6 +282,16 @@ function CompanyInfoSection({
             className="rounded-lg border border-border px-3 py-2 text-sm"
           />
         </label>
+        <label className="flex flex-col gap-1 text-xs">
+          通知メールアドレス（業務報告の提出・シフト希望のたまり・販促品の受注をお知らせします。空欄なら送信しません）
+          <input
+            type="email"
+            value={notificationEmailValue}
+            onChange={(e) => setNotificationEmailValue(e.target.value)}
+            placeholder="例：shift@your-company.com"
+            className="rounded-lg border border-border px-3 py-2 text-sm"
+          />
+        </label>
         <div className="flex gap-2">
           <button
             type="button"
@@ -281,6 +302,7 @@ function CompanyInfoSection({
                 await updateCompanyInvoiceRegistrationNumberAction(regNumber);
                 await updateCompanyAddressAction(addressValue);
                 await updateCompanyPhoneNumberAction(phoneValue);
+                await updateCompanyNotificationEmailAction(notificationEmailValue);
                 setEditing(false);
               })
             }

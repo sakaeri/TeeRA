@@ -77,6 +77,10 @@ model Company {
   name                      String
   address                   String?
   phoneNumber               String?
+  // 業務報告提出・シフト希望のたまり・販促品受注のメール通知の宛先。
+  // 特定ユーザーのアカウントに紐付けない（担当者交代やチーム共有アドレスに
+  // 対応するため）。未設定ならその会社への通知メールは一切送らない。
+  notificationEmail         String?
   agencyEnabled             Boolean  @default(false) // 他社へスタッフを派遣する (companyModules.agency)
   dispatchEnabled           Boolean  @default(false) // 派遣会社と連携する (companyModules.dispatch)
   invoiceRegistrationNumber String? // インボイス（適格請求書発行事業者）登録番号
@@ -487,6 +491,7 @@ model InviteToken {
 enum AccountActionTokenKind {
   PASSWORD_RESET
   EMAIL_CHANGE
+  APPROVE_WORK_REPORT
 }
 
 // パスワードリセット・メールアドレス変更確認用の使い捨てトークン。
@@ -494,19 +499,24 @@ enum AccountActionTokenKind {
 // メールで送るのはtoken本体で、DBにはハッシュ（tokenHash）だけを保存する
 // （招待URLと違い、こちらは本人以外が知り得ない前提で使うトークンのため、
 // DB漏洩時にそのまま使われてしまわないようにする）。
+// APPROVE_WORK_REPORTはTeeRAアカウントに紐付かない共有の通知メールアドレス
+// 宛にも送るため、userIdは他のkindと違い任意。
 model AccountActionToken {
-  id        String                 @id @default(cuid())
-  tokenHash String                 @unique
-  kind      AccountActionTokenKind
-  userId    String
-  newEmail  String? // EMAIL_CHANGE用 — 確定するまでUser.emailは変更しない
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime               @default(now())
+  id           String                 @id @default(cuid())
+  tokenHash    String                 @unique
+  kind         AccountActionTokenKind
+  userId       String?
+  newEmail     String? // EMAIL_CHANGE用 — 確定するまでUser.emailは変更しない
+  workReportId String? // APPROVE_WORK_REPORT用
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime               @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workReport WorkReport? @relation(fields: [workReportId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([workReportId])
 }
 
 // ---------------------------------------------------------------------------
@@ -549,6 +559,8 @@ model Shift {
   status                ShiftStatus     @default(CONFIRMED)
   createdVia            ShiftCreatedVia
   publicRecruitmentId   String?
+  // 勤務開始1時間前リマインドメールを送信済みかどうかの目印（二重送信防止）。
+  reminderSentAt        DateTime?
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
 
@@ -743,6 +755,8 @@ model WorkReport {
   staff     User  @relation("WorkReportStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
   approver  User? @relation("WorkReportApprover", fields: [approverUserId], references: [id])
   corrector User? @relation("WorkReportCorrector", fields: [correctedByUserId], references: [id])
+
+  accountActionTokens AccountActionToken[]
 
   @@index([staffUserId])
   @@index([approvalStatus])

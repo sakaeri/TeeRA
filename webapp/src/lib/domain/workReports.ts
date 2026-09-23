@@ -243,7 +243,7 @@ async function awardApprovalPoints(tx: Tx, report: { id: string; staffUserId: st
 // 待ち）やREJECTED・APPROVEDから企業が直接動かせてしまうと、古い画面から
 // の操作（レース条件）でスタッフの確認ステップを飛び越えて承認できてしまう
 // （correctAndReturnWorkReportのコメント参照）。
-export async function approveWorkReport(params: { workReportId: string; approverUserId: string }) {
+export async function approveWorkReport(params: { workReportId: string; approverUserId?: string }) {
   return prisma.$transaction(async (tx) => {
     const report = await tx.workReport.findUniqueOrThrow({ where: { id: params.workReportId } });
 

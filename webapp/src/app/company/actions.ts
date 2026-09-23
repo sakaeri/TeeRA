@@ -407,6 +407,17 @@ export async function updateCompanyPhoneNumberAction(phoneNumber: string) {
   revalidatePath("/company/settings");
 }
 
+export async function updateCompanyNotificationEmailAction(notificationEmail: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  await prisma.company.update({
+    where: { id: membership.companyId },
+    data: { notificationEmail: notificationEmail.trim() || null },
+  });
+  revalidatePath("/company/settings");
+}
+
 export async function setCompanyMemberRoleAction(
   targetUserId: string,
   role: "COMPANY_ADMIN" | "COMPANY_EDITOR",

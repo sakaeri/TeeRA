@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 
 const PUBLIC_ROUTES = ["/", "/login", "/register", "/forgot-password"];
-const PUBLIC_PREFIXES = ["/invite/", "/reset-password/", "/confirm-email-change/"];
+const PUBLIC_PREFIXES = ["/invite/", "/reset-password/", "/confirm-email-change/", "/email-actions/"];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;

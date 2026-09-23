@@ -5,6 +5,7 @@ import { requireCompanyStaffRole } from "@/lib/auth/session";
 import { submitShiftRequest } from "@/lib/domain/shifts";
 import { applyToRecruitment } from "@/lib/domain/recruitment";
 import { clockIn, clockOut, submitWorkReport, confirmCorrectedWorkReport } from "@/lib/domain/workReports";
+import { notifyCompanyOfWorkReportSubmission } from "@/lib/domain/emailNotifications";
 import { markStaffNoticeRead } from "@/lib/domain/notices";
 import { updateMembershipIdDocument, updateMembershipBankInfo } from "@/lib/domain/roster";
 import { addStaffRelationshipNote } from "@/lib/domain/relationships";
@@ -84,7 +85,7 @@ export async function submitWorkReportAction(input: {
 }) {
   const { userId } = await requireCompanyStaffRole();
   await assertOwnShift(input.shiftId, userId);
-  await submitWorkReport({
+  const report = await submitWorkReport({
     shiftId: input.shiftId,
     staffUserId: userId,
     outcome: input.outcome,
@@ -94,6 +95,11 @@ export async function submitWorkReportAction(input: {
     clockInTime: input.clockInTime,
     clockOutTime: input.clockOutTime,
   });
+  // 通知メールの失敗で、提出済みの業務報告自体が失敗したかのように
+  // 利用者に見えてしまわないよう、ここだけ独立してcatchする。
+  await notifyCompanyOfWorkReportSubmission(report.id).catch((err) =>
+    console.error("[email] work report submitted notify failed", err),
+  );
   revalidatePath("/staff/timecard");
   revalidatePath("/staff");
 }

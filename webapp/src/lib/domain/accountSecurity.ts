@@ -48,6 +48,7 @@ async function consumeToken(token: string, kind: "PASSWORD_RESET" | "EMAIL_CHANG
 
 export async function resetPassword(token: string, newPassword: string) {
   const record = await consumeToken(token, "PASSWORD_RESET");
+  if (!record.userId) throw new Error("invalid_or_expired_token");
   const passwordHash = await bcrypt.hash(newPassword, 12);
 
   await prisma.$transaction([
@@ -90,7 +91,7 @@ export async function requestEmailChange(userId: string, newEmail: string, curre
 
 export async function confirmEmailChange(token: string) {
   const record = await consumeToken(token, "EMAIL_CHANGE");
-  if (!record.newEmail) throw new Error("invalid_or_expired_token");
+  if (!record.newEmail || !record.userId) throw new Error("invalid_or_expired_token");
 
   // 発行から確定までの間に別の人がそのアドレスで登録している可能性がある
   // ため、確定直前にもう一度重複チェックする。
