@@ -471,7 +471,7 @@ export function RosterView({
       ) : null}
 
       {tab === "agencies" ? (
-        <RelationshipTable rows={filteredAgencies} onRowClick={(id) => openRelationship(id, "agency")} />
+        <RelationshipTable rows={filteredAgencies} onRowClick={(id) => openRelationship(id, "agency")} showTeamColumn={false} />
       ) : null}
 
       {selectedStaffId ? (
@@ -862,9 +862,11 @@ function MobileTabSelect({
 function RelationshipTable({
   rows,
   onRowClick,
+  showTeamColumn = true,
 }: {
   rows: RelationshipRow[];
   onRowClick: (id: string) => void;
+  showTeamColumn?: boolean;
 }) {
   return (
     <div className="overflow-hidden rounded-xl border border-border">
@@ -873,7 +875,7 @@ function RelationshipTable({
         <thead>
           <tr className="border-b border-border bg-background/60 text-left text-xs text-muted">
             <th className="px-4 py-3 font-semibold">名称</th>
-            <th className="px-4 py-3 font-semibold">チーム</th>
+            {showTeamColumn ? <th className="px-4 py-3 font-semibold">チーム</th> : null}
             <th className="px-4 py-3 font-semibold">スタッフ人数</th>
           </tr>
         </thead>
@@ -892,19 +894,21 @@ function RelationshipTable({
                   </span>
                 ) : null}
               </td>
-              <td className="px-4 py-3.5">
-                <div className="flex flex-wrap gap-1">
-                  {r.teams.length === 0 ? (
-                    <span className="text-muted">—</span>
-                  ) : (
-                    r.teams.map((t) => (
-                      <span key={t.id} className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-900">
-                        {t.name}
-                      </span>
-                    ))
-                  )}
-                </div>
-              </td>
+              {showTeamColumn ? (
+                <td className="px-4 py-3.5">
+                  <div className="flex flex-wrap gap-1">
+                    {r.teams.length === 0 ? (
+                      <span className="text-muted">—</span>
+                    ) : (
+                      r.teams.map((t) => (
+                        <span key={t.id} className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-900">
+                          {t.name}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </td>
+              ) : null}
               <td className="px-4 py-3.5 text-muted">{r.staffCount}名</td>
             </tr>
           ))}
