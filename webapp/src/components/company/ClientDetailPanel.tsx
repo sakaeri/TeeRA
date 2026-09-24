@@ -245,18 +245,39 @@ export function ClientDetailPanel({
           <p className="text-sm text-muted">読み込み中…</p>
         ) : (
           <>
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex items-start justify-between gap-2">
               <h2 className="font-serif-jp text-xl font-bold">{data.name}</h2>
-              {data.isOwner ? (
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="text-xs text-muted hover:text-red-600"
-                >
-                  取引先情報を削除
-                </button>
-              ) : null}
+              <div className="flex shrink-0 items-center gap-3">
+                {kind === "agency" && data.isProxy ? (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={inviteAgencyTaggedStaff}
+                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                  >
+                    ＋派遣スタッフを招待
+                  </button>
+                ) : null}
+                {data.isOwner ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="text-xs text-muted hover:text-red-600"
+                  >
+                    取引先情報を削除
+                  </button>
+                ) : null}
+              </div>
             </div>
+
+            {agencyInviteUrl ? (
+              <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 p-3 text-xs">
+                <p className="mb-2 text-foreground">
+                  これは「{data.name}」の派遣スタッフを招待するためのURLです。このURLを共有してください（1回のみ使用できます）。開いた方はこの派遣会社のスタッフとして登録されます。
+                </p>
+                <CopyUrlField url={agencyInviteUrl} size="sm" />
+              </div>
+            ) : null}
 
             {deleteError ? <p className="mb-3 text-xs text-red-600">{deleteError}</p> : null}
 
@@ -416,7 +437,11 @@ export function ClientDetailPanel({
                   </button>
                 </div>
 
-                <div className={`mb-4 grid gap-2 text-center ${kind === "client" ? "grid-cols-3" : "grid-cols-2"}`}>
+                <div
+                  className={`mb-4 grid gap-2 text-center ${
+                    kind === "client" || (kind === "agency" && data.isProxy) ? "grid-cols-3" : "grid-cols-2"
+                  }`}
+                >
                   <div className="rounded-lg border border-border p-3">
                     <p className="text-xs text-muted">稼働時間</p>
                     <p className="text-lg font-bold">{data.workedHours}h</p>
@@ -442,6 +467,19 @@ export function ClientDetailPanel({
                         {data.invoiceTotal === null ? "作成する" : `${data.invoiceTotal}円`}
                       </button>
                     </div>
+                  ) : null}
+                  {kind === "agency" && data.isProxy ? (
+                    <a
+                      href={`/api/agency-relationships/${relationshipId}/performance-pdf?y=${year}&m=${month}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border p-3"
+                    >
+                      <p className="text-xs text-muted">実績PDF</p>
+                      <span className="rounded-lg border border-primary px-3 py-1 text-xs font-semibold text-primary">
+                        出す（承認済みのみ）
+                      </span>
+                    </a>
                   ) : null}
                 </div>
 
@@ -516,36 +554,8 @@ export function ClientDetailPanel({
                 ) : null}
 
                 {kind === "agency" && data.isProxy ? (
-                  <div className="mt-4 rounded-lg border border-border p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                      <p className="text-xs font-medium text-muted">この派遣会社のスタッフ</p>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={inviteAgencyTaggedStaff}
-                          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
-                        >
-                          ＋スタッフを招待
-                        </button>
-                        <a
-                          href={`/api/agency-relationships/${relationshipId}/performance-pdf?y=${year}&m=${month}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/5"
-                        >
-                          実績PDFを出す（承認済みのみ）
-                        </a>
-                      </div>
-                    </div>
-                    {agencyInviteUrl ? (
-                      <div className="mb-2 rounded-lg border border-border bg-background/40 p-2">
-                        <p className="mb-1 text-xs text-muted">
-                          このURLを共有してください。1回のみ使用できます。開いた方はこの派遣会社のスタッフとして登録されます。
-                        </p>
-                        <CopyUrlField url={agencyInviteUrl} size="sm" />
-                      </div>
-                    ) : null}
+                  <div className="mt-4">
+                    <p className="mb-2 text-xs font-medium text-muted">この派遣会社のスタッフ</p>
                     <ul className="flex flex-col gap-1">
                       {data.taggedStaff.map((s) => (
                         <li key={s.userId}>

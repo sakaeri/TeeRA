@@ -125,14 +125,17 @@ export async function sendPromoOrderEmail(
 
 export async function sendShiftReminderEmail(
   to: string,
-  params: { companyName: string; date: string; timeLabel: string; appUrl: string },
+  params: { companyName: string; date: string; timeLabel: string; appUrl: string; isAllDay?: boolean },
 ) {
+  const intro = params.isAllDay
+    ? `本日、${params.companyName}でのシフトがあります。`
+    : `${params.companyName}でのシフトが1時間後に始まります。`;
   await sendMail(
     to,
     "【TeeRA】まもなくシフトの時間です",
     emailLayout(
       "まもなくシフトの時間です",
-      `<p style="margin:0 0 12px;font-size:14px;line-height:1.6;">${params.companyName}でのシフトが1時間後に始まります。</p>
+      `<p style="margin:0 0 12px;font-size:14px;line-height:1.6;">${intro}</p>
        ${infoRow("日付", params.date)}
        ${infoRow("時間", params.timeLabel)}
        ${button(params.appUrl, "アプリを開く")}`,

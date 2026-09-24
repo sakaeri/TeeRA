@@ -178,8 +178,9 @@ export async function runShiftRequestDigest() {
   }
 }
 
-// ④勤務開始1時間前リマインド — 5〜10分おきのCronから呼ばれる想定。
-// 二重送信を避けるため、対象シフトにはreminderSentAtを記録する。
+// ④勤務開始1時間前リマインド（終日シフトは当日朝6:00に固定でリマインド）
+// — 5〜10分おきのCronから呼ばれる想定。二重送信を避けるため、対象シフト
+// にはreminderSentAtを記録する。
 export async function runShiftStartReminders() {
   const now = new Date();
   const windowStart = new Date(now.getTime() + 55 * 60 * 1000);
@@ -212,6 +213,33 @@ export async function runShiftStartReminders() {
       timeLabel: shiftTimeLabel(shift),
       appUrl: absoluteUrl("/staff/timecard"),
     });
+  }
+
+  // 終日シフトは「開始時刻の1時間前」という基準が使えないため、当日朝
+  // 6:00（±5分、5分おきのCronの実行間隔に合わせた許容幅）に固定でリマインド
+  // する。
+  const nowJstMinutesOfDay = Math.floor((now.getTime() + JST_OFFSET_MS) / 60000) % (24 * 60);
+  if (Math.abs(nowJstMinutesOfDay - 6 * 60) <= 5) {
+    const allDayCandidates = await prisma.shift.findMany({
+      where: {
+        status: "CONFIRMED",
+        isAllDay: true,
+        reminderSentAt: null,
+        date: { gte: new Date(`${todayStr}T00:00:00.000Z`), lt: tomorrow },
+      },
+      include: { staff: true, company: true },
+    });
+
+    for (const shift of allDayCandidates) {
+      await prisma.shift.update({ where: { id: shift.id }, data: { reminderSentAt: new Date() } });
+      await sendShiftReminderEmail(shift.staff.email, {
+        companyName: shift.company.name,
+        date: shift.date.toISOString().slice(0, 10),
+        timeLabel: shiftTimeLabel(shift),
+        appUrl: absoluteUrl("/staff/timecard"),
+        isAllDay: true,
+      });
+    }
   }
 }
 

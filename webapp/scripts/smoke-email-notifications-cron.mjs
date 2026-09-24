@@ -108,6 +108,33 @@ try {
   const secondReminderLog = readServerLogSince(logStart);
   log("同じシフトに二重送信されない", !secondReminderLog.includes(reminderStaffEmail));
 
+  // 終日シフトは「開始1時間前」の基準が使えないため、当日朝6:00(±5分)に
+  // 固定でリマインドする別ロジック。実行時刻が偶然その10分の窓（1日
+  // 1440分中10分）に重なる確率は低いので、通常はここでは送られない
+  // ことだけを確認する（窓の中の挙動自体はコードレビューで確認済み）。
+  const jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const jstMinutesOfDay = jstNow.getUTCHours() * 60 + jstNow.getUTCMinutes();
+  const nearSixAm = Math.abs(jstMinutesOfDay - 6 * 60) <= 5;
+  if (!nearSixAm) {
+    const allDayStaffEmail = `cron-reminder-allday-staff-${suffix}@example.com`;
+    const allDayStaffId = psql(
+      `insert into "User" (id, email, "passwordHash", name, "updatedAt") values (gen_random_uuid()::text, '${allDayStaffEmail}', 'x', 'Cron終日太郎', now()) returning id;`,
+    );
+    const allDayShiftId = psql(
+      `insert into "Shift" (id, "companyId", "staffUserId", source, date, "isAllDay", "createdVia", "updatedAt") ` +
+        `values (gen_random_uuid()::text, '${reminderCompanyId}', '${allDayStaffId}', 'INHOUSE', (now() at time zone 'Asia/Tokyo')::date, true, 'ASSIGN', now()) returning id;`,
+    );
+    logStart = readFileSync(DEV_LOG_PATH, "utf8").length;
+    await callCron("shift-start-reminders");
+    await new Promise((r) => setTimeout(r, 300));
+    const allDayLog = readServerLogSince(logStart);
+    log("終日シフトは朝6:00の窓の外では送られない（1時間前ロジックの対象外）", !allDayLog.includes(allDayStaffEmail));
+    const allDayReminded = psql(`select "reminderSentAt" is not null from "Shift" where id='${allDayShiftId}';`);
+    log("終日シフトのreminderSentAtも立っていない", allDayReminded === "f");
+  } else {
+    console.log("SKIP 終日シフトのリマインドテスト（実行時刻がたまたま朝6:00の窓と重なったため）");
+  }
+
   // ⑤未提出の業務報告・契約書同意待ちリマインド（週次、スタッフ本人宛）
   const weeklyStaffEmail = `cron-weekly-staff-${suffix}@example.com`;
   const weeklyStaffId = psql(

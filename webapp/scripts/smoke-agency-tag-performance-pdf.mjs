@@ -121,7 +121,7 @@ try {
       `values (gen_random_uuid()::text, '${shiftId}', '${staffUserId}', 'WORKED', ('${shiftDate}'::date + interval '9 hour'), ('${shiftDate}'::date + interval '13 hour'), 0, 240, 'APPROVED', now(), now());`,
   );
 
-  // --- client: 派遣会社一覧 → その架空派遣会社の詳細 → スタッフ欄にタグ付きスタッフが出る ---
+  // --- client: 派遣会社一覧 → その架空派遣会社の詳細 → 稼働履歴タブに実績PDFカードが出る ---
   await client.goto("http://localhost:3000/company/roster");
   await client.click("text=派遣会社一覧").catch(async () => {
     await client.getByRole("button", { name: /派遣会社一覧/ }).click();
@@ -130,19 +130,24 @@ try {
   await client.click("text=実績PDFテスト架空派遣");
   await client.waitForTimeout(400);
   const agencyPanel = client.locator("div.fixed.inset-0.z-30, div.fixed.inset-0.z-20").last();
+  bodyText = await agencyPanel.textContent();
+  log("実績PDFを出すボタンが稼働履歴タブにある", bodyText.includes("実績PDF") && bodyText.includes("出す（承認済みのみ）"));
+  log("ヘッダーに＋派遣スタッフを招待ボタンがある", bodyText.includes("＋派遣スタッフを招待"));
+
   await agencyPanel.getByRole("button", { name: "スタッフ一覧" }).click();
   await client.waitForTimeout(300);
   bodyText = await agencyPanel.textContent();
   log("派遣会社詳細のスタッフ欄にタグ付きスタッフが表示される", bodyText.includes("実績PDF対象スタッフ"));
   log("配属中スタッフには出ない（StaffPlacementとは無関係のため）", bodyText.includes("配属中のスタッフはいません"));
-  log("実績PDFを出すボタンがある", bodyText.includes("実績PDFを出す"));
 
   // --- 派遣会社詳細から直接スタッフを招待すると、参加時点で自動的にタグ付けされる ---
   const staff2Ctx = await browser.newContext();
   const staff2 = await staff2Ctx.newPage();
   const staff2Email = `atpp-staff2-${Date.now()}@example.com`;
-  await agencyPanel.getByRole("button", { name: "＋スタッフを招待" }).click();
+  await agencyPanel.getByRole("button", { name: "＋派遣スタッフを招待" }).click();
   await client.waitForSelector('input[readonly]');
+  bodyText = await agencyPanel.textContent();
+  log("招待URLの案内に対象の派遣会社名が入っている", bodyText.includes("実績PDFテスト架空派遣"));
   const agencyInviteUrl = await agencyPanel.locator('input[readonly]').inputValue();
   await staff2.goto(agencyInviteUrl);
   await staff2.click("text=アカウントを作成して参加する");
