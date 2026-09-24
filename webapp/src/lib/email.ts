@@ -85,7 +85,7 @@ export async function sendWorkReportSubmittedEmail(
     "【TeeRA】業務報告が届きました",
     emailLayout(
       "業務報告が届きました",
-      `<p style="margin:0 0 12px;font-size:14px;line-height:1.6;">${params.staffName}さんから業務報告が届きました。</p>
+      `${infoRow("申請者", `${params.staffName}さん`)}
        ${infoRow("日付", params.date)}
        ${infoRow("時間", params.timeLabel)}
        ${infoRow("業務内容", params.taskLabel)}

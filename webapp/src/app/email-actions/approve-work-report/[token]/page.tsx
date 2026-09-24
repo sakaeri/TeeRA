@@ -20,9 +20,9 @@ export default async function ApproveWorkReportPage({
         ) : (
           <>
             <h1 className="mb-4 text-center text-lg font-semibold">業務報告の承認</h1>
-            <div className="mb-6 flex flex-col gap-1 text-sm">
+            <div className="mb-4 flex flex-col gap-1 text-sm">
               <p>
-                <span className="text-muted">スタッフ：</span>
+                <span className="text-muted">申請者：</span>
                 {info.staffName}さん
               </p>
               <p>
@@ -42,6 +42,7 @@ export default async function ApproveWorkReportPage({
                 {info.taskLabel}
               </p>
             </div>
+            <p className="mb-4 text-center text-sm font-semibold text-primary">この内容で承認を確定しますか？</p>
             <ApproveWorkReportButton token={token} />
           </>
         )}
