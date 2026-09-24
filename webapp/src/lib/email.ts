@@ -22,11 +22,44 @@ async function sendMail(to: string, subject: string, html: string) {
   }
 }
 
+// 全メール共通のカード型レイアウト。アプリ内の確認画面（例:
+// /email-actions/approve-work-report）と印象を揃えるため、白背景の
+// 角丸カード＋ラベル薄色/値濃色の情報行というトーンに統一する。
+function emailLayout(title: string, bodyHtml: string) {
+  return `<div style="background:#f5f6f3;padding:32px 16px;font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic',sans-serif;color:#1f2a24;">
+  <div style="max-width:480px;margin:0 auto;">
+    <div style="text-align:center;margin-bottom:16px;font-size:20px;font-weight:bold;color:#0f4d3a;">TeeRA</div>
+    <div style="background:#ffffff;border-radius:16px;padding:28px 24px;">
+      <h1 style="margin:0 0 16px;font-size:16px;font-weight:bold;color:#0f4d3a;">${title}</h1>
+      ${bodyHtml}
+    </div>
+    <p style="text-align:center;color:#9aa39c;font-size:11px;margin:16px 0 0;">このメールはTeeRAから自動送信されています。</p>
+  </div>
+</div>`;
+}
+
+function infoRow(label: string, value: string) {
+  return `<p style="margin:0 0 6px;font-size:14px;line-height:1.6;"><span style="color:#8b968e;">${label}：</span>${value}</p>`;
+}
+
+function button(url: string, label: string) {
+  return `<p style="margin:20px 0 0;"><a href="${url}" style="display:inline-block;padding:11px 24px;background:#0f4d3a;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold;font-size:14px;">${label}</a></p>`;
+}
+
+function note(html: string) {
+  return `<p style="margin:16px 0 0;font-size:12px;color:#8b968e;line-height:1.6;">${html}</p>`;
+}
+
 export async function sendPasswordResetEmail(to: string, resetUrl: string) {
   await sendMail(
     to,
     "【TeeRA】パスワード再設定のご案内",
-    `<p>パスワード再設定のリクエストを受け付けました。以下のリンクから新しいパスワードを設定してください（1時間有効）。</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>心当たりがない場合はこのメールを破棄してください。</p>`,
+    emailLayout(
+      "パスワード再設定のご案内",
+      `<p style="margin:0;font-size:14px;line-height:1.6;">パスワード再設定のリクエストを受け付けました。以下のボタンから新しいパスワードを設定してください（1時間有効）。</p>
+       ${button(resetUrl, "パスワードを再設定する")}
+       ${note("心当たりがない場合はこのメールを破棄してください。")}`,
+    ),
   );
 }
 
@@ -34,12 +67,13 @@ export async function sendEmailChangeConfirmation(to: string, confirmUrl: string
   await sendMail(
     to,
     "【TeeRA】メールアドレス変更の確認",
-    `<p>このメールアドレスへの変更が申請されました。以下のリンクをクリックすると変更が確定します（1時間有効）。</p><p><a href="${confirmUrl}">${confirmUrl}</a></p><p>心当たりがない場合はこのメールを破棄してください。</p>`,
+    emailLayout(
+      "メールアドレス変更の確認",
+      `<p style="margin:0;font-size:14px;line-height:1.6;">このメールアドレスへの変更が申請されました。以下のボタンを押すと変更が確定します（1時間有効）。</p>
+       ${button(confirmUrl, "変更を確定する")}
+       ${note("心当たりがない場合はこのメールを破棄してください。")}`,
+    ),
   );
-}
-
-function button(url: string, label: string) {
-  return `<p><a href="${url}" style="display:inline-block;padding:10px 20px;background:#0f4d3a;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold;">${label}</a></p>`;
 }
 
 export async function sendWorkReportSubmittedEmail(
@@ -49,10 +83,15 @@ export async function sendWorkReportSubmittedEmail(
   await sendMail(
     to,
     "【TeeRA】業務報告が届きました",
-    `<p>${params.staffName}さんから業務報告が届きました。</p>
-     <p>日付：${params.date}　時間：${params.timeLabel}　業務内容：${params.taskLabel}</p>
-     ${button(params.approveUrl, "承認する")}
-     <p>内容を修正して差し戻す場合は、アプリを開いて操作してください。<br><a href="${params.reviewUrl}">${params.reviewUrl}</a></p>`,
+    emailLayout(
+      "業務報告が届きました",
+      `<p style="margin:0 0 12px;font-size:14px;line-height:1.6;">${params.staffName}さんから業務報告が届きました。</p>
+       ${infoRow("日付", params.date)}
+       ${infoRow("時間", params.timeLabel)}
+       ${infoRow("業務内容", params.taskLabel)}
+       ${button(params.approveUrl, "承認する")}
+       ${note(`内容を修正して差し戻す場合は、アプリを開いて操作してください。<br><a href="${params.reviewUrl}" style="color:#0f4d3a;">${params.reviewUrl}</a>`)}`,
+    ),
   );
 }
 
@@ -60,7 +99,11 @@ export async function sendShiftRequestDigestEmail(to: string, count: number, rev
   await sendMail(
     to,
     "【TeeRA】未確定のシフト希望があります",
-    `<p>現在、確定待ちのシフト希望が${count}件あります。</p>${button(reviewUrl, "確認する")}`,
+    emailLayout(
+      "未確定のシフト希望があります",
+      `<p style="margin:0;font-size:14px;line-height:1.6;">現在、確定待ちのシフト希望が<strong>${count}件</strong>あります。</p>
+       ${button(reviewUrl, "確認する")}`,
+    ),
   );
 }
 
@@ -71,7 +114,12 @@ export async function sendPromoOrderEmail(
   await sendMail(
     to,
     "【TeeRA】販促品の注文が届きました",
-    `<p>${params.staffName}さんが「${params.itemName}」を注文しました。</p>${button(params.reviewUrl, "確認する")}`,
+    emailLayout(
+      "販促品の注文が届きました",
+      `${infoRow("スタッフ", `${params.staffName}さん`)}
+       ${infoRow("商品", params.itemName)}
+       ${button(params.reviewUrl, "確認する")}`,
+    ),
   );
 }
 
@@ -82,9 +130,13 @@ export async function sendShiftReminderEmail(
   await sendMail(
     to,
     "【TeeRA】まもなくシフトの時間です",
-    `<p>${params.companyName}でのシフトが1時間後に始まります。</p>
-     <p>日付：${params.date}　時間：${params.timeLabel}</p>
-     ${button(params.appUrl, "アプリを開く")}`,
+    emailLayout(
+      "まもなくシフトの時間です",
+      `<p style="margin:0 0 12px;font-size:14px;line-height:1.6;">${params.companyName}でのシフトが1時間後に始まります。</p>
+       ${infoRow("日付", params.date)}
+       ${infoRow("時間", params.timeLabel)}
+       ${button(params.appUrl, "アプリを開く")}`,
+    ),
   );
 }
 
@@ -92,7 +144,11 @@ export async function sendUnsubmittedWorkReportReminderEmail(to: string, count: 
   await sendMail(
     to,
     "【TeeRA】未提出の業務報告があります",
-    `<p>提出がまだの業務報告が${count}件あります。お手すきの際にご提出ください。</p>${button(appUrl, "アプリを開く")}`,
+    emailLayout(
+      "未提出の業務報告があります",
+      `<p style="margin:0;font-size:14px;line-height:1.6;">提出がまだの業務報告が<strong>${count}件</strong>あります。お手すきの際にご提出ください。</p>
+       ${button(appUrl, "アプリを開く")}`,
+    ),
   );
 }
 
@@ -100,8 +156,11 @@ export async function sendContractConsentReminderEmail(to: string, companyNames:
   await sendMail(
     to,
     "【TeeRA】契約書の確認をお願いします",
-    `<p>以下の会社から届いている契約書が、まだ確認・同意待ちのままです。</p>
-     <p>${companyNames.join("、")}</p>
-     ${button(appUrl, "アプリを開く")}`,
+    emailLayout(
+      "契約書の確認をお願いします",
+      `<p style="margin:0 0 8px;font-size:14px;line-height:1.6;">以下の会社から届いている契約書が、まだ確認・同意待ちのままです。</p>
+       <p style="margin:0;font-size:14px;font-weight:bold;">${companyNames.join("、")}</p>
+       ${button(appUrl, "アプリを開く")}`,
+    ),
   );
 }

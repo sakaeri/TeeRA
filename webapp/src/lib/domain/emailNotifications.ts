@@ -31,6 +31,27 @@ function shiftTimeLabel(shift: { isAllDay: boolean; isUndecided: boolean; startT
   return `${shift.startTime ?? "--:--"}〜${shift.endTime ?? "--:--"}`;
 }
 
+function formatJstTime(date: Date) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Tokyo",
+  }).format(date);
+}
+
+// 業務報告に表示する時間は、シフトの予定時刻ではなく実際の打刻時刻を優先
+// する（打刻がない場合のみ予定時刻にフォールバック）。
+function reportTimeLabel(
+  report: { clockIn: Date | null; clockOut: Date | null },
+  shift: { isAllDay: boolean; isUndecided: boolean; startTime: string | null; endTime: string | null },
+) {
+  if (report.clockIn && report.clockOut) {
+    return `${formatJstTime(report.clockIn)}〜${formatJstTime(report.clockOut)}`;
+  }
+  return shiftTimeLabel(shift);
+}
+
 // 日付(date列, @db.Date)＋"HH:mm"文字列を、そのカレンダー日のJST時刻として
 // 実際のDateに合成する（withJstTimeと同じ考え方 — workReports.ts内は非公開
 // なのでここでも小さく複製する。日付をまたぐシフトの終業側には使わない）。
@@ -73,7 +94,7 @@ export async function notifyCompanyOfWorkReportSubmission(workReportId: string) 
   await sendWorkReportSubmittedEmail(company.notificationEmail, {
     staffName: report.staff.name,
     date: report.shift.date.toISOString().slice(0, 10),
-    timeLabel: shiftTimeLabel(report.shift),
+    timeLabel: reportTimeLabel(report, report.shift),
     taskLabel: report.taskName ?? report.shift.taskName ?? "（未指定）",
     approveUrl: absoluteUrl(`/email-actions/approve-work-report/${token}`),
     reviewUrl: absoluteUrl("/company/settings?tab=workreports"),
@@ -117,7 +138,7 @@ export async function getApproveWorkReportTokenInfo(token: string) {
     staffName: record.workReport.staff.name,
     companyName: record.workReport.shift.company.name,
     date: record.workReport.shift.date.toISOString().slice(0, 10),
-    timeLabel: shiftTimeLabel(record.workReport.shift),
+    timeLabel: reportTimeLabel(record.workReport, record.workReport.shift),
     taskLabel: record.workReport.taskName ?? record.workReport.shift.taskName ?? "（未指定）",
   };
 }
