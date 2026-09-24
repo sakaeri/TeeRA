@@ -811,12 +811,12 @@ function TeamInviteForm({
           staffOptions.length === 0 ? (
             <p className="text-xs text-muted">追加できる既存スタッフがいません。</p>
           ) : (
-            <label className="flex flex-col gap-0.5 text-xs text-muted">
-              スタッフ
+            <label className="flex flex-col gap-0.5 text-xs">
+              <span className="text-muted">スタッフ</span>
               <select
                 value={selectedStaffId}
                 onChange={(e) => setSelectedStaffId(e.target.value)}
-                className="rounded-lg border border-border px-2 py-1.5 text-sm"
+                className="rounded-lg border border-border px-2 py-1.5 text-sm text-foreground"
               >
                 {staffOptions.map((s) => (
                   <option key={s.userId} value={s.userId}>
@@ -828,12 +828,12 @@ function TeamInviteForm({
           )
         ) : null}
 
-        <label className="flex flex-col gap-0.5 text-xs text-muted">
-          権限
+        <label className="flex flex-col gap-0.5 text-xs">
+          <span className="text-muted">権限</span>
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as "TEAM_MANAGER" | "TEAM_LEADER")}
-            className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            className="rounded-lg border border-border px-2 py-1.5 text-sm text-foreground"
           >
             <option value="TEAM_MANAGER">マネージャー</option>
             <option value="TEAM_LEADER">リーダー</option>

@@ -520,8 +520,8 @@ export function ClientDetailPanel({
                   <div className="flex flex-col gap-3 border-b border-border/60 pb-4">
                     {editingWorkplaceInfo ? (
                       <div className="flex flex-col gap-2">
-                        <label className="flex flex-col gap-1 text-xs text-muted">
-                          勤務地
+                        <label className="flex flex-col gap-1 text-xs">
+                          <span className="text-muted">勤務地</span>
                           <input
                             type="text"
                             value={workLocationDraft}
@@ -530,8 +530,8 @@ export function ClientDetailPanel({
                             className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
                           />
                         </label>
-                        <label className="flex flex-col gap-1 text-xs text-muted">
-                          緊急連絡先
+                        <label className="flex flex-col gap-1 text-xs">
+                          <span className="text-muted">緊急連絡先</span>
                           <input
                             type="text"
                             value={emergencyContactDraft}
@@ -915,13 +915,13 @@ function PlacementRatesTab({
                 placeholder="金額"
                 className="w-24 rounded-lg border border-border px-2 py-2 text-sm"
               />
-              <label className="flex flex-col gap-0.5 text-xs text-muted">
-                開始日
+              <label className="flex flex-col gap-0.5 text-xs">
+                <span className="text-muted">開始日</span>
                 <input
                   type="date"
                   value={amendEffectiveFrom}
                   onChange={(e) => setAmendEffectiveFrom(e.target.value)}
-                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                  className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                 />
               </label>
             </div>
@@ -1022,13 +1022,13 @@ function PlacementRatesTab({
                   placeholder="金額"
                   className="w-24 rounded-lg border border-border px-2 py-2 text-sm"
                 />
-                <label className="flex flex-col gap-0.5 text-xs text-muted">
-                  開始日
+                <label className="flex flex-col gap-0.5 text-xs">
+                  <span className="text-muted">開始日</span>
                   <input
                     type="date"
                     value={newEffectiveFrom}
                     onChange={(e) => setNewEffectiveFrom(e.target.value)}
-                    className="rounded-lg border border-border px-2 py-2 text-sm"
+                    className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                   />
                 </label>
               </div>

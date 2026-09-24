@@ -252,52 +252,52 @@ export function StaffContractsView({
 
           {wizardStep === "bank" ? (
             <div className="flex flex-col gap-3">
-              <label className="flex flex-col gap-1 text-xs text-muted">
-                銀行名
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-muted">銀行名</span>
                 <input
                   type="text"
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
-                  className="rounded-lg border border-border px-3 py-2 text-sm"
+                  className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
                 />
               </label>
-              <label className="flex flex-col gap-1 text-xs text-muted">
-                支店名
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-muted">支店名</span>
                 <input
                   type="text"
                   value={branchName}
                   onChange={(e) => setBranchName(e.target.value)}
-                  className="rounded-lg border border-border px-3 py-2 text-sm"
+                  className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
                 />
               </label>
-              <label className="flex flex-col gap-1 text-xs text-muted">
-                口座種別
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-muted">口座種別</span>
                 <select
                   value={accountType}
                   onChange={(e) => setAccountType(e.target.value)}
-                  className="rounded-lg border border-border px-3 py-2 text-sm"
+                  className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
                 >
                   <option value="">未選択</option>
                   <option value="普通">普通</option>
                   <option value="当座">当座</option>
                 </select>
               </label>
-              <label className="flex flex-col gap-1 text-xs text-muted">
-                口座番号
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-muted">口座番号</span>
                 <input
                   type="text"
                   value={accountNumber}
                   onChange={(e) => setAccountNumber(e.target.value)}
-                  className="rounded-lg border border-border px-3 py-2 text-sm"
+                  className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
                 />
               </label>
-              <label className="flex flex-col gap-1 text-xs text-muted">
-                口座名義
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-muted">口座名義</span>
                 <input
                   type="text"
                   value={accountHolderName}
                   onChange={(e) => setAccountHolderName(e.target.value)}
-                  className="rounded-lg border border-border px-3 py-2 text-sm"
+                  className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
                 />
               </label>
               <button
@@ -645,8 +645,8 @@ export function StaffContractsView({
         )}
         {bankEditing ? (
           <div className="mt-4 flex flex-col gap-3 border-t border-border/60 pt-4">
-            <label className="flex flex-col gap-1 text-xs text-muted">
-              銀行名
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted">銀行名</span>
               <input
                 type="text"
                 value={bankName}
@@ -654,8 +654,8 @@ export function StaffContractsView({
                 className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
               />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-muted">
-              支店名
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted">支店名</span>
               <input
                 type="text"
                 value={branchName}
@@ -663,8 +663,8 @@ export function StaffContractsView({
                 className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
               />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-muted">
-              口座種別
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted">口座種別</span>
               <select
                 value={accountType}
                 onChange={(e) => setAccountType(e.target.value)}
@@ -675,8 +675,8 @@ export function StaffContractsView({
                 <option value="当座">当座</option>
               </select>
             </label>
-            <label className="flex flex-col gap-1 text-xs text-muted">
-              口座番号
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted">口座番号</span>
               <input
                 type="text"
                 value={accountNumber}
@@ -684,8 +684,8 @@ export function StaffContractsView({
                 className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
               />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-muted">
-              口座名義
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted">口座名義</span>
               <input
                 type="text"
                 value={accountHolderName}

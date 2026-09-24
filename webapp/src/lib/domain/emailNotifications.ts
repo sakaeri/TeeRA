@@ -43,14 +43,22 @@ function combineJstDateTime(date: Date, hhmm: string): Date {
 // ①業務報告が届いたら即メール — 会社の「通知メールアドレス」が設定されて
 // いる場合のみ送る（未設定の会社には一切送らない）。
 export async function notifyCompanyOfWorkReportSubmission(workReportId: string) {
+  console.log(`[email-notif] notifyCompanyOfWorkReportSubmission called workReportId=${workReportId}`);
   const report = await prisma.workReport.findUnique({
     where: { id: workReportId },
     include: { staff: true, shift: { include: { company: true } } },
   });
-  if (!report) return;
+  if (!report) {
+    console.log(`[email-notif] report not found for workReportId=${workReportId}`);
+    return;
+  }
 
   const company = report.shift.company;
-  if (!company.notificationEmail) return;
+  if (!company.notificationEmail) {
+    console.log(`[email-notif] company ${company.id} has no notificationEmail set, skipping`);
+    return;
+  }
+  console.log(`[email-notif] sending to ${company.notificationEmail} for company ${company.id}`);
 
   const token = generateToken();
   await prisma.accountActionToken.create({

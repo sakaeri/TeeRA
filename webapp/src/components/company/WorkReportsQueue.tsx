@@ -151,32 +151,32 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
               修正するとスタッフに「これで合っています」の確認を求める通知が届きます。スタッフが確認するまでは承認済みになりません。
             </p>
             <div className="flex flex-wrap items-end gap-2">
-              <label className="flex flex-col gap-0.5 text-xs text-muted">
-                出勤時刻
+              <label className="flex flex-col gap-0.5 text-xs">
+                <span className="text-muted">出勤時刻</span>
                 <input
                   type="time"
                   value={clockIn}
                   onChange={(e) => setClockIn(e.target.value)}
-                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                  className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                 />
               </label>
-              <label className="flex flex-col gap-0.5 text-xs text-muted">
-                退勤時刻
+              <label className="flex flex-col gap-0.5 text-xs">
+                <span className="text-muted">退勤時刻</span>
                 <input
                   type="time"
                   value={clockOut}
                   onChange={(e) => setClockOut(e.target.value)}
-                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                  className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                 />
               </label>
-              <label className="flex flex-col gap-0.5 text-xs text-muted">
-                休憩（分）
+              <label className="flex flex-col gap-0.5 text-xs">
+                <span className="text-muted">休憩（分）</span>
                 <input
                   type="number"
                   min="0"
                   value={breakMinutes}
                   onChange={(e) => setBreakMinutes(e.target.value)}
-                  className="w-20 rounded-lg border border-border px-2 py-2 text-sm"
+                  className="w-20 rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                 />
               </label>
             </div>
@@ -206,13 +206,13 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
                 ✕
               </button>
             </div>
-            <label className="flex flex-col gap-0.5 text-xs text-muted">
-              差し戻す理由（スタッフに表示されます）
+            <label className="flex flex-col gap-0.5 text-xs">
+              <span className="text-muted">差し戻す理由（スタッフに表示されます）</span>
               <textarea
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
                 placeholder="例：業務内容を具体的に記入してください"
-                className="rounded-lg border border-border px-3 py-2 text-sm"
+                className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
                 rows={3}
               />
             </label>

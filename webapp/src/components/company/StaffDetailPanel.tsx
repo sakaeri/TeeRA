@@ -1084,13 +1084,13 @@ export function StaffDetailPanel({
                     />
                     <span className="text-sm text-muted">円</span>
                   </div>
-                  <label className="flex flex-col gap-0.5 text-xs text-muted">
-                    開始日
+                  <label className="flex flex-col gap-0.5 text-xs">
+                    <span className="text-muted">開始日</span>
                     <input
                       type="date"
                       value={editWageEffectiveFrom}
                       onChange={(e) => setEditWageEffectiveFrom(e.target.value)}
-                      className="rounded-lg border border-border px-2 py-2 text-sm"
+                      className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                     />
                   </label>
                 </div>
@@ -1270,8 +1270,8 @@ export function StaffDetailPanel({
               </button>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="flex flex-col gap-0.5 text-xs text-muted">
-                銀行名
+              <label className="flex flex-col gap-0.5 text-xs">
+                <span className="text-muted">銀行名</span>
                 <input
                   type="text"
                   value={bankName}
@@ -1279,8 +1279,8 @@ export function StaffDetailPanel({
                   className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                 />
               </label>
-              <label className="flex flex-col gap-0.5 text-xs text-muted">
-                支店名
+              <label className="flex flex-col gap-0.5 text-xs">
+                <span className="text-muted">支店名</span>
                 <input
                   type="text"
                   value={branchName}
@@ -1288,8 +1288,8 @@ export function StaffDetailPanel({
                   className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                 />
               </label>
-              <label className="flex flex-col gap-0.5 text-xs text-muted">
-                口座種別
+              <label className="flex flex-col gap-0.5 text-xs">
+                <span className="text-muted">口座種別</span>
                 <select
                   value={accountType}
                   onChange={(e) => setAccountType(e.target.value)}
@@ -1300,8 +1300,8 @@ export function StaffDetailPanel({
                   <option value="当座">当座</option>
                 </select>
               </label>
-              <label className="flex flex-col gap-0.5 text-xs text-muted">
-                口座番号
+              <label className="flex flex-col gap-0.5 text-xs">
+                <span className="text-muted">口座番号</span>
                 <input
                   type="text"
                   value={accountNumber}
@@ -1309,8 +1309,8 @@ export function StaffDetailPanel({
                   className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                 />
               </label>
-              <label className="flex flex-col gap-0.5 text-xs text-muted">
-                口座名義
+              <label className="flex flex-col gap-0.5 text-xs">
+                <span className="text-muted">口座名義</span>
                 <input
                   type="text"
                   value={accountHolderName}
@@ -1589,13 +1589,13 @@ function StaffTaskRatesTab({
                 placeholder="金額"
                 className="w-24 rounded-lg border border-border px-2 py-2 text-sm"
               />
-              <label className="flex flex-col gap-0.5 text-xs text-muted">
-                開始日
+              <label className="flex flex-col gap-0.5 text-xs">
+                <span className="text-muted">開始日</span>
                 <input
                   type="date"
                   value={amendEffectiveFrom}
                   onChange={(e) => setAmendEffectiveFrom(e.target.value)}
-                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                  className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                 />
               </label>
             </div>
@@ -1676,12 +1676,12 @@ function StaffTaskRatesTab({
                   ) : null}
                 </div>
               )}
-              <label className="flex flex-col gap-0.5 text-xs text-muted">
-                勤務先
+              <label className="flex flex-col gap-0.5 text-xs">
+                <span className="text-muted">勤務先</span>
                 <select
                   value={newCompanyRelationshipId}
                   onChange={(e) => setNewCompanyRelationshipId(e.target.value)}
-                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                  className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                 >
                   <option value="">勤務先を問わない</option>
                   {clients.map((c) => (
@@ -1711,13 +1711,13 @@ function StaffTaskRatesTab({
                   placeholder="金額"
                   className="w-24 rounded-lg border border-border px-2 py-2 text-sm"
                 />
-                <label className="flex flex-col gap-0.5 text-xs text-muted">
-                  開始日
+                <label className="flex flex-col gap-0.5 text-xs">
+                  <span className="text-muted">開始日</span>
                   <input
                     type="date"
                     value={newEffectiveFrom}
                     onChange={(e) => setNewEffectiveFrom(e.target.value)}
-                    className="rounded-lg border border-border px-2 py-2 text-sm"
+                    className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                   />
                 </label>
               </div>

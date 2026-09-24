@@ -14,7 +14,12 @@ async function sendMail(to: string, subject: string, html: string) {
     console.log(`[email:fallback] RESEND_API_KEY未設定のため送信をスキップしました。宛先=${to} 件名=${subject}\n${html}`);
     return;
   }
-  await resend.emails.send({ from: FROM, to, subject, html });
+  const result = await resend.emails.send({ from: FROM, to, subject, html });
+  if (result.error) {
+    console.error(`[email:resend-error] 宛先=${to} 件名=${subject}`, result.error);
+  } else {
+    console.log(`[email:sent] id=${result.data?.id} 宛先=${to} 件名=${subject}`);
+  }
 }
 
 export async function sendPasswordResetEmail(to: string, resetUrl: string) {

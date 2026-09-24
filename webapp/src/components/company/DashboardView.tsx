@@ -815,13 +815,13 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
 
         {rejecting ? (
           <div className="mt-4">
-            <label className="flex flex-col gap-0.5 text-xs text-muted">
-              差し戻す理由（スタッフに表示されます）
+            <label className="flex flex-col gap-0.5 text-xs">
+              <span className="text-muted">差し戻す理由（スタッフに表示されます）</span>
               <textarea
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
                 placeholder="例：業務内容を具体的に記入してください"
-                className="rounded-lg border border-border px-3 py-2 text-sm"
+                className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
                 rows={3}
               />
             </label>
