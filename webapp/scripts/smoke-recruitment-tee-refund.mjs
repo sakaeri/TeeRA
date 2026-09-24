@@ -176,25 +176,19 @@ try {
   balance = Number(psql(`select "teeBalance" from "Company" where id='${companyAId}';`));
   log("無関係スタッフの応募では残高は変わらない（80のまま）", balance === 80);
 
-  // A社自身のスタッフXが残り1枠に応募 → その場でその1枠分(10Tee)が即返金される
+  // A社自身のスタッフXは、自社が出した公開募集を一覧では見られるが詳細は
+  // 開けない（公開募集の賃金は所属の無いスタッフ向けのもので、契約単価と
+  // 食い違って見えると混乱のもとになるため）。この導線からは応募できない
+  // ので、既知スタッフによる返金は管理者アサイン経由でのみ検証する
+  // （後段の「管理者による直接アサイン」ブロック参照）。
   await staffX.goto("http://localhost:3000/staff/recruitments");
   const xItem = staffX.locator(`[data-testid="recruitment-${recruitmentId}"]`);
-  await xItem.locator("button").first().click();
-  await staffX.waitForTimeout(200);
-  await xItem.getByRole("button", { name: "応募する" }).click();
-  await staffX.waitForTimeout(800);
+  log("自社スタッフには公開募集の詳細を開くボタンが無効化されている", await xItem.locator("button").first().isDisabled());
 
   state = psql(`select "lockedTee" from "PublicRecruitment" where id='${recruitmentId}';`);
-  log("自社スタッフの応募では即座に1枠分(10Tee)返金される（ロック10に減る）", state === "10");
+  log("自社スタッフは応募できないのでロックは20のまま", state === "20");
   balance = Number(psql(`select "teeBalance" from "Company" where id='${companyAId}';`));
-  log("自社スタッフの応募で残高が10戻る（80→90）", balance === 90);
-
-  const refundEventCount = Number(
-    psql(
-      `select count(*) from "TeeLedgerEntry" where "publicRecruitmentId"='${recruitmentId}' and type='UNLOCK_REFUND_RECRUITMENT';`,
-    ),
-  );
-  log("返金の履歴が1件記録される", refundEventCount === 1);
+  log("残高も80のまま", balance === 80);
 
   // 管理者による直接アサイン（＋スタッフを追加）でも、既に自社所属の
   // スタッフなら同様にその場で返金される

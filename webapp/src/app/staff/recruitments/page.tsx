@@ -19,12 +19,13 @@ export default async function StaffRecruitmentsPage() {
             date: r.date.toISOString().slice(0, 10),
             startTime: r.startTime,
             endTime: r.endTime,
-            hourlyWage: r.isAffiliated ? null : r.hourlyWage,
-            wageType: r.isAffiliated ? null : r.wageType,
-            extraItems: r.isAffiliated ? [] : (r.extraItems as { label: string; value: string }[]),
+            hourlyWage: r.hourlyWage,
+            wageType: r.wageType,
+            extraItems: r.extraItems as { label: string; value: string }[],
             maxEntries: r.maxEntries,
             filled: r.entries.filter((e) => e.status !== "REJECTED").length,
             alreadyApplied: r.entries.some((e) => e.staffUserId === userId && e.status !== "REJECTED"),
+            isAffiliated: r.isAffiliated,
           }))
           // 満員の募集、および自分が既に応募済みの募集は、スクロールする
           // だけの雑音になるため出さない（確定シフトと時間が重なる募集は

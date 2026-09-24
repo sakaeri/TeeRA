@@ -17,6 +17,7 @@ type Row = {
   maxEntries: number;
   filled: number;
   alreadyApplied: boolean;
+  isAffiliated: boolean;
 };
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -57,7 +58,12 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
         const remaining = Math.max(r.maxEntries - r.filled, 0);
         const isFull = remaining <= 0;
         const isApplied = applied[r.id] || r.alreadyApplied;
-        const open = openId === r.id;
+        // 所属先（自社／配属済みの依頼主）が出した公開募集は、一覧には
+        // 出すが詳細は開けないようにする — 公開募集の賃金は所属の無い
+        // スタッフ向けのもので、契約済みの単価と違って見えると無用な
+        // 不満につながるため（実際の支給額は契約単価の方が使われる）。
+        const hideDetail = r.visibility === "PUBLIC" && r.isAffiliated;
+        const open = !hideDetail && openId === r.id;
         const location = r.extraItems.find((i) => i.label === "勤務地")?.value;
         const otherExtraItems = r.extraItems.filter((i) => i.label !== "勤務地");
         return (
@@ -68,8 +74,9 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
           >
             <button
               type="button"
+              disabled={hideDetail}
               onClick={() => setOpenId(open ? null : r.id)}
-              className="flex w-full flex-col gap-1 px-4 py-3 text-left"
+              className="flex w-full flex-col gap-1 px-4 py-3 text-left disabled:cursor-default"
             >
               <span className="text-xs text-muted">{formatDateJa(r.date)}</span>
               <div className="flex items-center justify-between gap-2">
@@ -89,16 +96,18 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
                   ) : (
                     <span>残り{remaining}名</span>
                   )}
-                  <svg
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-                  >
-                    <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  {hideDetail ? null : (
+                    <svg
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+                    >
+                      <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
                 </span>
               </div>
-              {location ? <span className="text-xs text-muted">勤務地：{location}</span> : null}
+              {location && !hideDetail ? <span className="text-xs text-muted">勤務地：{location}</span> : null}
             </button>
             {open ? (
               <div className="flex flex-col gap-2 border-t border-black/5 px-4 py-3 text-sm">

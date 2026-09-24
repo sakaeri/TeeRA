@@ -1199,6 +1199,9 @@ function OrderEditModal({
                 公開募集は課金制です。<span className="font-semibold">1名10Tee</span>がかかります
               </p>
             </div>
+            <p className="mb-3 text-xs text-muted">
+              既に自社スタッフ・配属済みのスタッフが応募／アサインされた場合、その枠のTeeは消費されず自動的に返金されます（課金されるのは所属のないスタッフで枠が埋まった場合のみです）。
+            </p>
 
             <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 p-3">
               <p className="text-xs text-foreground">
