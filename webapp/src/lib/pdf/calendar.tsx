@@ -59,6 +59,7 @@ export type CalendarPdfData = {
   month: number;
   issuedAt: string;
   filterLabel?: string | null;
+  title?: string;
   shifts: CalendarPdfShift[];
 };
 
@@ -79,7 +80,7 @@ export function CalendarPdfDocument({ data }: { data: CalendarPdfData }) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <Text style={styles.title}>シフト表</Text>
+        <Text style={styles.title}>{data.title ?? "シフト表"}</Text>
         <Text style={styles.subtitle}>
           {data.companyName} ／ 対象月: {data.year}年{data.month}月 ／ 発行日: {data.issuedAt}
           {data.filterLabel ? ` ／ 絞り込み: ${data.filterLabel}` : ""}

@@ -248,16 +248,6 @@ export function ClientDetailPanel({
             <div className="mb-3 flex items-start justify-between gap-2">
               <h2 className="font-serif-jp text-xl font-bold">{data.name}</h2>
               <div className="flex shrink-0 items-center gap-3">
-                {kind === "agency" && data.isProxy ? (
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={inviteAgencyTaggedStaff}
-                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
-                  >
-                    ＋派遣スタッフを招待
-                  </button>
-                ) : null}
                 {data.isOwner ? (
                   <button
                     type="button"
@@ -269,15 +259,6 @@ export function ClientDetailPanel({
                 ) : null}
               </div>
             </div>
-
-            {agencyInviteUrl ? (
-              <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 p-3 text-xs">
-                <p className="mb-2 text-foreground">
-                  これは「{data.name}」の派遣スタッフを招待するためのURLです。このURLを共有してください（1回のみ使用できます）。開いた方はこの派遣会社のスタッフとして登録されます。
-                </p>
-                <CopyUrlField url={agencyInviteUrl} size="sm" />
-              </div>
-            ) : null}
 
             {deleteError ? <p className="mb-3 text-xs text-red-600">{deleteError}</p> : null}
 
@@ -477,7 +458,7 @@ export function ClientDetailPanel({
                     >
                       <p className="text-xs text-muted">実績PDF</p>
                       <span className="rounded-lg border border-primary px-3 py-1 text-xs font-semibold text-primary">
-                        出す（承認済みのみ）
+                        PDF出力
                       </span>
                     </a>
                   ) : null}
@@ -508,54 +489,27 @@ export function ClientDetailPanel({
 
             {tab === "staff" ? (
               <div>
-                <p className="mb-2 text-xs font-medium text-muted">配属中スタッフ</p>
-                <ul className="flex flex-col gap-2">
-                  {data.placements
-                    .filter((p) => p.active)
-                    .map((p) => (
-                      <li key={p.staffUserId} className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
-                        <span>
-                          {p.staffName}
-                          <span className="ml-1 text-xs text-muted">（{p.startedAt}〜）</span>
-                        </span>
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => setUnplaceConfirmTarget(p)}
-                          className="shrink-0 text-xs text-muted hover:text-red-600"
-                        >
-                          配属解除
-                        </button>
-                      </li>
-                    ))}
-                  {data.placements.filter((p) => p.active).length === 0 ? (
-                    <p className="py-4 text-center text-sm text-muted">配属中のスタッフはいません。</p>
-                  ) : null}
-                </ul>
-                {data.placements.some((p) => !p.active) ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowPlacementHistory((v) => !v)}
-                    className="mt-2 text-xs text-muted hover:text-primary"
-                  >
-                    {showPlacementHistory ? "解除履歴を隠す" : "解除履歴を表示"}
-                  </button>
-                ) : null}
-                {showPlacementHistory ? (
-                  <ul className="mt-2 flex flex-col gap-2">
-                    {data.placements
-                      .filter((p) => !p.active)
-                      .map((p) => (
-                        <li key={`${p.staffUserId}-${p.endedAt}`} className="rounded-lg border border-border bg-background/40 p-3 text-xs text-muted">
-                          {p.staffName}（{p.startedAt}〜{p.endedAt}・配属解除）
-                        </li>
-                      ))}
-                  </ul>
-                ) : null}
-
                 {kind === "agency" && data.isProxy ? (
-                  <div className="mt-4">
-                    <p className="mb-2 text-xs font-medium text-muted">この派遣会社のスタッフ</p>
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-muted">この派遣会社のスタッフ</p>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={inviteAgencyTaggedStaff}
+                        className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                      >
+                        ＋派遣スタッフを招待
+                      </button>
+                    </div>
+                    {agencyInviteUrl ? (
+                      <div className="mb-3 rounded-lg border border-accent/40 bg-accent/10 p-3 text-xs">
+                        <p className="mb-2 text-foreground">
+                          これは「{data.name}」の派遣スタッフを招待するためのURLです。このURLを共有してください（1回のみ使用できます）。開いた方はこの派遣会社のスタッフとして登録されます。
+                        </p>
+                        <CopyUrlField url={agencyInviteUrl} size="sm" />
+                      </div>
+                    ) : null}
                     <ul className="flex flex-col gap-1">
                       {data.taggedStaff.map((s) => (
                         <li key={s.userId}>
@@ -573,7 +527,54 @@ export function ClientDetailPanel({
                       ) : null}
                     </ul>
                   </div>
-                ) : null}
+                ) : (
+                  <>
+                    <p className="mb-2 text-xs font-medium text-muted">配属中スタッフ</p>
+                    <ul className="flex flex-col gap-2">
+                      {data.placements
+                        .filter((p) => p.active)
+                        .map((p) => (
+                          <li key={p.staffUserId} className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
+                            <span>
+                              {p.staffName}
+                              <span className="ml-1 text-xs text-muted">（{p.startedAt}〜）</span>
+                            </span>
+                            <button
+                              type="button"
+                              disabled={pending}
+                              onClick={() => setUnplaceConfirmTarget(p)}
+                              className="shrink-0 text-xs text-muted hover:text-red-600"
+                            >
+                              配属解除
+                            </button>
+                          </li>
+                        ))}
+                      {data.placements.filter((p) => p.active).length === 0 ? (
+                        <p className="py-4 text-center text-sm text-muted">配属中のスタッフはいません。</p>
+                      ) : null}
+                    </ul>
+                    {data.placements.some((p) => !p.active) ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowPlacementHistory((v) => !v)}
+                        className="mt-2 text-xs text-muted hover:text-primary"
+                      >
+                        {showPlacementHistory ? "解除履歴を隠す" : "解除履歴を表示"}
+                      </button>
+                    ) : null}
+                    {showPlacementHistory ? (
+                      <ul className="mt-2 flex flex-col gap-2">
+                        {data.placements
+                          .filter((p) => !p.active)
+                          .map((p) => (
+                            <li key={`${p.staffUserId}-${p.endedAt}`} className="rounded-lg border border-border bg-background/40 p-3 text-xs text-muted">
+                              {p.staffName}（{p.startedAt}〜{p.endedAt}・配属解除）
+                            </li>
+                          ))}
+                      </ul>
+                    ) : null}
+                  </>
+                )}
               </div>
             ) : null}
 

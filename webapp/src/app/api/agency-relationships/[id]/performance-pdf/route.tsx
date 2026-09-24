@@ -30,6 +30,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/agenc
     year,
     month,
     issuedAt: todayJst(),
+    title: "実績表",
     filterLabel: `派遣会社：${rel.proxyName ?? ""}（承認済みのみ）`,
     shifts: shifts.map((s) => ({
       date: s.date.toISOString().slice(0, 10),

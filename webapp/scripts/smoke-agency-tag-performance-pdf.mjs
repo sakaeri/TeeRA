@@ -131,14 +131,17 @@ try {
   await client.waitForTimeout(400);
   const agencyPanel = client.locator("div.fixed.inset-0.z-30, div.fixed.inset-0.z-20").last();
   bodyText = await agencyPanel.textContent();
-  log("実績PDFを出すボタンが稼働履歴タブにある", bodyText.includes("実績PDF") && bodyText.includes("出す（承認済みのみ）"));
-  log("ヘッダーに＋派遣スタッフを招待ボタンがある", bodyText.includes("＋派遣スタッフを招待"));
+  log("実績PDFを出すボタンが稼働履歴タブにある", bodyText.includes("実績PDF") && bodyText.includes("PDF出力"));
 
   await agencyPanel.getByRole("button", { name: "スタッフ一覧" }).click();
   await client.waitForTimeout(300);
   bodyText = await agencyPanel.textContent();
+  log("スタッフ一覧タブに＋派遣スタッフを招待ボタンがある", bodyText.includes("＋派遣スタッフを招待"));
   log("派遣会社詳細のスタッフ欄にタグ付きスタッフが表示される", bodyText.includes("実績PDF対象スタッフ"));
-  log("配属中スタッフには出ない（StaffPlacementとは無関係のため）", bodyText.includes("配属中のスタッフはいません"));
+  log(
+    "配属中スタッフのセクションは出ない（架空派遣会社には意味がないため常に非表示）",
+    !bodyText.includes("配属中スタッフ") && !bodyText.includes("配属中のスタッフはいません"),
+  );
 
   // --- 派遣会社詳細から直接スタッフを招待すると、参加時点で自動的にタグ付けされる ---
   const staff2Ctx = await browser.newContext();
