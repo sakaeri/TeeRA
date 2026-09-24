@@ -5,6 +5,17 @@ function log(label, ok) {
   if (!ok) process.exitCode = 1;
 }
 
+// 「今日から3日後」を対象日にする（ハードコードした日付だと、時間が経つと
+// 過去日になってシフト希望を出せなくなってしまうため）。月末付近だと翌月に
+// またがり、ウィザードのミニカレンダーが当月しか出さない場合に失敗し得る
+// が、他の同種テストと同じ割り切りとして許容する。
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const targetDate = new Date(Date.now() + JST_OFFSET_MS + 3 * 24 * 60 * 60 * 1000);
+const targetYear = targetDate.getUTCFullYear();
+const targetMonth = targetDate.getUTCMonth() + 1;
+const targetDay = targetDate.getUTCDate();
+const targetLabel = `${targetMonth}月${targetDay}日`;
+
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 
 const adminCtx = await browser.newContext();
@@ -50,31 +61,32 @@ try {
   await staff.click("text=参加する");
   await staff.waitForURL("http://localhost:3000/staff");
 
-  // --- staff: submit shift request for a date (day 15, taken from the
-  // wizard's mini calendar grid for the currently-viewed month). The
-  // request wizard is now a 4-step flow (勤務先→出勤/休み→日付/備考→確認);
-  // this staff has only one company so step①(勤務先選択) is skipped.
+  // --- staff: submit shift request for a date (taken from the wizard's mini
+  // calendar grid for the currently-viewed month). The request wizard is now
+  // a 4-step flow (勤務先→出勤/休み→日付/備考→確認); this staff has only
+  // one company so step①(勤務先選択) is skipped.
   await staff.locator("button.fixed.bottom-8.right-8").click();
   const wizard = staff.locator("div.fixed.inset-0.z-30");
   await wizard.getByRole("button", { name: "出勤希望", exact: true }).click();
   await wizard.getByRole("button", { name: "次へ" }).click();
   await staff.waitForTimeout(200);
-  await wizard.getByRole("button", { name: "15", exact: true }).click();
+  await wizard.getByRole("button", { name: String(targetDay), exact: true }).click();
   await wizard.getByRole("button", { name: "次へ" }).click();
   await staff.waitForTimeout(200);
   await wizard.getByRole("button", { name: "申請する", exact: true }).click();
   await staff.waitForTimeout(800);
 
-  // --- admin: go to calendar for Sept 2026, see pending request grouped by
-  // date at the bottom, resolve it via the day-detail's ＋シフトを作成
-  // (the old "マッチさせる" mini-form — which created a bare shift without
-  // any task/workplace context — was retired; resolving a shift request now
-  // goes through the same day-detail flow as any other assignment).
-  await admin.goto("http://localhost:3000/company/calendar?y=2026&m=9");
+  // --- admin: go to calendar for the target month, see pending request
+  // grouped by date at the bottom, resolve it via the day-detail's
+  // ＋シフトを作成 (the old "マッチさせる" mini-form — which created a bare
+  // shift without any task/workplace context — was retired; resolving a
+  // shift request now goes through the same day-detail flow as any other
+  // assignment).
+  await admin.goto(`http://localhost:3000/company/calendar?y=${targetYear}&m=${targetMonth}`);
   let calBody = await admin.textContent("body");
-  log("pending shift request visible to admin (日付＋人数のみ、氏名は出さない)", calBody.includes("9月15日") && calBody.includes("1名"));
+  log("pending shift request visible to admin (日付＋人数のみ、氏名は出さない)", calBody.includes(targetLabel) && calBody.includes("1名"));
 
-  await admin.getByRole("button", { name: /9月15日/ }).click();
+  await admin.getByRole("button", { name: new RegExp(targetLabel) }).click();
   await admin.waitForTimeout(300);
   let bodyText = await admin.textContent("body");
   log("確認で日別詳細が開き＋シフトを作成が表示される", bodyText.includes("＋シフトを作成"));
@@ -98,7 +110,7 @@ try {
   // server action's revalidatePath already refreshed the route's data, so it
   // should now show the newly-created shift without any extra click.
   calBody = await admin.textContent("body");
-  const dayDetailMatch = calBody.match(/9月15日[\s\S]{0,300}/);
+  const dayDetailMatch = calBody.match(new RegExp(`${targetLabel}[\\s\\S]{0,300}`));
   console.log("day detail snippet:", dayDetailMatch?.[0]);
   log("matched shift appears in day detail panel", Boolean(dayDetailMatch && dayDetailMatch[0].includes("カレンダースタッフ")));
 
@@ -107,7 +119,10 @@ try {
   // confirm the shift request section at the top of the page dropped this
   // now-resolved request — with none left pending, the whole collapsible
   // section is hidden entirely rather than showing an empty-state message.
-  const requestsAfterMatch = await admin.evaluate((url) => fetch(url).then((r) => r.text()), "http://localhost:3000/company/calendar?y=2026&m=9");
+  const requestsAfterMatch = await admin.evaluate(
+    (url) => fetch(url).then((r) => r.text()),
+    `http://localhost:3000/company/calendar?y=${targetYear}&m=${targetMonth}`,
+  );
   log("シフト作成に伴い出勤希望が自動的に対応済みになる", !requestsAfterMatch.includes("シフト希望　"));
 
   // --- admin: create an overlapping assigned shift on same day -> expect conflict

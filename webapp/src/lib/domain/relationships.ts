@@ -57,6 +57,38 @@ export async function listAssignableAgencyStaff(clientCompanyId: string) {
   );
 }
 
+// TeeRAを使っていない（実体のない）派遣会社にタグ付けされている自社
+// スタッフの、指定月における承認済みシフト一覧。実績PDF出力用 — シフト
+// 自体はこれまで通り自社(INHOUSE)のままなので、既存のCLIENT-source向け
+// 集計とは別に、このタグ(CompanyMembership.viaAgencyRelationshipId)
+// だけを頼りに集計する。
+export async function listApprovedShiftsForTaggedAgencyStaff(params: {
+  companyId: string;
+  viaAgencyRelationshipId: string;
+  year: number;
+  month: number;
+}) {
+  const taggedMemberships = await prisma.companyMembership.findMany({
+    where: { companyId: params.companyId, viaAgencyRelationshipId: params.viaAgencyRelationshipId },
+    select: { userId: true },
+  });
+  const staffUserIds = taggedMemberships.map((m) => m.userId);
+  if (staffUserIds.length === 0) return [];
+
+  const start = new Date(Date.UTC(params.year, params.month - 1, 1));
+  const end = new Date(Date.UTC(params.year, params.month, 1));
+  return prisma.shift.findMany({
+    where: {
+      companyId: params.companyId,
+      staffUserId: { in: staffUserIds },
+      date: { gte: start, lt: end },
+      workReport: { approvalStatus: "APPROVED" },
+    },
+    include: { staff: true },
+    orderBy: { date: "asc" },
+  });
+}
+
 // "+ 取引先名簿を追加" -> 依頼主名簿: activates companyModules.agency and
 // creates a proxy client relationship in one step (chat29's one-click flow).
 export async function activateAgencyModuleWithProxyClient(params: {
@@ -291,6 +323,15 @@ export async function getClientMonthDetail(params: {
     }),
   ]);
 
+  // 依頼主として、TeeRAを使っていない（実体のない）派遣会社にタグ付けした
+  // 自社スタッフの一覧（実績PDFの対象になる）。
+  const taggedStaff = !isClientDirection && !relationship.agencyCompanyId
+    ? await prisma.companyMembership.findMany({
+        where: { companyId: params.companyId, viaAgencyRelationshipId: params.companyRelationshipId },
+        include: { user: true },
+      })
+    : [];
+
   const unapprovedCount = shifts.filter((s) => s.workReport && s.workReport.approvalStatus !== "APPROVED").length;
   // 稼働時間は日給・時給を問わず実際の実働分（WorkReport.computedMinutes）の
   // 単純合計 — 請求金額のプレビューではなく「今月どれだけ稼働があったか」
@@ -345,6 +386,7 @@ export async function getClientMonthDetail(params: {
       startedAt: p.createdAt.toISOString().slice(0, 10),
       endedAt: p.endedAt ? p.endedAt.toISOString().slice(0, 10) : null,
     })),
+    taggedStaff: taggedStaff.map((m) => ({ userId: m.userId, name: m.user.name })),
     relationshipNotes: relationshipNotes.map((n) => ({
       id: n.id,
       content: n.content,

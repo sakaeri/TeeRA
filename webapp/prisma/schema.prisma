@@ -191,14 +191,22 @@ model CompanyMembership {
   paidLeaveBalance       Int       @default(0)
   nextPaidLeaveGrantDate DateTime? @db.Date
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // TeeRAを使っていない（実体のない/プロキシの）派遣会社からこの自社スタッフ
+  // が来ている、という表示用のラベルだけの項目。シフト自体はこれまで通り
+  // 自社(INHOUSE)のまま作られ、給与・請求など既存のロジックには一切影響
+  // しない — 実体のある派遣会社の配属(StaffPlacement)とは別軸。
+  viaAgencyRelationshipId String?
+
+  user                  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company               Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  viaAgencyRelationship CompanyRelationship? @relation(fields: [viaAgencyRelationshipId], references: [id], onDelete: SetNull)
 
   staffNotes      StaffNote[]
   paidLeaveEvents PaidLeaveEvent[]
 
   @@unique([userId, companyId])
   @@index([companyId, role])
+  @@index([viaAgencyRelationshipId])
 }
 
 enum PaidLeaveEventType {
@@ -275,33 +283,34 @@ enum RelationshipStatus {
 // holds its display name in that case, until upgraded via CLIENT_UPGRADE /
 // AGENCY_UPGRADE invite redemption.
 model CompanyRelationship {
-  id              String             @id @default(cuid())
-  ownerCompanyId  String
-  agencyCompanyId String?
-  clientCompanyId String?
-  proxyName       String?
-  status          RelationshipStatus @default(ACTIVE)
-  createdAt       DateTime           @default(now())
+  id               String             @id @default(cuid())
+  ownerCompanyId   String
+  agencyCompanyId  String?
+  clientCompanyId  String?
+  proxyName        String?
+  status           RelationshipStatus @default(ACTIVE)
+  createdAt        DateTime           @default(now())
   // 配属先のルール連絡先。配属先自身の住所（Company.address）は「本社所在
   // 地≠実際の勤務地」のケースがあるため参照せず、この2項目は常に手入力
   // ＋固定フォームにする。配属されているスタッフ本人にも「業務単価」の
   // 勤務先詳細で表示される（社内専用メモとは別軸の共有情報）。
-  workLocation      String?
-  emergencyContact  String?
+  workLocation     String?
+  emergencyContact String?
 
   ownerCompany  Company  @relation("OwnerSide", fields: [ownerCompanyId], references: [id], onDelete: Cascade)
   agencyCompany Company? @relation("AgencySide", fields: [agencyCompanyId], references: [id], onDelete: SetNull)
   clientCompany Company? @relation("ClientSide", fields: [clientCompanyId], references: [id], onDelete: SetNull)
 
-  placementRates    CompanyPlacementRate[]
-  staffTaskRates    StaffTaskRate[]
-  contractTemplates ContractTemplate[]
-  shifts            Shift[]
-  invoices          Invoice[]
-  inviteTokens      InviteToken[]
-  staffPlacements   StaffPlacement[]
-  relationshipNotes RelationshipNote[]
-  teamLinks         TeamClientRelationship[]
+  placementRates       CompanyPlacementRate[]
+  staffTaskRates       StaffTaskRate[]
+  contractTemplates    ContractTemplate[]
+  shifts               Shift[]
+  invoices             Invoice[]
+  inviteTokens         InviteToken[]
+  staffPlacements      StaffPlacement[]
+  relationshipNotes    RelationshipNote[]
+  teamLinks            TeamClientRelationship[]
+  membershipsViaAgency CompanyMembership[]
 
   @@index([ownerCompanyId])
   @@index([agencyCompanyId])
@@ -925,20 +934,20 @@ enum SalarySlipLineKind {
 }
 
 model SalarySlipLine {
-  id           String             @id @default(cuid())
-  salarySlipId String
-  shiftId      String?
-  kind         SalarySlipLineKind
-  description  String
-  hours        Float
-  rate         Int
-  amount       Int
-  sortOrder    Int                @default(0)
+  id               String             @id @default(cuid())
+  salarySlipId     String
+  shiftId          String?
+  kind             SalarySlipLineKind
+  description      String
+  hours            Float
+  rate             Int
+  amount           Int
+  sortOrder        Int                @default(0)
   // trueは管理者が単価/時間を手で直したSHIFT行 — regenerateShiftLinesは
   // この行を上書き・削除しない。falseのまま（自動生成のまま一度も編集
   // されていない）のSHIFT行は、単価未設定の解消などを反映するため
   // 従来通り毎回作り直す。
-  isManuallyEdited Boolean         @default(false)
+  isManuallyEdited Boolean            @default(false)
 
   salarySlip SalarySlip @relation(fields: [salarySlipId], references: [id], onDelete: Cascade)
   shift      Shift?     @relation(fields: [shiftId], references: [id], onDelete: SetNull)

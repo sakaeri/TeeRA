@@ -41,11 +41,15 @@ export default async function PayrollPage({
   // カレンダー/スタッフ詳細パネルと同様、カットオフ月そのものを見ている
   // 時だけバナーを出す（無料プランというだけで常時表示すると邪魔になる）。
   const atHistoryCutoff = minMonth !== null && targetMonth === minMonth;
+  // TeeRAを使っていない（実体のない）派遣会社にタグ付けされているスタッフは
+  // 実際の給与を派遣会社側が払う想定のため、ここでの給与計算対象からは
+  // 除外する（誤ってここから給料明細を発行してしまわないように）。
+  const payableStaff = allStaff.filter((s) => !s.viaAgencyRelationshipName);
   // チームマネージャー/リーダーは自チームのスタッフしか選べない（本部管理者/
   // 編集者は全社分）。
   const staff = isCompanyScopeAdmin(membership)
-    ? allStaff
-    : allStaff.filter((s) => s.teams.some((t) => membership.teamMemberships.some((tm) => tm.teamId === t.teamId)));
+    ? payableStaff
+    : payableStaff.filter((s) => s.teams.some((t) => membership.teamMemberships.some((tm) => tm.teamId === t.teamId)));
 
   type SlipData = {
     id: string;
@@ -65,7 +69,10 @@ export default async function PayrollPage({
   const targetStaffTeamIds = staffUserId
     ? (await prisma.teamMembership.findMany({ where: { userId: staffUserId }, select: { teamId: true } })).map((r) => r.teamId)
     : [];
-  if (staffUserId && canManageAny(membership, targetStaffTeamIds)) {
+  // タグ付きスタッフはURL直指定でも給与計算の対象にしない（ピッカーの
+  // 除外だけでは、?staff=idを直接開かれた場合に素通りしてしまうため）。
+  const isPayableStaff = payableStaff.some((s) => s.userId === staffUserId);
+  if (staffUserId && isPayableStaff && canManageAny(membership, targetStaffTeamIds)) {
     const slip = await getOrCreateSalarySlip({
       companyId: membership.companyId,
       staffUserId,

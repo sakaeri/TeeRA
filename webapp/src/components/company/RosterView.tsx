@@ -24,6 +24,7 @@ type StaffRow = {
   name: string;
   email: string;
   isProxy: boolean;
+  viaAgencyRelationshipName: string | null;
   teams: { teamId: string; teamName: string; role: string }[];
   monthlyHours: number;
   contractLabel: string;
@@ -118,7 +119,10 @@ export function RosterView({
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showAddMenuInfo, setShowAddMenuInfo] = useState(false);
   const [teamFilter, setTeamFilter] = useState("");
-  const filteredStaff = teamFilter ? staff.filter((s) => s.teams.some((t) => t.teamId === teamFilter)) : staff;
+  // 実体のない（TeeRAを使っていない）派遣会社にタグ付けされているスタッフは
+  // 自社スタッフの名簿には出さない（その派遣会社の詳細パネル側だけに出す）。
+  const ownStaff = staff.filter((s) => !s.viaAgencyRelationshipName);
+  const filteredStaff = teamFilter ? ownStaff.filter((s) => s.teams.some((t) => t.teamId === teamFilter)) : ownStaff;
   const filteredClients = teamFilter ? clients.filter((c) => c.teams.some((t) => t.id === teamFilter)) : clients;
   const filteredAgencies = teamFilter ? agencies.filter((a) => a.teams.some((t) => t.id === teamFilter)) : agencies;
   const [proxyNamePromptFor, setProxyNamePromptFor] = useState<
@@ -475,6 +479,7 @@ export function RosterView({
           userId={selectedStaffId}
           companyName={companyName}
           clients={clients.map((c) => ({ id: c.id, name: c.name }))}
+          agencyOptions={agencies.filter((a) => a.isProxy).map((a) => ({ id: a.id, name: a.name }))}
           contractTemplates={contractTemplates}
           knownTaskNames={knownTaskNames}
           allTeams={teams}
@@ -488,6 +493,11 @@ export function RosterView({
           kind={selectedRelationshipKind}
           knownTaskNames={knownTaskNames}
           allTeams={teams}
+          onOpenStaff={(userId) => {
+            setSelectedRelationshipId(null);
+            setSelectedRelationshipKind(null);
+            setSelectedStaffId(userId);
+          }}
           onClose={() => {
             setSelectedRelationshipId(null);
             setSelectedRelationshipKind(null);

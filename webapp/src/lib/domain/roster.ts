@@ -15,7 +15,7 @@ import type { TeamRole } from "@/generated/prisma/enums";
 export async function listStaff(companyId: string) {
   const memberships = await prisma.companyMembership.findMany({
     where: { companyId, OR: [{ role: "STAFF" }, { canWorkShifts: true }] },
-    include: { user: true },
+    include: { user: true, viaAgencyRelationship: true },
     orderBy: { createdAt: "asc" },
   });
 
@@ -32,6 +32,7 @@ export async function listStaff(companyId: string) {
     email: m.user.email,
     isProxy: m.user.isProxy,
     createdAt: m.createdAt,
+    viaAgencyRelationshipName: m.viaAgencyRelationship?.proxyName ?? null,
     teams: teamMemberships
       .filter((tm) => tm.userId === m.userId)
       .map((tm) => ({ teamId: tm.teamId, teamName: tm.team.name, role: tm.role })),
@@ -118,6 +119,10 @@ export async function inviteStaff(params: {
   teamId?: string;
   contractTemplateId?: string;
   contractStartDate?: Date;
+  // TeeRAを使っていない（実体のない）派遣会社の詳細パネルから招待した
+  // 場合のみセットされる。redeemInvite側でCompanyMembership作成時に
+  // そのままviaAgencyRelationshipIdとして引き継がれる。
+  viaAgencyRelationshipId?: string;
 }) {
   return createInvite({
     kind: "STAFF",
@@ -126,6 +131,7 @@ export async function inviteStaff(params: {
     teamId: params.teamId,
     contractTemplateId: params.contractTemplateId,
     contractStartDate: params.contractStartDate,
+    companyRelationshipId: params.viaAgencyRelationshipId,
     targetRole: "STAFF",
   });
 }
@@ -239,7 +245,7 @@ export async function getStaffMonthDetail(params: {
 }) {
   const membership = await prisma.companyMembership.findFirstOrThrow({
     where: { userId: params.userId, companyId: params.companyId, OR: [{ role: "STAFF" }, { canWorkShifts: true }] },
-    include: { user: true },
+    include: { user: true, viaAgencyRelationship: true },
   });
   const teamMemberships = await prisma.teamMembership.findMany({
     where: { userId: params.userId, team: { companyId: params.companyId } },
@@ -321,6 +327,8 @@ export async function getStaffMonthDetail(params: {
     membershipId: membership.id,
     name: membership.user.name,
     isProxy: membership.user.isProxy,
+    viaAgencyRelationshipId: membership.viaAgencyRelationshipId,
+    viaAgencyRelationshipName: membership.viaAgencyRelationship?.proxyName ?? null,
     staffNotes: staffNotes.map((n) => ({
       id: n.id,
       content: n.content,
@@ -510,5 +518,18 @@ export async function updateMembershipBankInfo(params: {
       accountNumber: params.accountNumber.trim() || null,
       accountHolderName: params.accountHolderName.trim() || null,
     },
+  });
+}
+
+// TeeRAを使っていない（実体のない）派遣会社からこのスタッフが来ている、
+// という表示用ラベルの設定/解除。シフトはこれまで通り自社(INHOUSE)の
+// まま作られるため、給与・請求など既存のロジックには一切影響しない。
+export async function updateStaffAgencyTag(params: {
+  membershipId: string;
+  viaAgencyRelationshipId: string | null;
+}) {
+  return prisma.companyMembership.update({
+    where: { id: params.membershipId },
+    data: { viaAgencyRelationshipId: params.viaAgencyRelationshipId },
   });
 }

@@ -15,6 +15,7 @@ import {
   deleteStaffNote,
   updateMembershipIdDocument,
   updateMembershipBankInfo,
+  updateStaffAgencyTag,
 } from "@/lib/domain/roster";
 import { listPendingInvites, revokeInvite } from "@/lib/domain/invites";
 import { setHireDate, grantPaidLeave, adjustPaidLeaveBalance, skipPaidLeaveGrant } from "@/lib/domain/paidLeave";
@@ -67,6 +68,27 @@ export async function inviteStaffAction(
     teamId,
     contractTemplateId,
     contractStartDate: contractStartDate ? new Date(`${contractStartDate}T00:00:00.000Z`) : undefined,
+  });
+  revalidatePath("/company/roster");
+  return absoluteInviteUrl(invite.token);
+}
+
+// 派遣会社（プロキシ）詳細パネルの「＋スタッフを招待」専用。招待を受諾した
+// 時点で、自社スタッフとしてではなくこの派遣会社タグ付き（表示用）として
+// 登録される。
+export async function inviteAgencyTaggedStaffAction(viaAgencyRelationshipId: string) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  const rel = await prisma.companyRelationship.findUnique({ where: { id: viaAgencyRelationshipId } });
+  if (!rel || rel.clientCompanyId !== membership.companyId || rel.agencyCompanyId) {
+    throw new Error("forbidden");
+  }
+
+  const invite = await inviteStaff({
+    companyId: membership.companyId,
+    createdByUserId: userId,
+    viaAgencyRelationshipId,
   });
   revalidatePath("/company/roster");
   return absoluteInviteUrl(invite.token);
@@ -539,6 +561,24 @@ export async function updateStaffBankInfoAction(
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
   await assertMembershipOwnedByCompany(membershipId, membership.companyId);
   await updateMembershipBankInfo({ membershipId, ...input });
+  revalidatePath("/company/roster");
+}
+
+// TeeRAを使っていない（実体のない）派遣会社からこのスタッフが来ている、
+// という表示用ラベルの設定/解除。実体のある（本物の）派遣会社は既に
+// 配属(StaffPlacement)という別の仕組みがあるため、ここで選べるのは
+// プロキシ（agencyCompanyIdが無い）の関係に限定する。
+export async function updateStaffAgencyTagAction(membershipId: string, viaAgencyRelationshipId: string | null) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertMembershipOwnedByCompany(membershipId, membership.companyId);
+  if (viaAgencyRelationshipId) {
+    const rel = await prisma.companyRelationship.findUnique({ where: { id: viaAgencyRelationshipId } });
+    if (!rel || rel.clientCompanyId !== membership.companyId || rel.agencyCompanyId) {
+      throw new Error("forbidden");
+    }
+  }
+  await updateStaffAgencyTag({ membershipId, viaAgencyRelationshipId });
   revalidatePath("/company/roster");
 }
 

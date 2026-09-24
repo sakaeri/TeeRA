@@ -33,6 +33,13 @@ export async function openSalarySlipAction(staffUserId: string, targetMonth: str
   const staffTeamIds = await getStaffTeamIds(staffUserId);
   if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
 
+  // TeeRAを使っていない（実体のない）派遣会社にタグ付けされているスタッフは
+  // 実際の給与を派遣会社側が払う想定のため、給与計算の対象にしない。
+  const targetMembership = await prisma.companyMembership.findFirst({
+    where: { userId: staffUserId, companyId: membership.companyId },
+  });
+  if (!targetMembership || targetMembership.viaAgencyRelationshipId) throw new Error("forbidden");
+
   const slip = await getOrCreateSalarySlip({
     companyId: membership.companyId,
     staffUserId,

@@ -123,7 +123,7 @@ export default async function CompanyCalendarPage({
           status: s.status,
           originLabel: s.publicRecruitment ? `${s.publicRecruitment.company.name}／${s.publicRecruitment.title}` : null,
         }))}
-        staffOptions={staff.map((s) => ({ id: s.userId, name: s.name }))}
+        staffOptions={staff.map((s) => ({ id: s.userId, name: s.name, viaAgencyRelationshipName: s.viaAgencyRelationshipName }))}
         teams={teams
           .filter((t) => isAdmin || myTeamIds.includes(t.id))
           .map((t) => ({ id: t.id, name: t.name, clientIds: t.clientLinks.map((l) => l.companyRelationshipId) }))}

@@ -41,9 +41,12 @@ try {
   );
   const staffUserId = psql(`select id from "User" where email='${staffEmail}';`);
 
-  const shortageDate = "2026-09-10";
-  const unconfirmedDate = "2026-09-15";
-  const reportDate = "2026-08-20";
+  // ハードコードした日付だと時間が経つにつれ過去日/未来日の前提が崩れる
+  // ため、実行時刻基準の相対日付にする（JST/UTCの「今日」判定に多少
+  // 噛み合わなくても十分に未来/過去になるよう余裕を持たせる）。
+  const shortageDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const unconfirmedDate = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const reportDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   // セッションの「今日」に依存せず必ず過去日になるよう、実行時刻基準で
   // 1年前の日付を使う（JST/UTCの「今日」判定に噛み合わなくても十分過去）。
@@ -91,11 +94,15 @@ try {
       `values ('${shiftIdValue}', '${companyId}', '${staffUserId}', 'INHOUSE', '${reportDate}', '08:00', '12:00', 'ASSIGN', now());`,
   );
   const shiftId = shiftIdValue;
-  // clockIn/clockOut are stored in UTC; insert JST 08:00/12:03 as UTC-9h so the
-  // dashboard's Asia/Tokyo-formatted display should read 08:00/12:03
+  // clockIn/clockOut are stored in UTC; insert JST 08:00/12:03 (reportDate
+  // 00:00 UTC ±9h) so the dashboard's Asia/Tokyo-formatted display should
+  // read 08:00/12:03
+  const reportDateMidnightUtc = new Date(`${reportDate}T00:00:00.000Z`).getTime();
+  const clockInIso = new Date(reportDateMidnightUtc + (8 * 60 - 9 * 60) * 60 * 1000).toISOString();
+  const clockOutIso = new Date(reportDateMidnightUtc + (12 * 60 + 3 - 9 * 60) * 60 * 1000).toISOString();
   psql(
     `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "clockIn", "clockOut", "breakMinutes", "computedMinutes", comment, "approvalStatus", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${shiftId}', '${staffUserId}', 'WORKED', '2026-08-19T23:00:00Z', '2026-08-20T03:03:00Z', 0, 243, 'よろしくお願いします', 'PENDING', now());`,
+      `values (gen_random_uuid()::text, '${shiftId}', '${staffUserId}', 'WORKED', '${clockInIso}', '${clockOutIso}', 0, 243, 'よろしくお願いします', 'PENDING', now());`,
   );
 
   await page.goto("http://localhost:3000/company");
@@ -136,7 +143,7 @@ try {
   body = await page.textContent("body");
   log(
     "detail modal shows clock in/out, break, hours, comment",
-    body.includes("08:00") && body.includes("12:03") && body.includes("4.05時間") && body.includes("よろしくお願いします"),
+    body.includes("08:00") && body.includes("12:03") && body.includes("4.0時間") && body.includes("よろしくお願いします"),
   );
 
   await page.getByRole("button", { name: "承認する" }).click();

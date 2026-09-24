@@ -65,7 +65,7 @@ const APPROVAL_LABEL: Record<string, string> = {
   NEEDS_CONFIRMATION: "要確認",
 };
 
-type StaffOption = { id: string; name: string };
+type StaffOption = { id: string; name: string; viaAgencyRelationshipName?: string | null };
 type AgencyStaffOption = { staffUserId: string; staffName: string; companyRelationshipId: string; agencyName: string };
 type Team = { id: string; name: string; clientIds: string[] };
 
@@ -2642,7 +2642,10 @@ function AssignShiftModal({
           <div className="flex max-h-96 flex-col gap-2 overflow-y-auto">
             {(agencyRelationshipId
               ? agencyStaffOptions.filter((s) => s.companyRelationshipId === agencyRelationshipId)
-              : staffOptions.map((s) => ({ staffUserId: s.id, staffName: s.name }))
+              : staffOptions.map((s) => ({
+                  staffUserId: s.id,
+                  staffName: s.viaAgencyRelationshipName ? `${s.name}（${s.viaAgencyRelationshipName}）` : s.name,
+                }))
             ).map((s) => (
               <WizardOptionButton
                 key={s.staffUserId}

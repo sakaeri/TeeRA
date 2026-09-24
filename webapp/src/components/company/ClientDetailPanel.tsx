@@ -13,6 +13,7 @@ import {
   setClientTeamsAction,
   deleteCompanyRelationshipAction,
   unplaceStaffAction,
+  inviteAgencyTaggedStaffAction,
 } from "@/app/company/actions";
 import { addPlacementRateVersionAction, deletePlacementTaskNameAction } from "@/app/company/contracts/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
@@ -52,6 +53,7 @@ type ClientMonthDetail = {
   historyCutoff: { year: number; month: number } | null;
   teams: { teamId: string; teamName: string }[];
   placements: Placement[];
+  taggedStaff: { userId: string; name: string }[];
   relationshipNotes: RelationshipNote[];
   workedHours: number;
   unapprovedCount: number;
@@ -95,12 +97,14 @@ export function ClientDetailPanel({
   kind,
   knownTaskNames,
   allTeams,
+  onOpenStaff,
   onClose,
 }: {
   relationshipId: string;
   kind: "client" | "agency";
   knownTaskNames: string[];
   allTeams: { id: string; name: string }[];
+  onOpenStaff: (userId: string) => void;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -111,6 +115,14 @@ export function ClientDetailPanel({
   const [data, setData] = useState<ClientMonthDetail | null>(null);
   const [pending, startTransition] = useTransition();
   const [upgradeUrl, setUpgradeUrl] = useState<string | null>(null);
+  const [agencyInviteUrl, setAgencyInviteUrl] = useState<string | null>(null);
+
+  function inviteAgencyTaggedStaff() {
+    startTransition(async () => {
+      const url = await inviteAgencyTaggedStaffAction(relationshipId);
+      setAgencyInviteUrl(url);
+    });
+  }
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState("");
   const [newNoteVisibleToStaff, setNewNoteVisibleToStaff] = useState(false);
@@ -501,6 +513,56 @@ export function ClientDetailPanel({
                         </li>
                       ))}
                   </ul>
+                ) : null}
+
+                {kind === "agency" && data.isProxy ? (
+                  <div className="mt-4 rounded-lg border border-border p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-xs font-medium text-muted">この派遣会社のスタッフ</p>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={inviteAgencyTaggedStaff}
+                          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                        >
+                          ＋スタッフを招待
+                        </button>
+                        <a
+                          href={`/api/agency-relationships/${relationshipId}/performance-pdf?y=${year}&m=${month}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/5"
+                        >
+                          実績PDFを出す（承認済みのみ）
+                        </a>
+                      </div>
+                    </div>
+                    {agencyInviteUrl ? (
+                      <div className="mb-2 rounded-lg border border-border bg-background/40 p-2">
+                        <p className="mb-1 text-xs text-muted">
+                          このURLを共有してください。1回のみ使用できます。開いた方はこの派遣会社のスタッフとして登録されます。
+                        </p>
+                        <CopyUrlField url={agencyInviteUrl} size="sm" />
+                      </div>
+                    ) : null}
+                    <ul className="flex flex-col gap-1">
+                      {data.taggedStaff.map((s) => (
+                        <li key={s.userId}>
+                          <button
+                            type="button"
+                            onClick={() => onOpenStaff(s.userId)}
+                            className="w-full rounded-lg border border-border bg-background/40 px-3 py-2 text-left text-sm hover:border-primary"
+                          >
+                            {s.name}
+                          </button>
+                        </li>
+                      ))}
+                      {data.taggedStaff.length === 0 ? (
+                        <p className="py-2 text-center text-xs text-muted">スタッフはまだいません。</p>
+                      ) : null}
+                    </ul>
+                  </div>
                 ) : null}
               </div>
             ) : null}

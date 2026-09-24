@@ -44,20 +44,23 @@ try {
       `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'STAFF');`,
   );
 
-  const shortageDate = "2026-09-12";
+  // ハードコードした日付だと時間が経つにつれ過去日/未来日の前提が崩れる
+  // ため、実行時刻基準の相対日付にする。
+  const shortageDate = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   psql(
     `insert into "PublicRecruitment" (id, "companyId", title, date, "startTime", "endTime", "maxEntries", "lockedTee", status, "updatedAt") ` +
       `values (gen_random_uuid()::text, '${companyId}', 'テスト事務所', '${shortageDate}', '09:00', '17:00', 1, 10, 'PUBLISHED', now());`,
   );
 
+  const workReportDate = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const shiftId = `todolink-shift-${Date.now()}`;
   psql(
     `insert into "Shift" (id, "companyId", "staffUserId", source, date, "startTime", "endTime", "createdVia", "updatedAt") ` +
-      `values ('${shiftId}', '${companyId}', '${staffUserId}', 'INHOUSE', '2026-08-20', '09:00', '13:00', 'ASSIGN', now());`,
+      `values ('${shiftId}', '${companyId}', '${staffUserId}', 'INHOUSE', '${workReportDate}', '09:00', '13:00', 'ASSIGN', now());`,
   );
   psql(
     `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "clockIn", "clockOut", "breakMinutes", "computedMinutes", comment, "approvalStatus", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${shiftId}', '${staffUserId}', 'WORKED', '2026-08-20T00:00:00Z', '2026-08-20T04:00:00Z', 0, 240, 'テストコメント', 'PENDING', now());`,
+      `values (gen_random_uuid()::text, '${shiftId}', '${staffUserId}', 'WORKED', '${workReportDate}T00:00:00Z', '${workReportDate}T04:00:00Z', 0, 240, 'テストコメント', 'PENDING', now());`,
   );
   const reportId = psql(`select id from "WorkReport" where "shiftId"='${shiftId}';`);
 
@@ -77,7 +80,7 @@ try {
   let body = await page.textContent("body");
   log(
     "業務報告 auto-todo text includes team/date/time detail",
-    body.includes("リンクスタッフさんの業務（自社）（2026-08-20・09:00〜13:00）業務報告が未承認です"),
+    body.includes(`リンクスタッフさんの業務（自社）（${workReportDate}・09:00〜13:00）業務報告が未承認です`),
   );
 
   // 欠員: カレンダーで確認 should deep-link straight to that day's detail

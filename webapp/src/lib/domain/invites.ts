@@ -114,7 +114,15 @@ export async function redeemInvite(token: string, userId: string) {
       } else {
         const role = invite.targetRole ?? "STAFF";
         await tx.companyMembership.create({
-          data: { userId, companyId: invite.companyId, role },
+          data: {
+            userId,
+            companyId: invite.companyId,
+            role,
+            // STAFF招待でのみ「実体のない派遣会社」タグ付けの意味を持つ
+            // （companyRelationshipIdはCLIENT_UPGRADE/AGENCY_UPGRADEでも
+            // 使われるフィールドだが、それらは別のkindなのでここには来ない）。
+            viaAgencyRelationshipId: invite.kind === "STAFF" ? invite.companyRelationshipId : null,
+          },
         });
         if (invite.teamId) {
           await tx.teamMembership.create({
