@@ -100,10 +100,10 @@ try {
   const shiftId = psql(`select id from "Shift" where "staffUserId"='${staffUserId}' order by "createdAt" desc limit 1;`);
 
   await staff.goto("http://localhost:3000/staff/timecard");
-  await staff.getByRole("button", { name: "出勤" }).click();
+  await staff.getByRole("button", { name: "勤務開始" }).click();
   await staff.waitForTimeout(500);
   psql(`update "WorkReport" set "clockIn" = now() - interval '8 hours' where "shiftId"='${shiftId}';`);
-  await staff.getByRole("button", { name: "退勤" }).click();
+  await staff.getByRole("button", { name: "勤務終了" }).click();
   await staff.waitForTimeout(500);
   // 業務報告は特に選び直さず（デフォルトのままシフト予定の「キャディ」で）提出する
   await staff.getByRole("button", { name: "業務報告を提出する" }).click();

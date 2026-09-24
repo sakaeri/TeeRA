@@ -95,14 +95,14 @@ try {
   await admin.waitForTimeout(800);
 
   await staff.goto("http://localhost:3000/staff/timecard");
-  await staff.getByRole("button", { name: "出勤" }).click();
+  await staff.getByRole("button", { name: "勤務開始" }).click();
   await staff.waitForTimeout(500);
 
   const staffUserId = psql(`select id from "User" where email='${staffEmail.toLowerCase()}';`);
   psql(`update "WorkReport" set "clockIn" = now() - interval '8 hours' where "staffUserId"='${staffUserId}';`);
   await staff.reload();
   await staff.waitForTimeout(400);
-  await staff.getByRole("button", { name: "退勤" }).click();
+  await staff.getByRole("button", { name: "勤務終了" }).click();
   await staff.waitForTimeout(500);
   const logSizeBeforeSubmit = readFileSync(DEV_LOG_PATH, "utf8").length;
   await staff.getByRole("button", { name: "業務報告を提出する" }).click();

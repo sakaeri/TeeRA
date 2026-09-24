@@ -102,14 +102,14 @@ try {
   await admin.waitForTimeout(800);
 
   await staff.goto("http://localhost:3000/staff/timecard");
-  await staff.getByRole("button", { name: "出勤" }).click();
+  await staff.getByRole("button", { name: "勤務開始" }).click();
   await staff.waitForTimeout(500);
   // backdate clockIn by 8h so the test doesn't depend on real elapsed time
   const shiftIdForToday = psql(
     `select id from "Shift" where "staffUserId"='${psql(`select id from "User" where email='${staffEmail}';`)}' order by "createdAt" desc limit 1;`,
   );
   psql(`update "WorkReport" set "clockIn" = now() - interval '8 hours' where "shiftId"='${shiftIdForToday}';`);
-  await staff.getByRole("button", { name: "退勤" }).click();
+  await staff.getByRole("button", { name: "勤務終了" }).click();
   await staff.waitForTimeout(500);
   await staff.getByRole("button", { name: "業務報告を提出する" }).click();
   await staff.waitForTimeout(600);

@@ -74,10 +74,10 @@ try {
   let staffBody = await staff.textContent("body");
   log("staff sees today's shift", staffBody.includes(today));
 
-  await staff.getByRole("button", { name: "出勤" }).click();
+  await staff.getByRole("button", { name: "勤務開始" }).click();
   await staff.waitForTimeout(600);
   staffBody = await staff.textContent("body");
-  log("shows 退勤 button after clock-in", staffBody.includes("退勤"));
+  log("shows 勤務終了 button after clock-in", staffBody.includes("勤務終了"));
 
   // 出勤・退勤がほぼ同時（同じ分内）だと、分単位に丸められる打刻修正の
   // 仕組み上「実働0分」＝無効な時間帯として提出できなくなる（他セッション
@@ -88,7 +88,7 @@ try {
   await staff.reload();
   await staff.waitForTimeout(400);
 
-  await staff.getByRole("button", { name: "退勤" }).click();
+  await staff.getByRole("button", { name: "勤務終了" }).click();
   await staff.waitForTimeout(600);
   staffBody = await staff.textContent("body");
   log("shows submit button after clock-out", staffBody.includes("業務報告を提出する"));

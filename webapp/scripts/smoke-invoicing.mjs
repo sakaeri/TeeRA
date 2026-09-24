@@ -110,10 +110,10 @@ try {
 
   // staff clock in/out (backdated) + submit + admin approves
   await staff.goto("http://localhost:3000/staff/timecard");
-  await staff.getByRole("button", { name: "出勤" }).click();
+  await staff.getByRole("button", { name: "勤務開始" }).click();
   await staff.waitForTimeout(400);
   psql(`update "WorkReport" set "clockIn" = now() - interval '6 hours' where "shiftId"='${shiftId}';`);
-  await staff.getByRole("button", { name: "退勤" }).click();
+  await staff.getByRole("button", { name: "勤務終了" }).click();
   await staff.waitForTimeout(400);
   await staff.getByRole("button", { name: "業務報告を提出する" }).click();
   await staff.waitForTimeout(600);

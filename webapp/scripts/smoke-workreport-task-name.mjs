@@ -107,13 +107,13 @@ try {
 
   await staff.goto("http://localhost:3000/staff/timecard");
   await staff.waitForTimeout(400);
-  await staff.getByRole("button", { name: "出勤" }).click();
+  await staff.getByRole("button", { name: "勤務開始" }).click();
   await staff.waitForTimeout(200);
   // backdate clockIn by 8h so computedMinutes on clockOut reflects real worked hours
   psql(`update "WorkReport" set "clockIn" = now() - interval '8 hours' where "shiftId"='${shiftId}';`);
   await staff.reload();
   await staff.waitForTimeout(400);
-  await staff.getByRole("button", { name: "退勤" }).click();
+  await staff.getByRole("button", { name: "勤務終了" }).click();
   await staff.waitForTimeout(200);
 
   const beforeReport = psql(`select "taskName" from "WorkReport" where "shiftId"='${shiftId}';`);

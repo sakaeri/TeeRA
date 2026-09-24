@@ -100,7 +100,7 @@ try {
   await admin.waitForTimeout(800);
 
   await staff.goto("http://localhost:3000/staff/timecard");
-  await staff.getByRole("button", { name: "出勤" }).click();
+  await staff.getByRole("button", { name: "勤務開始" }).click();
   await staff.waitForTimeout(400);
   // 出勤・退勤がほぼ同時（同じ分内）だと、分単位に丸められる打刻修正の
   // 仕組み上「実働0分」＝無効な時間帯として提出できなくなる（他セッション
@@ -111,7 +111,7 @@ try {
   );
   await staff.reload();
   await staff.waitForTimeout(300);
-  await staff.getByRole("button", { name: "退勤" }).click();
+  await staff.getByRole("button", { name: "勤務終了" }).click();
   await staff.waitForTimeout(400);
   await staff.getByRole("button", { name: "業務報告を提出する" }).click();
   await staff.waitForTimeout(600);

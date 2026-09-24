@@ -134,7 +134,11 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
     <li className="rounded-xl border border-border bg-white/60 p-4">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="min-w-0 font-medium">{shift.date}</span>
-        {shift.approvalStatus ? (
+        {/* approvalStatusは出勤した瞬間からデフォルトでPENDINGが入っている
+            （「打刻しただけ」と「実際に提出した」を区別する唯一の目印は
+            submittedAt）。ここで判定を絞らないと、出勤ボタンを押しただけで
+            「承認待ち」バッジが出てしまう。 */}
+        {shift.approvalStatus && shift.submittedAt ? (
           <span
             className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
               APPROVAL_PILL[shift.approvalStatus] ?? "bg-accent/20 text-accent"
@@ -192,43 +196,52 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
         </>
       ) : (
         <>
-          {!shift.clockIn ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => startTransition(() => clockInAction(shift.id))}
-              className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              出勤
-            </button>
-          ) : !shift.clockOut ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => startTransition(() => clockOutAction(shift.id))}
-              className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              退勤
-            </button>
+          {!(shift.clockIn && shift.clockOut) ? (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={pending || Boolean(shift.clockIn)}
+                onClick={() => startTransition(() => clockInAction(shift.id))}
+                className={`flex-1 rounded-lg px-4 py-1.5 text-sm font-semibold disabled:cursor-default ${
+                  shift.clockIn
+                    ? "border border-border bg-background text-muted"
+                    : "bg-primary text-primary-foreground disabled:opacity-60"
+                }`}
+              >
+                {shift.clockInTime ?? "勤務開始"}
+              </button>
+              <button
+                type="button"
+                disabled={pending || !shift.clockIn || Boolean(shift.clockOut)}
+                onClick={() => startTransition(() => clockOutAction(shift.id))}
+                className={`flex-1 rounded-lg px-4 py-1.5 text-sm font-semibold disabled:cursor-default ${
+                  shift.clockIn && !shift.clockOut
+                    ? "bg-primary text-primary-foreground disabled:opacity-60"
+                    : "border border-border bg-background text-muted"
+                }`}
+              >
+                {shift.clockOutTime ?? "勤務終了"}
+              </button>
+            </div>
           ) : (
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-end gap-2">
-                <label className="flex flex-col gap-0.5 text-xs text-muted">
-                  出勤時刻
+                <label className="flex flex-col gap-0.5 text-xs">
+                  <span className="text-muted">出勤時刻</span>
                   <input
                     type="time"
                     value={clockInEdit}
                     onChange={(e) => setClockInEdit(e.target.value)}
-                    className="rounded-lg border border-border px-2 py-2 text-sm"
+                    className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                   />
                 </label>
-                <label className="flex flex-col gap-0.5 text-xs text-muted">
-                  退勤時刻
+                <label className="flex flex-col gap-0.5 text-xs">
+                  <span className="text-muted">退勤時刻</span>
                   <input
                     type="time"
                     value={clockOutEdit}
                     onChange={(e) => setClockOutEdit(e.target.value)}
-                    className="rounded-lg border border-border px-2 py-2 text-sm"
+                    className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                   />
                 </label>
               </div>
@@ -260,12 +273,12 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
                   <span className="text-xs text-muted">分</span>
                 </div>
               </div>
-              <p className="text-sm text-muted">実働 {(liveComputedMinutes / 60).toFixed(1)} 時間</p>
+              <p className="text-sm font-semibold text-foreground">実働 {(liveComputedMinutes / 60).toFixed(1)} 時間</p>
               {hasInvalidTimeRange ? (
                 <p className="text-xs text-red-600">退勤時刻が出勤時刻より前になっています。時刻を見直してください。</p>
               ) : null}
-              <label className="flex flex-col gap-0.5 text-xs text-muted">
-                業務内容
+              <label className="flex flex-col gap-0.5 text-xs">
+                <span className="text-muted">業務内容</span>
                 {taskNameMode === "pick" ? (
                   <select
                     value={taskName}
@@ -277,7 +290,7 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
                         setTaskName(e.target.value);
                       }
                     }}
-                    className="rounded-lg border border-border px-3 py-2 text-sm"
+                    className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
                   >
                     <option value="">未選択</option>
                     {knownTaskNames.map((name) => (
