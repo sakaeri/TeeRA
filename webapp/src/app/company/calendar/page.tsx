@@ -10,8 +10,8 @@ import {
 } from "@/lib/domain/recruitment";
 import { listStaff } from "@/lib/domain/roster";
 import { listTeams } from "@/lib/domain/teams";
-import { listClients, listAgencies } from "@/lib/domain/relationships";
-import { listPlacementRates } from "@/lib/domain/contracts";
+import { listClients, listAgencies, listAssignableAgencyStaff } from "@/lib/domain/relationships";
+import { listPlacementRates, listPastTaskNamesForRelationship } from "@/lib/domain/contracts";
 import { prisma } from "@/lib/prisma";
 import { todayJstParts, earliestAllowedMonth, isBeforeCutoff } from "@/lib/date";
 import { CalendarView } from "@/components/company/CalendarView";
@@ -68,6 +68,13 @@ export default async function CompanyCalendarPage({
   const affordable = await affordableMaxEntries(membership.companyId);
   const clients = company.agencyEnabled ? await listClients(membership.companyId) : [];
   const agencies = company.dispatchEnabled ? await listAgencies(membership.companyId) : [];
+  const assignableAgencyStaff = company.dispatchEnabled ? await listAssignableAgencyStaff(membership.companyId) : [];
+  const agencyRelationshipIds = [...new Set(assignableAgencyStaff.map((s) => s.companyRelationshipId))];
+  const agencyTaskNamesByRelationship = Object.fromEntries(
+    await Promise.all(
+      agencyRelationshipIds.map(async (id) => [id, await listPastTaskNamesForRelationship(id)] as const),
+    ),
+  );
   // 自社(社内)勤務のシフトでも業務内容を選べるようにしたため、依頼主連携の
   // 有無に関わらず常に取得する（companyRelationshipId=nullの登録もここに含む）。
   const placementRates = await listPlacementRates(membership.companyId);
@@ -164,6 +171,8 @@ export default async function CompanyCalendarPage({
           taskName: r.taskName,
         }))}
         agencies={agencies.map((a) => ({ id: a.id, name: a.agencyCompany?.name ?? a.proxyName ?? "" }))}
+        agencyStaffOptions={assignableAgencyStaff}
+        agencyTaskNamesByRelationship={agencyTaskNamesByRelationship}
         selectedRelationshipId={relationshipId}
         companyName={company.name}
         initialSelectedDate={dateParam}

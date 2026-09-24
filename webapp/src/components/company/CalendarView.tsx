@@ -66,6 +66,7 @@ const APPROVAL_LABEL: Record<string, string> = {
 };
 
 type StaffOption = { id: string; name: string };
+type AgencyStaffOption = { staffUserId: string; staffName: string; companyRelationshipId: string; agencyName: string };
 type Team = { id: string; name: string; clientIds: string[] };
 
 type ShiftRequestRow = {
@@ -140,6 +141,8 @@ export function CalendarView({
   affordableMaxEntries,
   clients,
   agencies,
+  agencyStaffOptions,
+  agencyTaskNamesByRelationship,
   placementRates,
   selectedRelationshipId,
   companyName,
@@ -160,6 +163,8 @@ export function CalendarView({
   affordableMaxEntries: number;
   clients: { id: string; name: string }[];
   agencies: { id: string; name: string }[];
+  agencyStaffOptions: AgencyStaffOption[];
+  agencyTaskNamesByRelationship: Record<string, string[]>;
   placementRates: TaskNameRow[];
   selectedRelationshipId?: string;
   companyName: string;
@@ -568,6 +573,8 @@ export function CalendarView({
           staffOptions={staffOptions}
           teams={teams}
           clients={clients}
+          agencyStaffOptions={agencyStaffOptions}
+          agencyTaskNamesByRelationship={agencyTaskNamesByRelationship}
           placementRates={placementRates}
           defaultDate={selectedDate ?? todayStr}
           defaultStaffUserId={assignFormStaffUserId}
@@ -2243,6 +2250,8 @@ function AssignShiftModal({
   staffOptions,
   teams,
   clients,
+  agencyStaffOptions,
+  agencyTaskNamesByRelationship,
   placementRates,
   defaultDate,
   defaultStaffUserId,
@@ -2251,6 +2260,8 @@ function AssignShiftModal({
   staffOptions: StaffOption[];
   teams: Team[];
   clients: { id: string; name: string }[];
+  agencyStaffOptions: AgencyStaffOption[];
+  agencyTaskNamesByRelationship: Record<string, string[]>;
   placementRates: TaskNameRow[];
   defaultDate: string;
   defaultStaffUserId?: string;
@@ -2258,6 +2269,11 @@ function AssignShiftModal({
 }) {
   const [teamId, setTeamId] = useState("");
   const [companyRelationshipId, setCompanyRelationshipId] = useState("");
+  // 連携済み派遣会社の配属済みスタッフを選んだ場合のみセットされる。この場合
+  // 作られるシフトの実体は派遣会社側の通常のCLIENT-sourceシフトと同じになる
+  // （companyIdは派遣会社側、単価も派遣会社側の管理のまま）ため、companyId
+  // 相当の判定は「社内」「依頼主から選択」とは別軸として持つ。
+  const [agencyRelationshipId, setAgencyRelationshipId] = useState("");
   const [taskName, setTaskName] = useState("");
   // このモーダル内で新しく追加した業務名（サーバー側のplacementRates propは
   // ページ全体のrevalidateを待たないと更新されないので、追加直後にその場で
@@ -2272,6 +2288,12 @@ function AssignShiftModal({
         .map((r) => [r.taskName, r]),
     ).values(),
   );
+  // 派遣会社の単価表は依頼主側からは見えない（オーナー限定）ため、代わりに
+  // この関係で過去に使われた業務内容名だけをピッカーとして出す。
+  const agencyTaskOptions = agencyTaskNamesByRelationship[agencyRelationshipId] ?? [];
+  const agencyOptions = Array.from(
+    new Map(agencyStaffOptions.map((s) => [s.companyRelationshipId, s.agencyName])).entries(),
+  ).map(([id, name]) => ({ id, name }));
   // シフト希望の一覧から「このスタッフ・この日でシフト作成」を選んだ場合は
   // スタッフが既に確定しているので、スタッフ選択ステップ自体を飛ばす。
   const steps: AssignStep[] = [
@@ -2353,7 +2375,9 @@ function AssignShiftModal({
           ? Object.fromEntries(conflictsByDate.map((c) => [c.date, c.conflicts.map((x) => x.id)]))
           : undefined;
         const result = await createAssignedShiftAction({
-          teamId: teamId || undefined,
+          // 派遣会社の配属済みスタッフのシフトは派遣会社側の記録になるため、
+          // 依頼主自身のチームには紐付けない。
+          teamId: agencyRelationshipId ? undefined : teamId || undefined,
           staffUserId,
           dates,
           startTime: isUndecided ? null : startTime,
@@ -2362,6 +2386,7 @@ function AssignShiftModal({
           isUndecided,
           note: note || undefined,
           companyRelationshipId: companyRelationshipId || undefined,
+          viaAgencyRelationshipId: agencyRelationshipId || undefined,
           taskName: taskName || undefined,
           overridesByDate,
           confirmedOffDates: offRequestDates ?? undefined,
@@ -2382,7 +2407,11 @@ function AssignShiftModal({
   }
 
   const teamName = teams.find((t) => t.id === teamId)?.name;
-  const workplaceName = companyRelationshipId ? clients.find((c) => c.id === companyRelationshipId)?.name : "社内";
+  const workplaceName = agencyRelationshipId
+    ? agencyOptions.find((a) => a.id === agencyRelationshipId)?.name
+    : companyRelationshipId
+      ? clients.find((c) => c.id === companyRelationshipId)?.name
+      : "社内";
   const staffName = staffOptions.find((s) => s.id === staffUserId)?.name;
   const dateLabels = dates.map((d) => {
     const dt = new Date(d + "T00:00:00Z");
@@ -2435,10 +2464,30 @@ function AssignShiftModal({
             label="社内（自社スタッフとして勤務）"
             onClick={() => {
               setCompanyRelationshipId("");
+              setAgencyRelationshipId("");
               setTaskName("");
               setStep("task");
             }}
           />
+          {agencyOptions.length > 0 ? (
+            <>
+              <p className="mt-1 text-xs text-muted">派遣会社の配属済みスタッフから選択</p>
+              <div className="flex flex-col gap-2">
+                {agencyOptions.map((a) => (
+                  <WizardOptionButton
+                    key={a.id}
+                    label={a.name}
+                    onClick={() => {
+                      setCompanyRelationshipId("");
+                      setAgencyRelationshipId(a.id);
+                      setTaskName("");
+                      setStep("task");
+                    }}
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
           {clients.length > 0 ? (
             <>
               <p className="mt-1 text-xs text-muted">依頼主から選択</p>
@@ -2456,6 +2505,7 @@ function AssignShiftModal({
                     label={c.name}
                     onClick={() => {
                       setCompanyRelationshipId(c.id);
+                      setAgencyRelationshipId("");
                       setTaskName("");
                       setStep("task");
                     }}
@@ -2464,6 +2514,53 @@ function AssignShiftModal({
               </div>
             </>
           ) : null}
+        </div>
+      </Modal>
+    );
+  }
+
+  if (step === "task" && agencyRelationshipId) {
+    // 派遣会社の単価表は依頼主側から見えないため、過去に使った業務内容名
+    // からの選択／自由入力のみ（単価表への登録は行わない — 派遣会社側で
+    // 業務報告提出時に自動的に登録される既存の仕組みに任せる）。
+    return (
+      <Modal title="シフトを作成" onClose={onClose}>
+        <div className="flex flex-col gap-3">
+          {backButton}
+          <h3 className="font-serif-jp text-lg font-semibold">{workplaceName}・業務内容を選択</h3>
+          <div className="flex flex-col gap-2">
+            {agencyTaskOptions.map((name) => (
+              <WizardOptionButton
+                key={name}
+                label={name}
+                onClick={() => {
+                  setTaskName(name);
+                  goNext();
+                }}
+              />
+            ))}
+          </div>
+          <div className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-3">
+            <input
+              type="text"
+              value={newTaskName}
+              onChange={(e) => setNewTaskName(e.target.value)}
+              placeholder="業務内容（例：キャディ業務）"
+              className="rounded-lg border border-border px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              disabled={!newTaskName.trim()}
+              onClick={() => {
+                setTaskName(newTaskName.trim());
+                setNewTaskName("");
+                goNext();
+              }}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              この業務内容にして次へ
+            </button>
+          </div>
         </div>
       </Modal>
     );
@@ -2543,12 +2640,15 @@ function AssignShiftModal({
             {taskName ? `・${taskName}` : ""}・スタッフを選択
           </h3>
           <div className="flex max-h-96 flex-col gap-2 overflow-y-auto">
-            {staffOptions.map((s) => (
+            {(agencyRelationshipId
+              ? agencyStaffOptions.filter((s) => s.companyRelationshipId === agencyRelationshipId)
+              : staffOptions.map((s) => ({ staffUserId: s.id, staffName: s.name }))
+            ).map((s) => (
               <WizardOptionButton
-                key={s.id}
-                label={s.name}
+                key={s.staffUserId}
+                label={s.staffName}
                 onClick={() => {
-                  setStaffUserId(s.id);
+                  setStaffUserId(s.staffUserId);
                   goNext();
                 }}
               />
@@ -2651,7 +2751,7 @@ function AssignShiftModal({
             <dt className="text-muted">スタッフ</dt>
             <dd className="font-medium">{staffName}</dd>
           </div>
-          {teams.length > 0 ? (
+          {teams.length > 0 && !agencyRelationshipId ? (
             <div className="flex items-center justify-between px-4 py-3">
               <dt className="text-muted">チーム</dt>
               <dd className="font-medium">{teamName ?? "指定なし"}</dd>

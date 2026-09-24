@@ -336,6 +336,22 @@ export async function listKnownTaskNames(companyId: string): Promise<string[]> {
   return Array.from(names).sort((a, b) => a.localeCompare(b, "ja"));
 }
 
+// 依頼主が連携済み派遣会社の配属済みスタッフにシフトを作る際の業務内容
+// ピッカー用 — 作られるシフトはcompanyIdが派遣会社側になり単価表も
+// 派遣会社の非公開情報（オーナー限定）のため、依頼主側からは単価表を
+// 見せられない。代わりにこの関係で過去に使われた業務内容名（Shift.
+// taskNameの履歴）だけを再利用候補として出す。
+export async function listPastTaskNamesForRelationship(companyRelationshipId: string): Promise<string[]> {
+  const rows = await prisma.shift.findMany({
+    where: { companyRelationshipId, taskName: { not: null } },
+    select: { taskName: true },
+    distinct: ["taskName"],
+  });
+  const names = new Set<string>();
+  for (const r of rows) if (r.taskName) names.add(r.taskName);
+  return Array.from(names).sort((a, b) => a.localeCompare(b, "ja"));
+}
+
 // 業務内容名だけを登録する（単価は付けない）— シフト作成時のその場追加用。
 // companyRelationshipId がnullの複合ユニークキーはPrismaのupsertでは扱えない
 // ため、findFirst+create で代用する。

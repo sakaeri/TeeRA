@@ -34,6 +34,29 @@ export async function listAgencies(companyId: string) {
   });
 }
 
+// 依頼主が「＋シフトを作成」で、実体のある（プロキシではない）連携済み
+// 派遣会社の配属済みスタッフを直接選べるようにするための候補一覧。作成
+// されるシフトの実体はagencyCompanyId側（派遣会社）の通常のCLIENT-source
+// シフトと全く同じもの（companyId=派遣会社）になるため、プロキシ派遣会社
+// （agencyCompanyIdが無い＝実際のスタッフ名簿が存在しない）は対象外。
+export async function listAssignableAgencyStaff(clientCompanyId: string) {
+  const relationships = await prisma.companyRelationship.findMany({
+    where: { clientCompanyId, agencyCompanyId: { not: null }, status: "ACTIVE" },
+    include: {
+      agencyCompany: true,
+      staffPlacements: { where: { active: true }, include: { staff: true } },
+    },
+  });
+  return relationships.flatMap((rel) =>
+    rel.staffPlacements.map((p) => ({
+      staffUserId: p.staffUserId,
+      staffName: p.staff.name,
+      companyRelationshipId: rel.id,
+      agencyName: rel.agencyCompany?.name ?? "",
+    })),
+  );
+}
+
 // "+ 取引先名簿を追加" -> 依頼主名簿: activates companyModules.agency and
 // creates a proxy client relationship in one step (chat29's one-click flow).
 export async function activateAgencyModuleWithProxyClient(params: {

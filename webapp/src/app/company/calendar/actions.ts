@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { canManageShifts } from "@/lib/auth/permissions";
+import { canManageShifts, isCompanyScopeAdmin } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import {
   createAssignedShift,
@@ -30,6 +30,12 @@ export async function createAssignedShiftAction(input: {
   isUndecided: boolean;
   note?: string;
   companyRelationshipId?: string;
+  // 依頼主が、実体のある連携済み派遣会社の配属済みスタッフに直接シフトを
+  // 作る場合のみセットされる。この場合作られるシフトの実体はその派遣会社
+  // 側の通常のCLIENT-sourceシフトと同じもの（companyId=派遣会社）になる
+  // ため、通常のcompanyRelationshipId（このcompany自身が依頼主にアサイン
+  // する向き）とは別パラメータにしている。
+  viaAgencyRelationshipId?: string;
   taskName?: string;
   overridesByDate?: Record<string, string[]>; // date -> conflicting shift ids to supersede, set once confirmed
   confirmedOffDates?: string[]; // dates where a pending 休み希望 has already been confirmed by the caller
@@ -37,21 +43,42 @@ export async function createAssignedShiftAction(input: {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManageShifts(membership, input.teamId)) throw new Error("forbidden");
 
+  let shiftCompanyId = membership.companyId;
+  let effectiveCompanyRelationshipId = input.companyRelationshipId;
+  let effectiveTeamId = input.teamId;
+
+  if (input.viaAgencyRelationshipId) {
+    // 他社（派遣会社）名義でシフトを作る、会社をまたぐ操作のため、チーム
+    // マネージャーではなく会社スコープの管理者/編集者に限定する。
+    if (!isCompanyScopeAdmin(membership)) throw new Error("forbidden");
+    const rel = await prisma.companyRelationship.findUnique({ where: { id: input.viaAgencyRelationshipId } });
+    if (!rel || rel.clientCompanyId !== membership.companyId || !rel.agencyCompanyId || rel.status !== "ACTIVE") {
+      throw new Error("forbidden");
+    }
+    const placement = await prisma.staffPlacement.findFirst({
+      where: { staffUserId: input.staffUserId, companyRelationshipId: rel.id, active: true },
+    });
+    if (!placement) throw new Error("forbidden");
+    shiftCompanyId = rel.agencyCompanyId;
+    effectiveCompanyRelationshipId = rel.id;
+    effectiveTeamId = undefined;
+  }
+
   const offRequestDates: string[] = [];
   const conflictsByDate: { date: string; conflicts: { id: string; startTime: string | null; endTime: string | null }[] }[] = [];
   const createdShiftIds: string[] = [];
 
   for (const date of input.dates) {
     const result = await createAssignedShift({
-      companyId: membership.companyId,
-      teamId: input.teamId,
+      companyId: shiftCompanyId,
+      teamId: effectiveTeamId,
       staffUserId: input.staffUserId,
       date: new Date(`${date}T00:00:00.000Z`),
       startTime: input.startTime,
       endTime: input.endTime,
       isAllDay: input.isAllDay,
       isUndecided: input.isUndecided,
-      companyRelationshipId: input.companyRelationshipId,
+      companyRelationshipId: effectiveCompanyRelationshipId,
       taskName: input.taskName,
       note: input.note,
       confirmedByUserId: userId,
