@@ -81,7 +81,7 @@ try {
   const taggedRelId = psql(`select "viaAgencyRelationshipId" from "CompanyMembership" where "userId"='${staffUserId}';`);
   log("参加後、正しくタグ付けされる", taggedRelId === relId);
 
-  // --- ②行き止まり状態に「アプリを開く」リンクがあるか ---
+  // --- ②行き止まり状態に「ログイン」ボタンがあるか ---
   // 同じ会社宛のスタッフ招待をもう1つ発行し、既にこの会社のメンバーである
   // スタッフ（上で作成済み）に開かせて「すでに所属しています」状態を作る。
   await admin.goto("http://localhost:3000/company/roster");
@@ -94,9 +94,9 @@ try {
   await staff.goto(secondInviteUrl);
   const dupBody = await staff.textContent("body");
   log("すでに所属済みの会社への招待を開くと専用メッセージが出る", dupBody.includes("すでにこの会社に所属しています"));
-  log("「アプリを開く」リンクが表示される（行き止まりにならない）", dupBody.includes("アプリを開く"));
+  log("「ログイン」ボタンが表示される（行き止まりにならない）", dupBody.includes("ログイン"));
 
-  await staff.getByRole("link", { name: "アプリを開く" }).click();
+  await staff.getByRole("link", { name: "ログイン" }).click();
   await staff.waitForTimeout(500);
   log("リンクを押すとアプリ側に遷移する（招待ページのままではない）", !staff.url().includes("/invite/"));
 

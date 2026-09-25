@@ -45,7 +45,7 @@ export default async function InvitePage({
 
   if (!session?.user?.id) {
     return (
-      <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-6 py-16">
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 py-16">
         <div className="mb-8 text-center font-serif-jp text-2xl font-bold text-primary">
           TeeRA
         </div>
@@ -85,7 +85,7 @@ export default async function InvitePage({
   const activeMembership = isCompanyRelationshipInvite ? await getActiveMembership(session.user.id) : null;
 
   return (
-    <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-6 py-16">
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 py-16">
       <div className="mb-8 text-center font-serif-jp text-2xl font-bold text-primary">
         TeeRA
       </div>
@@ -139,8 +139,11 @@ export default async function InvitePage({
           ) : activeMembership.role === "STAFF" ? (
             <div>
               <p className="mb-4 text-sm text-red-600">自社の管理者/編集者のみがこの招待を受け取れます。</p>
-              <Link href="/" className="text-sm text-primary underline">
-                アプリを開く
+              <Link
+                href="/"
+                className="block rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+              >
+                ログイン
               </Link>
             </div>
           ) : (
@@ -166,8 +169,11 @@ export default async function InvitePage({
                 ? "権限（管理者/編集者）を変更したい場合は、招待ではなく、既存の管理者/編集者が「設定＞本部メンバー権限」からこのアカウントの権限を直接変更してください。"
                 : ""}
             </p>
-            <Link href="/" className="text-sm text-primary underline">
-              アプリを開く
+            <Link
+              href="/"
+              className="block rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+            >
+              ログイン
             </Link>
           </div>
         ) : (
@@ -192,14 +198,17 @@ export default async function InvitePage({
 
 function InviteMessage({ title }: { title: string }) {
   return (
-    <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-6 py-16">
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 py-16">
       <div className="mb-8 text-center font-serif-jp text-2xl font-bold text-primary">
         TeeRA
       </div>
       <div className="rounded-2xl border border-border bg-white/60 p-6 text-center">
         <h1 className="mb-4 text-lg font-semibold">{title}</h1>
-        <Link href="/" className="text-sm text-primary underline">
-          TeeRAを開く
+        <Link
+          href="/"
+          className="block rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+        >
+          ログイン
         </Link>
       </div>
     </main>
