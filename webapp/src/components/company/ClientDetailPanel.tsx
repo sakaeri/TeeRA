@@ -14,6 +14,8 @@ import {
   deleteCompanyRelationshipAction,
   unplaceStaffAction,
   inviteAgencyTaggedStaffAction,
+  listPendingAgencyTaggedInvitesAction,
+  revokeStaffInviteAction,
 } from "@/app/company/actions";
 import { addPlacementRateVersionAction, deletePlacementTaskNameAction } from "@/app/company/contracts/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
@@ -115,14 +117,7 @@ export function ClientDetailPanel({
   const [data, setData] = useState<ClientMonthDetail | null>(null);
   const [pending, startTransition] = useTransition();
   const [upgradeUrl, setUpgradeUrl] = useState<string | null>(null);
-  const [agencyInviteUrl, setAgencyInviteUrl] = useState<string | null>(null);
-
-  function inviteAgencyTaggedStaff() {
-    startTransition(async () => {
-      const url = await inviteAgencyTaggedStaffAction(relationshipId);
-      setAgencyInviteUrl(url);
-    });
-  }
+  const [showAgencyInviteModal, setShowAgencyInviteModal] = useState(false);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState("");
   const [newNoteVisibleToStaff, setNewNoteVisibleToStaff] = useState(false);
@@ -495,21 +490,12 @@ export function ClientDetailPanel({
                       <p className="text-xs font-medium text-muted">この派遣会社のスタッフ</p>
                       <button
                         type="button"
-                        disabled={pending}
-                        onClick={inviteAgencyTaggedStaff}
-                        className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                        onClick={() => setShowAgencyInviteModal(true)}
+                        className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
                       >
                         ＋派遣スタッフを招待
                       </button>
                     </div>
-                    {agencyInviteUrl ? (
-                      <div className="mb-3 rounded-lg border border-accent/40 bg-accent/10 p-3 text-xs">
-                        <p className="mb-2 text-foreground">
-                          これは「{data.name}」の派遣スタッフを招待するためのURLです。このURLを共有してください（1回のみ使用できます）。開いた方はこの派遣会社のスタッフとして登録されます。
-                        </p>
-                        <CopyUrlField url={agencyInviteUrl} size="sm" />
-                      </div>
-                    ) : null}
                     <ul className="flex flex-col gap-1">
                       {data.taggedStaff.map((s) => (
                         <li key={s.userId}>
@@ -789,6 +775,104 @@ export function ClientDetailPanel({
           </div>
         </div>
       ) : null}
+
+      {showAgencyInviteModal ? (
+        <AgencyInviteModal
+          relationshipId={relationshipId}
+          agencyName={data?.name ?? ""}
+          onClose={() => setShowAgencyInviteModal(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function AgencyInviteModal({
+  relationshipId,
+  agencyName,
+  onClose,
+}: {
+  relationshipId: string;
+  agencyName: string;
+  onClose: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [url, setUrl] = useState<string | null>(null);
+  const [pendingInvites, setPendingInvites] = useState<{ id: string; url: string; createdAt: string }[]>([]);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    listPendingAgencyTaggedInvitesAction(relationshipId).then(setPendingInvites);
+  }, [relationshipId, url]);
+
+  function revoke(inviteId: string) {
+    setRevokingId(inviteId);
+    startTransition(async () => {
+      await revokeStaffInviteAction(inviteId);
+      setPendingInvites((prev) => prev.filter((i) => i.id !== inviteId));
+      setRevokingId(null);
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">派遣スタッフを招待する</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <p className="mb-4 text-sm text-muted">
+          これは「{agencyName}」の派遣スタッフを招待するためのURLです。このURLを共有してください。1回のみ使用できます。開いた方はこの派遣会社のスタッフとして登録されます。
+        </p>
+
+        {!url ? (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                const generated = await inviteAgencyTaggedStaffAction(relationshipId);
+                setUrl(generated);
+              })
+            }
+            className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            招待URLを発行する
+          </button>
+        ) : (
+          <CopyUrlField url={url} />
+        )}
+
+        {pendingInvites.length > 0 ? (
+          <div className="mt-4 border-t border-border pt-3">
+            <p className="mb-2 text-xs font-semibold text-muted">
+              発行済み・未使用の招待URL（{pendingInvites.length}件）
+            </p>
+            <ul className="flex flex-col gap-1.5">
+              {pendingInvites.map((invite) => (
+                <li
+                  key={invite.id}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-1.5 text-xs"
+                >
+                  <span className="text-muted">
+                    {new Date(invite.createdAt).toLocaleDateString("ja-JP")}発行
+                  </span>
+                  <button
+                    type="button"
+                    disabled={pending && revokingId === invite.id}
+                    onClick={() => revoke(invite.id)}
+                    className="shrink-0 text-red-600 hover:underline disabled:opacity-60"
+                  >
+                    無効化する
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

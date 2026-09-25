@@ -96,7 +96,13 @@ export async function inviteAgencyTaggedStaffAction(viaAgencyRelationshipId: str
 
 export async function listPendingStaffInvitesAction() {
   const { membership } = await requireCompanyAdminOrEditor();
-  const invites = await listPendingInvites(membership.companyId, "STAFF");
+  const invites = await listPendingInvites(membership.companyId, "STAFF", null);
+  return invites.map((i) => ({ id: i.id, url: absoluteInviteUrl(i.token), createdAt: i.createdAt.toISOString() }));
+}
+
+export async function listPendingAgencyTaggedInvitesAction(viaAgencyRelationshipId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const invites = await listPendingInvites(membership.companyId, "STAFF", viaAgencyRelationshipId);
   return invites.map((i) => ({ id: i.id, url: absoluteInviteUrl(i.token), createdAt: i.createdAt.toISOString() }));
 }
 

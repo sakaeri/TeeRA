@@ -148,10 +148,19 @@ try {
   const staff2 = await staff2Ctx.newPage();
   const staff2Email = `atpp-staff2-${Date.now()}@example.com`;
   await agencyPanel.getByRole("button", { name: "＋派遣スタッフを招待" }).click();
-  await client.waitForSelector('input[readonly]');
+  await client.waitForTimeout(300);
   bodyText = await agencyPanel.textContent();
-  log("招待URLの案内に対象の派遣会社名が入っている", bodyText.includes("実績PDFテスト架空派遣"));
+  log("招待モーダルの案内に対象の派遣会社名が入っている", bodyText.includes("実績PDFテスト架空派遣"));
+  await agencyPanel.getByRole("button", { name: "招待URLを発行する" }).click();
+  await client.waitForSelector('input[readonly]');
   const agencyInviteUrl = await agencyPanel.locator('input[readonly]').inputValue();
+  await client.waitForTimeout(300);
+  bodyText = await agencyPanel.textContent();
+  log(
+    "発行済み・未使用の招待URL一覧にこの派遣会社宛の招待が1件表示される（他の派遣会社/直雇用の招待とは混ざらない）",
+    bodyText.includes("発行済み・未使用の招待URL（1件）"),
+  );
+  await agencyPanel.getByRole("button", { name: "✕" }).click();
   await staff2.goto(agencyInviteUrl);
   await staff2.click("text=アカウントを作成して参加する");
   await staff2.fill("#name", "招待経由派遣スタッフ");
