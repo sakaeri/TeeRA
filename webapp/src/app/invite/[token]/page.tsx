@@ -34,6 +34,14 @@ export default async function InvitePage({
 
   const { invite } = result;
   const teamName = invite.team?.name;
+  // 架空派遣会社（プロキシ）にタグ付けされたスタッフ招待だけ、通常の自社
+  // スタッフ招待と区別できるよう対象の派遣会社名を明示する
+  // （inviteAgencyTaggedStaffAction経由の招待にだけcompanyRelationshipが
+  // 付く。実体のある取引先連携の招待＝CLIENT_UPGRADE/AGENCY_UPGRADEは
+  // isCompanyRelationshipInviteで別扱いなので、ここはkind==="STAFF"限定で
+  // 安全に判定できる）。
+  const agencyTagName = invite.kind === "STAFF" ? invite.companyRelationship?.proxyName : null;
+  const kindLabel = agencyTagName ? `${agencyTagName}の派遣スタッフ` : (KIND_LABEL[invite.kind] ?? invite.kind);
 
   if (!session?.user?.id) {
     return (
@@ -46,7 +54,7 @@ export default async function InvitePage({
             {invite.company.name} への招待
           </h1>
           <p className="mb-6 text-sm text-muted">
-            {KIND_LABEL[invite.kind] ?? invite.kind}
+            {kindLabel}
             {teamName ? `（${teamName}）` : ""}
             として参加します。まずアカウントを作成してください。
           </p>
@@ -86,7 +94,7 @@ export default async function InvitePage({
           {invite.company.name} への招待
         </h1>
         <p className="mb-6 text-sm text-muted">
-          {KIND_LABEL[invite.kind] ?? invite.kind}
+          {kindLabel}
           {teamName ? `（${teamName}）` : ""}
           として参加します。
         </p>
@@ -129,7 +137,12 @@ export default async function InvitePage({
               </Link>
             </div>
           ) : activeMembership.role === "STAFF" ? (
-            <p className="text-sm text-red-600">自社の管理者/編集者のみがこの招待を受け取れます。</p>
+            <div>
+              <p className="mb-4 text-sm text-red-600">自社の管理者/編集者のみがこの招待を受け取れます。</p>
+              <Link href="/" className="text-sm text-primary underline">
+                アプリを開く
+              </Link>
+            </div>
           ) : (
             <form
               action={async () => {
@@ -146,12 +159,17 @@ export default async function InvitePage({
             </form>
           )
         ) : membershipAtThisCompany ? (
-          <p className="text-sm text-red-600">
-            このアカウントはすでにこの会社に所属しています。
-            {invite.kind === "COMPANY_ADMIN_TRANSFER"
-              ? "権限（管理者/編集者）を変更したい場合は、招待ではなく、既存の管理者/編集者が「設定＞本部メンバー権限」からこのアカウントの権限を直接変更してください。"
-              : ""}
-          </p>
+          <div>
+            <p className="mb-4 text-sm text-red-600">
+              このアカウントはすでにこの会社に所属しています。
+              {invite.kind === "COMPANY_ADMIN_TRANSFER"
+                ? "権限（管理者/編集者）を変更したい場合は、招待ではなく、既存の管理者/編集者が「設定＞本部メンバー権限」からこのアカウントの権限を直接変更してください。"
+                : ""}
+            </p>
+            <Link href="/" className="text-sm text-primary underline">
+              アプリを開く
+            </Link>
+          </div>
         ) : (
           <form
             action={async () => {
@@ -179,7 +197,10 @@ function InviteMessage({ title }: { title: string }) {
         TeeRA
       </div>
       <div className="rounded-2xl border border-border bg-white/60 p-6 text-center">
-        <h1 className="text-lg font-semibold">{title}</h1>
+        <h1 className="mb-4 text-lg font-semibold">{title}</h1>
+        <Link href="/" className="text-sm text-primary underline">
+          TeeRAを開く
+        </Link>
       </div>
     </main>
   );
