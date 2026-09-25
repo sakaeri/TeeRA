@@ -52,6 +52,18 @@ function reportTimeLabel(
   return shiftTimeLabel(shift);
 }
 
+// 欠勤・勤務先からのキャンセルはtimeLabelが予定時刻や「未定」にフォール
+// バックするだけで結果自体が伝わらない（メール・承認確認ページどちらも
+// 見た目上は普通の出勤報告と区別がつかなかった）ため、outcomeを別枠で
+// はっきり伝える。WORKEDの場合はnull（従来通り時間だけ見せる）。
+const NON_WORKED_OUTCOME_LABEL: Record<string, string> = {
+  ABSENT: "欠勤",
+  CANCELLED_BY_EMPLOYER: "勤務先からのキャンセル",
+};
+function reportOutcomeLabel(report: { outcome: string }): string | null {
+  return NON_WORKED_OUTCOME_LABEL[report.outcome] ?? null;
+}
+
 // 日付(date列, @db.Date)＋"HH:mm"文字列を、そのカレンダー日のJST時刻として
 // 実際のDateに合成する（withJstTimeと同じ考え方 — workReports.ts内は非公開
 // なのでここでも小さく複製する。日付をまたぐシフトの終業側には使わない）。
@@ -95,6 +107,7 @@ export async function notifyCompanyOfWorkReportSubmission(workReportId: string) 
     staffName: report.staff.name,
     date: report.shift.date.toISOString().slice(0, 10),
     timeLabel: reportTimeLabel(report, report.shift),
+    outcomeLabel: reportOutcomeLabel(report),
     taskLabel: report.taskName ?? report.shift.taskName ?? "（未指定）",
     approveUrl: absoluteUrl(`/email-actions/approve-work-report/${token}`),
     reviewUrl: absoluteUrl("/company/settings?tab=workreports"),
@@ -139,6 +152,7 @@ export async function getApproveWorkReportTokenInfo(token: string) {
     companyName: record.workReport.shift.company.name,
     date: record.workReport.shift.date.toISOString().slice(0, 10),
     timeLabel: reportTimeLabel(record.workReport, record.workReport.shift),
+    outcomeLabel: reportOutcomeLabel(record.workReport),
     taskLabel: record.workReport.taskName ?? record.workReport.shift.taskName ?? "（未指定）",
   };
 }

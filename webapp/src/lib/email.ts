@@ -78,18 +78,34 @@ export async function sendEmailChangeConfirmation(to: string, confirmUrl: string
 
 export async function sendWorkReportSubmittedEmail(
   to: string,
-  params: { staffName: string; date: string; timeLabel: string; taskLabel: string; approveUrl: string; reviewUrl: string },
+  params: {
+    staffName: string;
+    date: string;
+    timeLabel: string;
+    // 欠勤・勤務先からのキャンセルの場合のみセット。WORKEDの通常報告では
+    // null — 時間・業務内容の代わりに結果をはっきり出す（そうしないと
+    // 予定時刻や「未定」しか見えず、欠勤・キャンセルだと気づけない）。
+    outcomeLabel: string | null;
+    taskLabel: string;
+    approveUrl: string;
+    reviewUrl: string;
+  },
 ) {
+  const title = params.outcomeLabel ? `${params.outcomeLabel}の報告が届きました` : "業務報告が届きました";
+  const details = params.outcomeLabel
+    ? infoRow("結果", params.outcomeLabel)
+    : `${infoRow("時間", params.timeLabel)}
+       ${infoRow("業務内容", params.taskLabel)}`;
+  const buttonLabel = params.outcomeLabel ? "確認する" : "承認する";
   await sendMail(
     to,
-    "【TeeRA】業務報告が届きました",
+    `【TeeRA】${title}`,
     emailLayout(
-      "業務報告が届きました",
+      title,
       `${infoRow("申請者", `${params.staffName}さん`)}
        ${infoRow("日付", params.date)}
-       ${infoRow("時間", params.timeLabel)}
-       ${infoRow("業務内容", params.taskLabel)}
-       ${button(params.approveUrl, "承認する")}
+       ${details}
+       ${button(params.approveUrl, buttonLabel)}
        ${note(`内容を修正して差し戻す場合は、アプリを開いて操作してください。<br><a href="${params.reviewUrl}" style="color:#0f4d3a;">${params.reviewUrl}</a>`)}`,
     ),
   );

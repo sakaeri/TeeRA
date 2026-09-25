@@ -8,6 +8,7 @@ import {
   confirmCorrectedWorkReportAction,
 } from "@/app/staff/actions";
 import { isDone, type ShiftRow } from "@/lib/staffShiftStatus";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export type { ShiftRow };
 export { isDone };
@@ -84,6 +85,7 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
   );
   const [error, setError] = useState<string | null>(null);
   const [breakMinutes, setBreakMinutes] = useState("0");
+  const [confirmOutcome, setConfirmOutcome] = useState<"ABSENT" | "CANCELLED_BY_EMPLOYER" | null>(null);
   // 打刻時刻は自動記録だが、押し忘れ・押し間違いを本人が直せるよう提出前
   // に限り手修正を許す（承認/差し戻しという既存のチェックが最終的な歯止め
   // になるため）。
@@ -373,11 +375,7 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
               <button
                 type="button"
                 disabled={pending}
-                onClick={() =>
-                  startTransition(() =>
-                    submitWorkReportAction({ shiftId: shift.id, outcome: "ABSENT" }),
-                  )
-                }
+                onClick={() => setConfirmOutcome("ABSENT")}
                 className="underline"
               >
                 欠勤
@@ -385,19 +383,30 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
               <button
                 type="button"
                 disabled={pending}
-                onClick={() =>
-                  startTransition(() =>
-                    submitWorkReportAction({
-                      shiftId: shift.id,
-                      outcome: "CANCELLED_BY_EMPLOYER",
-                    }),
-                  )
-                }
+                onClick={() => setConfirmOutcome("CANCELLED_BY_EMPLOYER")}
                 className="underline"
               >
                 勤務先からのキャンセル
               </button>
             </div>
+          ) : null}
+
+          {confirmOutcome ? (
+            <ConfirmDialog
+              message={
+                confirmOutcome === "ABSENT"
+                  ? "欠勤として報告します。後から取り消せません。よろしいですか？"
+                  : "勤務先からのキャンセルとして報告します。後から取り消せません。よろしいですか？"
+              }
+              confirmLabel="報告する"
+              pending={pending}
+              onConfirm={() => {
+                const outcome = confirmOutcome;
+                setConfirmOutcome(null);
+                startTransition(() => submitWorkReportAction({ shiftId: shift.id, outcome }));
+              }}
+              onCancel={() => setConfirmOutcome(null)}
+            />
           ) : null}
         </>
       )}

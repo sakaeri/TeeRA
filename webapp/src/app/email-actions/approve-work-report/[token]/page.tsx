@@ -19,7 +19,9 @@ export default async function ApproveWorkReportPage({
           <p className="text-sm text-muted">この業務報告は既に処理済みです。</p>
         ) : (
           <>
-            <h1 className="mb-4 text-center text-lg font-semibold">業務報告の承認</h1>
+            <h1 className="mb-4 text-center text-lg font-semibold">
+              {info.outcomeLabel ? `${info.outcomeLabel}の確認` : "業務報告の承認"}
+            </h1>
             <div className="mb-4 flex flex-col gap-1 text-sm">
               <p>
                 <span className="text-muted">申請者：</span>
@@ -33,17 +35,28 @@ export default async function ApproveWorkReportPage({
                 <span className="text-muted">日付：</span>
                 {info.date}
               </p>
-              <p>
-                <span className="text-muted">時間：</span>
-                {info.timeLabel}
-              </p>
-              <p>
-                <span className="text-muted">業務内容：</span>
-                {info.taskLabel}
-              </p>
+              {info.outcomeLabel ? (
+                <p>
+                  <span className="text-muted">結果：</span>
+                  <span className="font-semibold text-rose-700">{info.outcomeLabel}</span>
+                </p>
+              ) : (
+                <>
+                  <p>
+                    <span className="text-muted">時間：</span>
+                    {info.timeLabel}
+                  </p>
+                  <p>
+                    <span className="text-muted">業務内容：</span>
+                    {info.taskLabel}
+                  </p>
+                </>
+              )}
             </div>
-            <p className="mb-4 text-center text-sm font-semibold text-primary">この内容で承認を確定しますか？</p>
-            <ApproveWorkReportButton token={token} />
+            <p className="mb-4 text-center text-sm font-semibold text-primary">
+              {info.outcomeLabel ? "この内容を確認しましたか？" : "この内容で承認を確定しますか？"}
+            </p>
+            <ApproveWorkReportButton token={token} label={info.outcomeLabel ? "確認する" : undefined} />
           </>
         )}
       </div>
