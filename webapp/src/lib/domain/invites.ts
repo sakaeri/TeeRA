@@ -40,45 +40,6 @@ export async function createInvite(params: {
   });
 }
 
-// 招待モーダルに「発行済み・未使用の招待」を一覧表示し、使われないまま
-// 残った古いURLを管理者が手動で無効化できるようにするためのもの
-// （開発指示書上は再発行で自動的に無効化される前提のコメントが残って
-// いたが、実際には無効化されておらず、古いURLがいつまでも有効なままに
-// なっていた）。自動的な無効化にはしていない — 同じチーム/役職宛に
-// 複数人へ同時に招待URLを発行するのは正当な運用のため。
-// companyRelationshipIdを渡さない場合は絞り込まない。nullを明示的に渡すと
-// 「どの関係にも紐付かない招待」だけ（通常の直雇用スタッフ招待など）に絞る
-// — 架空派遣会社タグ付き招待（companyRelationshipIdあり）も同じkind:"STAFF"
-// を使うため、区別せずに一覧すると別の派遣会社宛の招待URLまで混ざって
-// 見えてしまうのを防ぐ。
-export async function listPendingInvites(
-  companyId: string,
-  kind: InviteKind,
-  companyRelationshipId?: string | null,
-) {
-  return prisma.inviteToken.findMany({
-    where: {
-      companyId,
-      kind,
-      usedAt: null,
-      expiresAt: { gt: new Date() },
-      ...(companyRelationshipId !== undefined ? { companyRelationshipId } : {}),
-    },
-    orderBy: { createdAt: "desc" },
-  });
-}
-
-export async function revokeInvite(params: { inviteId: string; companyId: string }) {
-  const invite = await prisma.inviteToken.findFirstOrThrow({
-    where: { id: params.inviteId, companyId: params.companyId },
-  });
-  if (invite.usedAt) throw new Error("already_used");
-  return prisma.inviteToken.update({
-    where: { id: invite.id },
-    data: { expiresAt: new Date() },
-  });
-}
-
 export type InviteLookup = Awaited<ReturnType<typeof lookupInvite>>;
 
 export async function lookupInvite(token: string) {

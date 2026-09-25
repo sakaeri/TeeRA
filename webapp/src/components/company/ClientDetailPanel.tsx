@@ -14,8 +14,6 @@ import {
   deleteCompanyRelationshipAction,
   unplaceStaffAction,
   inviteAgencyTaggedStaffAction,
-  listPendingAgencyTaggedInvitesAction,
-  revokeStaffInviteAction,
 } from "@/app/company/actions";
 import { addPlacementRateVersionAction, deletePlacementTaskNameAction } from "@/app/company/contracts/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
@@ -798,21 +796,6 @@ function AgencyInviteModal({
 }) {
   const [pending, startTransition] = useTransition();
   const [url, setUrl] = useState<string | null>(null);
-  const [pendingInvites, setPendingInvites] = useState<{ id: string; url: string; createdAt: string }[]>([]);
-  const [revokingId, setRevokingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    listPendingAgencyTaggedInvitesAction(relationshipId).then(setPendingInvites);
-  }, [relationshipId, url]);
-
-  function revoke(inviteId: string) {
-    setRevokingId(inviteId);
-    startTransition(async () => {
-      await revokeStaffInviteAction(inviteId);
-      setPendingInvites((prev) => prev.filter((i) => i.id !== inviteId));
-      setRevokingId(null);
-    });
-  }
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
@@ -844,34 +827,6 @@ function AgencyInviteModal({
         ) : (
           <CopyUrlField url={url} />
         )}
-
-        {pendingInvites.length > 0 ? (
-          <div className="mt-4 border-t border-border pt-3">
-            <p className="mb-2 text-xs font-semibold text-muted">
-              発行済み・未使用の招待URL（{pendingInvites.length}件）
-            </p>
-            <ul className="flex flex-col gap-1.5">
-              {pendingInvites.map((invite) => (
-                <li
-                  key={invite.id}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-1.5 text-xs"
-                >
-                  <span className="text-muted">
-                    {new Date(invite.createdAt).toLocaleDateString("ja-JP")}発行
-                  </span>
-                  <button
-                    type="button"
-                    disabled={pending && revokingId === invite.id}
-                    onClick={() => revoke(invite.id)}
-                    className="shrink-0 text-red-600 hover:underline disabled:opacity-60"
-                  >
-                    無効化する
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
       </div>
     </div>
   );

@@ -154,12 +154,6 @@ try {
   await agencyPanel.getByRole("button", { name: "招待URLを発行する" }).click();
   await client.waitForSelector('input[readonly]');
   const agencyInviteUrl = await agencyPanel.locator('input[readonly]').inputValue();
-  await client.waitForTimeout(300);
-  bodyText = await agencyPanel.textContent();
-  log(
-    "発行済み・未使用の招待URL一覧にこの派遣会社宛の招待が1件表示される（他の派遣会社/直雇用の招待とは混ざらない）",
-    bodyText.includes("発行済み・未使用の招待URL（1件）"),
-  );
   await agencyPanel.getByRole("button", { name: "✕" }).click();
   await staff2.goto(agencyInviteUrl);
   await staff2.click("text=アカウントを作成して参加する");
