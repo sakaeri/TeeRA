@@ -14,6 +14,7 @@ import {
   deleteStaffAction,
   setStaffHireDateAction,
   grantStaffPaidLeaveAction,
+  adjustStaffPaidLeaveBalanceAction,
   updateStaffAgencyTagAction,
 } from "@/app/company/actions";
 import {
@@ -189,6 +190,9 @@ export function StaffDetailPanel({
   const [showGrantForm, setShowGrantForm] = useState(false);
   const [grantDaysInput, setGrantDaysInput] = useState("");
   const [grantNextDateInput, setGrantNextDateInput] = useState("");
+  const [showAdjustForm, setShowAdjustForm] = useState(false);
+  const [adjustDeltaInput, setAdjustDeltaInput] = useState("");
+  const [adjustNoteInput, setAdjustNoteInput] = useState("");
   const [deleteNoteConfirmTarget, setDeleteNoteConfirmTarget] = useState<StaffNote | null>(null);
   const [pending, startTransition] = useTransition();
   const [upgradeUrl, setUpgradeUrl] = useState<string | null>(null);
@@ -383,6 +387,21 @@ export function StaffDetailPanel({
       setGrantDaysInput("");
       setGrantNextDateInput("");
       setShowGrantForm(false);
+      await refresh();
+    });
+  }
+
+  // 「＋付与する」は正の日数の追加専用（間違って多く/少なく付与した場合の
+  // 訂正はできない）。こちらは正負どちらのdeltaも受け付ける訂正専用の
+  // フォーム — 履歴には「訂正」として記録される（PAID_LEAVE_EVENT_LABEL）。
+  function submitAdjust(membershipId: string) {
+    const delta = Number(adjustDeltaInput);
+    if (!delta) return;
+    startTransition(async () => {
+      await adjustStaffPaidLeaveBalanceAction(membershipId, delta, adjustNoteInput || undefined);
+      setAdjustDeltaInput("");
+      setAdjustNoteInput("");
+      setShowAdjustForm(false);
       await refresh();
     });
   }
@@ -823,6 +842,16 @@ export function StaffDetailPanel({
                     </button>
                   </div>
 
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdjustForm(true)}
+                      className="text-xs text-muted hover:text-primary"
+                    >
+                      残日数を訂正する
+                    </button>
+                  </div>
+
                   {data.paidLeave.events.length > 0 ? (
                     <div className="mt-3">
                       <button
@@ -1073,6 +1102,58 @@ export function StaffDetailPanel({
               className="mt-3 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
               付与する
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {showAdjustForm && data ? (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowAdjustForm(false);
+          }}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="font-serif-jp text-base font-bold text-primary">有給休暇の残日数を訂正</h4>
+              <button type="button" onClick={() => setShowAdjustForm(false)} aria-label="閉じる" className="text-muted hover:text-primary">
+                ✕
+              </button>
+            </div>
+            <p className="mb-3 text-xs text-muted">
+              付与・使用の間違いを訂正する場合に使います。増やす場合は正の数、減らす場合は負の数（例: -1）を入力してください。
+            </p>
+            <div className="flex flex-col gap-3">
+              <label className="flex flex-col gap-1 text-xs">
+                増減日数
+                <input
+                  type="number"
+                  value={adjustDeltaInput}
+                  onChange={(e) => setAdjustDeltaInput(e.target.value)}
+                  placeholder="例: -1 または 2"
+                  className="rounded-lg border border-border px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs">
+                メモ（任意）
+                <input
+                  type="text"
+                  value={adjustNoteInput}
+                  onChange={(e) => setAdjustNoteInput(e.target.value)}
+                  placeholder="訂正の理由など"
+                  className="rounded-lg border border-border px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              disabled={pending || !adjustDeltaInput || Number(adjustDeltaInput) === 0}
+              onClick={() => submitAdjust(data.membershipId)}
+              className="mt-3 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              訂正する
             </button>
           </div>
         </div>

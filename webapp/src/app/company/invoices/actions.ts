@@ -6,7 +6,6 @@ import { canManageAny } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { getClientTeamIds } from "@/lib/domain/teams";
 import {
-  getOrCreateInvoice,
   addCustomLine,
   updateLine,
   deleteLine,
@@ -25,20 +24,6 @@ async function assertAccess(invoiceId: string) {
     throw new Error("forbidden");
   }
   return { userId, membership, invoice };
-}
-
-export async function openInvoiceAction(companyRelationshipId: string, periodLabel: string) {
-  const { membership } = await requireCompanyAdminOrEditor();
-  const clientTeamIds = await getClientTeamIds(companyRelationshipId);
-  if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
-
-  const invoice = await getOrCreateInvoice({
-    issuingCompanyId: membership.companyId,
-    companyRelationshipId,
-    periodLabel,
-  });
-  revalidatePath("/company/invoices");
-  return invoice.id;
 }
 
 export async function addCustomLineAction(

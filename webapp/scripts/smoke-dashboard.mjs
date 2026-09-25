@@ -83,7 +83,7 @@ try {
     "解決済み tab shows small 誰から→誰宛（解決日）subtext",
     body.includes("ダッシュボード管理者 → ダッシュボード管理者宛（解決日"),
   );
-  log("no 再オープン button in 解決済み tab", !body.includes("再オープン"));
+  log("解決済み tab に「未対応に戻す」ボタンが出る", body.includes("未対応に戻す"));
   log("コメント link shown in 解決済み tab", body.includes("コメント（1）"));
 
   // the comment thread stayed expanded from the 未対応 tab interaction above
@@ -94,6 +94,16 @@ try {
   await page.waitForTimeout(300);
   body = await page.textContent("body");
   log("resolved todo comment thread is viewable", body.includes("確認お願いします"));
+
+  // reopen it: should move back to 未対応 and disappear from 解決済み
+  await page.getByRole("button", { name: "未対応に戻す" }).click();
+  await page.waitForTimeout(600);
+  body = await page.textContent("body");
+  log("解決済み tab から消える（未対応に戻した後）", !body.includes("コメント（1）"));
+
+  await page.locator("div.mb-3.flex.gap-1").getByText("やること", { exact: true }).click();
+  body = await page.textContent("body");
+  log("未対応に戻したtodoが「やること」タブに再び表示される", body.includes("契約書を確認してください"));
 
   console.log(process.exitCode ? "DASHBOARD SMOKE TEST HAD FAILURES" : "DASHBOARD SMOKE TEST PASSED");
 } catch (err) {

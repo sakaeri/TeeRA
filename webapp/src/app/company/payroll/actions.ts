@@ -6,7 +6,6 @@ import { canManageAny } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { getStaffTeamIds } from "@/lib/domain/teams";
 import {
-  getOrCreateSalarySlip,
   addCustomLine,
   updateLine,
   deleteLine,
@@ -26,27 +25,6 @@ async function assertAccess(salarySlipId: string) {
     throw new Error("forbidden");
   }
   return { membership, slip };
-}
-
-export async function openSalarySlipAction(staffUserId: string, targetMonth: string) {
-  const { membership } = await requireCompanyAdminOrEditor();
-  const staffTeamIds = await getStaffTeamIds(staffUserId);
-  if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
-
-  // TeeRAを使っていない（実体のない）派遣会社にタグ付けされているスタッフは
-  // 実際の給与を派遣会社側が払う想定のため、給与計算の対象にしない。
-  const targetMembership = await prisma.companyMembership.findFirst({
-    where: { userId: staffUserId, companyId: membership.companyId },
-  });
-  if (!targetMembership || targetMembership.viaAgencyRelationshipId) throw new Error("forbidden");
-
-  const slip = await getOrCreateSalarySlip({
-    companyId: membership.companyId,
-    staffUserId,
-    targetMonth,
-  });
-  revalidatePath("/company/payroll");
-  return slip.id;
 }
 
 export async function addCustomLineAction(salarySlipId: string, description: string, hours: number, rate: number) {

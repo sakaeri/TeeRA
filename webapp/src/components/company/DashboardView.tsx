@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   createManualTodoAction,
   resolveTodoAction,
+  reopenTodoAction,
   addTodoCommentAction,
 } from "@/app/company/actions-todo";
 import {
@@ -1137,13 +1138,23 @@ function TodoSection({
                     {t.createdByName} → {t.recipientName}宛（解決日 {t.resolvedAt}）
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setExpandedId(expandedId === t.id ? null : t.id)}
-                  className="shrink-0 text-xs text-muted underline"
-                >
-                  コメント（{t.comments.length}）
-                </button>
+                <div className="flex shrink-0 items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => startTransition(() => reopenTodoAction(t.id))}
+                    className="text-xs text-muted underline disabled:opacity-60"
+                  >
+                    未対応に戻す
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(expandedId === t.id ? null : t.id)}
+                    className="text-xs text-muted underline"
+                  >
+                    コメント（{t.comments.length}）
+                  </button>
+                </div>
               </div>
               {expandedId === t.id ? (
                 <div className="mt-2 border-t border-border/50 pt-2">

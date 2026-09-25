@@ -120,6 +120,19 @@ try {
   body = await admin.textContent("body");
   log("使用履歴が記録される", /使用 -3日/.test(body));
 
+  // 残日数の訂正（付与・使用の間違いを直す専用の経路。「＋付与する」は
+  // 正の日数しか受け付けないため、これが唯一の減算・訂正手段）
+  await admin.getByRole("button", { name: "残日数を訂正する" }).click();
+  await admin.locator('input[type=number]').fill("-1");
+  await admin.locator('input[type=text]').fill("テスト訂正");
+  await admin.getByRole("button", { name: "訂正する", exact: true }).click();
+  await admin.waitForTimeout(500);
+  body = await admin.textContent("body");
+  log("訂正後、残日数が1日減る（7日→6日）", body.includes("残日数: 6日"));
+  // 履歴パネルは前の確認（line 119）で既に開いたままなので再クリックしない
+  // （もう一度押すと閉じてしまう）。
+  log("訂正履歴が記録される（メモつき）", /訂正 -1日/.test(body) && body.includes("テスト訂正"));
+
   // 入社日を変更しても、既に付与履歴があるスタッフの次回予定日は自動では
   // 書き換わらない（誤って既存スケジュールを壊さないため）
   await admin.locator('input[type=date]').first().fill("2020-05-01");

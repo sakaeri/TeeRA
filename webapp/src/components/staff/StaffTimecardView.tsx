@@ -108,16 +108,25 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
   const finalized = shift.outcome && shift.outcome !== "WORKED";
   const readyToSubmit = shift.clockIn && shift.clockOut;
   // 休憩を確定させる前の実働時間プレビュー — 手修正した打刻時刻(HH:MM)を
-  // 使って計算する。サーバー側（withJstTime）は日付をまたがず、出勤・退勤を
-  // それぞれ元の暦日のまま扱う（翌日退勤とはみなさない）ため、ここでも同じ
-  // 計算にして、プレビューと実際の送信結果が食い違わないようにする。
-  function hhmmToMinutes(hhmm: string) {
+  // 使って計算する。サーバー側（withJstTime）は出勤・退勤それぞれ元の暦日
+  // （shift.clockIn/clockOutの実際の日付）はそのまま保ち、時刻だけを置き
+  // 換える。ここでもHH:MM同士を日付を無視して比較すると、深夜またぎシフト
+  // （出勤23:55→退勤07:55など）を「退勤が出勤より前」と誤判定してしまう
+  // ため、同じくreferenceの暦日を保つ計算にして、プレビューと実際の送信
+  // 結果が食い違わないようにする。
+  const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  function withJstTime(reference: Date, hhmm: string): Date {
     const [h, m] = hhmm.split(":").map(Number);
-    return h * 60 + m;
+    const jst = new Date(reference.getTime() + JST_OFFSET_MS);
+    return new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate(), h, m) - JST_OFFSET_MS);
   }
   const liveRawMinutes =
-    clockInEdit && clockOutEdit
-      ? hhmmToMinutes(clockOutEdit) - hhmmToMinutes(clockInEdit) - (Number(breakMinutes) || 0)
+    clockInEdit && clockOutEdit && shift.clockIn && shift.clockOut
+      ? Math.round(
+          (withJstTime(new Date(shift.clockOut), clockOutEdit).getTime() -
+            withJstTime(new Date(shift.clockIn), clockInEdit).getTime()) /
+            60000,
+        ) - (Number(breakMinutes) || 0)
       : 0;
   const liveComputedMinutes = Math.max(liveRawMinutes, 0);
   const hasInvalidTimeRange = Boolean(clockInEdit && clockOutEdit && liveRawMinutes <= 0);

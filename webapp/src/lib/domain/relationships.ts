@@ -376,6 +376,11 @@ export async function getClientMonthDetail(params: {
     // 削除できる（deleteCompanyRelationship参照。招待の向きを間違えた場合の
     // 取り消し導線）。
     isOwner: relationship.ownerCompanyId === params.companyId,
+    // 連携の終了/再開ボタンの表示判定用 — こちらが仮アカウントのまま
+    // （相手がまだ本アカウント連携していない）関係は「終了」の概念に
+    // 意味が無いので出さない（削除だけで足りる）。
+    canDeactivate: Boolean(relationship.clientCompanyId && relationship.agencyCompanyId),
+    status: relationship.status,
     workLocation: relationship.workLocation,
     emergencyContact: relationship.emergencyContact,
     teams: teamLinks.map((l) => ({ teamId: l.teamId, teamName: l.team.name })),

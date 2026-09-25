@@ -638,8 +638,9 @@ model ShiftRequest {
   @@index([companyId])
 }
 
+// 求人は作成と同時に即PUBLISHEDになる仕様（下書き保存→後で公開、という
+// フローは無い）ため、DRAFTは未使用として削除。
 enum RecruitmentStatus {
-  DRAFT
   PUBLISHED
   STOPPED
   DELETED
@@ -674,7 +675,7 @@ model PublicRecruitment {
   maxEntries      Int
   perEntryTeeCost Int                   @default(10)
   lockedTee       Int // maxEntries * perEntryTeeCost currently locked from company balance (PUBLIC化以降のみ非ゼロ)
-  status          RecruitmentStatus     @default(DRAFT)
+  status          RecruitmentStatus     @default(PUBLISHED)
   visibility      RecruitmentVisibility @default(ORDER)
   publishedAt     DateTime?
   publicOpenedAt  DateTime? // ORDER -> PUBLICへ切り替えた日時
@@ -900,9 +901,10 @@ model StaffContractWageVersion {
 // Payroll (salary slips) / invoicing
 // ---------------------------------------------------------------------------
 
+// FINALIZED（確定）という中間状態は廃止済み（20260909052244で既存データは
+// DRAFTへ寄せ済み）。DRAFT→ISSUEDの2状態のみ。
 enum SalarySlipStatus {
   DRAFT
-  FINALIZED // 確定 — locked numbers, no charge, no PDF
   ISSUED // 発行 — 1 Tee charged (first time), PDF generated
 }
 
@@ -967,9 +969,10 @@ model SalarySlipIssue {
   salarySlip SalarySlip @relation(fields: [salarySlipId], references: [id], onDelete: Cascade)
 }
 
+// CONFIRMED（確定）という中間状態は廃止済み（20260909052244で既存データは
+// DRAFTへ寄せ済み）。DRAFT→ISSUEDの2状態のみ。
 enum InvoiceStatus {
   DRAFT
-  CONFIRMED
   ISSUED
 }
 
@@ -1186,13 +1189,12 @@ model PromoRedemption {
 // Dashboard / To-Do list
 // ---------------------------------------------------------------------------
 
+// 欠員/シフト未確定/業務報告/契約書/販促品などの「自動タスク」は、DBには
+// 保存せずダッシュボード表示のたびにその場で計算している（dashboard.ts）
+// ため、TodoItem.kindは常にMANUALのみ。かつて自動タスクをDBに保存して
+// 元レコードにリンクさせる計画があった名残のAUTO_*値は未使用のため削除。
 enum TodoKind {
   MANUAL // リスト
-  AUTO_SHORTAGE // 欠員
-  AUTO_SHIFT_UNCONFIRMED // シフト未確定
-  AUTO_WORK_REPORT // 業務報告
-  AUTO_CONTRACT // 契約書
-  AUTO_PROMO // 販促品
 }
 
 enum TodoStatus {
@@ -1212,8 +1214,6 @@ model TodoItem {
   imageUrl          String?
   status            TodoStatus @default(OPEN)
   resolvedAt        DateTime?
-  relatedEntityType String?
-  relatedEntityId   String?
   createdAt         DateTime   @default(now())
 
   company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)

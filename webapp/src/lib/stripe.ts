@@ -4,9 +4,10 @@ import Stripe from "stripe";
 const secretKey = process.env.STRIPE_SECRET_KEY;
 
 // Real Stripe integration, per the user's explicit choice. STRIPE_SECRET_KEY
-// is intentionally left blank in .env.example — populate it with a live or
-// test-mode secret key before charging real cards. Wallet code that doesn't
-// touch Stripe (bank transfer, ledger reads) works without this key.
+// is intentionally left unset until ready to charge real cards — populate it
+// (and STRIPE_WEBHOOK_SECRET) in the deployment environment first. Wallet
+// code that doesn't touch Stripe (bank transfer, ledger reads) works without
+// this key.
 export const stripe = secretKey ? new Stripe(secretKey) : null;
 
 export function requireStripe() {

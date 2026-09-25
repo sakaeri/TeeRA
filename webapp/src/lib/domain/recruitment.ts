@@ -147,13 +147,6 @@ export async function saveRecruitmentPublicDraft(params: {
   });
 }
 
-export async function publishRecruitment(recruitmentId: string) {
-  return prisma.publicRecruitment.update({
-    where: { id: recruitmentId },
-    data: { status: "PUBLISHED", publishedAt: new Date() },
-  });
-}
-
 // Changing 人数上限 on an existing listing: lock the increment, or refund the
 // unused portion of a decrement. Editing existing content otherwise never
 // re-charges (開発指示書 §2.1). オーダー(visibility=ORDER)はそもそも無課金
@@ -296,7 +289,7 @@ export async function listPublicRecruitments(params: { companyId: string; teamId
     where: {
       companyId: params.companyId,
       teamId: params.teamId,
-      status: { in: ["PUBLISHED", "DRAFT"] },
+      status: "PUBLISHED",
     },
     include: { entries: true },
     orderBy: { date: "asc" },

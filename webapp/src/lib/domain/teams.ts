@@ -16,24 +16,6 @@ export async function listTeams(companyId: string) {
   });
 }
 
-// チームの主な取引先の紐付け。当初はシフト作成時の依頼主選択で上に出す
-// ための並び替え専用として作ったが、「チームに所属する企業＝そのチームが
-// 主に取引がある企業」という位置づけ通り、請求書のチームスコープ権限判定
-// （canManageAny）にもそのまま使う — 別テーブルは持たない。
-export async function addTeamClient(params: { teamId: string; companyRelationshipId: string }) {
-  return prisma.teamClientRelationship.upsert({
-    where: { teamId_companyRelationshipId: { teamId: params.teamId, companyRelationshipId: params.companyRelationshipId } },
-    create: { teamId: params.teamId, companyRelationshipId: params.companyRelationshipId },
-    update: {},
-  });
-}
-
-export async function removeTeamClient(params: { teamId: string; companyRelationshipId: string }) {
-  return prisma.teamClientRelationship.deleteMany({
-    where: { teamId: params.teamId, companyRelationshipId: params.companyRelationshipId },
-  });
-}
-
 export async function createTeam(params: {
   companyId: string;
   name: string;
@@ -70,12 +52,6 @@ export async function setTeamMemberRole(params: {
     where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
     create: { teamId: params.teamId, userId: params.userId, role: params.role },
     update: { role: params.role },
-  });
-}
-
-export async function removeTeamMember(params: { teamId: string; userId: string }) {
-  return prisma.teamMembership.delete({
-    where: { teamId_userId: { teamId: params.teamId, userId: params.userId } },
   });
 }
 
@@ -126,7 +102,10 @@ export async function setStaffPlainTeamMemberships(params: {
 
 // 依頼主/派遣会社詳細の「編集」パネル用 — その取引先が紐づくチームを、
 // 渡されたteamIds通りに揃える（スタッフと違い役職の概念が無いので単純な
-// 差分反映でよい）。
+// 差分反映でよい）。チームの主な取引先の紐付け（TeamClientRelationship）は
+// 当初シフト作成時の依頼主選択で上に出すための並び替え専用として作ったが、
+// 「チームに所属する企業＝そのチームが主に取引がある企業」という位置づけ
+// 通り、請求書のチームスコープ権限判定（canManageAny）にもそのまま使う。
 export async function setClientTeams(params: {
   companyId: string;
   companyRelationshipId: string;

@@ -32,16 +32,14 @@ import {
   assertRelationshipParty,
   unplaceStaff,
   updateRelationshipWorkplaceInfo,
+  setRelationshipStatus,
 } from "@/lib/domain/relationships";
 import {
   createTeam,
   setTeamMemberRole,
-  removeTeamMember,
   setCompanyMemberRole,
   setMemberCanWorkShifts,
   removeCompanyMemberRole,
-  addTeamClient,
-  removeTeamClient,
   setStaffPlainTeamMemberships,
   setClientTeams,
   getStaffTeamIds,
@@ -253,15 +251,6 @@ export async function setTeamMemberRoleAction(
   revalidatePath("/company/settings");
 }
 
-export async function removeTeamMemberAction(teamId: string, userId: string) {
-  const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
-  await assertTeamOwnedByCompany(teamId, membership.companyId);
-
-  await removeTeamMember({ teamId, userId });
-  revalidatePath("/company/settings");
-}
-
 // 設定＞チーム管理の「＋招待」（新しく招待する）専用 — 参加した瞬間から
 // 指定した役職（マネージャー/リーダー）を持つ招待URLを発行する。
 export async function inviteTeamManagerAction(teamId: string, teamRole: "TEAM_MANAGER" | "TEAM_LEADER") {
@@ -348,26 +337,20 @@ export async function unplaceStaffAction(companyRelationshipId: string, staffUse
   revalidatePath("/company/roster");
 }
 
-export async function addTeamClientAction(teamId: string, companyRelationshipId: string) {
+// 取引先/派遣会社との連携を終了・再開する — 削除と違い、稼働実績があって
+// も使える（実績は残したまま、以後のシフト作成・求人経由の配属・スタッフ
+// 側の契約書ページなどでこの関係を対象外にするだけ）。配属解除と同じく、
+// 関係の当事者であれば双方向どちらからでも操作できる。
+export async function setRelationshipStatusAction(
+  companyRelationshipId: string,
+  status: "ACTIVE" | "INACTIVE",
+) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
-  await assertTeamOwnedByCompany(teamId, membership.companyId);
-  await assertRelationshipAgencySide(companyRelationshipId, membership.companyId);
+  await assertRelationshipParty(companyRelationshipId, membership.companyId);
 
-  await addTeamClient({ teamId, companyRelationshipId });
-  revalidatePath("/company/settings");
-  revalidatePath("/company/calendar");
-}
-
-export async function removeTeamClientAction(teamId: string, companyRelationshipId: string) {
-  const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
-  await assertTeamOwnedByCompany(teamId, membership.companyId);
-  await assertRelationshipAgencySide(companyRelationshipId, membership.companyId);
-
-  await removeTeamClient({ teamId, companyRelationshipId });
-  revalidatePath("/company/settings");
-  revalidatePath("/company/calendar");
+  await setRelationshipStatus({ companyRelationshipId, status });
+  revalidatePath("/company/roster");
 }
 
 export async function updateCompanyNameAction(name: string) {

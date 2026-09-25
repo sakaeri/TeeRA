@@ -14,6 +14,7 @@ import {
   deleteCompanyRelationshipAction,
   unplaceStaffAction,
   inviteAgencyTaggedStaffAction,
+  setRelationshipStatusAction,
 } from "@/app/company/actions";
 import { addPlacementRateVersionAction, deletePlacementTaskNameAction } from "@/app/company/contracts/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
@@ -48,6 +49,8 @@ type ClientMonthDetail = {
   name: string;
   isProxy: boolean;
   isOwner: boolean;
+  canDeactivate: boolean;
+  status: "ACTIVE" | "INACTIVE";
   workLocation: string | null;
   emergencyContact: string | null;
   historyCutoff: { year: number; month: number } | null;
@@ -124,6 +127,7 @@ export function ClientDetailPanel({
   const [teamSelection, setTeamSelection] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
   const [showPlacementHistory, setShowPlacementHistory] = useState(false);
   const [unplaceConfirmTarget, setUnplaceConfirmTarget] = useState<Placement | null>(null);
   const [editingWorkplaceInfo, setEditingWorkplaceInfo] = useState(false);
@@ -177,6 +181,21 @@ export function ClientDetailPanel({
       setShowDeleteConfirm(false);
       onClose();
       router.refresh();
+    });
+  }
+
+  function submitDeactivate() {
+    setShowDeactivateConfirm(false);
+    startTransition(async () => {
+      await setRelationshipStatusAction(relationshipId, "INACTIVE");
+      await refresh();
+    });
+  }
+
+  function reactivate() {
+    startTransition(async () => {
+      await setRelationshipStatusAction(relationshipId, "ACTIVE");
+      await refresh();
     });
   }
 
@@ -239,8 +258,34 @@ export function ClientDetailPanel({
         ) : (
           <>
             <div className="mb-3 flex items-start justify-between gap-2">
-              <h2 className="font-serif-jp text-xl font-bold">{data.name}</h2>
+              <h2 className="font-serif-jp text-xl font-bold">
+                {data.name}
+                {data.status === "INACTIVE" ? (
+                  <span className="ml-2 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-normal text-gray-600">連携終了済み</span>
+                ) : null}
+              </h2>
               <div className="flex shrink-0 items-center gap-3">
+                {data.canDeactivate ? (
+                  data.status === "ACTIVE" ? (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => setShowDeactivateConfirm(true)}
+                      className="text-xs text-muted hover:text-red-600 disabled:opacity-60"
+                    >
+                      連携を終了する
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={reactivate}
+                      className="text-xs text-primary hover:underline disabled:opacity-60"
+                    >
+                      連携を再開する
+                    </button>
+                  )
+                ) : null}
                 {data.isOwner ? (
                   <button
                     type="button"
@@ -692,6 +737,16 @@ export function ClientDetailPanel({
           pending={pending}
           onConfirm={submitDeleteRelationship}
           onCancel={() => setShowDeleteConfirm(false)}
+        />
+      ) : null}
+
+      {showDeactivateConfirm ? (
+        <ConfirmDialog
+          message="この連携を終了します。稼働実績は残りますが、以後シフト作成・求人経由での配属・スタッフ側の契約書ページなどの対象から外れます。あとで「連携を再開する」でいつでも元に戻せます。よろしいですか？"
+          confirmLabel="終了する"
+          pending={pending}
+          onConfirm={submitDeactivate}
+          onCancel={() => setShowDeactivateConfirm(false)}
         />
       ) : null}
 
