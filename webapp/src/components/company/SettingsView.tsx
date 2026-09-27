@@ -828,17 +828,19 @@ function TeamInviteForm({
           )
         ) : null}
 
-        <label className="flex flex-col gap-0.5 text-xs">
-          <span className="text-muted">権限</span>
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as "TEAM_MANAGER" | "TEAM_LEADER")}
-            className="rounded-lg border border-border px-2 py-1.5 text-sm text-foreground"
-          >
-            <option value="TEAM_MANAGER">マネージャー</option>
-            <option value="TEAM_LEADER">リーダー</option>
-          </select>
-        </label>
+        {mode === "existing" ? (
+          <label className="flex flex-col gap-0.5 text-xs">
+            <span className="text-muted">権限</span>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as "TEAM_MANAGER" | "TEAM_LEADER")}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm text-foreground"
+            >
+              <option value="TEAM_MANAGER">マネージャー</option>
+              <option value="TEAM_LEADER">リーダー</option>
+            </select>
+          </label>
+        ) : null}
 
         {mode === "new" ? (
           <button
@@ -846,7 +848,11 @@ function TeamInviteForm({
             disabled={pending}
             onClick={() =>
               startTransition(async () => {
-                const url = await inviteTeamManagerAction(teamId, role);
+                // 招待の時点では権限を選ばせず、まずリーダーとして招待する。
+                // マネージャーへの昇格は参加後、上の一覧の「権限」セレクトから
+                // 行う（招待URL発行のたびに権限を選ばせるのは煩雑なだけで、
+                // 参加前に決め打ちする必要が無いため）。
+                const url = await inviteTeamManagerAction(teamId, "TEAM_LEADER");
                 setInviteUrl(url);
               })
             }

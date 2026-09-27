@@ -58,16 +58,21 @@ try {
   await admin.waitForTimeout(200);
   log("マネージャー未登録のチームは「まだマネージャー/リーダーがいません」と出る", body.includes("まだマネージャー/リーダーがいません"));
 
-  // --- ①「新しく招待する」でAチームのマネージャーを招待 ---
+  // --- ①「新しく招待する」でAチームのリーダーを招待 ---
+  // 招待の時点では権限を選ばせず、常にリーダーとして招待する（マネージャー
+  // への昇格は参加後、一覧の「権限」セレクトから行う）。
   const teamACard = admin
     .locator("div.rounded-xl.border.border-border.p-4")
     .filter({ has: admin.locator("div.mb-3.font-semibold", { hasText: /^Aチーム$/ }) });
   await teamACard.getByRole("button", { name: "＋招待" }).click();
+  log("「新しく招待する」タブに権限セレクトが出ない（招待時に権限を選ばせない）", !(await teamACard.getByText("権限", { exact: true }).isVisible()));
   await teamACard.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForTimeout(500);
   const url = await teamACard.locator("input[readonly]").inputValue();
 
   await mgr.goto(url);
+  const landingBody = await mgr.locator("body").innerText();
+  log("招待ページに「Aチームのリーダーとして参加します」と表示される", landingBody.includes("Aチームのリーダーとして参加します"));
   await mgr.click("text=アカウントを作成して参加する");
   await mgr.fill("#name", "Aチームマネージャー");
   await mgr.fill("#email", mgrEmail);
@@ -80,7 +85,7 @@ try {
   const mgrUserId = psql(`select id from "User" where email='${mgrEmail}';`);
   const teamAId = psql(`select id from "Team" where "companyId"='${companyId}' and name='Aチーム';`);
   const roleAfterInvite = psql(`select role from "TeamMembership" where "teamId"='${teamAId}' and "userId"='${mgrUserId}';`);
-  log("招待URL経由で参加すると最初からTEAM_MANAGERになっている", roleAfterInvite === "TEAM_MANAGER");
+  log("招待URL経由で参加すると最初からTEAM_LEADERになっている", roleAfterInvite === "TEAM_LEADER");
 
   await admin.goto("http://localhost:3000/company/settings?tab=teams");
   body = await admin.textContent("body");

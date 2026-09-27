@@ -77,6 +77,13 @@ export async function redeemInvite(token: string, userId: string) {
       if (invite.upgradeProxyUserId) {
         // 本アカウントと連携する: move the proxy's memberships onto the real
         // account, then remove the now-unused placeholder user.
+        //
+        // Userへの全リレーションはonDelete: Cascadeなので（deleteStaffが
+        // 稼働実績のある仮アカウントの削除を拒否しているのと同じ理由 —
+        // roster.ts参照）、CompanyMembership/TeamMembership以外の
+        // staffUserId参照（シフト・業務報告・契約・配属・タスク単価・
+        // 給与明細・ポイント履歴等）も実アカウントへ付け替えてからでないと、
+        // 仮アカウントUser削除時にそれらの実績データごと消えてしまう。
         const proxyUserId = invite.upgradeProxyUserId;
         await tx.companyMembership.updateMany({
           where: { userId: proxyUserId, companyId: invite.companyId },
@@ -86,6 +93,20 @@ export async function redeemInvite(token: string, userId: string) {
           where: { userId: proxyUserId, team: { companyId: invite.companyId } },
           data: { userId },
         });
+        await tx.shift.updateMany({ where: { staffUserId: proxyUserId }, data: { staffUserId: userId } });
+        await tx.workReport.updateMany({ where: { staffUserId: proxyUserId }, data: { staffUserId: userId } });
+        await tx.staffContract.updateMany({ where: { staffUserId: proxyUserId }, data: { staffUserId: userId } });
+        await tx.staffPlacement.updateMany({ where: { staffUserId: proxyUserId }, data: { staffUserId: userId } });
+        await tx.staffTaskRate.updateMany({ where: { staffUserId: proxyUserId }, data: { staffUserId: userId } });
+        await tx.staffNotice.updateMany({ where: { staffUserId: proxyUserId }, data: { staffUserId: userId } });
+        await tx.shiftRequest.updateMany({ where: { staffUserId: proxyUserId }, data: { staffUserId: userId } });
+        await tx.recruitmentEntry.updateMany({ where: { staffUserId: proxyUserId }, data: { staffUserId: userId } });
+        await tx.salarySlip.updateMany({ where: { staffUserId: proxyUserId }, data: { staffUserId: userId } });
+        await tx.staffPointsLedgerEntry.updateMany({
+          where: { staffUserId: proxyUserId },
+          data: { staffUserId: userId },
+        });
+        await tx.promoRedemption.updateMany({ where: { staffUserId: proxyUserId }, data: { staffUserId: userId } });
         await tx.user.delete({ where: { id: proxyUserId } });
       } else {
         const role = invite.targetRole ?? "STAFF";

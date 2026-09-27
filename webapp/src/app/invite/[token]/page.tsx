@@ -41,7 +41,31 @@ export default async function InvitePage({
   // isCompanyRelationshipInviteで別扱いなので、ここはkind==="STAFF"限定で
   // 安全に判定できる）。
   const agencyTagName = invite.kind === "STAFF" ? invite.companyRelationship?.proxyName : null;
-  const kindLabel = agencyTagName ? `${agencyTagName}の派遣スタッフ` : (KIND_LABEL[invite.kind] ?? invite.kind);
+  // CLIENT_UPGRADE/AGENCY_UPGRADE（既存の仮依頼主/仮派遣会社を本アカウント
+  // と連携する招待）も同様に、対象の仮会社名を明示しないと「依頼主」
+  // 「派遣会社」とだけ出て、どの仮アカウントの話なのか全く分からない
+  // （「本アカウントを招待」で仮アカウント無しに新規発行した場合は
+  // companyRelationshipId/proxyNameが無いので従来通りの表示になる）。
+  const relationshipProxyName =
+    invite.kind === "CLIENT_UPGRADE" || invite.kind === "AGENCY_UPGRADE"
+      ? invite.companyRelationship?.proxyName
+      : null;
+  // チーム招待（マネージャー/リーダー）は「スタッフ（チーム名）として参加
+  // します」だと不自然な上、権限（マネージャー/リーダー）がどこにも表示
+  // されない。「チーム名の権限」の形にまとめて自然な文にする。
+  const teamRoleLabel =
+    invite.targetTeamRole === "TEAM_MANAGER"
+      ? "マネージャー"
+      : invite.targetTeamRole === "TEAM_LEADER"
+        ? "リーダー"
+        : null;
+  const kindLabel = agencyTagName
+    ? `${agencyTagName}の派遣スタッフ`
+    : relationshipProxyName
+      ? `「${relationshipProxyName}」の本アカウント`
+      : teamName
+        ? `${teamName}の${teamRoleLabel ?? "スタッフ"}`
+        : (KIND_LABEL[invite.kind] ?? invite.kind);
 
   if (!session?.user?.id) {
     return (
@@ -55,7 +79,6 @@ export default async function InvitePage({
           </h1>
           <p className="mb-6 text-sm text-muted">
             {kindLabel}
-            {teamName ? `（${teamName}）` : ""}
             として参加します。まずアカウントを作成してください。
           </p>
           <Link
@@ -95,7 +118,6 @@ export default async function InvitePage({
         </h1>
         <p className="mb-6 text-sm text-muted">
           {kindLabel}
-          {teamName ? `（${teamName}）` : ""}
           として参加します。
         </p>
 
