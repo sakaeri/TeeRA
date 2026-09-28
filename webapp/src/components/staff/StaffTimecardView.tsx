@@ -9,6 +9,7 @@ import {
 } from "@/app/staff/actions";
 import { isDone, type ShiftRow } from "@/lib/staffShiftStatus";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { todayJst } from "@/lib/date";
 
 export type { ShiftRow };
 export { isDone };
@@ -109,6 +110,13 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
 
   const finalized = shift.outcome && shift.outcome !== "WORKED";
   const readyToSubmit = shift.clockIn && shift.clockOut;
+  // 過去のシフトを後日まとめて報告する場合、「勤務開始/勤務終了」ボタンは
+  // 押した瞬間（＝今日）の日付が打刻として記録されてしまい、シフト自体の
+  // 予定日とズレてしまう。過去日のシフトは打刻ボタンを出さず、最初から
+  // 時刻を直接入力するフォームにする（domain側のsubmitWorkReportも、
+  // 打刻が一度も無い状態からの提出はシフトの予定日を基準にするよう対応済み
+  // — workReports.ts参照）。
+  const isPastShift = shift.date < todayJst();
   // 休憩を確定させる前の実働時間プレビュー — 手修正した打刻時刻(HH:MM)を
   // 使って計算する。サーバー側（withJstTime）は出勤・退勤それぞれ元の暦日
   // （shift.clockIn/clockOutの実際の日付）はそのまま保ち、時刻だけを置き
@@ -122,11 +130,21 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
     const jst = new Date(reference.getTime() + JST_OFFSET_MS);
     return new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate(), h, m) - JST_OFFSET_MS);
   }
+  // 打刻が一度も無い過去シフトの手入力では、shift.clockIn/clockOutが両方
+  // nullなので、上と同じくどこかの暦日を基準に据える必要がある（プレビュー
+  // なので日付自体はどこでもよく、出勤・退勤で同じ基準日を使えれば足りる）。
+  // サーバー側（submitWorkReport）の判定と合わせ、退勤時刻の文字列が出勤
+  // 時刻より前なら深夜またぎとみなして退勤側だけ+1日する。
+  const clockInRef = shift.clockIn ? new Date(shift.clockIn) : new Date();
+  const clockOutRef = shift.clockOut
+    ? new Date(shift.clockOut)
+    : clockInEdit && clockOutEdit && clockOutEdit < clockInEdit
+      ? new Date(clockInRef.getTime() + 24 * 60 * 60 * 1000)
+      : clockInRef;
   const liveRawMinutes =
-    clockInEdit && clockOutEdit && shift.clockIn && shift.clockOut
+    clockInEdit && clockOutEdit
       ? Math.round(
-          (withJstTime(new Date(shift.clockOut), clockOutEdit).getTime() -
-            withJstTime(new Date(shift.clockIn), clockInEdit).getTime()) /
+          (withJstTime(clockOutRef, clockOutEdit).getTime() - withJstTime(clockInRef, clockInEdit).getTime()) /
             60000,
         ) - (Number(breakMinutes) || 0)
       : 0;
@@ -207,7 +225,7 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
         </>
       ) : (
         <>
-          {!(shift.clockIn && shift.clockOut) ? (
+          {!(shift.clockIn && shift.clockOut) && !isPastShift ? (
             <div className="flex gap-2">
               <button
                 type="button"
@@ -256,7 +274,11 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
                   />
                 </label>
               </div>
-              <p className="text-xs text-muted">押し忘れ・押し間違いがあれば時刻を修正できます。</p>
+              <p className="text-xs text-muted">
+                {isPastShift
+                  ? "実際に勤務した時刻を入力してください。"
+                  : "押し忘れ・押し間違いがあれば時刻を修正できます。"}
+              </p>
               <div>
                 <p className="mb-1 text-xs text-muted">休憩時間</p>
                 <div className="flex flex-wrap items-center gap-1.5">

@@ -31,6 +31,17 @@ function shiftTimeLabel(shift: { isAllDay: boolean; isUndecided: boolean; startT
   return `${shift.startTime ?? "--:--"}〜${shift.endTime ?? "--:--"}`;
 }
 
+// 公開募集（オーダー/公開どちらも）経由のシフトのみ、応募条件/服装/持ち物/
+// 集合場所などの詳細をリマインドメールにも載せる — 募集ページを開き直さ
+// なくても当日必要な持ち物・服装を確認できるようにするため。
+function recruitmentEmailDetails(recruitment: { note: string | null; extraItems: unknown } | null) {
+  if (!recruitment) return { recruitmentNote: null, recruitmentExtraItems: [] };
+  return {
+    recruitmentNote: recruitment.note,
+    recruitmentExtraItems: recruitment.extraItems as { label: string; value: string }[],
+  };
+}
+
 function formatJstTime(date: Date) {
   return new Intl.DateTimeFormat("ja-JP", {
     hour: "2-digit",
@@ -221,7 +232,7 @@ export async function runShiftStartReminders() {
       reminderSentAt: null,
       date: { gte: new Date(`${todayStr}T00:00:00.000Z`), lte: tomorrow },
     },
-    include: { staff: true, company: true },
+    include: { staff: true, company: true, publicRecruitment: true },
   });
 
   for (const shift of candidates) {
@@ -233,10 +244,13 @@ export async function runShiftStartReminders() {
 
     await prisma.shift.update({ where: { id: shift.id }, data: { reminderSentAt: new Date() } });
     await sendShiftReminderEmail(shift.staff.email, {
+      staffName: shift.staff.name,
       companyName: shift.company.name,
       date: shift.date.toISOString().slice(0, 10),
       timeLabel: shiftTimeLabel(shift),
+      taskLabel: shift.taskName,
       appUrl: absoluteUrl("/staff/timecard"),
+      ...recruitmentEmailDetails(shift.publicRecruitment),
     });
   }
 
@@ -251,17 +265,20 @@ export async function runShiftStartReminders() {
         reminderSentAt: null,
         date: { gte: new Date(`${todayStr}T00:00:00.000Z`), lt: tomorrow },
       },
-      include: { staff: true, company: true },
+      include: { staff: true, company: true, publicRecruitment: true },
     });
 
     for (const shift of allDayCandidates) {
       await prisma.shift.update({ where: { id: shift.id }, data: { reminderSentAt: new Date() } });
       await sendShiftReminderEmail(shift.staff.email, {
+        staffName: shift.staff.name,
         companyName: shift.company.name,
         date: shift.date.toISOString().slice(0, 10),
         timeLabel: shiftTimeLabel(shift),
+        taskLabel: shift.taskName,
         appUrl: absoluteUrl("/staff/timecard"),
         isAllDay: true,
+        ...recruitmentEmailDetails(shift.publicRecruitment),
       });
     }
   }
@@ -280,15 +297,15 @@ export async function runUnsubmittedWorkReportReminders() {
     include: { staff: true },
   });
 
-  const byStaff = new Map<string, { email: string; count: number }>();
+  const byStaff = new Map<string, { email: string; name: string; count: number }>();
   for (const shift of shifts) {
-    const entry = byStaff.get(shift.staffUserId) ?? { email: shift.staff.email, count: 0 };
+    const entry = byStaff.get(shift.staffUserId) ?? { email: shift.staff.email, name: shift.staff.name, count: 0 };
     entry.count += 1;
     byStaff.set(shift.staffUserId, entry);
   }
 
-  for (const { email, count } of byStaff.values()) {
-    await sendUnsubmittedWorkReportReminderEmail(email, count, absoluteUrl("/staff/timecard"));
+  for (const { email, name, count } of byStaff.values()) {
+    await sendUnsubmittedWorkReportReminderEmail(email, name, count, absoluteUrl("/staff/timecard"));
   }
 }
 
@@ -299,14 +316,18 @@ export async function runContractConsentReminders() {
     include: { staff: true, template: { include: { company: true } } },
   });
 
-  const byStaff = new Map<string, { email: string; companyNames: Set<string> }>();
+  const byStaff = new Map<string, { email: string; name: string; companyNames: Set<string> }>();
   for (const contract of pending) {
-    const entry = byStaff.get(contract.staffUserId) ?? { email: contract.staff.email, companyNames: new Set<string>() };
+    const entry = byStaff.get(contract.staffUserId) ?? {
+      email: contract.staff.email,
+      name: contract.staff.name,
+      companyNames: new Set<string>(),
+    };
     entry.companyNames.add(contract.template.company.name);
     byStaff.set(contract.staffUserId, entry);
   }
 
-  for (const { email, companyNames } of byStaff.values()) {
-    await sendContractConsentReminderEmail(email, Array.from(companyNames), absoluteUrl("/staff/contracts"));
+  for (const { email, name, companyNames } of byStaff.values()) {
+    await sendContractConsentReminderEmail(email, name, Array.from(companyNames), absoluteUrl("/staff/contracts"));
   }
 }

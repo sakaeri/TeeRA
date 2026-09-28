@@ -35,7 +35,7 @@ export async function requestPasswordReset(email: string) {
     },
   });
 
-  await sendPasswordResetEmail(user.email, absoluteUrl(`/reset-password/${token}`));
+  await sendPasswordResetEmail(user.email, user.name, absoluteUrl(`/reset-password/${token}`));
 }
 
 async function consumeToken(token: string, kind: "PASSWORD_RESET" | "EMAIL_CHANGE") {
@@ -86,7 +86,7 @@ export async function requestEmailChange(userId: string, newEmail: string, curre
     },
   });
 
-  await sendEmailChangeConfirmation(normalizedEmail, absoluteUrl(`/confirm-email-change/${token}`));
+  await sendEmailChangeConfirmation(normalizedEmail, user.name, absoluteUrl(`/confirm-email-change/${token}`));
 }
 
 export async function confirmEmailChange(token: string) {

@@ -92,8 +92,8 @@ try {
   );
   const hhmm = jstHHMMAfter(60 * 60 * 1000);
   const reminderShiftId = psql(
-    `insert into "Shift" (id, "companyId", "staffUserId", source, date, "startTime", "endTime", "createdVia", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${reminderCompanyId}', '${reminderStaffId}', 'INHOUSE', (now() at time zone 'Asia/Tokyo')::date, '${hhmm}', '${hhmm}', 'ASSIGN', now()) returning id;`,
+    `insert into "Shift" (id, "companyId", "staffUserId", source, date, "startTime", "endTime", "taskName", "createdVia", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${reminderCompanyId}', '${reminderStaffId}', 'INHOUSE', (now() at time zone 'Asia/Tokyo')::date, '${hhmm}', '${hhmm}', 'リマインド確認業務', 'ASSIGN', now()) returning id;`,
   );
 
   logStart = readFileSync(DEV_LOG_PATH, "utf8").length;
@@ -107,6 +107,11 @@ try {
       reminderLog.includes("まもなくシフトの時間です") &&
       reminderLog.includes("の時間が近づいています"),
   );
+  log("リマインドメールに宛名（○○様）が入る", reminderLog.includes("Cronリマインド太郎様"));
+  log("リマインドメールに勤務先が入る", reminderLog.includes("勤務先：") && reminderLog.includes(reminderCompanyName));
+  log("リマインドメールに業務内容が入る", reminderLog.includes("業務内容：") && reminderLog.includes("リマインド確認業務"));
+  log("リマインドメールのボタンが「タイムカードを開く」になっている", reminderLog.includes("タイムカードを開く"));
+  log("リマインドメールがアプリの配色（濃い緑・金）を使っている", reminderLog.includes("#0b3d2e") && reminderLog.includes("#c9a24b"));
 
   const remindedAt = psql(`select "reminderSentAt" is not null from "Shift" where id='${reminderShiftId}';`);
   log("送信済みフラグ(reminderSentAt)が立つ", remindedAt === "t");
@@ -181,6 +186,28 @@ try {
     log("終日シフトのreminderSentAtは立っていない", allDayReminded === "f");
   }
 
+  // 公開募集経由のシフトには、募集時の服装・持ち物等の詳細もリマインド
+  // メールに載る。
+  const recruitStaffEmail = `cron-reminder-recruit-staff-${suffix}@example.com`;
+  const recruitStaffId = psql(
+    `insert into "User" (id, email, "passwordHash", name, "updatedAt") values (gen_random_uuid()::text, '${recruitStaffEmail}', 'x', 'Cron募集太郎', now()) returning id;`,
+  );
+  const recruitHHMM = jstHHMMAfter(60 * 60 * 1000);
+  const recruitmentId = psql(
+    `with ins as (insert into "PublicRecruitment" (id, "companyId", title, note, "extraItems", date, "startTime", "endTime", "maxEntries", "lockedTee", status, visibility, "publishedAt", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${reminderCompanyId}', 'Cron募集確認', '動きやすい服装でお越しください', '[{"label":"持ち物","value":"タオル・飲み物"}]'::jsonb, (now() at time zone 'Asia/Tokyo')::date, '${recruitHHMM}', '${recruitHHMM}', 1, 0, 'PUBLISHED', 'ORDER', now(), now(), now()) returning id) select id from ins;`,
+  );
+  psql(
+    `insert into "Shift" (id, "companyId", "staffUserId", source, date, "startTime", "endTime", "taskName", "publicRecruitmentId", "createdVia", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${reminderCompanyId}', '${recruitStaffId}', 'INHOUSE', (now() at time zone 'Asia/Tokyo')::date, '${recruitHHMM}', '${recruitHHMM}', '募集経由業務', '${recruitmentId}', 'ASSIGN', now());`,
+  );
+  logStart = readFileSync(DEV_LOG_PATH, "utf8").length;
+  await callCron("shift-start-reminders");
+  await new Promise((r) => setTimeout(r, 500));
+  const recruitLog = readServerLogSince(logStart);
+  log("公開募集経由のシフトのリマインドに募集時の詳細（服装）が入る", recruitLog.includes("動きやすい服装でお越しください"));
+  log("公開募集経由のシフトのリマインドに募集時の詳細（持ち物）が入る", recruitLog.includes("持ち物") && recruitLog.includes("タオル・飲み物"));
+
   // ⑤未提出の業務報告・契約書同意待ちリマインド（週次、スタッフ本人宛）
   const weeklyStaffEmail = `cron-weekly-staff-${suffix}@example.com`;
   const weeklyStaffId = psql(
@@ -207,6 +234,7 @@ try {
   const weeklyLog = readServerLogSince(logStart);
   log("未提出の業務報告リマインドがスタッフ本人に届く", weeklyLog.includes(weeklyStaffEmail) && weeklyLog.includes("未提出の業務報告"));
   log("契約書の同意待ちリマインドがスタッフ本人に届く", weeklyLog.includes(weeklyStaffEmail) && weeklyLog.includes("契約書の確認"));
+  log("週次リマインドにも宛名（○○様）が入る", weeklyLog.includes("Cron週次太郎様"));
 
   console.log(process.exitCode ? "EMAIL NOTIFICATIONS CRON SMOKE TEST HAD FAILURES" : "EMAIL NOTIFICATIONS CRON SMOKE TEST PASSED");
 } catch (err) {

@@ -85,12 +85,27 @@ export async function submitWorkReport(params: {
   const existing = await prisma.workReport.findUnique({ where: { shiftId: params.shiftId } });
 
   if (params.outcome === "WORKED") {
-    if (!existing?.clockIn || !existing?.clockOut) {
+    const shift = await prisma.shift.findUniqueOrThrow({ where: { id: params.shiftId } });
+    // 提出し忘れた過去のシフトを後日まとめて報告する場合、出退勤ボタンを
+    // 一度も押していない（=WorkReportがまだ無いか、clockIn/clockOutが
+    // 未記録）ことがある。その場合の基準日は「今日」ではなくシフト自体の
+    // 予定日にする（そうしないと、ボタンを押した"今日"の日付がそのまま
+    // 打刻の暦日として記録されてしまい、日付を正しく直す手段が無くなる）。
+    // 出勤時刻より前の時刻表記で退勤時刻が入力された場合は、深夜またぎ
+    // シフトとみなして退勤側の暦日を+1日する。
+    const clockInBase = existing?.clockIn ?? shift.date;
+    const clockIn = params.clockInTime ? withJstTime(clockInBase, params.clockInTime) : existing?.clockIn;
+
+    let clockOutBase = existing?.clockOut ?? clockIn ?? shift.date;
+    if (!existing?.clockOut && params.clockInTime && params.clockOutTime && params.clockOutTime < params.clockInTime) {
+      clockOutBase = new Date(clockOutBase.getTime() + 24 * 60 * 60 * 1000);
+    }
+    const clockOut = params.clockOutTime ? withJstTime(clockOutBase, params.clockOutTime) : existing?.clockOut;
+
+    if (!clockIn || !clockOut) {
       throw new Error("clock_in_out_required");
     }
-    const clockIn = params.clockInTime ? withJstTime(existing.clockIn, params.clockInTime) : existing.clockIn;
-    const clockOut = params.clockOutTime ? withJstTime(existing.clockOut, params.clockOutTime) : existing.clockOut;
-    const breakMinutes = params.breakMinutes ?? existing.breakMinutes;
+    const breakMinutes = params.breakMinutes ?? existing?.breakMinutes ?? 0;
     const rawMinutes = Math.round((clockOut.getTime() - clockIn.getTime()) / 60000);
     if (rawMinutes <= 0) throw new Error("invalid_time_range");
     const computedMinutes = Math.max(rawMinutes - breakMinutes, 0);
@@ -99,7 +114,6 @@ export async function submitWorkReport(params: {
       // しておく — こうしないと後で会社側が単価を設定しようとしたとき、
       // ここで入力された文字列と一致する候補が一覧に出てこない
       // （表記ゆれ対策の意味が無くなってしまう）。単価は付けず登録のみ。
-      const shift = await prisma.shift.findUniqueOrThrow({ where: { id: params.shiftId } });
       await registerStaffTaskName({
         companyId: shift.companyId,
         staffUserId: params.staffUserId,
@@ -114,9 +128,25 @@ export async function submitWorkReport(params: {
         });
       }
     }
-    return prisma.workReport.update({
+    // 出退勤ボタンを一度も押していない（=WorkReport行がまだ無い）状態から
+    // 直接手入力で提出するケースがあるため、update前提だったここもupsertに
+    // する（欠勤/キャンセルの分岐は元々upsertだった）。
+    return prisma.workReport.upsert({
       where: { shiftId: params.shiftId },
-      data: {
+      create: {
+        shiftId: params.shiftId,
+        staffUserId: params.staffUserId,
+        outcome: "WORKED",
+        comment: params.comment,
+        taskName: params.taskName,
+        clockIn,
+        clockOut,
+        breakMinutes,
+        computedMinutes,
+        approvalStatus: "PENDING",
+        submittedAt: new Date(),
+      },
+      update: {
         outcome: "WORKED",
         comment: params.comment,
         taskName: params.taskName,
