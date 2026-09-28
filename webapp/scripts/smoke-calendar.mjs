@@ -7,8 +7,9 @@ function log(label, ok) {
 
 // 「今日から3日後」を対象日にする（ハードコードした日付だと、時間が経つと
 // 過去日になってシフト希望を出せなくなってしまうため）。月末付近だと翌月に
-// またがり、ウィザードのミニカレンダーが当月しか出さない場合に失敗し得る
-// が、他の同種テストと同じ割り切りとして許容する。
+// またがり得るが、ウィザードのミニカレンダーは開いた時点の/staffページの
+// 表示月（?y=&m=）をそのまま使うだけなので、事前に対象月へ遷移しておけば
+// 月をまたいでも問題なく選べる（下のstaff.gotoを参照）。
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const targetDate = new Date(Date.now() + JST_OFFSET_MS + 3 * 24 * 60 * 60 * 1000);
 const targetYear = targetDate.getUTCFullYear();
@@ -60,6 +61,10 @@ try {
   await staff.waitForURL(new RegExp("/invite/"));
   await staff.click("text=参加する");
   await staff.waitForURL("http://localhost:3000/staff");
+
+  // 対象日の月へ先に遷移しておく（月末付近で対象日が翌月にまたがっていて
+  // も、ウィザードのミニカレンダーがその月を表示するように）。
+  await staff.goto(`http://localhost:3000/staff?y=${targetYear}&m=${targetMonth}`);
 
   // --- staff: submit shift request for a date (taken from the wizard's mini
   // calendar grid for the currently-viewed month). The request wizard is now

@@ -148,9 +148,15 @@ try {
   const beforeOrderAssign = psql(`select count(*) from "StaffPlacement" where "staffUserId"='${staffUserId}' and "companyRelationshipId"='${orderRelId}';`);
   log("オーダーアサイン前は、そのオーダー元への配属記録が無い", beforeOrderAssign === "0");
 
-  await agency.goto("http://localhost:3000/company/calendar");
+  // 「+3日」が月末付近だと翌月にまたがるため、日付だけでなく対象月へも
+  // 明示的に遷移する（?無しのgotoだと常に「今月」が開き、翌月の1日等を
+  // 「1」というテキストで探しても今月の1日にマッチしてしまう）。
+  const orderDate = new Date(Date.now() + 3 * 86400000 + 9 * 60 * 60 * 1000);
+  const orderYear = orderDate.getUTCFullYear();
+  const orderMonth = orderDate.getUTCMonth() + 1;
+  const orderDay = String(orderDate.getUTCDate());
+  await agency.goto(`http://localhost:3000/company/calendar?y=${orderYear}&m=${orderMonth}`);
   await agency.waitForTimeout(300);
-  const orderDay = String(new Date(Date.now() + 3 * 86400000).getDate());
   await agency.locator(`button:has-text("${orderDay}")`).first().click();
   await agency.waitForTimeout(300);
   const dayModal = agency.locator("div.fixed.inset-0.z-20").last();

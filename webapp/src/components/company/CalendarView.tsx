@@ -44,7 +44,8 @@ type ShiftHistoryRow = {
   staffName: string;
   publicRecruitmentId: string | null;
   status: string; // "SUPERSEDED" | "CANCELLED"
-  originLabel: string | null; // 元々どの会社／募集の枠だったか（会社名／募集タイトル）
+  detailLabel: string; // 変更前のシフト自体の時間・業務内容（常に表示）
+  originLabel: string | null; // 元々どの会社／募集の枠だったか（会社名／募集タイトル、別会社からの移動時のみ）
 };
 
 const SHIFT_HISTORY_LABEL: Record<string, string> = {
@@ -173,6 +174,17 @@ export function CalendarView({
 }) {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<string | null>(initialSelectedDate ?? null);
+  // 月をまたぐ日付ジャンプ（navigateToDate参照）は?date=付きでページ遷移
+  // させるが、同じCalendarViewインスタンスが再利用され続ける限りuseStateの
+  // 初期値は最初のマウント時にしか使われないため、initialSelectedDateが
+  // 変わった時点でselectedDateを追従させる必要がある。useEffect内での
+  // setStateはカスケード再レンダリングを招くため、Reactが推奨する
+  // 「レンダー中に前回値と比較して調整する」パターンで行う。
+  const [prevInitialSelectedDate, setPrevInitialSelectedDate] = useState(initialSelectedDate);
+  if (initialSelectedDate !== prevInitialSelectedDate) {
+    setPrevInitialSelectedDate(initialSelectedDate);
+    if (initialSelectedDate) setSelectedDate(initialSelectedDate);
+  }
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [assignFormStaffUserId, setAssignFormStaffUserId] = useState<string | undefined>(undefined);
   const [showRecruitForm, setShowRecruitForm] = useState(false);
@@ -210,6 +222,21 @@ export function CalendarView({
   }
 
   const filterQuery = selectedTeamId ? `&team=${selectedTeamId}` : selectedRelationshipId ? `&rel=${selectedRelationshipId}` : "";
+
+  // 日別詳細モーダルの＜＞やシフト希望一覧からの日付ジャンプ先が今表示中の
+  // 月の外だった場合、selectedDateを変えるだけだと今の月分しか取得して
+  // いないshifts/shiftHistoryのままになり、実際にはシフトがあっても
+  // 「この日のシフトはありません」と誤表示されてしまう。月をまたぐ場合は
+  // ページ遷移でその月のデータを取得し直す（?date=で該当日を選択状態にして
+  // 開き直す）。
+  function navigateToDate(dateStr: string) {
+    const [y, m] = dateStr.split("-").map(Number);
+    if (y === year && m === month) {
+      setSelectedDate(dateStr);
+    } else {
+      router.push(`?y=${y}&m=${m}&date=${dateStr}${filterQuery}`);
+    }
+  }
 
   async function shareAsImage() {
     if (!shareRef.current || sharingImage) return;
@@ -391,7 +418,7 @@ export function CalendarView({
       ) : null}
 
       <div className="order-1 sm:order-2">
-        <ShiftRequestsSection requests={shiftRequests} onNavigate={setSelectedDate} />
+        <ShiftRequestsSection requests={shiftRequests} onNavigate={navigateToDate} />
       </div>
 
       <div className="order-3 flex flex-1 flex-col bg-white p-1.5 sm:block sm:rounded-2xl sm:p-4">
@@ -553,7 +580,7 @@ export function CalendarView({
           dayShiftRequests={shiftRequests
             .filter((r) => r.desire === "WORK" && r.dates.includes(selectedDate))
             .map((r) => ({ requestId: r.id, staffUserId: r.staffUserId, staffName: r.staffName, note: r.note }))}
-          onNavigate={setSelectedDate}
+          onNavigate={navigateToDate}
           onCreateShift={() => setShowAssignForm(true)}
           onCreateShiftForStaff={(staffUserId) => {
             setAssignFormStaffUserId(staffUserId);
@@ -1640,7 +1667,9 @@ function ShiftHistorySection({ history }: { history: ShiftHistoryRow[] }) {
             <li key={h.id} className="flex items-center justify-between gap-2 text-[11px] text-muted/70">
               <span>{h.staffName}</span>
               <span className="text-right">
-                {h.originLabel ? `（${h.originLabel}） ` : ""}
+                {h.detailLabel}
+                {h.originLabel ? `（${h.originLabel}）` : ""}
+                {" → "}
                 {SHIFT_HISTORY_LABEL[h.status] ?? h.status}
               </span>
             </li>

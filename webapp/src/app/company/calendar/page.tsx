@@ -121,6 +121,11 @@ export default async function CompanyCalendarPage({
           staffName: s.staff.name,
           publicRecruitmentId: s.publicRecruitmentId,
           status: s.status,
+          // 変更前のシフト自体の時間・業務内容は、会社／募集が同じ（＝
+          // originLabelが無い）場合でも必ず表示する — 同じ会社・同じ業務の
+          // 枠変更だと「別の枠に変更」としか出ず、何がどう変わったのか
+          // まったく分からなかったため。
+          detailLabel: `${s.isUndecided ? "未定" : s.isAllDay ? "終日" : `${s.startTime}〜${s.endTime}`}${s.taskName ? `・${s.taskName}` : ""}`,
           originLabel: s.publicRecruitment ? `${s.publicRecruitment.company.name}／${s.publicRecruitment.title}` : null,
         }))}
         staffOptions={staff.map((s) => ({ id: s.userId, name: s.name, viaAgencyRelationshipName: s.viaAgencyRelationshipName }))}
