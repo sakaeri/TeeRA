@@ -919,6 +919,11 @@ model SalarySlip {
   paidLeaveDailyRate   Int              @default(0)
   paidLeaveGrantDays   Int              @default(10) // annual grant, edit-and-save-only
   carriedOverFromMonth String? // set when a month's manual items/deductions/leave carry forward
+  // 管理者がSHIFT行を「削除」した対象のshiftId一覧。削除しただけだと、次の
+  // regenerateShiftLinesでその月の承認済み実績としてまた自動生成されて
+  // しまう（isManuallyEditedは既存行の上書き防止であって、削除済みの
+  // shiftIdを覚えておく仕組みではなかったため）。
+  excludedShiftIds     Json             @default("[]")
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
@@ -985,6 +990,10 @@ model Invoice {
   dueDate                           DateTime?     @db.Date // required before confirm/issue
   note                              String?
   invoicedShiftIds                  Json          @default("[]") // locked ONLY at actual issuance, not at confirm (chat29/30 bugfix)
+  // 管理者が明細行を「削除」した対象のshiftId一覧。削除しただけだと、次の
+  // regenerateLinesでその月の承認済み実績としてまた自動生成されてしまう
+  // （SalarySlip.excludedShiftIdsと同じ理由）。
+  excludedShiftIds                  Json          @default("[]")
   status                            InvoiceStatus @default(DRAFT)
   createdAt                         DateTime      @default(now())
   updatedAt                         DateTime      @updatedAt
@@ -1008,6 +1017,9 @@ model InvoiceLine {
   amount         Int
   taxRatePercent Int // 10 or 8
   sortOrder      Int     @default(0)
+  // trueは管理者が時間/単価を手で直した行 — regenerateLinesはこの行を
+  // 上書き・削除しない（SalarySlipLine.isManuallyEditedと同じ考え方）。
+  isManuallyEdited Boolean @default(false)
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   shift   Shift?  @relation(fields: [shiftId], references: [id], onDelete: SetNull)

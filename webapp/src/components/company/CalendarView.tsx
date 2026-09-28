@@ -1063,14 +1063,11 @@ function OrderEditModal({
   function saveMaxEntries() {
     setError(null);
     startTransition(async () => {
-      try {
-        await updateMaxEntriesAction(recruitment.id, maxEntries);
-      } catch (e) {
-        if (e instanceof Error && e.message === "insufficient_tee_balance") {
-          setError("Tee残高が不足しているため変更できません。");
-        } else {
-          setError("変更できませんでした。");
-        }
+      const result = await updateMaxEntriesAction(recruitment.id, maxEntries);
+      if (result.error) {
+        setError(
+          result.error === "insufficient_tee_balance" ? "Tee残高が不足しているため変更できません。" : "変更できませんでした。",
+        );
       }
     });
   }
@@ -1090,18 +1087,22 @@ function OrderEditModal({
   function switchToPublic() {
     setError(null);
     startTransition(async () => {
-      try {
-        await openRecruitmentToPublicAction({
-          recruitmentId: recruitment.id,
-          remaining,
-          hourlyWage: Number(wageAmount),
-          wageType,
-          extraItems,
-        });
-        onClose();
-      } catch {
-        setError("公開募集の開始に失敗しました（残高不足の可能性があります）。");
+      const result = await openRecruitmentToPublicAction({
+        recruitmentId: recruitment.id,
+        remaining,
+        hourlyWage: Number(wageAmount),
+        wageType,
+        extraItems,
+      });
+      if (result.error) {
+        setError(
+          result.error === "insufficient_tee_balance"
+            ? "Tee残高が不足しているため開始できません。"
+            : "公開募集の開始に失敗しました。",
+        );
+        return;
       }
+      onClose();
     });
   }
 

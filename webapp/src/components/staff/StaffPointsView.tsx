@@ -57,7 +57,12 @@ export function StaffPointsView({
         // 切った直後の失敗など）ため、失敗時は開いたままにする。
         setErrors((prev) => ({
           ...prev,
-          [id]: result.error === "insufficient_points" ? "ポイントが不足しています。" : "在庫がありません。",
+          [id]:
+            result.error === "insufficient_points"
+              ? "ポイントが不足しています。"
+              : result.error === "redeem_conflict"
+                ? "混み合っています。もう一度お試しください。"
+                : "在庫がありません。",
         }));
         return;
       }

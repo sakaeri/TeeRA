@@ -66,11 +66,24 @@ async function regenerateLines(invoiceId: string) {
   const ratesByTask = new Map(relationshipRates.map((r) => [r.taskName, r.versions]));
 
   const unresolved: UnresolvedInvoiceShift[] = [];
+  const manuallyExcludedShiftIds = new Set((invoice.excludedShiftIds as string[]) ?? []);
 
   await prisma.$transaction(async (tx) => {
-    await tx.invoiceLine.deleteMany({ where: { invoiceId: invoice.id, shiftId: { not: null } } });
+    // 管理者が時間/単価を手で直した行（isManuallyEdited）や、削除した行の
+    // shiftId（excludedShiftIds）は上書き・再生成しない — 以前は毎回全削除
+    // してから作り直していたため、ページを開き直すたびに手動編集・削除が
+    // 元の自動計算値に戻ってしまっていた（SalarySlipLineと同じ問題・同じ
+    // 考え方の修正 — payroll.tsのregenerateShiftLines参照）。
+    const existingLines = await tx.invoiceLine.findMany({
+      where: { invoiceId: invoice.id, shiftId: { not: null } },
+      select: { shiftId: true, isManuallyEdited: true },
+    });
+    const manuallyEditedShiftIds = new Set(existingLines.filter((l) => l.isManuallyEdited).map((l) => l.shiftId));
+    const autoShiftIds = new Set(existingLines.filter((l) => !l.isManuallyEdited).map((l) => l.shiftId));
+    const validShiftIds = new Set<string>();
+
     for (const s of shifts) {
-      if (excluded.has(s.id)) continue;
+      if (excluded.has(s.id) || manuallyExcludedShiftIds.has(s.id)) continue;
       const report = s.workReport;
       if (!report || report.outcome !== "WORKED" || report.approvalStatus !== "APPROVED") continue;
       const workedHours = Math.round((report.computedMinutes / 60) * 100) / 100;
@@ -93,6 +106,12 @@ async function regenerateLines(invoiceId: string) {
       const rate = taskRate.amount;
       const taskLabel = effectiveTaskName ? `（${effectiveTaskName}）` : "";
 
+      validShiftIds.add(s.id);
+      if (manuallyEditedShiftIds.has(s.id)) continue;
+      if (autoShiftIds.has(s.id)) {
+        await tx.invoiceLine.deleteMany({ where: { invoiceId: invoice.id, shiftId: s.id } });
+      }
+
       await tx.invoiceLine.create({
         data: {
           invoiceId: invoice.id,
@@ -106,6 +125,16 @@ async function regenerateLines(invoiceId: string) {
         },
       });
     }
+
+    // 対象月の承認済み実績と対応しなくなった自動生成行（業務報告の承認が
+    // 取り消された等）だけを削除する。手動編集済みの行はここでは触らない。
+    await tx.invoiceLine.deleteMany({
+      where: {
+        invoiceId: invoice.id,
+        shiftId: { not: null, notIn: Array.from(validShiftIds) },
+        isManuallyEdited: false,
+      },
+    });
   });
 
   return { invoice, unresolved };
@@ -185,12 +214,28 @@ export async function updateLine(
       rate,
       amount: Math.round(hours * rate),
       taxRatePercent: changes.taxRatePercent ?? line.taxRatePercent,
+      isManuallyEdited: true,
     },
   });
 }
 
+// シフト由来の行を削除した場合、そのshiftIdをexcludedShiftIdsに記録して
+// おかないと、次にこの請求書を開いた時（regenerateLines）にまた自動生成
+// されて復活してしまう。カスタム行（shiftId無し）の削除はそのまま。
 export async function deleteLine(lineId: string) {
-  return prisma.invoiceLine.delete({ where: { id: lineId } });
+  const line = await prisma.invoiceLine.findUniqueOrThrow({ where: { id: lineId } });
+  await prisma.$transaction(async (tx) => {
+    if (line.shiftId) {
+      const invoice = await tx.invoice.findUniqueOrThrow({ where: { id: line.invoiceId } });
+      const excludedShiftIds = new Set((invoice.excludedShiftIds as string[]) ?? []);
+      excludedShiftIds.add(line.shiftId);
+      await tx.invoice.update({
+        where: { id: line.invoiceId },
+        data: { excludedShiftIds: Array.from(excludedShiftIds) },
+      });
+    }
+    await tx.invoiceLine.delete({ where: { id: lineId } });
+  });
 }
 
 export async function setDueDate(invoiceId: string, dueDate: Date) {

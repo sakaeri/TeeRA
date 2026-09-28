@@ -111,6 +111,7 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
   }
 
   const unresolved: UnresolvedSalaryShift[] = [];
+  const manuallyExcludedShiftIds = new Set((slip.excludedShiftIds as string[]) ?? []);
 
   await prisma.$transaction(async (tx) => {
     // 雇用契約が無いスタッフは自動計上できない。
@@ -133,6 +134,7 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     const validShiftIds = new Set<string>();
 
     for (const r of reports) {
+      if (manuallyExcludedShiftIds.has(r.shiftId)) continue;
       const workedHours = Math.round((r.computedMinutes / 60) * 100) / 100;
       if (workedHours <= 0) continue;
       // 業務報告の時点で業務内容が選び直されていればそちらを優先し（提出時点
@@ -305,8 +307,24 @@ export async function updateLine(lineId: string, changes: { hours?: number; rate
   });
 }
 
+// SHIFT行を削除した場合、そのshiftIdをexcludedShiftIdsに記録しておかないと、
+// 次にこの給料明細を開いた時（regenerateShiftLines）にまた自動生成されて
+// 復活してしまう（削除してもisManuallyEditedな行として残るわけではない
+// ため、上書き防止の対象外になってしまっていた）。CUSTOM行の削除はそのまま。
 export async function deleteLine(lineId: string) {
-  return prisma.salarySlipLine.delete({ where: { id: lineId } });
+  const line = await prisma.salarySlipLine.findUniqueOrThrow({ where: { id: lineId } });
+  await prisma.$transaction(async (tx) => {
+    if (line.kind === "SHIFT" && line.shiftId) {
+      const slip = await tx.salarySlip.findUniqueOrThrow({ where: { id: line.salarySlipId } });
+      const excludedShiftIds = new Set((slip.excludedShiftIds as string[]) ?? []);
+      excludedShiftIds.add(line.shiftId);
+      await tx.salarySlip.update({
+        where: { id: line.salarySlipId },
+        data: { excludedShiftIds: Array.from(excludedShiftIds) },
+      });
+    }
+    await tx.salarySlipLine.delete({ where: { id: lineId } });
+  });
 }
 
 export async function updateDeductions(salarySlipId: string, deductions: DeductionItem[]) {

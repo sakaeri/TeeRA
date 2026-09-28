@@ -72,57 +72,82 @@ export async function redeemPromoItem(params: {
   shippingAddress: string;
   shippingPhone: string;
 }) {
-  return prisma.$transaction(async (tx) => {
-    const item = await tx.promoItem.findUniqueOrThrow({ where: { id: params.promoItemId } });
-    if (item.stock <= 0) throw new Error("out_of_stock");
+  try {
+    return await redeemPromoItemTx(params);
+  } catch (error) {
+    // ポイント残高はCompany.teeBalanceのような単一のミュータブルな列を
+    // 持たず、最新の台帳行から都度計算するため、在庫のようなWHERE条件付き
+    // updateManyでは同時実行を防げない（同じ残高を2件のリクエストが同時に
+    // 読んでしまう）。SERIALIZABLE分離レベルにすると、Postgresが同じ台帳を
+    // 読んで書き込む2つのトランザクションの競合をP2034（シリアライズ失敗）
+    // として検知してくれるので、片方だけ弾く形で二重交換を防ぐ。
+    if (error && typeof error === "object" && "code" in error && error.code === "P2034") {
+      throw new Error("redeem_conflict");
+    }
+    throw error;
+  }
+}
 
-    const latest = await tx.staffPointsLedgerEntry.findFirst({
-      where: { staffUserId: params.staffUserId },
-      orderBy: { createdAt: "desc" },
-    });
-    const balance = latest?.balanceAfter ?? 0;
-    if (balance < item.pointsCost) throw new Error("insufficient_points");
+async function redeemPromoItemTx(params: {
+  promoItemId: string;
+  staffUserId: string;
+  shippingAddress: string;
+  shippingPhone: string;
+}) {
+  return prisma.$transaction(
+    async (tx) => {
+      const item = await tx.promoItem.findUniqueOrThrow({ where: { id: params.promoItemId } });
+      if (item.stock <= 0) throw new Error("out_of_stock");
 
-    // 在庫の減算はread→checkの後にwriteする形だと、2人が同時に最後の1個へ
-    // 交換した場合に両方成功して売り越しになる（TOCTOU）。updateManyの
-    // WHERE条件（stock>0のまま）で条件付き更新にし、Postgresの行ロックに
-    // より後勝ちの更新は先勝ちのCOMMIT後に再評価されるため、在庫切れの
-    // 場合はcount=0となり確実に検知できる。
-    const decremented = await tx.promoItem.updateMany({
-      where: { id: item.id, stock: { gt: 0 } },
-      data: { stock: { decrement: 1 } },
-    });
-    if (decremented.count === 0) throw new Error("out_of_stock");
+      const latest = await tx.staffPointsLedgerEntry.findFirst({
+        where: { staffUserId: params.staffUserId },
+        orderBy: { createdAt: "desc" },
+      });
+      const balance = latest?.balanceAfter ?? 0;
+      if (balance < item.pointsCost) throw new Error("insufficient_points");
 
-    // Remember the address for next time, and snapshot it onto this order so a
-    // later change doesn't retroactively alter an already-placed order.
-    await tx.user.update({
-      where: { id: params.staffUserId },
-      data: { address: params.shippingAddress, phoneNumber: params.shippingPhone },
-    });
+      // 在庫の減算はread→checkの後にwriteする形だと、2人が同時に最後の1個へ
+      // 交換した場合に両方成功して売り越しになる（TOCTOU）。updateManyの
+      // WHERE条件（stock>0のまま）で条件付き更新にし、Postgresの行ロックに
+      // より後勝ちの更新は先勝ちのCOMMIT後に再評価されるため、在庫切れの
+      // 場合はcount=0となり確実に検知できる。
+      const decremented = await tx.promoItem.updateMany({
+        where: { id: item.id, stock: { gt: 0 } },
+        data: { stock: { decrement: 1 } },
+      });
+      if (decremented.count === 0) throw new Error("out_of_stock");
 
-    const redemption = await tx.promoRedemption.create({
-      data: {
-        promoItemId: item.id,
-        staffUserId: params.staffUserId,
-        pointsSpent: item.pointsCost,
-        shippingAddress: params.shippingAddress,
-        shippingPhone: params.shippingPhone,
-      },
-    });
+      // Remember the address for next time, and snapshot it onto this order so a
+      // later change doesn't retroactively alter an already-placed order.
+      await tx.user.update({
+        where: { id: params.staffUserId },
+        data: { address: params.shippingAddress, phoneNumber: params.shippingPhone },
+      });
 
-    await tx.staffPointsLedgerEntry.create({
-      data: {
-        staffUserId: params.staffUserId,
-        type: "REDEEM_PROMO",
-        points: -item.pointsCost,
-        balanceAfter: balance - item.pointsCost,
-        relatedRedemptionId: redemption.id,
-      },
-    });
+      const redemption = await tx.promoRedemption.create({
+        data: {
+          promoItemId: item.id,
+          staffUserId: params.staffUserId,
+          pointsSpent: item.pointsCost,
+          shippingAddress: params.shippingAddress,
+          shippingPhone: params.shippingPhone,
+        },
+      });
 
-    return redemption;
-  });
+      await tx.staffPointsLedgerEntry.create({
+        data: {
+          staffUserId: params.staffUserId,
+          type: "REDEEM_PROMO",
+          points: -item.pointsCost,
+          balanceAfter: balance - item.pointsCost,
+          relatedRedemptionId: redemption.id,
+        },
+      });
+
+      return redemption;
+    },
+    { isolationLevel: "Serializable" },
+  );
 }
 
 export async function markRedemptionShipped(redemptionId: string) {

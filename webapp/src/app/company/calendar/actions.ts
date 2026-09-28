@@ -155,19 +155,29 @@ export async function openRecruitmentToPublicAction(input: {
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: input.recruitmentId } });
   if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
 
-  const affordable = await affordableMaxEntries(membership.companyId);
-  if (input.remaining > affordable) {
-    throw new Error("insufficient_tee_balance");
-  }
+  try {
+    const affordable = await affordableMaxEntries(membership.companyId);
+    if (input.remaining > affordable) {
+      throw new Error("insufficient_tee_balance");
+    }
 
-  await openRecruitmentToPublic({
-    recruitmentId: input.recruitmentId,
-    hourlyWage: input.hourlyWage,
-    wageType: input.wageType,
-    extraItems: input.extraItems,
-    updatedByUserId: userId,
-  });
+    await openRecruitmentToPublic({
+      recruitmentId: input.recruitmentId,
+      hourlyWage: input.hourlyWage,
+      wageType: input.wageType,
+      extraItems: input.extraItems,
+      updatedByUserId: userId,
+    });
+  } catch (error) {
+    // Next.jsは本番ビルドでServer Actionから素通しで投げた例外のmessageを
+    // 握りつぶしてしまう（assignStaffToRecruitmentActionのASSIGN_ERROR_LABEL
+    // 参照のコメントと同じ理由）ため、ここで必ず捕まえて返す。Tee残高不足の
+    // 事前チェックは通っていても、ほぼ同時に他の操作でTeeを使い切った場合は
+    // postLedgerEntry側でも同じメッセージで弾かれる。
+    return { error: error instanceof Error ? error.message : "unknown" };
+  }
   revalidatePath("/company/calendar");
+  return { error: null };
 }
 
 // 公開募集の内容だけ先に下書き保存する（visibility=ORDERのまま、Teeも動かさ
@@ -192,15 +202,23 @@ export async function updateMaxEntriesAction(recruitmentId: string, newMaxEntrie
   // （公開募集化済みのものだけ、上限を上げる分のTeeが払えるか確認する）。
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: recruitmentId } });
   if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
-  if (recruitment.visibility === "PUBLIC") {
-    const affordable = await affordableMaxEntries(membership.companyId);
-    if (newMaxEntries > affordable) {
-      throw new Error("insufficient_tee_balance");
-    }
-  }
 
-  await updateMaxEntries({ recruitmentId, newMaxEntries, updatedByUserId: userId });
+  try {
+    if (recruitment.visibility === "PUBLIC") {
+      const affordable = await affordableMaxEntries(membership.companyId);
+      if (newMaxEntries > affordable) {
+        throw new Error("insufficient_tee_balance");
+      }
+    }
+
+    await updateMaxEntries({ recruitmentId, newMaxEntries, updatedByUserId: userId });
+  } catch (error) {
+    // openRecruitmentToPublicActionと同じ理由（Next.jsが本番ビルドで素通しの
+    // 例外messageを握りつぶすため）で、必ず捕まえて返す。
+    return { error: error instanceof Error ? error.message : "unknown" };
+  }
   revalidatePath("/company/calendar");
+  return { error: null };
 }
 
 export async function deleteRecruitmentAction(recruitmentId: string) {
