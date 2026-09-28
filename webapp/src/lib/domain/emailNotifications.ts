@@ -192,16 +192,25 @@ export async function runShiftRequestDigest() {
   }
 }
 
-// ④勤務開始1時間前リマインド（終日シフトは当日朝6:00に固定でリマインド）
-// — 5〜10分おきのCronから呼ばれる想定。二重送信を避けるため、対象シフト
-// にはreminderSentAtを記録する。
+// ④勤務開始1時間前リマインド（終日シフトは当日朝6:00以降にリマインド）
+// — 5〜10分おきのCronから呼ばれる想定だったが、実際にはGitHub Actionsの
+// 高頻度スケジュールは公式に間引かれ、数時間おきにしか実行されないことが
+// ある（実際にこれが原因で終日シフトの6:00リマインドが丸ごと届かない
+// 事故が発生した）。「ちょうど◯分前/◯時ちょうど」という狭い時刻一致では
+// その狭い窓をCronの実行タイミングが外れただけで通知が消えてしまうため、
+// 「基準時刻を過ぎていて、まだ送っていなければ送る」という判定に緩めて
+// いる。二重送信を避けるため、対象シフトにはreminderSentAtを記録する。
 export async function runShiftStartReminders() {
   const now = new Date();
-  const windowStart = new Date(now.getTime() + 55 * 60 * 1000);
-  const windowEnd = new Date(now.getTime() + 65 * 60 * 1000);
   const todayStr = todayJst();
   const tomorrow = new Date(`${todayStr}T00:00:00.000Z`);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+  // 「開始1時間前」ちょうどではなく、開始4時間前〜開始2時間後を対象にする
+  // （Cronが数時間単位で間引かれても、いずれかの実行がこの窓に入るように
+  // 幅を持たせている）。開始2時間を過ぎたら今更感があるので諦める。
+  const REMIND_BEFORE_MS = 4 * 60 * 60 * 1000;
+  const GIVE_UP_AFTER_MS = 2 * 60 * 60 * 1000;
 
   const candidates = await prisma.shift.findMany({
     where: {
@@ -218,7 +227,9 @@ export async function runShiftStartReminders() {
   for (const shift of candidates) {
     if (!shift.startTime) continue;
     const startAt = combineJstDateTime(shift.date, shift.startTime);
-    if (startAt < windowStart || startAt > windowEnd) continue;
+    const remindAt = new Date(startAt.getTime() - REMIND_BEFORE_MS);
+    const giveUpAt = new Date(startAt.getTime() + GIVE_UP_AFTER_MS);
+    if (now < remindAt || now > giveUpAt) continue;
 
     await prisma.shift.update({ where: { id: shift.id }, data: { reminderSentAt: new Date() } });
     await sendShiftReminderEmail(shift.staff.email, {
@@ -229,11 +240,10 @@ export async function runShiftStartReminders() {
     });
   }
 
-  // 終日シフトは「開始時刻の1時間前」という基準が使えないため、当日朝
-  // 6:00（±5分、5分おきのCronの実行間隔に合わせた許容幅）に固定でリマインド
-  // する。
+  // 終日シフトは「開始時刻の◯時間前」という基準が使えないため、当日朝
+  // 6:00以降ならいつでも対象にする（同じ理由で「6:00ちょうど」に固定しない）。
   const nowJstMinutesOfDay = Math.floor((now.getTime() + JST_OFFSET_MS) / 60000) % (24 * 60);
-  if (Math.abs(nowJstMinutesOfDay - 6 * 60) <= 5) {
+  if (nowJstMinutesOfDay >= 6 * 60) {
     const allDayCandidates = await prisma.shift.findMany({
       where: {
         status: "CONFIRMED",

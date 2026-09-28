@@ -143,9 +143,12 @@ export async function sendShiftReminderEmail(
   to: string,
   params: { companyName: string; date: string; timeLabel: string; appUrl: string; isAllDay?: boolean },
 ) {
+  // 実際の送信タイミングはCronの実行間隔に左右され「ちょうど1時間前」とは
+  // 限らない（emailNotifications.tsのrunShiftStartReminders参照）ため、
+  // 具体的な時間を断定しない文言にしている。
   const intro = params.isAllDay
     ? `本日、${params.companyName}でのシフトがあります。`
-    : `${params.companyName}でのシフトが1時間後に始まります。`;
+    : `${params.companyName}でのシフトの時間が近づいています。`;
   await sendMail(
     to,
     "【TeeRA】まもなくシフトの時間です",
