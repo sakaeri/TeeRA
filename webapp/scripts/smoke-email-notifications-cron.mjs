@@ -73,6 +73,7 @@ try {
     "1件でもPENDINGのシフト希望があれば通知される（しきい値なし）",
     digestLog.includes(digestNotifyEmail) && digestLog.includes("未確定のシフト希望") && digestLog.includes("1件"),
   );
+  log("会社宛メールには個人名でなく会社名に「御中」が付く", digestLog.includes(digestCompanyName) && digestLog.includes("御中"));
 
   // ④勤務開始リマインド — GitHub Actionsの"*/5"スケジュールは実際には
   // 数時間おきにしか実行されないことがあるため、「ちょうど1時間前」の狭い

@@ -114,6 +114,10 @@ try {
     ? submitLog
     : null;
   log("業務報告提出で通知メール（fallback）が送られる", Boolean(fallbackLog));
+  log(
+    "会社宛メールには個人名でなく会社名に「御中」が付く",
+    Boolean(fallbackLog) && fallbackLog.includes(companyName) && fallbackLog.includes("御中"),
+  );
 
   const workReportId = psql(`select id from "WorkReport" where "staffUserId"='${staffUserId}';`);
   const tokenCount = psql(
@@ -177,6 +181,10 @@ try {
   const redeemLog = readServerLogSince(logSizeBeforeRedeem);
   const promoFallback = redeemLog.includes("[email:fallback]") && redeemLog.includes(notifEmail) && redeemLog.includes("販促品の注文が届きました");
   log("販促品の受注で通知メール（fallback）が送られる", promoFallback);
+  log(
+    "販促品受注メールにも会社名の「御中」が付く",
+    promoFallback && redeemLog.includes(companyName) && redeemLog.includes("御中"),
+  );
 
   console.log(process.exitCode ? "EMAIL NOTIFICATIONS SMOKE TEST HAD FAILURES" : "EMAIL NOTIFICATIONS SMOKE TEST PASSED");
 } catch (err) {

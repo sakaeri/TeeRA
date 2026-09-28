@@ -115,6 +115,7 @@ export async function notifyCompanyOfWorkReportSubmission(workReportId: string) 
   });
 
   await sendWorkReportSubmittedEmail(company.notificationEmail, {
+    companyName: company.name,
     staffName: report.staff.name,
     date: report.shift.date.toISOString().slice(0, 10),
     timeLabel: reportTimeLabel(report, report.shift),
@@ -137,6 +138,7 @@ export async function notifyCompanyOfPromoOrder(redemptionId: string) {
   if (!company.notificationEmail) return;
 
   await sendPromoOrderEmail(company.notificationEmail, {
+    companyName: company.name,
     staffName: redemption.staff.name,
     itemName: redemption.promoItem.name,
     reviewUrl: absoluteUrl("/company/settings?tab=promo"),
@@ -187,7 +189,7 @@ export async function runShiftRequestDigest() {
   const today = new Date(`${todayJst()}T00:00:00.000Z`);
   const companies = await prisma.company.findMany({
     where: { notificationEmail: { not: null } },
-    select: { id: true, notificationEmail: true },
+    select: { id: true, name: true, notificationEmail: true },
   });
 
   for (const company of companies) {
@@ -199,7 +201,7 @@ export async function runShiftRequestDigest() {
     const count = requests.filter((r) => r.dates.some((d) => d >= today)).length;
     if (count === 0) continue;
 
-    await sendShiftRequestDigestEmail(company.notificationEmail, count, absoluteUrl("/company"));
+    await sendShiftRequestDigestEmail(company.notificationEmail, company.name, count, absoluteUrl("/company"));
   }
 }
 

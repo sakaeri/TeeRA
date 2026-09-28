@@ -39,11 +39,16 @@ function emailLayout(title: string, bodyHtml: string) {
 </div>`;
 }
 
-// 宛先が特定の個人（スタッフ本人・会員登録メールアドレス）である場合のみ
-// 使う — 会社の共有受信箱(notificationEmail)宛のメールには使わない
-// （誰が開くか分からない共有アドレスに「○○様」と付けると不自然なため）。
+// 宛先が特定の個人（スタッフ本人・会員登録メールアドレス）である場合に使う。
 function greeting(name: string) {
   return `<p style="margin:0 0 12px;font-size:14px;line-height:1.6;">${name}様</p>`;
+}
+
+// 宛先が会社の共有受信箱(notificationEmail)の場合に使う — 誰が開くか
+// 分からない共有アドレスなので、個人名の「様」ではなく会社名に「御中」を
+// 付ける。
+function companyGreeting(companyName: string) {
+  return `<p style="margin:0 0 12px;font-size:14px;line-height:1.6;">${companyName}　御中</p>`;
 }
 
 function infoRow(label: string, value: string) {
@@ -89,6 +94,7 @@ export async function sendEmailChangeConfirmation(to: string, name: string, conf
 export async function sendWorkReportSubmittedEmail(
   to: string,
   params: {
+    companyName: string;
     staffName: string;
     date: string;
     timeLabel: string;
@@ -112,7 +118,8 @@ export async function sendWorkReportSubmittedEmail(
     `【TeeRA】${title}`,
     emailLayout(
       title,
-      `${infoRow("申請者", `${params.staffName}さん`)}
+      `${companyGreeting(params.companyName)}
+       ${infoRow("申請者", `${params.staffName}さん`)}
        ${infoRow("日付", params.date)}
        ${details}
        ${button(params.approveUrl, buttonLabel)}
@@ -121,13 +128,14 @@ export async function sendWorkReportSubmittedEmail(
   );
 }
 
-export async function sendShiftRequestDigestEmail(to: string, count: number, reviewUrl: string) {
+export async function sendShiftRequestDigestEmail(to: string, companyName: string, count: number, reviewUrl: string) {
   await sendMail(
     to,
     "【TeeRA】未確定のシフト希望があります",
     emailLayout(
       "未確定のシフト希望があります",
-      `<p style="margin:0;font-size:14px;line-height:1.6;">現在、確定待ちのシフト希望が<strong>${count}件</strong>あります。</p>
+      `${companyGreeting(companyName)}
+       <p style="margin:0;font-size:14px;line-height:1.6;">現在、確定待ちのシフト希望が<strong>${count}件</strong>あります。</p>
        ${button(reviewUrl, "確認する")}`,
     ),
   );
@@ -135,14 +143,15 @@ export async function sendShiftRequestDigestEmail(to: string, count: number, rev
 
 export async function sendPromoOrderEmail(
   to: string,
-  params: { staffName: string; itemName: string; reviewUrl: string },
+  params: { companyName: string; staffName: string; itemName: string; reviewUrl: string },
 ) {
   await sendMail(
     to,
     "【TeeRA】販促品の注文が届きました",
     emailLayout(
       "販促品の注文が届きました",
-      `${infoRow("スタッフ", `${params.staffName}さん`)}
+      `${companyGreeting(params.companyName)}
+       ${infoRow("スタッフ", `${params.staffName}さん`)}
        ${infoRow("商品", params.itemName)}
        ${button(params.reviewUrl, "確認する")}`,
     ),
