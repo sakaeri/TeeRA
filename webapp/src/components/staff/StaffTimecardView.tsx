@@ -62,7 +62,7 @@ export function StaffTimecardView({
       </ul>
 
       {done.length > 0 ? (
-        <details className="rounded-xl border border-border/60 bg-white/40 p-4">
+        <details className="rounded-2xl bg-white/70 p-4 shadow-sm ring-1 ring-black/5">
           <summary className="cursor-pointer text-sm font-semibold text-muted">
             過去の報告（{done.length}件）
           </summary>
@@ -160,7 +160,7 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
     (shift.approvalStatus === "PENDING" || shift.approvalStatus === "APPROVED");
 
   return (
-    <li className="rounded-xl border border-border bg-white/60 p-4">
+    <li className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/5">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="min-w-0 font-medium">{shift.date}</span>
         {/* approvalStatusは出勤した瞬間からデフォルトでPENDINGが入っている
