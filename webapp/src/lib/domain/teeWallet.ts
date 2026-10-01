@@ -11,11 +11,16 @@ export async function createStripeCheckoutSession(params: {
   const stripe = requireStripe();
   const yenAmount = params.teeAmount * teeYenPerUnit();
 
-  // ui_mode: "embedded" はcheckout.stripe.comへ遷移させず、自ページ内に
-  // Stripeがホストするカード入力フォーム（iframe）を埋め込む方式。カード情報
-  // 自体は引き続きStripe側だけが扱うのでPCI DSS対応は変わらない。
+  // ui_mode: "embedded_page" はcheckout.stripe.comへ遷移させず、自ページ内に
+  // Stripeがホストするカード入力フォーム（iframe）を埋め込む方式（このStripe
+  // アカウントのAPIバージョンでは旧名称"embedded"は廃止されている）。カード
+  // 情報自体は引き続きStripe側だけが扱うのでPCI DSS対応は変わらない。
+  // redirect_on_completion: "if_required"で、カード決済（リダイレクト不要）
+  // ではreturn_urlへ飛ばさず、クライアント側のonCompleteコールバックだけで
+  // 完了を扱う（モーダルを閉じて画面を更新する形にできる）。
   const session = await stripe.checkout.sessions.create({
-    ui_mode: "embedded",
+    ui_mode: "embedded_page",
+    redirect_on_completion: "if_required",
     mode: "payment",
     payment_method_types: ["card"],
     line_items: [

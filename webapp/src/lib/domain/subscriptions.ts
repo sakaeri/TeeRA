@@ -12,10 +12,11 @@ export async function createSubscriptionCheckoutSession(params: {
   const stripe = requireStripe();
   const yenAmount = PLAN_YEN[params.planTier];
 
-  // createStripeCheckoutSession（teeWallet.ts）と同じくembeddedモード
+  // createStripeCheckoutSession（teeWallet.ts）と同じくembedded_pageモード
   // （checkout.stripe.comへ遷移させず自ページ内にフォームを埋め込む）。
   const session = await stripe.checkout.sessions.create({
-    ui_mode: "embedded",
+    ui_mode: "embedded_page",
+    redirect_on_completion: "if_required",
     mode: "subscription",
     payment_method_types: ["card"],
     line_items: [
