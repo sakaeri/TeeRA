@@ -34,6 +34,17 @@ async function contractsWithWageVersions(companyId: string, staffUserId: string)
 
 type ContractWithWageVersions = Awaited<ReturnType<typeof contractsWithWageVersions>>[number];
 
+// 給与明細PDFの「支払日」表示用 — 契約テンプレートの支払日欄（自由入力、
+// 例：「翌月25日」）をそのまま流用する。対象月の末日時点で有効だった契約を
+// 選ぶ（pickContractForDateと同じ考え方）。該当する契約が無ければnull。
+export async function getPaymentTerms(companyId: string, staffUserId: string, targetMonth: string) {
+  const contracts = await contractsWithWageVersions(companyId, staffUserId);
+  const { end } = monthRange(targetMonth);
+  const lastDayOfMonth = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+  const contract = pickContractForDate(contracts, lastDayOfMonth);
+  return { paymentDay: contract?.template.paymentDay ?? null };
+}
+
 // 複数の契約の中から指定日時点で有効だったものを1つ選ぶ（契約期間の
 // start/endで判定）。期間が重複するデータ不整合がある場合は契約開始日が
 // 新しい方を優先する。

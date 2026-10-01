@@ -36,6 +36,8 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
     const snap = issue.snapshot as unknown as Record<string, unknown>;
     data = {
       issuingCompanyName: invoice.issuingCompany.name,
+      issuingCompanyAddress: invoice.issuingCompany.address,
+      issuingCompanyPhoneNumber: invoice.issuingCompany.phoneNumber,
       clientName,
       periodLabel: snap.periodLabel as string,
       dueDate: (snap.dueDate as string | undefined)?.slice(0, 10) ?? null,
@@ -55,6 +57,8 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
     const totals = computeInvoiceTotals({ lines: invoice.lines, registered });
     data = {
       issuingCompanyName: invoice.issuingCompany.name,
+      issuingCompanyAddress: invoice.issuingCompany.address,
+      issuingCompanyPhoneNumber: invoice.issuingCompany.phoneNumber,
       clientName,
       periodLabel: invoice.periodLabel,
       dueDate: invoice.dueDate?.toISOString().slice(0, 10) ?? null,

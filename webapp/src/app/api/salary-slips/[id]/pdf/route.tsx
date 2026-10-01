@@ -1,7 +1,7 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 import { verifySession, getActiveMembership } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { getTotals } from "@/lib/domain/payroll";
+import { getTotals, getPaymentTerms } from "@/lib/domain/payroll";
 import { todayJst } from "@/lib/date";
 import { SalarySlipDocument, type SalarySlipPdfData } from "@/lib/pdf/salarySlip";
 
@@ -29,11 +29,15 @@ export async function GET(request: Request, { params }: RouteContext<"/api/salar
     const issue = await prisma.salarySlipIssue.findUnique({ where: { id: issueId } });
     if (!issue || issue.salarySlipId !== slip.id) return new Response("not found", { status: 404 });
     const snap = issue.snapshot as unknown as Record<string, unknown>;
+    const { paymentDay } = await getPaymentTerms(slip.companyId, slip.staffUserId, snap.targetMonth as string);
     data = {
       companyName: slip.company.name,
+      companyAddress: slip.company.address,
+      companyPhoneNumber: slip.company.phoneNumber,
       staffName: snap.staffName as string,
       targetMonth: snap.targetMonth as string,
       issuedAt: (snap.issuedAt as string).slice(0, 10),
+      paymentDay,
       lines: snap.lines as SalarySlipPdfData["lines"],
       deductions: snap.deductions as SalarySlipPdfData["deductions"],
       paidLeaveDaysUsed: snap.paidLeaveDaysUsed as number,
@@ -47,11 +51,15 @@ export async function GET(request: Request, { params }: RouteContext<"/api/salar
     };
   } else {
     const totals = getTotals(slip);
+    const { paymentDay } = await getPaymentTerms(slip.companyId, slip.staffUserId, slip.targetMonth);
     data = {
       companyName: slip.company.name,
+      companyAddress: slip.company.address,
+      companyPhoneNumber: slip.company.phoneNumber,
       staffName: slip.staff.name,
       targetMonth: slip.targetMonth,
       issuedAt: todayJst(),
+      paymentDay,
       lines: slip.lines,
       deductions: slip.deductions as SalarySlipPdfData["deductions"],
       paidLeaveDaysUsed: slip.paidLeaveDaysUsed,

@@ -149,13 +149,7 @@ export function WalletView({
             />
             <UsageRow
               label="給与明細の発行"
-              detail={
-                <>
-                  1件 1 Tee
-                  <br />
-                  無料枠・同月内は無料
-                </>
-              }
+              detail="1件 1 Tee"
               icon={
                 <>
                   <path d="M5 3h7l3 3v11a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
@@ -166,13 +160,7 @@ export function WalletView({
             <UsageRow
               last
               label="請求書の発行"
-              detail={
-                <>
-                  1件 1 Tee
-                  <br />
-                  無料枠・同月内は無料
-                </>
-              }
+              detail="1件 1 Tee"
               icon={
                 <>
                   <path d="M5 2.5h10v15l-2-1.3-1.5 1.3-1.5-1.3-1.5 1.3L7 16.2l-2 1.3v-15z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
