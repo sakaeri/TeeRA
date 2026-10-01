@@ -98,7 +98,8 @@ export function InvoiceEditor({
             {invoice.lines.map((l) => (
               <tr key={l.id} className="border-b border-border/60">
                 <td className="py-1">
-                  {l.staffName} / {l.description}
+                  {l.staffName ? `${l.staffName} / ` : ""}
+                  {l.description}
                 </td>
                 <td className="py-1">
                   {isEditable ? (
@@ -135,9 +136,10 @@ export function InvoiceEditor({
                     >
                       <option value={10}>10%</option>
                       <option value={8}>8%</option>
+                      <option value={0}>なし</option>
                     </select>
                   ) : (
-                    `${l.taxRatePercent}%`
+                    l.taxRatePercent === 0 ? "なし" : `${l.taxRatePercent}%`
                   )}
                 </td>
                 <td className="py-1">{l.amount}円</td>
@@ -194,7 +196,7 @@ export function InvoiceEditor({
         <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">消費税区分</h2>
         {invoice.totals.brackets.map((b) => (
           <div key={b.rate} className="flex justify-between border-b border-border/60 py-1 text-sm">
-            <span>{b.rate}%対象</span>
+            <span>{b.rate === 0 ? "対象外" : `${b.rate}%対象`}</span>
             <span>
               小計 {b.subtotal}円 ／ 消費税 {b.tax}円
             </span>
@@ -340,7 +342,9 @@ function AddInvoiceLineModal({
   const [hours, setHours] = useState("");
   const [rate, setRate] = useState("");
   const [taxRatePercent, setTaxRatePercent] = useState("10");
-  const canSubmit = staffName && desc && hours && rate;
+  // スタッフ名は必須にしない — まとめて業務内容×単価×数量で計上する行
+  // （特定のスタッフに紐付かない明細）もあるため。
+  const canSubmit = desc && hours && rate;
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
@@ -353,7 +357,7 @@ function AddInvoiceLineModal({
         </div>
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-xs">
-            スタッフ名
+            スタッフ名（任意）
             <input
               type="text"
               value={staffName}
@@ -362,7 +366,7 @@ function AddInvoiceLineModal({
             />
           </label>
           <label className="flex flex-col gap-1 text-xs">
-            内容（相殺の場合はマイナス金額で）
+            内容
             <input
               type="text"
               value={desc}
@@ -380,7 +384,7 @@ function AddInvoiceLineModal({
             />
           </label>
           <label className="flex flex-col gap-1 text-xs">
-            単価
+            単価（相殺の場合はマイナス金額で）
             <input
               type="number"
               value={rate}
@@ -397,6 +401,7 @@ function AddInvoiceLineModal({
             >
               <option value="10">10%</option>
               <option value="8">8%</option>
+              <option value="0">なし</option>
             </select>
           </label>
         </div>

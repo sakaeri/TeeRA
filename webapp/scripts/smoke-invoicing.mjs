@@ -140,7 +140,7 @@ try {
   await admin.waitForTimeout(300);
   const addLineModal = admin.locator("div.fixed.inset-0.z-40").last();
   await addLineModal.getByLabel("スタッフ名").fill("相殺");
-  await addLineModal.getByLabel("内容（相殺の場合はマイナス金額で）").fill("端数調整");
+  await addLineModal.getByLabel("内容").fill("端数調整");
   await addLineModal.getByLabel("数量").fill("1");
   await addLineModal.getByLabel("単価").fill("-1000");
   await addLineModal.getByRole("button", { name: "追加する" }).click();
@@ -149,6 +149,24 @@ try {
   log("手動で明細行を追加できる（請求書側にaddCustomLineActionのUIが無かった）", body.includes("相殺") && body.includes("端数調整"));
   const subtotalAfter = Number((await admin.getByText(/小計 [\d,]+円/).first().textContent()).match(/[\d,]+/)[0].replace(/,/g, ""));
   log("マイナス金額の明細行が相殺として合計に反映される", subtotalAfter === subtotalBefore - 1000);
+
+  // スタッフ名は任意 — 特定のスタッフに紐付かないまとめた明細行も追加できる。
+  // 消費税区分「なし」も選べる。
+  await admin.getByRole("button", { name: "＋追加" }).click();
+  await admin.waitForTimeout(300);
+  const addLineModal2 = admin.locator("div.fixed.inset-0.z-40").last();
+  await addLineModal2.getByLabel("内容").fill("会場使用料");
+  await addLineModal2.getByLabel("数量").fill("1");
+  await addLineModal2.getByLabel("単価").fill("500");
+  await addLineModal2.getByLabel("消費税区分").selectOption("0");
+  await addLineModal2.getByRole("button", { name: "追加する" }).click();
+  await admin.waitForTimeout(500);
+  body = await admin.textContent("body");
+  log(
+    "スタッフ名を空欄のまま明細行を追加できる（表示に余計な／が出ない）",
+    body.includes("会場使用料") && !body.includes("／会場使用料") && !body.includes("/ 会場使用料"),
+  );
+  log("消費税区分「なし」の明細行はサマリーに「対象外」として表示される", body.includes("対象外"));
 
   // set due date (auto-saves onBlur, no separate 保存 button anymore)
   await admin.fill('input[type="date"]', "2026-09-30");

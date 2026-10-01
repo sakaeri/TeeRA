@@ -261,7 +261,8 @@ export function computeInvoiceTotals(params: {
   lines: { amount: number; taxRatePercent: number }[];
   registered: boolean;
 }) {
-  const brackets = [10, 8].map((rate) => {
+  // 0は「消費税区分：なし」（対象外）の明細行用。
+  const brackets = [10, 8, 0].map((rate) => {
     const subtotal = params.lines
       .filter((l) => l.taxRatePercent === rate)
       .reduce((sum, l) => sum + l.amount, 0);

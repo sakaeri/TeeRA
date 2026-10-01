@@ -1015,7 +1015,7 @@ model InvoiceLine {
   hours          Float
   rate           Int
   amount         Int
-  taxRatePercent Int // 10 or 8
+  taxRatePercent Int // 10, 8, or 0 (消費税区分「なし」)
   sortOrder      Int     @default(0)
   // trueは管理者が時間/単価を手で直した行 — regenerateLinesはこの行を
   // 上書き・削除しない（SalarySlipLine.isManuallyEditedと同じ考え方）。

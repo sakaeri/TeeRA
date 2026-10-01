@@ -172,11 +172,12 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
           {data.lines.map((l, i) => (
             <View key={i} style={styles.tableRow}>
               <Text>
-                {l.staffName} / {l.description}
+                {l.staffName ? `${l.staffName} / ` : ""}
+                {l.description}
               </Text>
               <Text>{l.hours}h</Text>
               <Text>{l.rate}円</Text>
-              <Text>{l.taxRatePercent}%</Text>
+              <Text>{l.taxRatePercent === 0 ? "なし" : `${l.taxRatePercent}%`}</Text>
               <Text>{l.amount}円</Text>
             </View>
           ))}
@@ -186,7 +187,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
           {data.brackets.map((b) => (
             <View key={b.rate} style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>
-                {b.rate}%対象 小計 {b.subtotal.toLocaleString()}円
+                {b.rate === 0 ? "対象外" : `${b.rate}%対象`} 小計 {b.subtotal.toLocaleString()}円
               </Text>
               <Text style={styles.summaryValue}>消費税 {b.tax.toLocaleString()}円</Text>
             </View>
