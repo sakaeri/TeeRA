@@ -1,8 +1,18 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { loadStripe } from "@stripe/stripe-js";
+import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { createCheckoutSessionAction } from "@/app/company/wallet/actions";
 import { createSubscriptionCheckoutSessionAction } from "@/app/company/settings/subscriptionActions";
+
+// checkout.stripe.comへ遷移させず、ページ内にStripeのカード入力フォームを
+// 埋め込むための読み込み（1回だけ行えばよいのでモジュールスコープに置く）。
+// 公開可能キーは秘密鍵と違いクライアントに出ても問題ない種類のもの。
+const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+  : null;
 
 type LedgerEntry = { id: string; label: string; amount: number; balanceAfter: number; createdAt: string };
 type PlanTier = "FREE" | "STANDARD" | "BUSINESS";
@@ -32,11 +42,32 @@ export function WalletView({
   planTier: PlanTier;
   ledgerEntries: LedgerEntry[];
 }) {
+  const router = useRouter();
   const [modal, setModal] = useState<"charge" | "plan" | null>(null);
   const [usageOpen, setUsageOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [teeAmount, setTeeAmount] = useState(100);
   const [pending, startTransition] = useTransition();
+  const [chargeClientSecret, setChargeClientSecret] = useState<string | null>(null);
+  const [chargeError, setChargeError] = useState<string | null>(null);
+  const [planClientSecret, setPlanClientSecret] = useState<string | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
+
+  function closeModal() {
+    setModal(null);
+    setChargeClientSecret(null);
+    setChargeError(null);
+    setPlanClientSecret(null);
+    setPlanError(null);
+  }
+
+  // Webhook経由でTee付与・プラン切替が反映されるまで若干のタイムラグが
+  // あるため、完了直後と少し待った後の2回refreshして取りこぼしを減らす。
+  function handleCheckoutComplete() {
+    closeModal();
+    router.refresh();
+    setTimeout(() => router.refresh(), 2000);
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -203,90 +234,170 @@ export function WalletView({
       </section>
 
       {modal === "charge" ? (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={() => setModal(null)}>
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={closeModal}>
+          <div
+            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mb-4 flex items-center justify-between">
               <h3 className="font-serif-jp text-lg font-bold text-primary">チャージするTee数</h3>
-              <button type="button" onClick={() => setModal(null)} className="text-muted">
+              <button type="button" onClick={closeModal} className="text-muted">
                 ✕
               </button>
             </div>
 
-            <div className="flex items-center gap-3">
-              <input
-                type="number"
-                min={1}
-                value={teeAmount}
-                onChange={(e) => setTeeAmount(Number(e.target.value))}
-                className="w-32 rounded-lg border border-border px-3 py-2 text-sm"
-              />
-              <span className="text-sm text-muted">× {yenPerUnit}円</span>
-            </div>
-            <p className="mt-1 text-sm text-muted">{teeAmount * yenPerUnit}円</p>
+            {chargeClientSecret ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setChargeClientSecret(null)}
+                  className="mb-2 text-xs text-muted hover:text-primary"
+                >
+                  ← 金額を選び直す
+                </button>
+                {stripePromise ? (
+                  <EmbeddedCheckoutProvider
+                    stripe={stripePromise}
+                    options={{ clientSecret: chargeClientSecret, onComplete: handleCheckoutComplete }}
+                  >
+                    <EmbeddedCheckout />
+                  </EmbeddedCheckoutProvider>
+                ) : (
+                  <p className="text-xs text-red-600">
+                    決済フォームの読み込みに失敗しました（公開可能キーが未設定です）。
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={1}
+                    value={teeAmount}
+                    onChange={(e) => setTeeAmount(Number(e.target.value))}
+                    className="w-32 rounded-lg border border-border px-3 py-2 text-sm"
+                  />
+                  <span className="text-sm text-muted">× {yenPerUnit}円</span>
+                </div>
+                <p className="mt-1 text-sm text-muted">{teeAmount * yenPerUnit}円</p>
 
-            <button
-              type="button"
-              disabled={pending || !stripeConfigured || teeAmount < 1}
-              onClick={() => startTransition(() => createCheckoutSessionAction(teeAmount))}
-              className="mt-5 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              クレジットカードで購入（即時反映）
-            </button>
-            {!stripeConfigured ? (
-              <p className="mt-2 text-xs text-red-600">Stripeが未設定のため、クレジットカード決済は利用できません。</p>
-            ) : null}
+                <button
+                  type="button"
+                  disabled={pending || !stripeConfigured || teeAmount < 1}
+                  onClick={() =>
+                    startTransition(async () => {
+                      setChargeError(null);
+                      const result = await createCheckoutSessionAction(teeAmount);
+                      if (result.error || !result.clientSecret) {
+                        setChargeError(result.error ?? "決済の準備に失敗しました。");
+                        return;
+                      }
+                      setChargeClientSecret(result.clientSecret);
+                    })
+                  }
+                  className="mt-5 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                >
+                  クレジットカードで購入（即時反映）
+                </button>
+                {chargeError ? <p className="mt-2 text-xs text-red-600">{chargeError}</p> : null}
+                {!stripeConfigured ? (
+                  <p className="mt-2 text-xs text-red-600">Stripeが未設定のため、クレジットカード決済は利用できません。</p>
+                ) : null}
+              </>
+            )}
           </div>
         </div>
       ) : null}
 
       {modal === "plan" ? (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={() => setModal(null)}>
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={closeModal}>
+          <div
+            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mb-4 flex items-center justify-between">
               <h3 className="font-serif-jp text-lg font-bold text-primary">プランを選ぶ</h3>
-              <button type="button" onClick={() => setModal(null)} className="text-muted">
+              <button type="button" onClick={closeModal} className="text-muted">
                 ✕
               </button>
             </div>
 
-            <div className="flex flex-col gap-2.5">
-              {(["FREE", "STANDARD", "BUSINESS"] as const).map((tier) => {
-                const isCurrent = tier === planTier;
-                return (
-                  <div
-                    key={tier}
-                    className={`flex items-center justify-between gap-3 rounded-xl border p-4 ${
-                      isCurrent ? "border-accent/70 bg-accent/10" : "border-border"
-                    }`}
+            {planClientSecret ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setPlanClientSecret(null)}
+                  className="mb-2 text-xs text-muted hover:text-primary"
+                >
+                  ← プランを選び直す
+                </button>
+                {stripePromise ? (
+                  <EmbeddedCheckoutProvider
+                    stripe={stripePromise}
+                    options={{ clientSecret: planClientSecret, onComplete: handleCheckoutComplete }}
                   >
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{PLAN_LABEL[tier]}プラン</p>
-                      <p className="mt-0.5 text-xs text-muted">
-                        {tier === "FREE" ? "¥0 / 月" : `¥${PLAN_INFO[tier].yen.toLocaleString()} / 月`}
-                      </p>
-                      <p className="text-xs text-muted">{PLAN_INFO[tier].detail}</p>
-                    </div>
-                    {isCurrent ? (
-                      <span className="shrink-0 rounded-full bg-accent/20 px-3 py-1 text-xs font-semibold text-accent">
-                        現在のプラン
-                      </span>
-                    ) : tier === "FREE" ? null : (
-                      <button
-                        type="button"
-                        disabled={pending || !stripeConfigured}
-                        onClick={() => startTransition(() => createSubscriptionCheckoutSessionAction(tier))}
-                        className="shrink-0 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60 whitespace-nowrap"
+                    <EmbeddedCheckout />
+                  </EmbeddedCheckoutProvider>
+                ) : (
+                  <p className="text-xs text-red-600">
+                    決済フォームの読み込みに失敗しました（公開可能キーが未設定です）。
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col gap-2.5">
+                  {(["FREE", "STANDARD", "BUSINESS"] as const).map((tier) => {
+                    const isCurrent = tier === planTier;
+                    return (
+                      <div
+                        key={tier}
+                        className={`flex items-center justify-between gap-3 rounded-xl border p-4 ${
+                          isCurrent ? "border-accent/70 bg-accent/10" : "border-border"
+                        }`}
                       >
-                        このプランにする
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            {!stripeConfigured ? (
-              <p className="mt-3 text-xs text-red-600">Stripeが未設定のため、プランのアップグレードは利用できません。</p>
-            ) : null}
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{PLAN_LABEL[tier]}プラン</p>
+                          <p className="mt-0.5 text-xs text-muted">
+                            {tier === "FREE" ? "¥0 / 月" : `¥${PLAN_INFO[tier].yen.toLocaleString()} / 月`}
+                          </p>
+                          <p className="text-xs text-muted">{PLAN_INFO[tier].detail}</p>
+                        </div>
+                        {isCurrent ? (
+                          <span className="shrink-0 rounded-full bg-accent/20 px-3 py-1 text-xs font-semibold text-accent">
+                            現在のプラン
+                          </span>
+                        ) : tier === "FREE" ? null : (
+                          <button
+                            type="button"
+                            disabled={pending || !stripeConfigured}
+                            onClick={() =>
+                              startTransition(async () => {
+                                setPlanError(null);
+                                const result = await createSubscriptionCheckoutSessionAction(tier);
+                                if (result.error || !result.clientSecret) {
+                                  setPlanError(result.error ?? "決済の準備に失敗しました。");
+                                  return;
+                                }
+                                setPlanClientSecret(result.clientSecret);
+                              })
+                            }
+                            className="shrink-0 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60 whitespace-nowrap"
+                          >
+                            このプランにする
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {planError ? <p className="mt-3 text-xs text-red-600">{planError}</p> : null}
+                {!stripeConfigured ? (
+                  <p className="mt-3 text-xs text-red-600">Stripeが未設定のため、プランのアップグレードは利用できません。</p>
+                ) : null}
+              </>
+            )}
           </div>
         </div>
       ) : null}

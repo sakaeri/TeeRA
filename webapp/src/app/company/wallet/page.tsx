@@ -25,7 +25,7 @@ export default async function WalletPage() {
       <WalletView
         teeBalance={company.teeBalance}
         yenPerUnit={teeYenPerUnit()}
-        stripeConfigured={Boolean(process.env.STRIPE_SECRET_KEY)}
+        stripeConfigured={Boolean(process.env.STRIPE_SECRET_KEY) && Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)}
         planTier={company.planTier}
         ledgerEntries={ledgerEntries.map((e) => ({
           id: e.id,

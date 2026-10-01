@@ -6,13 +6,16 @@ import { postLedgerEntry } from "@/lib/domain/wallet";
 export async function createStripeCheckoutSession(params: {
   companyId: string;
   teeAmount: number;
-  successUrl: string;
-  cancelUrl: string;
+  returnUrl: string;
 }) {
   const stripe = requireStripe();
   const yenAmount = params.teeAmount * teeYenPerUnit();
 
+  // ui_mode: "embedded" はcheckout.stripe.comへ遷移させず、自ページ内に
+  // Stripeがホストするカード入力フォーム（iframe）を埋め込む方式。カード情報
+  // 自体は引き続きStripe側だけが扱うのでPCI DSS対応は変わらない。
   const session = await stripe.checkout.sessions.create({
+    ui_mode: "embedded",
     mode: "payment",
     payment_method_types: ["card"],
     line_items: [
@@ -26,8 +29,7 @@ export async function createStripeCheckoutSession(params: {
       },
     ],
     metadata: { companyId: params.companyId, teeAmount: String(params.teeAmount) },
-    success_url: params.successUrl,
-    cancel_url: params.cancelUrl,
+    return_url: params.returnUrl,
   });
 
   await prisma.stripeCharge.create({

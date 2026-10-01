@@ -7,13 +7,15 @@ import type { PlanTier } from "@/generated/prisma/enums";
 export async function createSubscriptionCheckoutSession(params: {
   companyId: string;
   planTier: "STANDARD" | "BUSINESS";
-  successUrl: string;
-  cancelUrl: string;
+  returnUrl: string;
 }) {
   const stripe = requireStripe();
   const yenAmount = PLAN_YEN[params.planTier];
 
+  // createStripeCheckoutSession（teeWallet.ts）と同じくembeddedモード
+  // （checkout.stripe.comへ遷移させず自ページ内にフォームを埋め込む）。
   const session = await stripe.checkout.sessions.create({
+    ui_mode: "embedded",
     mode: "subscription",
     payment_method_types: ["card"],
     line_items: [
@@ -28,8 +30,7 @@ export async function createSubscriptionCheckoutSession(params: {
       },
     ],
     metadata: { companyId: params.companyId, planTier: params.planTier },
-    success_url: params.successUrl,
-    cancel_url: params.cancelUrl,
+    return_url: params.returnUrl,
   });
 
   await prisma.stripeSubscription.create({
