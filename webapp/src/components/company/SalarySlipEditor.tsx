@@ -13,7 +13,11 @@ import {
 } from "@/app/company/payroll/actions";
 
 type Line = { id: string; kind: string; description: string; hours: number; rate: number; amount: number };
-type Deduction = { id: string; label: string; amount: number };
+// ratePercentは「雇用保険料」欄で率（例：0.6）を入力したときに、その月の
+// 支給合計から逆算した金額と一緒に保存しておく表示用の値。次に開いたとき
+// 入力した率を再表示できるようにするためのもので、他の月や他のスタッフに
+// は引き継がない（都度その月の支給合計で計算し直す運用）。
+type Deduction = { id: string; label: string; amount: number; ratePercent?: number };
 type Totals = { grossFromShifts: number; paidLeaveAmount: number; gross: number; totalDeductions: number; net: number };
 type UnresolvedShift = { shiftId: string; workReportId: string; date: string; taskName: string; source: "workReport" | "shift" };
 
@@ -140,7 +144,7 @@ export function SalarySlipEditor({
       ) : null}
 
       <PaidLeaveSection slip={slip} isEditable={isEditable} pending={pending} startTransition={startTransition} />
-      <DeductionsSection slip={slip} isEditable={isEditable} startTransition={startTransition} />
+      <DeductionsSection slip={slip} gross={slip.totals.gross} isEditable={isEditable} startTransition={startTransition} />
 
       <section className="rounded-2xl border-2 border-primary bg-white/60 p-6">
         <div className="flex items-center justify-between text-sm">
@@ -460,10 +464,12 @@ function PaidLeaveSection({
 
 function DeductionsSection({
   slip,
+  gross,
   isEditable,
   startTransition,
 }: {
   slip: { id: string; deductions: Deduction[] };
+  gross: number;
   isEditable: boolean;
   startTransition: (fn: () => void | Promise<void>) => void;
 }) {
@@ -480,20 +486,57 @@ function DeductionsSection({
       <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">控除</h2>
       <div className="flex flex-col gap-2">
         {deductions.map((d, i) => (
-          <div key={d.id} className="flex items-center gap-2 text-sm">
+          <div key={d.id} className="flex flex-wrap items-center gap-2 text-sm">
             <span className="w-32">{d.label}</span>
+            {d.label === "雇用保険料" ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  step="0.01"
+                  key={`${d.id}-rate-${d.ratePercent ?? ""}`}
+                  defaultValue={d.ratePercent ?? ""}
+                  disabled={!isEditable}
+                  placeholder="率"
+                  // 率を入力すると支給合計×率で金額欄を自動計算する。率は
+                  // この月のこの欄にだけ記録される表示用の値で、他の月や
+                  // 他のスタッフには引き継がない（都度その月の支給合計で
+                  // 計算し直す運用のため）。
+                  onBlur={(e) => {
+                    const rateStr = e.target.value;
+                    if (rateStr === "") return;
+                    const rate = Number(rateStr);
+                    const amount = Math.round((gross * rate) / 100);
+                    const next = [...deductions];
+                    next[i] = { ...d, amount, ratePercent: rate };
+                    save(next);
+                  }}
+                  className="w-16 rounded-lg border border-border px-2 py-1 text-sm"
+                />
+                <span className="text-xs text-muted">% ×支給合計 =</span>
+              </div>
+            ) : null}
             <input
               type="number"
-              value={d.amount}
+              defaultValue={d.amount}
+              key={`${d.id}-amt-${d.amount}`}
               disabled={!isEditable}
-              onChange={(e) => {
+              // valueで常に制御すると、入力中に先頭の0が消えずに残り続ける
+              // ブラウザのnumber inputの挙動（例：08900のように表示されて
+              // しまう）があるため、他の金額欄（勤務内訳の時間/単価等）と
+              // 同じくdefaultValue+onBlurの非制御方式にする。keyにamountを
+              // 含めているのは、率入力による自動計算で値が変わった時に
+              // defaultValueを再反映させるため（非制御なので再マウントが
+              // 必要）。
+              onBlur={(e) => {
+                const amount = Number(e.target.value);
+                if (amount === d.amount) return;
                 const next = [...deductions];
-                next[i] = { ...d, amount: Number(e.target.value) };
-                setDeductions(next);
+                next[i] = { ...d, amount, ratePercent: undefined };
+                save(next);
               }}
-              onBlur={() => save(deductions)}
               className="w-28 rounded-lg border border-border px-2 py-1 text-sm"
             />
+            <span className="text-xs text-muted">円</span>
             {d.id.startsWith("custom-") && isEditable ? (
               <button
                 type="button"
