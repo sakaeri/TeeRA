@@ -18,7 +18,8 @@ export async function createSubscriptionCheckoutSessionAction(planTier: "STANDAR
       returnUrl: `${base}/company/wallet?checkout=return`,
     });
     return { clientSecret: session.client_secret, error: null };
-  } catch {
+  } catch (error) {
+    console.error("createSubscriptionCheckoutSession failed", error);
     return { clientSecret: null, error: "決済の準備に失敗しました。時間を置いてもう一度お試しください。" };
   }
 }
