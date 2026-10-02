@@ -47,6 +47,7 @@ export function InvoiceEditor({
     lines: Line[];
     totals: Totals;
     unresolved: UnresolvedShift[];
+    issues: { id: string }[];
   };
   willUseFreeQuota: boolean;
 }) {
@@ -295,7 +296,7 @@ export function InvoiceEditor({
         {showIssueConfirm ? (
           <div className="mt-4 rounded-lg border border-accent bg-accent/10 p-4 text-sm">
             <p className="mb-3">
-              {invoice.status === "ISSUED"
+              {invoice.issues.length > 0
                 ? "同一対象月への再発行は無料です。よろしいですか？"
                 : willUseFreeQuota
                   ? "今月の無料発行枠を使って発行します（Teeは消費されません）。よろしいですか？"
