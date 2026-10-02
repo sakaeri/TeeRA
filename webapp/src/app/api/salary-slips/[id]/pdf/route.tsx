@@ -1,7 +1,7 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 import { verifySession, getActiveMembership } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { getTotals, getPaymentTerms } from "@/lib/domain/payroll";
+import { getTotals, getPaymentTerms, buildSalarySlipPdfLines, resolveWorkplaceNamesByShiftId } from "@/lib/domain/payroll";
 import { todayJst } from "@/lib/date";
 import { SalarySlipDocument, type SalarySlipPdfData } from "@/lib/pdf/salarySlip";
 
@@ -30,6 +30,10 @@ export async function GET(request: Request, { params }: RouteContext<"/api/salar
     if (!issue || issue.salarySlipId !== slip.id) return new Response("not found", { status: 404 });
     const snap = issue.snapshot as unknown as Record<string, unknown>;
     const { paymentDay } = await getPaymentTerms(slip.companyId, slip.staffUserId, snap.targetMonth as string);
+    const snapLines = snap.lines as { kind?: string; shiftId?: string | null; description: string; hours: number; rate: number; amount: number }[];
+    const snapWorkplaceMap = await resolveWorkplaceNamesByShiftId(
+      snapLines.map((l) => l.shiftId).filter((id): id is string => Boolean(id)),
+    );
     data = {
       companyName: slip.company.name,
       companyAddress: slip.company.address,
@@ -38,7 +42,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/salar
       targetMonth: snap.targetMonth as string,
       issuedAt: (snap.issuedAt as string).slice(0, 10),
       paymentDay,
-      lines: snap.lines as SalarySlipPdfData["lines"],
+      lines: buildSalarySlipPdfLines(snapLines, snapWorkplaceMap),
       deductions: snap.deductions as SalarySlipPdfData["deductions"],
       paidLeaveDaysUsed: snap.paidLeaveDaysUsed as number,
       paidLeaveDailyRate: snap.paidLeaveDailyRate as number,
@@ -52,6 +56,9 @@ export async function GET(request: Request, { params }: RouteContext<"/api/salar
   } else {
     const totals = getTotals(slip);
     const { paymentDay } = await getPaymentTerms(slip.companyId, slip.staffUserId, slip.targetMonth);
+    const liveWorkplaceMap = await resolveWorkplaceNamesByShiftId(
+      slip.lines.map((l) => l.shiftId).filter((id): id is string => Boolean(id)),
+    );
     data = {
       companyName: slip.company.name,
       companyAddress: slip.company.address,
@@ -60,7 +67,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/salar
       targetMonth: slip.targetMonth,
       issuedAt: todayJst(),
       paymentDay,
-      lines: slip.lines,
+      lines: buildSalarySlipPdfLines(slip.lines, liveWorkplaceMap),
       deductions: slip.deductions as SalarySlipPdfData["deductions"],
       paidLeaveDaysUsed: slip.paidLeaveDaysUsed,
       paidLeaveDailyRate: slip.paidLeaveDailyRate,

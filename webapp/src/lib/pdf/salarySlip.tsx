@@ -38,20 +38,6 @@ const styles = StyleSheet.create({
   issuerLine: { fontSize: 9, color: "#45534d", marginBottom: 2 },
   metaBlock: { marginTop: 14, flexDirection: "row", gap: 24 },
   metaLine: { fontSize: 9, color: "#45534d" },
-  totalBox: {
-    marginTop: 18,
-    marginBottom: 18,
-    borderWidth: 1.5,
-    borderColor: "#0b3d2e",
-    borderRadius: 4,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  totalBoxLabel: { fontSize: 11, color: "#45534d" },
-  totalBoxAmount: { fontSize: 22, fontWeight: 700, color: "#0b3d2e" },
   section: { marginTop: 16 },
   sectionTitle: { fontSize: 12, fontWeight: 700, color: "#0b3d2e", marginBottom: 6 },
   tableHeaderRow: {
@@ -152,23 +138,18 @@ export function SalarySlipDocument({ data }: { data: SalarySlipPdfData }) {
           <Text style={styles.metaLine}>支払日: {data.paymentDay ?? "—"}</Text>
         </View>
 
-        <View style={styles.totalBox}>
-          <Text style={styles.totalBoxLabel}>差引支給額</Text>
-          <Text style={styles.totalBoxAmount}>{data.net.toLocaleString()}円</Text>
-        </View>
-
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>勤務内訳</Text>
           <View style={styles.tableHeaderRow}>
             <Text style={styles.tableHeaderText}>内容</Text>
-            <Text style={styles.tableHeaderText}>時間</Text>
+            <Text style={styles.tableHeaderText}>数量</Text>
             <Text style={styles.tableHeaderText}>単価</Text>
             <Text style={styles.tableHeaderText}>金額</Text>
           </View>
           {data.lines.map((l, i) => (
             <View key={i} style={styles.tableRow}>
               <Text>{l.description}</Text>
-              <Text>{l.hours}h</Text>
+              <Text>{l.hours}</Text>
               <Text>{l.rate}円</Text>
               <Text>{l.amount}円</Text>
             </View>

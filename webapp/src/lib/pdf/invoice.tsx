@@ -163,8 +163,8 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
 
         <View style={styles.section}>
           <View style={styles.tableHeaderRow}>
-            <Text style={styles.tableHeaderText}>スタッフ／内容</Text>
-            <Text style={styles.tableHeaderText}>時間</Text>
+            <Text style={styles.tableHeaderText}>内容</Text>
+            <Text style={styles.tableHeaderText}>数量</Text>
             <Text style={styles.tableHeaderText}>単価</Text>
             <Text style={styles.tableHeaderText}>税率</Text>
             <Text style={styles.tableHeaderText}>金額</Text>
@@ -175,7 +175,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
                 {l.staffName ? `${l.staffName} / ` : ""}
                 {l.description}
               </Text>
-              <Text>{l.hours}h</Text>
+              <Text>{l.hours}</Text>
               <Text>{l.rate}円</Text>
               <Text>{l.taxRatePercent === 0 ? "なし" : `${l.taxRatePercent}%`}</Text>
               <Text>{l.amount}円</Text>

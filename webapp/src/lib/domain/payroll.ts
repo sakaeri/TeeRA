@@ -47,6 +47,76 @@ export async function getPaymentTerms(companyId: string, staffUserId: string, ta
   return { paymentDay: contract?.template.paymentDay ?? null };
 }
 
+// SHIFT行のdescriptionはregenerateShiftLinesが常にこの形式で自動生成する
+// （管理者が直接書き換えることはできない — updateLineはhours/rateのみ対応）
+// ため、安全に分解できる: "YYYY-MM-DD 勤務（業務内容）" または日給なら
+// 末尾に「（日給）」が付く。
+const DAILY_WAGE_SUFFIX = "（日給）";
+function parseAutoShiftDescription(description: string): { taskName: string | null; isDaily: boolean } {
+  const isDaily = description.endsWith(DAILY_WAGE_SUFFIX);
+  const base = isDaily ? description.slice(0, -DAILY_WAGE_SUFFIX.length) : description;
+  const match = base.match(/^\d{4}-\d{2}-\d{2} 勤務(?:（(.+)）)?$/);
+  return { taskName: match?.[1] ?? null, isDaily };
+}
+
+// 給与明細PDFに渡すためのshiftId→勤務先名の対応表。companyRelationshipIdが
+// 無ければ社内勤務（自社スタッフとしての勤務）。roster.ts等の
+// workplaceName解決と同じ考え方（クライアント企業が未登録ならproxyNameに
+// フォールバック）。
+export async function resolveWorkplaceNamesByShiftId(shiftIds: string[]): Promise<Map<string, string | null>> {
+  if (shiftIds.length === 0) return new Map();
+  const shifts = await prisma.shift.findMany({
+    where: { id: { in: shiftIds } },
+    select: {
+      id: true,
+      companyRelationship: { select: { clientCompany: { select: { name: true } }, proxyName: true } },
+    },
+  });
+  return new Map(
+    shifts.map((s) => [s.id, s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? null]),
+  );
+}
+
+export type SalarySlipPdfLine = { description: string; hours: number; rate: number; amount: number };
+
+// 時給制のSHIFT行は「勤務先（業務内容）」でまとめて1行に合算する
+// （1日ごとの内訳はPDFでは冗長なため）。日給制は「数量」欄が日数なのか
+// 時間なのか紛らわしくなるため、これまで通り1日＝1行のまま残す。
+// CUSTOM行（手動追加分）もそのまま個別に残す。画面上の編集欄（シフトごと
+// に時間を直す一覧）は対象外 — グループ化するのはPDF出力のときだけ。
+export function buildSalarySlipPdfLines(
+  lines: { kind?: string; shiftId?: string | null; description: string; hours: number; rate: number; amount: number }[],
+  workplaceByShiftId: Map<string, string | null>,
+): SalarySlipPdfLine[] {
+  const grouped = new Map<string, SalarySlipPdfLine>();
+  const result: SalarySlipPdfLine[] = [];
+
+  for (const line of lines) {
+    if (line.kind !== "SHIFT" || !line.shiftId) {
+      result.push({ description: line.description, hours: line.hours, rate: line.rate, amount: line.amount });
+      continue;
+    }
+    const { taskName, isDaily } = parseAutoShiftDescription(line.description);
+    if (isDaily) {
+      result.push({ description: line.description, hours: line.hours, rate: line.rate, amount: line.amount });
+      continue;
+    }
+    const workplace = workplaceByShiftId.get(line.shiftId) ?? "社内";
+    const label = taskName ? `${workplace}（${taskName}）` : workplace;
+    const key = `${label}__${line.rate}`;
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.hours += line.hours;
+      existing.amount += line.amount;
+    } else {
+      const fresh: SalarySlipPdfLine = { description: label, hours: line.hours, rate: line.rate, amount: line.amount };
+      grouped.set(key, fresh);
+      result.push(fresh);
+    }
+  }
+  return result;
+}
+
 // 複数の契約の中から指定日時点で有効だったものを1つ選ぶ（契約期間の
 // start/endで判定）。期間が重複するデータ不整合がある場合は契約開始日が
 // 新しい方を優先する。

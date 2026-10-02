@@ -86,7 +86,7 @@ export function InvoiceEditor({
         <table className="w-full min-w-max text-sm">
           <thead>
             <tr className="border-b border-border text-left text-muted">
-              <th className="py-1">スタッフ／内容</th>
+              <th className="py-1">内容</th>
               <th className="py-1">数量</th>
               <th className="py-1">単価</th>
               <th className="py-1">税率</th>

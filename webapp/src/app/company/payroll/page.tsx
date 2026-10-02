@@ -211,7 +211,12 @@ export default async function PayrollPage({
                     key={slip.id}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm"
                   >
-                    <span className="font-medium">{slip.staff.name}</span>
+                    <Link
+                      href={`/company/payroll?month=${targetMonth}&staff=${slip.staffUserId}`}
+                      className="font-medium text-primary underline"
+                    >
+                      {slip.staff.name}
+                    </Link>
                     <span className="text-muted">{getTotals(slip).net}円</span>
                     <div className="flex flex-wrap gap-3">
                       {slip.issues.map((i) => (

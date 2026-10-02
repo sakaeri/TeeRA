@@ -212,9 +212,12 @@ export default async function InvoicesPage({
                       key={inv.id}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm"
                     >
-                      <span className="font-medium">
+                      <Link
+                        href={`/company/invoices?month=${periodLabel}&client=${inv.companyRelationshipId}`}
+                        className="font-medium text-primary underline"
+                      >
                         {inv.companyRelationship.clientCompany?.name ?? inv.companyRelationship.proxyName}
-                      </span>
+                      </Link>
                       <span className="text-muted">{totals.total}円</span>
                       <div className="flex flex-wrap gap-3">
                         {inv.issues.map((i) => (
