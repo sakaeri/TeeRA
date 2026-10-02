@@ -220,14 +220,13 @@ try {
   const balanceAfterSecondIssue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
   log("修正して再発行しても同月内は引き続き無料（still 9）", balanceAfterSecondIssue === 9);
 
-  // 発行済み(ISSUED)状態でも「再発行する（同月内は無料）」ボタンが直接見える
-  // （内容を修正するを経由しなくても再発行できる）
-  const reissueBody = await admin.textContent("body");
-  log("発行済み状態に「PDFで請求書を再発行する（同月内は無料）」ボタンがある", reissueBody.includes("PDFで請求書を再発行する（同月内は無料）"));
-  await admin.getByRole("button", { name: "PDFで請求書を再発行する（同月内は無料）", exact: true }).click();
-  await admin.waitForTimeout(1000);
-  const balanceAfterThirdIssue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
-  log("発行済みから直接再発行しても無料のまま（still 9）", balanceAfterThirdIssue === 9);
+  // 発行済み・未編集の状態では「再発行する」ボタンは置かない（下の発行
+  // 履歴から既存PDFを直接開けるため、同内容を増やすだけの重複ボタンに
+  // なってしまう）。再発行したい場合は「内容を修正する」を経由する。
+  log(
+    "発行済み・未編集では再発行ボタンは出ない（発行履歴から開く導線のみ）",
+    !(await admin.getByRole("button", { name: "PDFで請求書を再発行する（同月内は無料）", exact: true }).isVisible()),
+  );
 
   // fetch PDF
   const pdfLink = await admin.locator('a[href*="/api/invoices/"]').first().getAttribute("href");

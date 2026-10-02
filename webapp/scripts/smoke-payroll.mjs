@@ -183,13 +183,13 @@ try {
   body = await admin.textContent("body");
   log("status shows 発行済み", body.includes("発行済み"));
 
-  // re-issue (free) — 同月内の再発行は無料なので確認ダイアログを挟まず
-  // ボタン1クリックでそのまま発行される。
-  await admin.getByRole("button", { name: "PDFで明細を再発行する（同月内は無料）" }).click();
-  await admin.waitForTimeout(1000);
-
-  const balanceAfterReissue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
-  log("re-issue same month is free (still 9)", balanceAfterReissue === 9);
+  // 発行済み・未編集の状態では「再発行する」ボタンは置かない（下の発行
+  // 履歴から既存PDFを直接開けるため、同内容を増やすだけの重複ボタンに
+  // なってしまう）。再発行したい場合は「内容を修正する」を経由する。
+  log(
+    "発行済み・未編集では再発行ボタンは出ない（発行履歴から開く導線のみ）",
+    !(await admin.getByRole("button", { name: "PDFで明細を再発行する（同月内は無料）" }).isVisible()),
+  );
 
   // 発行済みでも「内容を修正する」で下書きに戻して編集でき、同月内の
   // 再発行は修正後も引き続き無料（⑤: 給料明細に確定/発行後の修正手段が

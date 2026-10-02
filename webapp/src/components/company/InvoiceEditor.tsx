@@ -283,6 +283,10 @@ export function InvoiceEditor({
             </button>
           </div>
         ) : invoice.status === "ISSUED" ? (
+          // 発行済みのPDFは下の発行履歴から直接開けるため、何も編集して
+          // いない状態での「再発行する」ボタンは、同じ内容の重複PDFが
+          // 増えるだけで実質的な意味が無く、紛らわしいので置かない。
+          // 発行し直したい場合は「内容を修正する」→編集→発行、の流れになる。
           <div className="mt-4 flex gap-2">
             <button
               type="button"
@@ -291,14 +295,6 @@ export function InvoiceEditor({
               className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
             >
               内容を修正する
-            </button>
-            <button
-              type="button"
-              disabled={pending || !dueDate}
-              onClick={issueOrConfirm}
-              className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
-            >
-              PDFで請求書を再発行する（同月内は無料）
             </button>
           </div>
         ) : null}

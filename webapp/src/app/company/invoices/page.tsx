@@ -151,17 +151,22 @@ export default async function InvoicesPage({
           </Link>
           <InvoiceEditor invoice={invoiceData} willUseFreeQuota={pdfQuota.quota > 0 && pdfQuota.remaining > 0} />
           {invoiceData.issues.length ? (
-            <div className="mt-6 text-sm">
-              {invoiceData.issues.map((i) => (
-                <Link
-                  key={i.id}
-                  href={`/api/invoices/${invoiceData!.id}/pdf?issueId=${i.id}`}
-                  target="_blank"
-                  className="mr-4 text-primary underline"
-                >
-                  PDF ({new Date(i.issuedAt).toLocaleString("ja-JP")})
-                </Link>
-              ))}
+            <div className="mt-6">
+              <p className="mb-1.5 text-xs text-muted">発行履歴</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                {invoiceData.issues.map((i, index) => (
+                  <Link
+                    key={i.id}
+                    href={`/api/invoices/${invoiceData!.id}/pdf?issueId=${i.id}`}
+                    target="_blank"
+                    // 最新の発行分（issuesはissuedAt降順）だけ目立たせ、
+                    // 過去分は薄い色にして見分けやすくする。
+                    className={index === 0 ? "font-semibold text-primary underline" : "text-muted underline"}
+                  >
+                    PDF ({new Date(i.issuedAt).toLocaleString("ja-JP")})
+                  </Link>
+                ))}
+              </div>
             </div>
           ) : null}
         </>
@@ -188,8 +193,15 @@ export default async function InvoicesPage({
                       href={`/company/invoices?month=${periodLabel}&client=${inv.companyRelationshipId}`}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm hover:bg-background"
                     >
-                      <span className="font-medium">
-                        {inv.companyRelationship.clientCompany?.name ?? inv.companyRelationship.proxyName}
+                      <span className="flex items-center gap-2">
+                        <span className="font-medium">
+                          {inv.companyRelationship.clientCompany?.name ?? inv.companyRelationship.proxyName}
+                        </span>
+                        {inv.issues.length > 0 ? (
+                          <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">
+                            発行済み（修正中）
+                          </span>
+                        ) : null}
                       </span>
                     </Link>
                   </li>
