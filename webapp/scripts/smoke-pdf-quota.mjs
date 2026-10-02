@@ -166,8 +166,8 @@ try {
   // --- 同月内の再発行は既存ルールどおり無料のまま（クォータも課金も発生しない） ---
   await admin.goto(`http://localhost:3000/company/invoices?month=${thisMonth}&client=${relationshipId}`);
   await admin.waitForTimeout(300);
+  // 同月内の再発行は確認ダイアログを挟まずボタン1クリックでそのまま発行される。
   await admin.getByRole("button", { name: "PDFで請求書を再発行する（同月内は無料）", exact: true }).click();
-  await admin.getByRole("button", { name: "発行する", exact: true }).click();
   await admin.waitForTimeout(800);
 
   balance = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));

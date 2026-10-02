@@ -183,9 +183,9 @@ try {
   body = await admin.textContent("body");
   log("status shows 発行済み", body.includes("発行済み"));
 
-  // re-issue (free)
+  // re-issue (free) — 同月内の再発行は無料なので確認ダイアログを挟まず
+  // ボタン1クリックでそのまま発行される。
   await admin.getByRole("button", { name: "PDFで明細を再発行する（同月内は無料）" }).click();
-  await admin.getByRole("button", { name: "発行する", exact: true }).click();
   await admin.waitForTimeout(1000);
 
   const balanceAfterReissue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
@@ -210,7 +210,6 @@ try {
   log("下書きに戻すと控除額を編集し直せる", /差引支給額 [\d,]+円/.test(body));
 
   await admin.getByRole("button", { name: "PDFで明細を発行する", exact: true }).click();
-  await admin.getByRole("button", { name: "発行する", exact: true }).click();
   await admin.waitForTimeout(1000);
   const balanceAfterReopenReissue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
   log("修正して再発行しても同月内は引き続き無料（still 9）", balanceAfterReopenReissue === 9);

@@ -60,6 +60,16 @@ export function InvoiceEditor({
 
   const isEditable = invoice.status === "DRAFT";
 
+  // 同月内の再発行は無料なので確認を挟まずそのまま発行する。Tee課金や
+  // 無料枠を使う「今月初めての発行」の時だけ確認ダイアログを出す。
+  function issueOrConfirm() {
+    if (invoice.issues.length > 0) {
+      startTransition(() => issueInvoiceAction(invoice.id));
+    } else {
+      setShowIssueConfirm(true);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {invoice.unresolved.length > 0 ? (
@@ -266,7 +276,7 @@ export function InvoiceEditor({
             <button
               type="button"
               disabled={pending || !dueDate}
-              onClick={() => setShowIssueConfirm(true)}
+              onClick={issueOrConfirm}
               className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
               PDFで請求書を発行する
@@ -285,7 +295,7 @@ export function InvoiceEditor({
             <button
               type="button"
               disabled={pending || !dueDate}
-              onClick={() => setShowIssueConfirm(true)}
+              onClick={issueOrConfirm}
               className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
             >
               PDFで請求書を再発行する（同月内は無料）
@@ -296,11 +306,9 @@ export function InvoiceEditor({
         {showIssueConfirm ? (
           <div className="mt-4 rounded-lg border border-accent bg-accent/10 p-4 text-sm">
             <p className="mb-3">
-              {invoice.issues.length > 0
-                ? "同一対象月への再発行は無料です。よろしいですか？"
-                : willUseFreeQuota
-                  ? "今月の無料発行枠を使って発行します（Teeは消費されません）。よろしいですか？"
-                  : "1Teeを課金して発行します。よろしいですか？"}
+              {willUseFreeQuota
+                ? "今月の無料発行枠を使って発行します（Teeは消費されません）。よろしいですか？"
+                : "1Teeを課金して発行します。よろしいですか？"}
             </p>
             <div className="flex gap-2">
               <button
