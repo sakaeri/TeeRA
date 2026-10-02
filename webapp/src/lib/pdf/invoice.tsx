@@ -55,7 +55,6 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 12, fontWeight: 700, color: "#0b3d2e", marginBottom: 6 },
   tableHeaderRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     paddingVertical: 5,
     backgroundColor: "#0b3d2e",
     paddingHorizontal: 6,
@@ -63,12 +62,16 @@ const styles = StyleSheet.create({
   tableHeaderText: { fontSize: 9, fontWeight: 700, color: "#f4ead0" },
   tableRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     paddingVertical: 5,
     paddingHorizontal: 6,
     borderBottomWidth: 1,
     borderBottomColor: "#e6e1d3",
   },
+  tableColDescription: { flexGrow: 1, textAlign: "left" },
+  tableColQty: { width: 36, textAlign: "right" },
+  tableColRate: { width: 64, textAlign: "right" },
+  tableColTax: { width: 42, textAlign: "right" },
+  tableColAmount: { width: 70, textAlign: "right" },
   summaryBox: {
     marginTop: 14,
     alignSelf: "flex-end",
@@ -145,15 +148,15 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
             {data.issuingCompanyPhoneNumber ? (
               <Text style={styles.issuerLine}>TEL: {data.issuingCompanyPhoneNumber}</Text>
             ) : null}
+            <Text style={styles.issuerLine}>
+              {data.registered ? `登録番号: ${data.invoiceRegistrationNumber}` : "登録なし（適格請求書発行事業者登録なし）"}
+            </Text>
           </View>
         </View>
 
         <View style={styles.metaBlock}>
           <Text style={styles.metaLine}>発行日: {data.issuedAt}</Text>
           <Text style={styles.metaLine}>支払期限: {data.dueDate ?? "—"}</Text>
-          <Text style={styles.metaLine}>
-            {data.registered ? `登録番号: ${data.invoiceRegistrationNumber}` : "登録なし（適格請求書発行事業者登録なし）"}
-          </Text>
         </View>
 
         <View style={styles.totalBox}>
@@ -163,22 +166,22 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
 
         <View style={styles.section}>
           <View style={styles.tableHeaderRow}>
-            <Text style={styles.tableHeaderText}>内容</Text>
-            <Text style={styles.tableHeaderText}>数量</Text>
-            <Text style={styles.tableHeaderText}>単価</Text>
-            <Text style={styles.tableHeaderText}>税率</Text>
-            <Text style={styles.tableHeaderText}>金額</Text>
+            <Text style={[styles.tableHeaderText, styles.tableColDescription]}>内容</Text>
+            <Text style={[styles.tableHeaderText, styles.tableColQty]}>数量</Text>
+            <Text style={[styles.tableHeaderText, styles.tableColRate]}>単価</Text>
+            <Text style={[styles.tableHeaderText, styles.tableColTax]}>税率</Text>
+            <Text style={[styles.tableHeaderText, styles.tableColAmount]}>金額</Text>
           </View>
           {data.lines.map((l, i) => (
             <View key={i} style={styles.tableRow}>
-              <Text>
+              <Text style={styles.tableColDescription}>
                 {l.staffName ? `${l.staffName} / ` : ""}
                 {l.description}
               </Text>
-              <Text>{l.hours}</Text>
-              <Text>{l.rate}円</Text>
-              <Text>{l.taxRatePercent === 0 ? "なし" : `${l.taxRatePercent}%`}</Text>
-              <Text>{l.amount}円</Text>
+              <Text style={styles.tableColQty}>{l.hours}</Text>
+              <Text style={styles.tableColRate}>{l.rate}円</Text>
+              <Text style={styles.tableColTax}>{l.taxRatePercent === 0 ? "なし" : `${l.taxRatePercent}%`}</Text>
+              <Text style={styles.tableColAmount}>{l.amount}円</Text>
             </View>
           ))}
         </View>

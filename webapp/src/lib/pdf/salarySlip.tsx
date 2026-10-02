@@ -42,7 +42,6 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 12, fontWeight: 700, color: "#0b3d2e", marginBottom: 6 },
   tableHeaderRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     paddingVertical: 5,
     backgroundColor: "#0b3d2e",
     paddingHorizontal: 6,
@@ -50,12 +49,15 @@ const styles = StyleSheet.create({
   tableHeaderText: { fontSize: 9, fontWeight: 700, color: "#f4ead0" },
   tableRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     paddingVertical: 5,
     paddingHorizontal: 6,
     borderBottomWidth: 1,
     borderBottomColor: "#e6e1d3",
   },
+  tableColDescription: { flexGrow: 1, textAlign: "left" },
+  tableColQty: { width: 40, textAlign: "right" },
+  tableColRate: { width: 65, textAlign: "right" },
+  tableColAmount: { width: 70, textAlign: "right" },
   summaryBox: {
     marginTop: 14,
     alignSelf: "flex-end",
@@ -141,25 +143,25 @@ export function SalarySlipDocument({ data }: { data: SalarySlipPdfData }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>勤務内訳</Text>
           <View style={styles.tableHeaderRow}>
-            <Text style={styles.tableHeaderText}>内容</Text>
-            <Text style={styles.tableHeaderText}>数量</Text>
-            <Text style={styles.tableHeaderText}>単価</Text>
-            <Text style={styles.tableHeaderText}>金額</Text>
+            <Text style={[styles.tableHeaderText, styles.tableColDescription]}>内容</Text>
+            <Text style={[styles.tableHeaderText, styles.tableColQty]}>数量</Text>
+            <Text style={[styles.tableHeaderText, styles.tableColRate]}>単価</Text>
+            <Text style={[styles.tableHeaderText, styles.tableColAmount]}>金額</Text>
           </View>
           {data.lines.map((l, i) => (
             <View key={i} style={styles.tableRow}>
-              <Text>{l.description}</Text>
-              <Text>{l.hours}</Text>
-              <Text>{l.rate}円</Text>
-              <Text>{l.amount}円</Text>
+              <Text style={styles.tableColDescription}>{l.description}</Text>
+              <Text style={styles.tableColQty}>{l.hours}</Text>
+              <Text style={styles.tableColRate}>{l.rate}円</Text>
+              <Text style={styles.tableColAmount}>{l.amount}円</Text>
             </View>
           ))}
           {data.paidLeaveDaysUsed > 0 ? (
             <View style={styles.tableRow}>
-              <Text>有給休暇 {data.paidLeaveDaysUsed}日</Text>
-              <Text>—</Text>
-              <Text>{data.paidLeaveDailyRate}円/日</Text>
-              <Text>{data.paidLeaveAmount}円</Text>
+              <Text style={styles.tableColDescription}>有給休暇 {data.paidLeaveDaysUsed}日</Text>
+              <Text style={styles.tableColQty}>—</Text>
+              <Text style={styles.tableColRate}>{data.paidLeaveDailyRate}円/日</Text>
+              <Text style={styles.tableColAmount}>{data.paidLeaveAmount}円</Text>
             </View>
           ) : null}
         </View>
@@ -168,8 +170,8 @@ export function SalarySlipDocument({ data }: { data: SalarySlipPdfData }) {
           <Text style={styles.sectionTitle}>控除</Text>
           {data.deductions.map((d) => (
             <View key={d.id} style={styles.tableRow}>
-              <Text>{d.label}</Text>
-              <Text>{d.amount}円</Text>
+              <Text style={styles.tableColDescription}>{d.label}</Text>
+              <Text style={styles.tableColAmount}>{d.amount}円</Text>
             </View>
           ))}
         </View>
