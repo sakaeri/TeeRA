@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/actions/auth";
 import { useClickOutside } from "@/lib/useClickOutside";
+import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 
 const NAV = [
   { href: "/company", label: "ダッシュボード", mobileLabel: "ホーム" },
@@ -141,6 +142,8 @@ export function CompanyShell({
           </div>
         </div>
       </header>
+
+      <PushNotificationPrompt />
 
       {/*
         デスクトップ用サイドバーをDOM上ではモバイル用タブバーより先に置く

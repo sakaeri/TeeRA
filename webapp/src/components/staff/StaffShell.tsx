@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/actions/auth";
 import { useClickOutside } from "@/lib/useClickOutside";
+import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 
 // 会社側の「＋」メニュー内のアイコン(CalendarView.tsx)と同じviewBox 24・
 // strokeWidth 1.8の線画スタイルに揃えたナビゲーションアイコン。
@@ -173,6 +174,8 @@ export function StaffShell({
           </div>
         </div>
       </header>
+
+      <PushNotificationPrompt />
 
       <nav className="flex items-stretch justify-around border-b border-border/60 bg-white/40 px-1 py-1.5 sm:justify-start sm:gap-1 sm:px-4">
         {NAV.map((item) => {

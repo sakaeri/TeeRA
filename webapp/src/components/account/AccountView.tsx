@@ -154,6 +154,10 @@ export function AccountView({
       ) : null}
 
       <section className="rounded-2xl border border-border bg-white/60 p-6">
+        <PushNotificationToggle />
+      </section>
+
+      <section className="rounded-2xl border border-border bg-white/60 p-6">
         <h2 className="mb-4 font-serif-jp text-lg font-bold text-primary">パスワードを変更する</h2>
         <ChangePasswordForm />
       </section>
@@ -161,11 +165,6 @@ export function AccountView({
       <section className="rounded-2xl border border-border bg-white/60 p-6">
         <h2 className="mb-4 font-serif-jp text-lg font-bold text-primary">メールアドレスを変更する</h2>
         <ChangeEmailForm currentEmail={userEmail} />
-      </section>
-
-      <section className="rounded-2xl border border-border bg-white/60 p-6">
-        <h2 className="mb-4 font-serif-jp text-lg font-bold text-primary">プッシュ通知</h2>
-        <PushNotificationToggle />
       </section>
     </div>
   );

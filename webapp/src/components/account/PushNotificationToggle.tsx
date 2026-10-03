@@ -1,15 +1,50 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-function urlBase64ToUint8Array(base64String: string) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = atob(base64);
-  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
-}
+import { pushSupported, subscribeToPush, unsubscribeFromPush, getExistingSubscription } from "@/lib/pushClient";
+import { useClickOutside } from "@/lib/useClickOutside";
 
 type Status = "checking" | "unsupported" | "unconfigured" | "off" | "on" | "working";
+
+function InfoTooltip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useClickOutside<HTMLDivElement>(open, () => setOpen(false));
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        type="button"
+        aria-label="説明を表示"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-5 w-5 items-center justify-center rounded-full border border-muted text-xs text-muted hover:border-primary hover:text-primary"
+      >
+        i
+      </button>
+      {open ? (
+        <div className="absolute left-0 top-7 z-10 w-64 rounded-lg border border-border bg-white p-3 text-xs leading-relaxed text-foreground shadow-lg">
+          {text}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Switch({ on, disabled, onToggle }: { on: boolean; disabled: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={onToggle}
+      className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-60 ${on ? "bg-primary" : "bg-border"}`}
+    >
+      <span
+        className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${on ? "translate-x-5" : "translate-x-0.5"}`}
+      />
+    </button>
+  );
+}
 
 export function PushNotificationToggle() {
   const [status, setStatus] = useState<Status>("checking");
@@ -20,7 +55,7 @@ export function PushNotificationToggle() {
   useEffect(() => {
     let cancelled = false;
     Promise.resolve().then(async () => {
-      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      if (!pushSupported()) {
         if (!cancelled) setStatus("unsupported");
         return;
       }
@@ -29,8 +64,7 @@ export function PushNotificationToggle() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js");
-        const sub = await reg.pushManager.getSubscription();
+        const sub = await getExistingSubscription();
         if (!cancelled) setStatus(sub ? "on" : "off");
       } catch {
         if (!cancelled) setStatus("unsupported");
@@ -44,85 +78,49 @@ export function PushNotificationToggle() {
   async function enable() {
     setError(null);
     setStatus("working");
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        setStatus("off");
-        setError("通知が許可されませんでした。ブラウザの通知設定をご確認ください。");
-        return;
-      }
-      const reg = await navigator.serviceWorker.register("/sw.js");
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey!),
-      });
-      const json = sub.toJSON();
-      const res = await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
-      });
-      if (!res.ok) throw new Error("subscribe failed");
+    const result = await subscribeToPush(vapidPublicKey!);
+    if (result.ok) {
       setStatus("on");
-    } catch {
-      setStatus("off");
-      setError("通知の設定に失敗しました。もう一度お試しください。");
+      return;
     }
+    setStatus("off");
+    setError(
+      result.reason === "denied"
+        ? "通知が許可されませんでした。ブラウザの通知設定をご確認ください。"
+        : "通知の設定に失敗しました。もう一度お試しください。",
+    );
   }
 
   async function disable() {
     setError(null);
     setStatus("working");
-    try {
-      const reg = await navigator.serviceWorker.register("/sw.js");
-      const sub = await reg.pushManager.getSubscription();
-      if (sub) {
-        await fetch("/api/push/unsubscribe", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ endpoint: sub.endpoint }),
-        });
-        await sub.unsubscribe();
-      }
+    const ok = await unsubscribeFromPush();
+    if (ok) {
       setStatus("off");
-    } catch {
+    } else {
       setStatus("on");
       setError("通知の解除に失敗しました。もう一度お試しください。");
     }
   }
 
   if (status === "checking") return null;
-  if (status === "unsupported") {
-    return <p className="text-sm text-muted">このブラウザではプッシュ通知を利用できません。</p>;
-  }
-  if (status === "unconfigured") {
-    return <p className="text-sm text-muted">現在プッシュ通知は準備中です。</p>;
-  }
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted">
-        業務報告の提出・シフト開始前・未確定のシフト希望など、タイミングが重要なお知らせをこのブラウザにプッシュ通知で届けます（届く内容は役割によって異なります）。
-      </p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5">
+          <h2 className="font-serif-jp text-lg font-bold text-primary">プッシュ通知</h2>
+          <InfoTooltip text="業務報告の提出・シフト開始前・未確定のシフト希望など、タイミングが重要なお知らせをこのブラウザにプッシュ通知で届けます（届く内容は役割によって異なります）。" />
+        </div>
+        {status === "unsupported" ? (
+          <span className="text-xs text-muted">このブラウザでは利用できません</span>
+        ) : status === "unconfigured" ? (
+          <span className="text-xs text-muted">準備中です</span>
+        ) : (
+          <Switch on={status === "on"} disabled={status === "working"} onToggle={status === "on" ? disable : enable} />
+        )}
+      </div>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      {status === "on" ? (
-        <button
-          type="button"
-          onClick={disable}
-          className="self-start rounded-lg border border-primary px-4 py-2.5 text-sm text-primary disabled:opacity-60"
-        >
-          プッシュ通知をオフにする
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={enable}
-          disabled={status === "working"}
-          className="self-start rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-        >
-          {status === "working" ? "設定中…" : "このブラウザでプッシュ通知を受け取る"}
-        </button>
-      )}
     </div>
   );
 }
