@@ -10,6 +10,7 @@ import {
   sendUnsubmittedWorkReportReminderEmail,
   sendContractConsentReminderEmail,
 } from "@/lib/email";
+import { sendPushToUser, sendPushToUsers } from "@/lib/push";
 
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const APPROVE_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7日
@@ -40,6 +41,17 @@ function recruitmentEmailDetails(recruitment: { note: string | null; extraItems:
     recruitmentNote: recruitment.note,
     recruitmentExtraItems: recruitment.extraItems as { label: string; value: string }[],
   };
+}
+
+// プッシュ通知は（会社の共有受信箱宛のメールと違い）ログイン中の本部
+// 管理者/編集者の端末にしか届けられないため、送信先はその会社の
+// COMPANY_ADMIN/COMPANY_EDITORのuserId一覧に読み替える。
+async function companyAdminUserIds(companyId: string) {
+  const members = await prisma.companyMembership.findMany({
+    where: { companyId, role: { in: ["COMPANY_ADMIN", "COMPANY_EDITOR"] } },
+    select: { userId: true },
+  });
+  return members.map((m) => m.userId);
 }
 
 function formatJstTime(date: Date) {
@@ -98,31 +110,38 @@ export async function notifyCompanyOfWorkReportSubmission(workReportId: string) 
   }
 
   const company = report.shift.company;
-  if (!company.notificationEmail) {
-    console.log(`[email-notif] company ${company.id} has no notificationEmail set, skipping`);
-    return;
+
+  if (company.notificationEmail) {
+    console.log(`[email-notif] sending to ${company.notificationEmail} for company ${company.id}`);
+
+    const token = generateToken();
+    await prisma.accountActionToken.create({
+      data: {
+        tokenHash: hashToken(token),
+        kind: "APPROVE_WORK_REPORT",
+        workReportId: report.id,
+        expiresAt: new Date(Date.now() + APPROVE_TOKEN_TTL_MS),
+      },
+    });
+
+    await sendWorkReportSubmittedEmail(company.notificationEmail, {
+      companyName: company.name,
+      staffName: report.staff.name,
+      date: report.shift.date.toISOString().slice(0, 10),
+      timeLabel: reportTimeLabel(report, report.shift),
+      outcomeLabel: reportOutcomeLabel(report),
+      taskLabel: report.taskName ?? report.shift.taskName ?? "（未指定）",
+      approveUrl: absoluteUrl(`/email-actions/approve-work-report/${token}`),
+      reviewUrl: absoluteUrl("/company/settings?tab=workreports"),
+    });
+  } else {
+    console.log(`[email-notif] company ${company.id} has no notificationEmail set, skipping email`);
   }
-  console.log(`[email-notif] sending to ${company.notificationEmail} for company ${company.id}`);
 
-  const token = generateToken();
-  await prisma.accountActionToken.create({
-    data: {
-      tokenHash: hashToken(token),
-      kind: "APPROVE_WORK_REPORT",
-      workReportId: report.id,
-      expiresAt: new Date(Date.now() + APPROVE_TOKEN_TTL_MS),
-    },
-  });
-
-  await sendWorkReportSubmittedEmail(company.notificationEmail, {
-    companyName: company.name,
-    staffName: report.staff.name,
-    date: report.shift.date.toISOString().slice(0, 10),
-    timeLabel: reportTimeLabel(report, report.shift),
-    outcomeLabel: reportOutcomeLabel(report),
-    taskLabel: report.taskName ?? report.shift.taskName ?? "（未指定）",
-    approveUrl: absoluteUrl(`/email-actions/approve-work-report/${token}`),
-    reviewUrl: absoluteUrl("/company/settings?tab=workreports"),
+  await sendPushToUsers(await companyAdminUserIds(company.id), {
+    title: "業務報告が届きました",
+    body: `${report.staff.name}さん（${report.shift.date.toISOString().slice(0, 10)}）`,
+    url: "/company/settings?tab=workreports",
   });
 }
 
@@ -187,13 +206,14 @@ export async function consumeApproveWorkReportToken(token: string) {
 // 同じ条件：PENDINGかつ希望日が1日でも今日以降残っているもの）。
 export async function runShiftRequestDigest() {
   const today = new Date(`${todayJst()}T00:00:00.000Z`);
+  // メール（notificationEmail宛）だけでなくpush（ログイン中の本部管理者/
+  // 編集者宛）でも届けるようになったため、notificationEmail未設定の会社も
+  // 対象に含める。
   const companies = await prisma.company.findMany({
-    where: { notificationEmail: { not: null } },
     select: { id: true, name: true, notificationEmail: true },
   });
 
   for (const company of companies) {
-    if (!company.notificationEmail) continue;
     const requests = await prisma.shiftRequest.findMany({
       where: { companyId: company.id, status: "PENDING" },
       select: { dates: true },
@@ -201,7 +221,14 @@ export async function runShiftRequestDigest() {
     const count = requests.filter((r) => r.dates.some((d) => d >= today)).length;
     if (count === 0) continue;
 
-    await sendShiftRequestDigestEmail(company.notificationEmail, company.name, count, absoluteUrl("/company"));
+    if (company.notificationEmail) {
+      await sendShiftRequestDigestEmail(company.notificationEmail, company.name, count, absoluteUrl("/company"));
+    }
+    await sendPushToUsers(await companyAdminUserIds(company.id), {
+      title: "未確定のシフト希望があります",
+      body: `${company.name}：${count}件`,
+      url: "/company",
+    });
   }
 }
 
@@ -254,6 +281,11 @@ export async function runShiftStartReminders() {
       appUrl: absoluteUrl("/staff/timecard"),
       ...recruitmentEmailDetails(shift.publicRecruitment),
     });
+    await sendPushToUser(shift.staffUserId, {
+      title: "まもなくシフト開始です",
+      body: `${shift.date.toISOString().slice(0, 10)} ${shiftTimeLabel(shift)}${shift.taskName ? " " + shift.taskName : ""}`,
+      url: "/staff/timecard",
+    });
   }
 
   // 終日シフトは「開始時刻の◯時間前」という基準が使えないため、当日朝
@@ -281,6 +313,11 @@ export async function runShiftStartReminders() {
         appUrl: absoluteUrl("/staff/timecard"),
         isAllDay: true,
         ...recruitmentEmailDetails(shift.publicRecruitment),
+      });
+      await sendPushToUser(shift.staffUserId, {
+        title: "本日のシフトがあります",
+        body: `${shift.date.toISOString().slice(0, 10)} 終日${shift.taskName ? " " + shift.taskName : ""}`,
+        url: "/staff/timecard",
       });
     }
   }

@@ -213,37 +213,49 @@ export default async function PayrollPage({
           </section>
 
           <section className="mt-10">
-            <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">発行履歴</h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-serif-jp text-lg font-bold text-primary">発行履歴</h2>
+              {issuedSlips.length > 0 ? (
+                <a
+                  href={`/api/salary-slips/bulk-pdf?month=${targetMonth}`}
+                  className="rounded-lg border border-primary px-3 py-1.5 text-xs text-primary hover:bg-primary/5"
+                >
+                  一括PDFダウンロード
+                </a>
+              ) : null}
+            </div>
             {issuedSlips.length === 0 ? (
               <p className="text-sm text-muted">この月に発行された給与明細はありません。</p>
             ) : (
               <ul className="flex flex-col gap-1">
-                {issuedSlips.map((slip) => (
-                  <li
-                    key={slip.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm"
-                  >
-                    <Link
-                      href={`/company/payroll?month=${targetMonth}&staff=${slip.staffUserId}`}
-                      className="font-medium text-primary underline"
+                {issuedSlips.map((slip) => {
+                  // 一覧にはこのスタッフの最新発行分のPDFだけを出す。過去分は
+                  // 詳細（編集画面）の発行履歴から辿れる。
+                  const latestIssue = slip.issues.reduce((latest, i) =>
+                    i.issuedAt > latest.issuedAt ? i : latest,
+                  );
+                  return (
+                    <li
+                      key={slip.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm"
                     >
-                      {slip.staff.name}
-                    </Link>
-                    <span className="text-muted">{getTotals(slip).net}円</span>
-                    <div className="flex flex-wrap gap-3">
-                      {slip.issues.map((i) => (
-                        <Link
-                          key={i.id}
-                          href={`/api/salary-slips/${slip.id}/pdf?issueId=${i.id}`}
-                          target="_blank"
-                          className="text-xs text-primary underline"
-                        >
-                          PDF（{new Date(i.issuedAt).toLocaleString("ja-JP")}）
-                        </Link>
-                      ))}
-                    </div>
-                  </li>
-                ))}
+                      <Link
+                        href={`/company/payroll?month=${targetMonth}&staff=${slip.staffUserId}`}
+                        className="font-medium text-primary underline"
+                      >
+                        {slip.staff.name}
+                      </Link>
+                      <span className="text-muted">{getTotals(slip).net}円</span>
+                      <Link
+                        href={`/api/salary-slips/${slip.id}/pdf?issueId=${latestIssue.id}`}
+                        target="_blank"
+                        className="text-xs text-primary underline"
+                      >
+                        PDF（{new Date(latestIssue.issuedAt).toLocaleString("ja-JP")}）
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>

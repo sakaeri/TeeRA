@@ -211,7 +211,17 @@ export default async function InvoicesPage({
           </section>
 
           <section className="mt-10">
-            <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">発行履歴</h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-serif-jp text-lg font-bold text-primary">発行履歴</h2>
+              {issuedInvoices.length > 0 ? (
+                <a
+                  href={`/api/invoices/bulk-pdf?month=${periodLabel}`}
+                  className="rounded-lg border border-primary px-3 py-1.5 text-xs text-primary hover:bg-primary/5"
+                >
+                  一括PDFダウンロード
+                </a>
+              ) : null}
+            </div>
             {issuedInvoices.length === 0 ? (
               <p className="text-sm text-muted">この月に発行された請求書はありません。</p>
             ) : (
@@ -219,6 +229,11 @@ export default async function InvoicesPage({
                 {issuedInvoices.map((inv) => {
                   const registered = Boolean(inv.invoiceRegistrationNumberSnapshot);
                   const totals = computeInvoiceTotals({ lines: inv.lines, registered });
+                  // 一覧にはこの依頼主の最新発行分のPDFだけを出す。過去分は
+                  // 詳細（編集画面）の発行履歴から辿れる。
+                  const latestIssue = inv.issues.reduce((latest, i) =>
+                    i.issuedAt > latest.issuedAt ? i : latest,
+                  );
                   return (
                     <li
                       key={inv.id}
@@ -231,18 +246,13 @@ export default async function InvoicesPage({
                         {inv.companyRelationship.clientCompany?.name ?? inv.companyRelationship.proxyName}
                       </Link>
                       <span className="text-muted">{totals.total}円</span>
-                      <div className="flex flex-wrap gap-3">
-                        {inv.issues.map((i) => (
-                          <Link
-                            key={i.id}
-                            href={`/api/invoices/${inv.id}/pdf?issueId=${i.id}`}
-                            target="_blank"
-                            className="text-xs text-primary underline"
-                          >
-                            PDF（{new Date(i.issuedAt).toLocaleString("ja-JP")}）
-                          </Link>
-                        ))}
-                      </div>
+                      <Link
+                        href={`/api/invoices/${inv.id}/pdf?issueId=${latestIssue.id}`}
+                        target="_blank"
+                        className="text-xs text-primary underline"
+                      >
+                        PDF（{new Date(latestIssue.issuedAt).toLocaleString("ja-JP")}）
+                      </Link>
                     </li>
                   );
                 })}

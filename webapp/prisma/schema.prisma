@@ -56,8 +56,25 @@ model User {
   staffNotesAuthored                  StaffNote[]
   relationshipNotesAuthored           RelationshipNote[]
   paidLeaveEventsCreated              PaidLeaveEvent[]
+  pushSubscriptions                   PushSubscription[]
 
   @@index([email])
+}
+
+// ブラウザのプッシュ通知購読（端末ごとに1行）。本人がログイン中のブラウザで
+// 通知を許可すると作成される。endpointがブラウザ側の購読窓口そのものの
+// ID代わりなので一意。送信に失敗（410 Gone等）した行は呼び出し側で削除する。
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 enum CompanyRole {
