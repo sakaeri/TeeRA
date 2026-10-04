@@ -17,6 +17,16 @@ const zenOldMincho = Zen_Old_Mincho({
 export const metadata: Metadata = {
   title: "TeeRA — シフト管理",
   description: "TeeRA シフト管理プラットフォーム",
+  // iOSでホーム画面に追加して開いた場合（スタンドアロン表示）は、
+  // ステータスバーの色はtheme-color/bodyの背景色では一切制御できず、
+  // この apple-mobile-web-app-status-bar-style だけが効く。
+  // black-translucentでステータスバーを透過させ、下のページ内容
+  // （ヘッダーのセーフエリア分パディング済みの緑）を透かして見せる。
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "TeeRA",
+  },
 };
 
 // viewportFit: "cover" でノッチ/ステータスバー領域までページ描画を広げ、
