@@ -1,10 +1,20 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { redeemPromoItemAction } from "@/app/staff/points/actions";
 
-type Item = { id: string; imageUrl: string; name: string; pointsCost: number; stock: number; description: string | null };
-type Order = { id: string; itemName: string; pointsSpent: number; status: string; createdAt: string };
+type Item = {
+  id: string;
+  imageUrl: string;
+  imageUrl2: string | null;
+  imageUrl3: string | null;
+  name: string;
+  pointsCost: number;
+  stock: number;
+  description: string | null;
+};
+type Order = { id: string; itemName: string; itemImageUrl: string; pointsSpent: number; status: string; createdAt: string };
 type Tier = {
   approvedCount: number;
   rankName: string;
@@ -22,35 +32,49 @@ const RANK_FILL: Record<number, string> = {
   3: "linear-gradient(90deg, var(--brand-accent), #f4dfa0)",
 };
 
+// ISO文字列を「M/D」形式に（タイムゾーンはブラウザのローカルでよい——表示用）。
+function formatMD(iso: string) {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
 export function StaffPointsView({
   balance,
   tier,
   items,
   orders,
+  pendingOrders,
   savedAddress,
   savedPhone,
+  savedRecipientName,
+  savedPostalCode,
 }: {
   balance: number;
   tier: Tier;
   items: Item[];
   orders: Order[];
+  pendingOrders: Record<string, string>;
   savedAddress: string;
   savedPhone: string;
+  savedRecipientName: string;
+  savedPostalCode: string;
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<"list" | "orders">("list");
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [redeemedIds, setRedeemedIds] = useState<Set<string>>(new Set());
   // 交換できる商品だけでなく、交換不可（在庫切れ／pt不足）の商品も
   // 「これのために頑張ろう」で見られるよう、詳細ポップアップはタップ
   // すれば誰でも開ける。交換フォームはその中で条件を満たす時だけ出す。
   const [detailItem, setDetailItem] = useState<Item | null>(null);
   const [address, setAddress] = useState(savedAddress);
   const [phone, setPhone] = useState(savedPhone);
+  const [recipientName, setRecipientName] = useState(savedRecipientName);
+  const [postalCode, setPostalCode] = useState(savedPostalCode);
 
   function redeem(id: string) {
     startTransition(async () => {
-      const result = await redeemPromoItemAction(id, address, phone);
+      const result = await redeemPromoItemAction(id, address, phone, recipientName, postalCode);
       if (result.error) {
         // モーダルを閉じてしまうと、その中にしか表示されないエラー文言が
         // 一度も見えないまま消えてしまう（誰かが先に在庫/ポイントを使い
@@ -66,7 +90,9 @@ export function StaffPointsView({
         }));
         return;
       }
-      setRedeemedIds((prev) => new Set(prev).add(id));
+      // pendingOrdersはサーバー側の最新の注文状況から計算されるため、
+      // 画面に反映するにはサーバーコンポーネントの再取得が必要。
+      router.refresh();
       setDetailItem(null);
     });
   }
@@ -165,7 +191,7 @@ export function StaffPointsView({
       {tab === "list" ? (
         <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
           {items.map((i) => {
-            const isRedeemed = redeemedIds.has(i.id);
+            const pendingSince = pendingOrders[i.id];
             const outOfStock = i.stock <= 0;
             return (
               <li key={i.id}>
@@ -190,8 +216,10 @@ export function StaffPointsView({
                     </span>
                   </div>
                   <div className="truncate font-medium">{i.name}</div>
-                  {isRedeemed || outOfStock ? (
-                    <p className="text-xs text-muted">{isRedeemed ? "交換済み" : "在庫切れ"}</p>
+                  {pendingSince || outOfStock ? (
+                    <p className="text-xs text-muted">
+                      {pendingSince ? `${formatMD(pendingSince)}注文済み` : "在庫切れ"}
+                    </p>
                   ) : null}
                 </button>
               </li>
@@ -202,8 +230,10 @@ export function StaffPointsView({
       ) : (
         <ul className="flex flex-col gap-2">
           {orders.map((o) => (
-            <li key={o.id} className="flex items-center justify-between rounded-lg border border-border/60 p-3 text-sm">
-              <span>{o.itemName}</span>
+            <li key={o.id} className="flex items-center gap-3 rounded-lg border border-border/60 p-3 text-sm">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={o.itemImageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+              <span className="flex-1">{o.itemName}</span>
               <span className="text-muted">
                 {o.pointsSpent}pt ／ {o.status === "SHIPPED" ? "発送済み" : "発送待ち"}
               </span>
@@ -218,12 +248,16 @@ export function StaffPointsView({
           item={detailItem}
           balance={balance}
           pending={pending}
-          isRedeemed={redeemedIds.has(detailItem.id)}
+          pendingSince={pendingOrders[detailItem.id]}
           error={errors[detailItem.id]}
           address={address}
           phone={phone}
+          recipientName={recipientName}
+          postalCode={postalCode}
           onAddressChange={setAddress}
           onPhoneChange={setPhone}
+          onRecipientNameChange={setRecipientName}
+          onPostalCodeChange={setPostalCode}
           onRedeem={() => redeem(detailItem.id)}
           onClose={() => setDetailItem(null)}
         />
@@ -236,43 +270,65 @@ function ItemDetailModal({
   item,
   balance,
   pending,
-  isRedeemed,
+  pendingSince,
   error,
   address,
   phone,
+  recipientName,
+  postalCode,
   onAddressChange,
   onPhoneChange,
+  onRecipientNameChange,
+  onPostalCodeChange,
   onRedeem,
   onClose,
 }: {
   item: Item;
   balance: number;
   pending: boolean;
-  isRedeemed: boolean;
+  pendingSince?: string;
   error?: string;
   address: string;
   phone: string;
+  recipientName: string;
+  postalCode: string;
   onAddressChange: (v: string) => void;
   onPhoneChange: (v: string) => void;
+  onRecipientNameChange: (v: string) => void;
+  onPostalCodeChange: (v: string) => void;
   onRedeem: () => void;
   onClose: () => void;
 }) {
   const outOfStock = item.stock <= 0;
   const insufficientPoints = balance < item.pointsCost;
-  const canRedeem = !isRedeemed && !outOfStock && !insufficientPoints;
+  const canRedeem = !pendingSince && !outOfStock && !insufficientPoints;
+  const images = [item.imageUrl, item.imageUrl2, item.imageUrl3].filter((u): u is string => Boolean(u));
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">{item.name}</h3>
           <button type="button" onClick={onClose} className="text-muted">
             ✕
           </button>
         </div>
-        {item.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.imageUrl} alt="" className="mb-3 aspect-square w-full rounded-lg object-cover" />
+        {images.length > 0 ? (
+          <div className="mb-3 grid grid-cols-1 gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={images[0]} alt="" className="aspect-square w-full rounded-lg object-cover" />
+            {images.length > 1 ? (
+              <div className="grid grid-cols-2 gap-2">
+                {images.slice(1).map((url) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={url} src={url} alt="" className="aspect-square w-full rounded-lg object-cover" />
+                ))}
+              </div>
+            ) : null}
+          </div>
         ) : null}
         <p className="mb-1 font-serif-jp text-lg font-bold text-primary">{item.pointsCost}pt</p>
         {item.description ? <p className="mb-3 text-sm text-muted">{item.description}</p> : null}
@@ -283,8 +339,8 @@ function ItemDetailModal({
             disabled
             className="w-full cursor-not-allowed rounded-lg bg-border px-4 py-2 text-sm font-semibold text-muted"
           >
-            {isRedeemed
-              ? "この商品はすでに交換済みです"
+            {pendingSince
+              ? `${formatMD(pendingSince)}注文済み — 発送までしばらくお待ちください`
               : outOfStock
                 ? "現在在庫切れです"
                 : `あと${item.pointsCost - balance}pt貯めると交換できます`}
@@ -292,6 +348,26 @@ function ItemDetailModal({
         ) : (
           <div className="flex flex-col gap-3">
             <p className="text-sm">お届け先を入力して交換してください。</p>
+            <label className="flex flex-col gap-1 text-xs">
+              お届け先のお名前
+              <input
+                type="text"
+                value={recipientName}
+                onChange={(e) => onRecipientNameChange(e.target.value)}
+                placeholder="例：山田 太郎"
+                className="rounded-lg border border-border px-2 py-2 text-sm"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              郵便番号
+              <input
+                type="text"
+                value={postalCode}
+                onChange={(e) => onPostalCodeChange(e.target.value)}
+                placeholder="例：123-4567"
+                className="rounded-lg border border-border px-2 py-2 text-sm"
+              />
+            </label>
             <label className="flex flex-col gap-1 text-xs">
               住所
               <input
@@ -315,7 +391,7 @@ function ItemDetailModal({
             {error ? <p className="text-xs text-red-600">{error}</p> : null}
             <button
               type="button"
-              disabled={pending || !address.trim() || !phone.trim()}
+              disabled={pending || !recipientName.trim() || !postalCode.trim() || !address.trim() || !phone.trim()}
               onClick={onRedeem}
               className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >

@@ -132,12 +132,15 @@ try {
   body = await staff.textContent("body");
   log("detail popup opens with shipping form", body.includes("お届け先を入力して交換してください"));
 
+  await staff.fill('input[placeholder="例：山田 太郎"]', "テスト 花子");
+  await staff.fill('input[placeholder="例：123-4567"]', "160-0000");
   await staff.fill('input[placeholder="例：東京都渋谷区〇〇1-2-3"]', "東京都新宿区テスト1-1-1");
   await staff.fill('input[placeholder="例：090-1234-5678"]', "090-0000-1111");
   await staff.getByRole("button", { name: "この内容で交換する" }).click();
   await staff.waitForTimeout(700);
   body = await staff.textContent("body");
-  log("item now shows as redeemed", body.includes("交換済み"));
+  const todayMD = `${new Date().getMonth() + 1}/${new Date().getDate()}`;
+  log("item now shows as pending (date-based, not a permanent lock)", body.includes(`${todayMD}注文済み`));
 
   await staff.click("text=交換履歴");
   body = await staff.textContent("body");
@@ -167,7 +170,13 @@ try {
   await admin.click("text=オリジナルタオルSサイズ");
   await admin.waitForTimeout(300);
   body = await admin.textContent("body");
-  log("expanded row shows shipping address/phone", body.includes("東京都新宿区テスト1-1-1") && body.includes("090-0000-1111"));
+  log(
+    "expanded row shows recipient name/postal code/address/phone",
+    body.includes("テスト 花子") &&
+      body.includes("160-0000") &&
+      body.includes("東京都新宿区テスト1-1-1") &&
+      body.includes("090-0000-1111"),
+  );
 
   await admin.getByRole("button", { name: "発送済みにする" }).click();
   await admin.waitForTimeout(300);
@@ -183,6 +192,26 @@ try {
   await staff.click("text=交換履歴");
   body = await staff.textContent("body");
   log("staff sees order as 発送済み", body.includes("発送済み"));
+
+  // ⑤: the "pending" lock is a real DB-backed status, not a permanent
+  // session-local flag — once the company marks it shipped, the item must
+  // become orderable again (confirms no fake/stuck "already redeemed" state).
+  // Grant 1 more point via the ledger so the shipping form (not an
+  // insufficient-points message) is what proves the lock was lifted.
+  psql(
+    `insert into "StaffPointsLedgerEntry" (id, "staffUserId", type, points, "balanceAfter", "createdAt") ` +
+      `select gen_random_uuid()::text, id, 'ADJUSTMENT', 1, 1, now() from "User" where email='${staffEmail}';`,
+  );
+  await staff.goto("http://localhost:3000/staff/points");
+  await staff.getByRole("button", { name: /オリジナルタオルSサイズ/ }).click();
+  await staff.waitForTimeout(300);
+  body = await staff.textContent("body");
+  log(
+    "item becomes re-orderable after company marks it shipped",
+    body.includes("お届け先を入力して交換してください"),
+  );
+  await staff.click("text=✕");
+  await staff.waitForTimeout(200);
 
   // delete via confirm popup
   await admin.goto("http://localhost:3000/company");

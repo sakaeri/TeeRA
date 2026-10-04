@@ -5,11 +5,24 @@ import { requireCompanyStaffRole } from "@/lib/auth/session";
 import { redeemPromoItem } from "@/lib/domain/promo";
 import { notifyCompanyOfPromoOrder } from "@/lib/domain/emailNotifications";
 
-export async function redeemPromoItemAction(promoItemId: string, shippingAddress: string, shippingPhone: string) {
+export async function redeemPromoItemAction(
+  promoItemId: string,
+  shippingAddress: string,
+  shippingPhone: string,
+  shippingRecipientName: string,
+  shippingPostalCode: string,
+) {
   const { userId } = await requireCompanyStaffRole();
 
   try {
-    const redemption = await redeemPromoItem({ promoItemId, staffUserId: userId, shippingAddress, shippingPhone });
+    const redemption = await redeemPromoItem({
+      promoItemId,
+      staffUserId: userId,
+      shippingAddress,
+      shippingPhone,
+      shippingRecipientName,
+      shippingPostalCode,
+    });
     // 通知メールの失敗（Resend側の一時的な障害等）で、成立済みの注文自体が
     // 失敗したかのように利用者に見えてしまわないよう、ここだけ独立してcatchする。
     await notifyCompanyOfPromoOrder(redemption.id).catch((err) => console.error("[email] promo order notify failed", err));

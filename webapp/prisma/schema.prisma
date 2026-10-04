@@ -18,15 +18,18 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  isProxy      Boolean  @default(false) // 仮アカウント — placeholder person with no real login yet
-  address      String? // shipping address, entered at first promo redemption and reused after
-  phoneNumber  String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  email                 String   @unique
+  passwordHash          String
+  name                  String
+  isProxy               Boolean  @default(false) // 仮アカウント — placeholder person with no real login yet
+  address               String? // shipping address, entered at first promo redemption and reused after
+  phoneNumber           String?
+  postalCode            String? // same reuse pattern as address/phoneNumber
+  shippingRecipientName String? // お届け先氏名。アカウント名(name)とは別に持つ
+  // — 家族宛て等、本人以外に送る場合もあるため name 自体は上書きしない。
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   companyMemberships CompanyMembership[]
   teamMemberships    TeamMembership[]
@@ -1024,16 +1027,16 @@ model Invoice {
 }
 
 model InvoiceLine {
-  id             String  @id @default(cuid())
-  invoiceId      String
-  shiftId        String?
-  staffName      String
-  description    String
-  hours          Float
-  rate           Int
-  amount         Int
-  taxRatePercent Int // 10, 8, or 0 (消費税区分「なし」)
-  sortOrder      Int     @default(0)
+  id               String  @id @default(cuid())
+  invoiceId        String
+  shiftId          String?
+  staffName        String
+  description      String
+  hours            Float
+  rate             Int
+  amount           Int
+  taxRatePercent   Int // 10, 8, or 0 (消費税区分「なし」)
+  sortOrder        Int     @default(0)
   // trueは管理者が時間/単価を手で直した行 — regenerateLinesはこの行を
   // 上書き・削除しない（SalarySlipLine.isManuallyEditedと同じ考え方）。
   isManuallyEdited Boolean @default(false)
@@ -1184,6 +1187,8 @@ model PromoItem {
   id          String   @id @default(cuid())
   companyId   String
   imageUrl    String
+  imageUrl2   String? // 商品画像2〜3枚目（任意）
+  imageUrl3   String?
   name        String
   pointsCost  Int
   stock       Int
@@ -1200,15 +1205,17 @@ enum PromoRedemptionStatus {
 }
 
 model PromoRedemption {
-  id              String                @id @default(cuid())
-  promoItemId     String
-  staffUserId     String
-  pointsSpent     Int
-  status          PromoRedemptionStatus @default(PENDING_SHIPMENT)
-  shippingAddress String? // snapshot of the staff's address at redemption time
-  shippingPhone   String?
-  shippedAt       DateTime?
-  createdAt       DateTime              @default(now())
+  id                    String                @id @default(cuid())
+  promoItemId           String
+  staffUserId           String
+  pointsSpent           Int
+  status                PromoRedemptionStatus @default(PENDING_SHIPMENT)
+  shippingAddress       String? // snapshot of the staff's address at redemption time
+  shippingPhone         String?
+  shippingPostalCode    String? // nullable for pre-existing rows created before this field existed
+  shippingRecipientName String? // same — may differ from staff's own User.name (shipping to someone else)
+  shippedAt             DateTime?
+  createdAt             DateTime              @default(now())
 
   promoItem PromoItem @relation(fields: [promoItemId], references: [id], onDelete: Cascade)
   staff     User      @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
@@ -1232,18 +1239,18 @@ enum TodoStatus {
 }
 
 model TodoItem {
-  id                String     @id @default(cuid())
-  companyId         String
-  teamId            String?
-  kind              TodoKind
-  title             String
-  dueDate           DateTime?  @db.Date
-  recipientUserId   String? // restricted to same-company/same-team members only
-  createdByUserId   String?
-  imageUrl          String?
-  status            TodoStatus @default(OPEN)
-  resolvedAt        DateTime?
-  createdAt         DateTime   @default(now())
+  id              String     @id @default(cuid())
+  companyId       String
+  teamId          String?
+  kind            TodoKind
+  title           String
+  dueDate         DateTime?  @db.Date
+  recipientUserId String? // restricted to same-company/same-team members only
+  createdByUserId String?
+  imageUrl        String?
+  status          TodoStatus @default(OPEN)
+  resolvedAt      DateTime?
+  createdAt       DateTime   @default(now())
 
   company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   team      Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)

@@ -172,6 +172,8 @@ try {
   await staff.waitForTimeout(300);
   await staff.getByRole("button", { name: /テスト景品/ }).click();
   await staff.waitForTimeout(300);
+  await staff.fill('input[placeholder="例：山田 太郎"]', "テスト 花子");
+  await staff.fill('input[placeholder="例：123-4567"]', "160-0000");
   await staff.fill('input[placeholder="例：東京都渋谷区〇〇1-2-3"]', "東京都新宿区テスト1-1-1");
   await staff.fill('input[placeholder="例：090-1234-5678"]', "090-0000-1111");
   const logSizeBeforeRedeem = readFileSync(DEV_LOG_PATH, "utf8").length;

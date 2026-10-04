@@ -94,6 +94,8 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
         promoItems={promoItems.map((p) => ({
           id: p.id,
           imageUrl: p.imageUrl,
+          imageUrl2: p.imageUrl2,
+          imageUrl3: p.imageUrl3,
           name: p.name,
           pointsCost: p.pointsCost,
           stock: p.stock,
@@ -102,11 +104,14 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
         promoOrders={redemptions.map((r) => ({
           id: r.id,
           itemName: r.promoItem.name,
+          itemImageUrl: r.promoItem.imageUrl,
           staffName: r.staff.name,
           status: r.status,
           createdAt: r.createdAt.toISOString().slice(0, 10),
           shippingAddress: r.shippingAddress,
           shippingPhone: r.shippingPhone,
+          shippingRecipientName: r.shippingRecipientName,
+          shippingPostalCode: r.shippingPostalCode,
         }))}
         shortageEntries={shortageEntries}
         unconfirmedShiftEntries={unconfirmedShiftEntries}

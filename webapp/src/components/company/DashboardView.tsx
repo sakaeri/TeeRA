@@ -121,6 +121,8 @@ type DuePaidLeaveGrant = {
 type PromoItem = {
   id: string;
   imageUrl: string;
+  imageUrl2: string | null;
+  imageUrl3: string | null;
   name: string;
   pointsCost: number;
   stock: number;
@@ -129,11 +131,14 @@ type PromoItem = {
 type PromoOrder = {
   id: string;
   itemName: string;
+  itemImageUrl: string;
   staffName: string;
   status: string;
   createdAt: string;
   shippingAddress: string | null;
   shippingPhone: string | null;
+  shippingRecipientName: string | null;
+  shippingPostalCode: string | null;
 };
 
 type DashboardTab = "active" | "resolved" | "promoList" | "promoOrders";
@@ -480,6 +485,8 @@ function TodoModal({
 function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onClose: () => void }) {
   const [pending, startTransition] = useTransition();
   const [imageUrl, setImageUrl] = useState(editingItem?.imageUrl ?? "");
+  const [imageUrl2, setImageUrl2] = useState(editingItem?.imageUrl2 ?? "");
+  const [imageUrl3, setImageUrl3] = useState(editingItem?.imageUrl3 ?? "");
   const [name, setName] = useState(editingItem?.name ?? "");
   const [pointsCost, setPointsCost] = useState(editingItem ? String(editingItem.pointsCost) : "");
   const [stock, setStock] = useState(editingItem ? String(editingItem.stock) : "");
@@ -493,7 +500,7 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-lg"
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative mb-4" ref={infoRef}>
@@ -521,7 +528,13 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <ImageDropzone label="商品画像" imageUrl={imageUrl} onChange={setImageUrl} required size="md" />
+          <div className="flex flex-col gap-2">
+            <ImageDropzone label="商品画像" imageUrl={imageUrl} onChange={setImageUrl} required size="md" />
+            <div className="grid grid-cols-2 gap-2">
+              <ImageDropzone label="画像2（任意）" imageUrl={imageUrl2} onChange={setImageUrl2} size="sm" />
+              <ImageDropzone label="画像3（任意）" imageUrl={imageUrl3} onChange={setImageUrl3} size="sm" />
+            </div>
+          </div>
           <div className="flex flex-col gap-3">
             <label className="flex flex-col gap-1 text-xs">
               <span>
@@ -581,6 +594,8 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
             startTransition(async () => {
               const payload = {
                 imageUrl,
+                imageUrl2: imageUrl2 || undefined,
+                imageUrl3: imageUrl3 || undefined,
                 name,
                 pointsCost: Number(pointsCost),
                 stock: Number(stock),
@@ -1247,20 +1262,31 @@ function TodoSection({
                     onClick={() => setExpandedOrderId(expanded ? null : o.id)}
                     className="flex w-full items-center justify-between text-left"
                   >
-                    <span>
-                      <span className="font-medium">{o.itemName}</span>
-                      <span className="ml-2 text-muted">
-                        注文者：{o.staffName} 注文日：{o.createdAt} 発送日：{o.status === "SHIPPED" ? "済" : "未定"}
+                    <span className="flex items-center gap-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={o.itemImageUrl}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                      />
+                      <span>
+                        <span className="font-medium">{o.itemName}</span>
+                        <span className="ml-2 text-muted">
+                          注文者：{o.staffName} 注文日：{o.createdAt} 発送日：{o.status === "SHIPPED" ? "済" : "未定"}
+                        </span>
+                        {o.status !== "SHIPPED" ? (
+                          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">発送待ち</span>
+                        ) : null}
                       </span>
-                      {o.status !== "SHIPPED" ? (
-                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">発送待ち</span>
-                      ) : null}
                     </span>
                     <span className="shrink-0 text-muted">{expanded ? "▲" : "▼"}</span>
                   </button>
                   {expanded ? (
                     <div className="mt-2 border-t border-border/50 pt-2 text-xs">
-                      <p>住所：{o.shippingAddress || "未登録"}</p>
+                      <p>お届け先氏名：{o.shippingRecipientName || "未登録"}</p>
+                      <p>
+                        郵便番号：{o.shippingPostalCode || "未登録"} 住所：{o.shippingAddress || "未登録"}
+                      </p>
                       <p>電話番号：{o.shippingPhone || "未登録"}</p>
                       {o.status !== "SHIPPED" ? (
                         <button

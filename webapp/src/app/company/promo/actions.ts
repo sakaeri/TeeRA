@@ -8,6 +8,8 @@ import { createPromoItem, updatePromoItem, deletePromoItem, markRedemptionShippe
 
 export async function createPromoItemAction(input: {
   imageUrl: string;
+  imageUrl2?: string;
+  imageUrl3?: string;
   name: string;
   pointsCost: number;
   stock: number;
@@ -22,7 +24,15 @@ export async function createPromoItemAction(input: {
 
 export async function updatePromoItemAction(
   id: string,
-  changes: Partial<{ imageUrl: string; name: string; pointsCost: number; stock: number; description: string }>,
+  changes: Partial<{
+    imageUrl: string;
+    imageUrl2: string;
+    imageUrl3: string;
+    name: string;
+    pointsCost: number;
+    stock: number;
+    description: string;
+  }>,
 ) {
   const { membership } = await requireCompanyAdminOrEditor();
   const item = await prisma.promoItem.findUniqueOrThrow({ where: { id } });

@@ -27,9 +27,13 @@ export default async function StaffPointsPage() {
         tier={tier}
         savedAddress={user.address ?? ""}
         savedPhone={user.phoneNumber ?? ""}
+        savedRecipientName={user.shippingRecipientName ?? user.name ?? ""}
+        savedPostalCode={user.postalCode ?? ""}
         items={items.map((i) => ({
           id: i.id,
           imageUrl: i.imageUrl,
+          imageUrl2: i.imageUrl2,
+          imageUrl3: i.imageUrl3,
           name: i.name,
           pointsCost: i.pointsCost,
           stock: i.stock,
@@ -38,10 +42,19 @@ export default async function StaffPointsPage() {
         orders={redemptions.map((r) => ({
           id: r.id,
           itemName: r.promoItem.name,
+          itemImageUrl: r.promoItem.imageUrl,
           pointsSpent: r.pointsSpent,
           status: r.status,
           createdAt: r.createdAt.toISOString(),
         }))}
+        pendingOrders={Object.fromEntries(
+          redemptions
+            .filter((r) => r.status === "PENDING_SHIPMENT")
+            .reduce((map, r) => {
+              if (!map.has(r.promoItemId)) map.set(r.promoItemId, r.createdAt.toISOString());
+              return map;
+            }, new Map<string, string>()),
+        )}
       />
     </main>
   );

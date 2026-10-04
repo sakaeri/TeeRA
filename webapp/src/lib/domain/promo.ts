@@ -8,6 +8,8 @@ export async function listPromoItems(companyId: string) {
 export async function createPromoItem(params: {
   companyId: string;
   imageUrl: string;
+  imageUrl2?: string;
+  imageUrl3?: string;
   name: string;
   pointsCost: number;
   stock: number;
@@ -18,7 +20,15 @@ export async function createPromoItem(params: {
 
 export async function updatePromoItem(
   id: string,
-  changes: Partial<{ imageUrl: string; name: string; pointsCost: number; stock: number; description: string }>,
+  changes: Partial<{
+    imageUrl: string;
+    imageUrl2: string;
+    imageUrl3: string;
+    name: string;
+    pointsCost: number;
+    stock: number;
+    description: string;
+  }>,
 ) {
   return prisma.promoItem.update({ where: { id }, data: changes });
 }
@@ -71,6 +81,8 @@ export async function redeemPromoItem(params: {
   staffUserId: string;
   shippingAddress: string;
   shippingPhone: string;
+  shippingRecipientName: string;
+  shippingPostalCode: string;
 }) {
   try {
     return await redeemPromoItemTx(params);
@@ -93,6 +105,8 @@ async function redeemPromoItemTx(params: {
   staffUserId: string;
   shippingAddress: string;
   shippingPhone: string;
+  shippingRecipientName: string;
+  shippingPostalCode: string;
 }) {
   return prisma.$transaction(
     async (tx) => {
@@ -121,7 +135,12 @@ async function redeemPromoItemTx(params: {
       // later change doesn't retroactively alter an already-placed order.
       await tx.user.update({
         where: { id: params.staffUserId },
-        data: { address: params.shippingAddress, phoneNumber: params.shippingPhone },
+        data: {
+          address: params.shippingAddress,
+          phoneNumber: params.shippingPhone,
+          shippingRecipientName: params.shippingRecipientName,
+          postalCode: params.shippingPostalCode,
+        },
       });
 
       const redemption = await tx.promoRedemption.create({
@@ -131,6 +150,8 @@ async function redeemPromoItemTx(params: {
           pointsSpent: item.pointsCost,
           shippingAddress: params.shippingAddress,
           shippingPhone: params.shippingPhone,
+          shippingRecipientName: params.shippingRecipientName,
+          shippingPostalCode: params.shippingPostalCode,
         },
       });
 
