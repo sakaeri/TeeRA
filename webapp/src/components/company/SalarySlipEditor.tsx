@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   addCustomLineAction,
   updateLineAction,
@@ -17,7 +17,10 @@ type Line = { id: string; kind: string; description: string; hours: number; rate
 // 支給合計から逆算した金額と一緒に保存しておく表示用の値。次に開いたとき
 // 入力した率を再表示できるようにするためのもので、他の月や他のスタッフに
 // は引き継がない（都度その月の支給合計で計算し直す運用）。
-type Deduction = { id: string; label: string; amount: number; ratePercent?: number };
+// quantity/unitPriceは、追加した控除項目を数量×単価で管理したい場合の
+// 表示用の値（例：弁当代 3回×300円）。どちらも無ければ金額を直接入力する
+// 従来通りの扱いになる。
+type Deduction = { id: string; label: string; amount: number; ratePercent?: number; quantity?: number; unitPrice?: number };
 type Totals = { grossFromShifts: number; paidLeaveAmount: number; gross: number; totalDeductions: number; net: number };
 type UnresolvedShift = { shiftId: string; workReportId: string; date: string; taskName: string; source: "workReport" | "shift" };
 
@@ -158,7 +161,7 @@ export function SalarySlipEditor({
       <DeductionsSection slip={slip} gross={slip.totals.gross} isEditable={isEditable} startTransition={startTransition} />
 
       <section className="rounded-2xl border-2 border-primary bg-white/60 p-6">
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
           <span>支給合計 {slip.totals.gross}円 ／ 控除合計 {slip.totals.totalDeductions}円</span>
           <span className="text-lg font-bold text-primary">差引支給額 {slip.totals.net}円</span>
         </div>
@@ -486,6 +489,28 @@ function DeductionsSection({
     startTransition(() => updateDeductionsAction(slip.id, next));
   }
 
+  // 率指定（雇用保険料）の控除は、支給合計（勤務内訳の編集等）が変わる
+  // たびに金額を自動で再計算する。以前は率の入力欄を一度消して入れ直す
+  // までは古い支給合計のままの金額が残ってしまうバグがあった。
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      setDeductions((prev) => {
+        let changed = false;
+        const next = prev.map((d) => {
+          if (d.ratePercent == null) return d;
+          const amount = Math.round((gross * d.ratePercent) / 100);
+          if (amount === d.amount) return d;
+          changed = true;
+          return { ...d, amount };
+        });
+        if (!changed) return prev;
+        startTransition(() => updateDeductionsAction(slip.id, next));
+        return next;
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gross]);
+
   return (
     <section className="rounded-2xl border border-border bg-white/60 p-6">
       <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">控除</h2>
@@ -508,7 +533,12 @@ function DeductionsSection({
                   // 計算し直す運用のため）。
                   onBlur={(e) => {
                     const rateStr = e.target.value;
-                    if (rateStr === "") return;
+                    if (rateStr === "") {
+                      const next = [...deductions];
+                      next[i] = { ...d, ratePercent: undefined };
+                      save(next);
+                      return;
+                    }
                     const rate = Number(rateStr);
                     const amount = Math.round((gross * rate) / 100);
                     const next = [...deductions];
@@ -517,31 +547,67 @@ function DeductionsSection({
                   }}
                   className="w-16 rounded-lg border border-border px-2 py-1 text-sm"
                 />
-                <span className="text-xs text-muted">% ×支給合計 =</span>
+                <span className="text-xs text-muted">%（＝{d.amount}円）</span>
               </div>
-            ) : null}
-            <input
-              type="number"
-              defaultValue={d.amount}
-              key={`${d.id}-amt-${d.amount}`}
-              disabled={!isEditable}
-              // valueで常に制御すると、入力中に先頭の0が消えずに残り続ける
-              // ブラウザのnumber inputの挙動（例：08900のように表示されて
-              // しまう）があるため、他の金額欄（勤務内訳の時間/単価等）と
-              // 同じくdefaultValue+onBlurの非制御方式にする。keyにamountを
-              // 含めているのは、率入力による自動計算で値が変わった時に
-              // defaultValueを再反映させるため（非制御なので再マウントが
-              // 必要）。
-              onBlur={(e) => {
-                const amount = Number(e.target.value);
-                if (amount === d.amount) return;
-                const next = [...deductions];
-                next[i] = { ...d, amount, ratePercent: undefined };
-                save(next);
-              }}
-              className="w-28 rounded-lg border border-border px-2 py-1 text-sm"
-            />
-            <span className="text-xs text-muted">円</span>
+            ) : d.quantity != null && d.unitPrice != null ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  key={`${d.id}-qty-${d.quantity}`}
+                  defaultValue={d.quantity}
+                  disabled={!isEditable}
+                  onBlur={(e) => {
+                    const quantity = Number(e.target.value);
+                    if (quantity === d.quantity) return;
+                    const unitPrice = d.unitPrice ?? 0;
+                    const next = [...deductions];
+                    next[i] = { ...d, quantity, amount: Math.round(quantity * unitPrice) };
+                    save(next);
+                  }}
+                  className="w-14 rounded-lg border border-border px-2 py-1 text-sm"
+                />
+                <span className="text-xs text-muted">×</span>
+                <input
+                  type="number"
+                  key={`${d.id}-unit-${d.unitPrice}`}
+                  defaultValue={d.unitPrice}
+                  disabled={!isEditable}
+                  onBlur={(e) => {
+                    const unitPrice = Number(e.target.value);
+                    if (unitPrice === d.unitPrice) return;
+                    const quantity = d.quantity ?? 0;
+                    const next = [...deductions];
+                    next[i] = { ...d, unitPrice, amount: Math.round(quantity * unitPrice) };
+                    save(next);
+                  }}
+                  className="w-20 rounded-lg border border-border px-2 py-1 text-sm"
+                />
+                <span className="text-xs text-muted">円（＝{d.amount}円）</span>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="number"
+                  defaultValue={d.amount}
+                  key={`${d.id}-amt-${d.amount}`}
+                  disabled={!isEditable}
+                  // valueで常に制御すると、入力中に先頭の0が消えずに残り
+                  // 続けるブラウザのnumber inputの挙動（例：08900のように
+                  // 表示されてしまう）があるため、他の金額欄（勤務内訳の
+                  // 時間/単価等）と同じくdefaultValue+onBlurの非制御方式に
+                  // する。
+                  onBlur={(e) => {
+                    const amount = Number(e.target.value);
+                    if (amount === d.amount) return;
+                    const next = [...deductions];
+                    next[i] = { ...d, amount };
+                    save(next);
+                  }}
+                  className="w-28 rounded-lg border border-border px-2 py-1 text-sm"
+                />
+                <span className="text-xs text-muted">円</span>
+              </>
+            )}
             {d.id.startsWith("custom-") && isEditable ? (
               <button
                 type="button"
@@ -569,8 +635,11 @@ function DeductionsSection({
       {showAddModal ? (
         <AddDeductionModal
           onClose={() => setShowAddModal(false)}
-          onSubmit={(label, amount) => {
-            save([...deductions, { id: `custom-${Date.now()}`, label, amount }]);
+          onSubmit={(label, quantity, unitPrice) => {
+            save([
+              ...deductions,
+              { id: `custom-${Date.now()}`, label, amount: Math.round(quantity * unitPrice), quantity, unitPrice },
+            ]);
             setShowAddModal(false);
           }}
         />
@@ -584,11 +653,12 @@ function AddDeductionModal({
   onSubmit,
 }: {
   onClose: () => void;
-  onSubmit: (label: string, amount: number) => void;
+  onSubmit: (label: string, quantity: number, unitPrice: number) => void;
 }) {
   const [label, setLabel] = useState("");
-  const [amount, setAmount] = useState("");
-  const canSubmit = label && amount;
+  const [quantity, setQuantity] = useState("1");
+  const [unitPrice, setUnitPrice] = useState("");
+  const canSubmit = label && quantity && unitPrice;
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
@@ -610,11 +680,20 @@ function AddDeductionModal({
             />
           </label>
           <label className="flex flex-col gap-1 text-xs">
-            金額
+            数量
             <input
               type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            単価
+            <input
+              type="number"
+              value={unitPrice}
+              onChange={(e) => setUnitPrice(e.target.value)}
               className="rounded-lg border border-border px-2 py-1.5 text-sm"
             />
           </label>
@@ -630,7 +709,7 @@ function AddDeductionModal({
           <button
             type="button"
             disabled={!canSubmit}
-            onClick={() => onSubmit(label, Number(amount))}
+            onClick={() => onSubmit(label, Number(quantity), Number(unitPrice))}
             className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
             追加する

@@ -9,7 +9,9 @@ const FIXED_DEDUCTION_LABELS = ["社会保険料", "厚生年金", "雇用保険
 
 // ratePercentは「雇用保険料」欄で率を入力して金額を自動計算したときの
 // 表示用の値（SalarySlipEditor.tsx参照）。計算には使わず、再表示だけに使う。
-export type DeductionItem = { id: string; label: string; amount: number; ratePercent?: number };
+// quantity/unitPriceも同様に、数量×単価で追加した控除項目の表示用の値
+// （どちらも無い場合は金額を直接入力したもの）。
+export type DeductionItem = { id: string; label: string; amount: number; ratePercent?: number; quantity?: number; unitPrice?: number };
 
 function monthRange(targetMonth: string) {
   const [year, month] = targetMonth.split("-").map(Number);

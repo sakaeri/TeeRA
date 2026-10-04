@@ -1,11 +1,16 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 
-// 控除欄の2つの修正を検証する:
+// 控除欄の修正を検証する:
 // ①先頭の0が消えずに残り続けるバグ（value制御+number inputの既知の癖）
 //   を、他の金額欄と同じdefaultValue+onBlurの非制御方式に直したことの確認。
-// ②雇用保険料欄に率(%)を入力すると、支給合計×率で金額欄が自動計算される
-//   ことの確認（率自体はその月の表示用に保存され、再読み込みでも残る）。
+// ②雇用保険料欄に率(%)を入力すると、支給合計×率で自動計算されることの
+//   確認（率自体はその月の表示用に保存され、再読み込みでも残る）。
+//   金額欄は率モードでは個別入力にせず「0.6%（＝78円）」の読み取り専用
+//   表示にし、率を消すと手入力モードに戻る。
+// ③支給合計（勤務内訳）を編集すると、率モードの雇用保険料も自動で
+//   再計算されることの確認（以前は率欄を消して入れ直すまで古い支給合計
+//   ベースの金額のままになるバグがあった）。
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -129,15 +134,17 @@ try {
   log("社会保険料に8900と入力すると08900にならず8900のまま", socialInsuranceValue === "8900");
 
   // --- ②雇用保険料: 率を入力すると自動計算される ---
+  // （率モードでは個別の金額入力欄は出さず、「0.6%（＝78円）」のように
+  //   計算結果だけを表示する仕様に変更した）
   const insuranceRow = admin.locator("div", { hasText: "雇用保険料" }).last();
   const rateInput = insuranceRow.locator('input[placeholder="率"]');
   await rateInput.fill("0.6");
   await rateInput.blur();
   await admin.waitForTimeout(500);
   // 13000 × 0.6 / 100 = 78円
-  const insuranceAmountInput = insuranceRow.locator('input[type=number]').nth(1);
-  const insuranceAmountValue = await insuranceAmountInput.inputValue();
-  log("雇用保険料率0.6%を入力すると支給合計13000円×0.6%=78円が自動計算される", insuranceAmountValue === "78");
+  let insuranceRowText = await insuranceRow.innerText();
+  log("雇用保険料率0.6%を入力すると支給合計13000円×0.6%=78円が自動計算される", insuranceRowText.includes("％（＝78円）") || insuranceRowText.includes("%（＝78円）"));
+  log("「×支給合計 =」という冗長な文言は出ない", !insuranceRowText.includes("×支給合計"));
 
   const slipId = psql(`select id from "SalarySlip" where "staffUserId"='${payrollStaffUserId}';`);
   const deductionsJson = psql(`select "deductions"::text from "SalarySlip" where id='${slipId}';`);
@@ -152,19 +159,43 @@ try {
   const rateValueAfterReload = await rateInputAfterReload.inputValue();
   log("ページを開き直しても率0.6が再表示される", rateValueAfterReload === "0.6");
 
-  // --- 金額を直接上書きすると率表示はクリアされる ---
-  const insuranceAmountInputAfterReload = insuranceRowAfterReload.locator('input[type=number]').nth(1);
-  await insuranceAmountInputAfterReload.click();
-  await insuranceAmountInputAfterReload.fill("");
-  await insuranceAmountInputAfterReload.type("100");
-  await insuranceAmountInputAfterReload.blur();
+  // --- ③支給合計が変わると（勤務内訳を編集すると）雇用保険料も自動で
+  //     再計算される（以前は率欄を消して入れ直すまで古い金額のままの
+  //     バグがあった） ---
+  const lineAmountInputs = admin.locator('section:has(h2:has-text("勤務内訳")) input[type=number]');
+  await lineAmountInputs.nth(1).fill("2600"); // 単価を2倍（1300→2600）にする
+  await lineAmountInputs.nth(1).blur();
+  await admin.waitForTimeout(800);
+  let bodyAfterGrossChange = await admin.locator("body").innerText();
+  log("支給合計が26000円に再計算される", bodyAfterGrossChange.includes("支給合計 26000円"));
+  log("雇用保険料も自動で156円（26000×0.6%）に再計算される（バグ修正確認）", bodyAfterGrossChange.includes("％（＝156円）") || bodyAfterGrossChange.includes("%（＝156円）"));
+  // 元の単価に戻しておく（以降のassertionは13000円ベースの想定のため）
+  await lineAmountInputs.nth(1).fill("1300");
+  await lineAmountInputs.nth(1).blur();
+  await admin.waitForTimeout(800);
+
+  // --- 率欄を空にすると手入力の金額モードに切り替わる ---
+  const rateInputToClear = admin.locator("div", { hasText: "雇用保険料" }).last().locator('input[placeholder="率"]');
+  await rateInputToClear.fill("");
+  await rateInputToClear.blur();
+  await admin.waitForTimeout(500);
+  await admin.goto(payrollUrl);
+  await admin.waitForTimeout(500);
+  const insuranceRowAfterClear = admin.locator("div", { hasText: "雇用保険料" }).last();
+  const rateValueAfterClear = await insuranceRowAfterClear.locator('input[placeholder="率"]').inputValue();
+  log("率欄を空にすると率表示はクリアされる（空になる）", rateValueAfterClear === "");
+
+  // --- 手入力モードになった金額欄を直接上書きできる ---
+  const insuranceAmountInputAfterClear = insuranceRowAfterClear.locator('input[type=number]').last();
+  await insuranceAmountInputAfterClear.click();
+  await insuranceAmountInputAfterClear.fill("");
+  await insuranceAmountInputAfterClear.type("100");
+  await insuranceAmountInputAfterClear.blur();
   await admin.waitForTimeout(500);
   await admin.goto(payrollUrl);
   await admin.waitForTimeout(500);
   const insuranceRowAfterOverride = admin.locator("div", { hasText: "雇用保険料" }).last();
-  const rateValueAfterOverride = await insuranceRowAfterOverride.locator('input[placeholder="率"]').inputValue();
-  log("金額を直接上書きすると率表示はクリアされる（空になる）", rateValueAfterOverride === "");
-  const amountValueAfterOverride = await insuranceRowAfterOverride.locator('input[type=number]').nth(1).inputValue();
+  const amountValueAfterOverride = await insuranceRowAfterOverride.locator('input[type=number]').last().inputValue();
   log("直接上書きした金額100円は保持される", amountValueAfterOverride === "100");
 
   console.log(process.exitCode ? "PAYROLL DEDUCTIONS SMOKE TEST HAD FAILURES" : "PAYROLL DEDUCTIONS SMOKE TEST PASSED");

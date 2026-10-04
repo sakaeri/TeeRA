@@ -264,7 +264,7 @@ export function InvoiceEditor({
       </section>
 
       <section className="rounded-2xl border-2 border-primary bg-white/60 p-6">
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
           <span>
             小計 {invoice.totals.subtotalAll}円 ／ 消費税合計 {invoice.totals.taxAll}円
           </span>
