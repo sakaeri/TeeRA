@@ -470,6 +470,20 @@ export function pickStaffTaskRate<T extends { companyRelationshipId: string | nu
   return null;
 }
 
+// あるスタッフの有効な雇用契約（ACTIVE）の業務内容（jobDescription）と
+// 一致するかどうか。一致する場合、その業務内容は既に契約の基本給で完全に
+// カバーされている（StaffDetailPanelの「基本給」行がまさにこれ）。
+export async function isCoveredByBaseContract(params: { companyId: string; staffUserId: string; taskName: string }) {
+  const contract = await prisma.staffContract.findFirst({
+    where: {
+      staffUserId: params.staffUserId,
+      status: "ACTIVE",
+      template: { companyId: params.companyId, jobDescription: params.taskName },
+    },
+  });
+  return Boolean(contract);
+}
+
 // 業務内容名だけを登録する（単価は付けない）— 業務報告での新規追加など、
 // その場登録用。companyRelationshipId がnullの複合ユニークキーはPrismaの
 // upsertでは扱えないため、findFirst+create で代用する

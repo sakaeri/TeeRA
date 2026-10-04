@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { registerStaffTaskName, registerPlacementTaskName } from "@/lib/domain/contracts";
+import { registerStaffTaskName, registerPlacementTaskName, isCoveredByBaseContract } from "@/lib/domain/contracts";
 import { todayJst } from "@/lib/date";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -114,12 +114,23 @@ export async function submitWorkReport(params: {
       // しておく — こうしないと後で会社側が単価を設定しようとしたとき、
       // ここで入力された文字列と一致する候補が一覧に出てこない
       // （表記ゆれ対策の意味が無くなってしまう）。単価は付けず登録のみ。
-      await registerStaffTaskName({
+      // ただし、有効な雇用契約の業務内容と同じ名前の場合は登録しない —
+      // 既に契約の基本給で完全にカバーされているのに「単価未設定」の行が
+      // 重複して並び、基本給の表示と矛盾して見えてしまうため
+      // （登録してしまうと、給与計算時にも設定漏れ扱いの警告が誤って出る）。
+      const coveredByBaseContract = await isCoveredByBaseContract({
         companyId: shift.companyId,
         staffUserId: params.staffUserId,
         taskName: params.taskName,
-        companyRelationshipId: shift.companyRelationshipId ?? undefined,
       });
+      if (!coveredByBaseContract) {
+        await registerStaffTaskName({
+          companyId: shift.companyId,
+          staffUserId: params.staffUserId,
+          taskName: params.taskName,
+          companyRelationshipId: shift.companyRelationshipId ?? undefined,
+        });
+      }
       if (shift.source === "CLIENT" && shift.companyRelationshipId) {
         await registerPlacementTaskName({
           companyId: shift.companyId,

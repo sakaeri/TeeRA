@@ -15,7 +15,6 @@ import {
   setStaffHireDateAction,
   grantStaffPaidLeaveAction,
   adjustStaffPaidLeaveBalanceAction,
-  updateStaffAgencyTagAction,
 } from "@/app/company/actions";
 import {
   addStaffTaskRateVersionAction,
@@ -161,7 +160,6 @@ export function StaffDetailPanel({
   userId,
   companyName,
   clients,
-  agencyOptions,
   contractTemplates,
   knownTaskNames,
   allTeams,
@@ -171,7 +169,6 @@ export function StaffDetailPanel({
   userId: string;
   companyName: string;
   clients: ClientOption[];
-  agencyOptions: { id: string; name: string }[];
   contractTemplates: Template[];
   knownTaskNames: string[];
   allTeams: { id: string; name: string }[];
@@ -368,13 +365,6 @@ export function StaffDetailPanel({
   function submitHireDate(membershipId: string) {
     startTransition(async () => {
       await setStaffHireDateAction(membershipId, hireDateInput || null);
-      await refresh();
-    });
-  }
-
-  function submitAgencyTag(membershipId: string, viaAgencyRelationshipId: string) {
-    startTransition(async () => {
-      await updateStaffAgencyTagAction(membershipId, viaAgencyRelationshipId || null);
       await refresh();
     });
   }
@@ -774,28 +764,6 @@ export function StaffDetailPanel({
                     </div>
                   );
                 })()}
-
-                {agencyOptions.length > 0 || data.viaAgencyRelationshipId ? (
-                  <div className="rounded-lg border border-border p-3 text-sm">
-                    <p className="mb-1 font-semibold">所属（表示用）</p>
-                    <p className="mb-2 text-xs text-muted">
-                      TeeRAを使っていない派遣会社からこのスタッフが来ている場合のラベルです。シフトの作成・給与計算には影響しません。
-                    </p>
-                    <select
-                      value={data.viaAgencyRelationshipId ?? ""}
-                      onChange={(e) => submitAgencyTag(data.membershipId, e.target.value)}
-                      disabled={pending}
-                      className="w-full rounded-lg border border-border px-2 py-1.5 text-sm text-foreground disabled:opacity-60"
-                    >
-                      <option value="">自社</option>
-                      {agencyOptions.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
 
                 <div className="rounded-lg border border-border p-3 text-sm">
                   <p className="mb-2 font-semibold">有給休暇</p>

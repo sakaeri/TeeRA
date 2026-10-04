@@ -477,7 +477,6 @@ export function RosterView({
           userId={selectedStaffId}
           companyName={companyName}
           clients={clients.map((c) => ({ id: c.id, name: c.name }))}
-          agencyOptions={agencies.filter((a) => a.isProxy).map((a) => ({ id: a.id, name: a.name }))}
           contractTemplates={contractTemplates}
           knownTaskNames={knownTaskNames}
           allTeams={teams}

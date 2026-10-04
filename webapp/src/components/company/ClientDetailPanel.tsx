@@ -8,6 +8,7 @@ import {
   addRelationshipNoteAction,
   deleteRelationshipNoteAction,
   updateRelationshipWorkplaceInfoAction,
+  updateStaffAgencyTagAction,
   inviteClientUpgradeAction,
   inviteAgencyUpgradeAction,
   setClientTeamsAction,
@@ -56,7 +57,7 @@ type ClientMonthDetail = {
   historyCutoff: { year: number; month: number } | null;
   teams: { teamId: string; teamName: string }[];
   placements: Placement[];
-  taggedStaff: { userId: string; name: string }[];
+  taggedStaff: { membershipId: string; userId: string; name: string }[];
   relationshipNotes: RelationshipNote[];
   workedHours: number;
   unapprovedCount: number;
@@ -130,6 +131,7 @@ export function ClientDetailPanel({
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
   const [showPlacementHistory, setShowPlacementHistory] = useState(false);
   const [unplaceConfirmTarget, setUnplaceConfirmTarget] = useState<Placement | null>(null);
+  const [untagConfirmTarget, setUntagConfirmTarget] = useState<{ membershipId: string; name: string } | null>(null);
   const [editingWorkplaceInfo, setEditingWorkplaceInfo] = useState(false);
   const [workLocationDraft, setWorkLocationDraft] = useState("");
   const [emergencyContactDraft, setEmergencyContactDraft] = useState("");
@@ -154,6 +156,16 @@ export function ClientDetailPanel({
     setUnplaceConfirmTarget(null);
     startTransition(async () => {
       await unplaceStaffAction(relationshipId, target.staffUserId);
+      await refresh();
+    });
+  }
+
+  function submitUntag() {
+    const target = untagConfirmTarget;
+    if (!target) return;
+    setUntagConfirmTarget(null);
+    startTransition(async () => {
+      await updateStaffAgencyTagAction(target.membershipId, null);
       await refresh();
     });
   }
@@ -541,13 +553,20 @@ export function ClientDetailPanel({
                     </div>
                     <ul className="flex flex-col gap-1">
                       {data.taggedStaff.map((s) => (
-                        <li key={s.userId}>
+                        <li
+                          key={s.userId}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background/40 px-3 py-2 text-sm"
+                        >
+                          <button type="button" onClick={() => onOpenStaff(s.userId)} className="flex-1 text-left hover:text-primary">
+                            {s.name}
+                          </button>
                           <button
                             type="button"
-                            onClick={() => onOpenStaff(s.userId)}
-                            className="w-full rounded-lg border border-border bg-background/40 px-3 py-2 text-left text-sm hover:border-primary"
+                            disabled={pending}
+                            onClick={() => setUntagConfirmTarget({ membershipId: s.membershipId, name: s.name })}
+                            className="shrink-0 text-xs text-muted hover:text-red-600"
                           >
-                            {s.name}
+                            所属解除
                           </button>
                         </li>
                       ))}
@@ -757,6 +776,16 @@ export function ClientDetailPanel({
           pending={pending}
           onConfirm={submitUnplace}
           onCancel={() => setUnplaceConfirmTarget(null)}
+        />
+      ) : null}
+
+      {untagConfirmTarget ? (
+        <ConfirmDialog
+          message={`${untagConfirmTarget.name}さんの所属をこの派遣会社から外します。自社スタッフとしてはそのまま残ります。よろしいですか？`}
+          confirmLabel="所属解除する"
+          pending={pending}
+          onConfirm={submitUntag}
+          onCancel={() => setUntagConfirmTarget(null)}
         />
       ) : null}
 

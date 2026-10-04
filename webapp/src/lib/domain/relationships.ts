@@ -22,12 +22,17 @@ export async function listClients(companyId: string) {
 
 // 派遣会社一覧 (from this company's perspective as the receiving/client side):
 // companies that send staff to this company. 同上、ownerCompanyIdでは絞らない。
+// プロキシ（TeeRAを使っていない、実体の無い）派遣会社はシフト作成で
+// StaffPlacementが作られることが構造上無い（シフトは常に自社扱いで
+// 作られるため）ので、人数はmembershipsViaAgency（所属タグ付けされた
+// スタッフ）側で数える。実体のある派遣会社はこれまで通り配属実績
+// （staffPlacements）で数える。
 export async function listAgencies(companyId: string) {
   return prisma.companyRelationship.findMany({
     where: { clientCompanyId: companyId },
     include: {
       agencyCompany: true,
-      _count: { select: { staffPlacements: { where: { active: true } } } },
+      _count: { select: { staffPlacements: { where: { active: true } }, membershipsViaAgency: true } },
       teamLinks: { where: { team: { companyId } }, include: { team: true } },
     },
     orderBy: { createdAt: "asc" },
@@ -391,7 +396,7 @@ export async function getClientMonthDetail(params: {
       startedAt: p.createdAt.toISOString().slice(0, 10),
       endedAt: p.endedAt ? p.endedAt.toISOString().slice(0, 10) : null,
     })),
-    taggedStaff: taggedStaff.map((m) => ({ userId: m.userId, name: m.user.name })),
+    taggedStaff: taggedStaff.map((m) => ({ membershipId: m.id, userId: m.userId, name: m.user.name })),
     relationshipNotes: relationshipNotes.map((n) => ({
       id: n.id,
       content: n.content,

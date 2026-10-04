@@ -238,7 +238,11 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
       // 業務内容は指定されているのに、その業務内容専用のスタッフ単価が
       // 無くて基本給にフォールバックしたケースは、単価の設定漏れの可能性が
       // あるため警告対象として記録する（計算自体は基本給で続行する）。
-      if (!matchedWage && baseWageVersion && effectiveTaskName) {
+      // ただし、その業務内容名が雇用契約自体の業務内容（jobDescription）と
+      // 一致する場合は「設定漏れ」ではなく基本給がまさにその業務のために
+      // 定められたものなので、警告は出さない。
+      const isBaseContractTask = effectiveTaskName != null && effectiveTaskName === baseContract?.template.jobDescription;
+      if (!matchedWage && baseWageVersion && effectiveTaskName && !isBaseContractTask) {
         unresolved.push({
           shiftId: r.shiftId,
           workReportId: r.id,

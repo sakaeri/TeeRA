@@ -54,7 +54,9 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
           id: a.id,
           name: a.agencyCompany?.name ?? a.proxyName ?? "(名称未設定)",
           isProxy: !a.agencyCompany,
-          staffCount: a._count.staffPlacements,
+          // プロキシ（実体の無い）派遣会社はStaffPlacementが作られないため、
+          // 所属タグ付けされたスタッフ数（membershipsViaAgency）で数える。
+          staffCount: a.agencyCompany ? a._count.staffPlacements : a._count.membershipsViaAgency,
           teams: a.teamLinks.map((l) => ({ id: l.team.id, name: l.team.name })),
         }))}
         teams={teams.map((t) => ({ id: t.id, name: t.name }))}
