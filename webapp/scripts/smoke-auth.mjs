@@ -15,7 +15,7 @@ try {
   console.log("landing:", page.url());
   await shot("landing");
 
-  await page.click("text=新規登録");
+  await page.click("text=無料で始める");
   await page.waitForURL("http://localhost:3000/register");
   await page.fill("#name", "スモークテスト太郎");
   await page.fill("#email", email);
