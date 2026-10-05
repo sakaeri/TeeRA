@@ -42,8 +42,8 @@ try {
   // local sandbox — the /api/upload route itself is unchanged by this UI
   // redesign and already verified working in production)
   psql(
-    `insert into "PromoItem" (id, "companyId", "imageUrl", name, "pointsCost", stock, description, "createdAt") ` +
-      `values (gen_random_uuid()::text, '${companyId}', 'https://example.com/mug.png', 'オリジナルタオル', 1, 2, '夏用タオル', now());`,
+    `insert into "PromoItem" (id, "companyId", "imageUrl", "imageUrl2", "imageUrl3", name, "pointsCost", stock, description, "createdAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', 'https://example.com/mug1.png', 'https://example.com/mug2.png', 'https://example.com/mug3.png', 'オリジナルタオル', 1, 2, '夏用タオル', now());`,
   );
   const itemId = psql(`select id from "PromoItem" where "companyId"='${companyId}' and name='オリジナルタオル';`);
 
@@ -131,6 +131,18 @@ try {
   await staff.waitForTimeout(300);
   body = await staff.textContent("body");
   log("detail popup opens with shipping form", body.includes("お届け先を入力して交換してください"));
+
+  // ①: 3 images registered → ＜＞ carousel with dot indicators, not a stacked grid
+  const modalImg = staff.locator("div.relative.mb-3 img[alt='']").first();
+  const firstSrc = await modalImg.getAttribute("src");
+  log("carousel shows 3 dot indicators", (await staff.locator("button[aria-label$='枚目の画像を表示']").count()) === 3);
+  await staff.getByRole("button", { name: "次の画像" }).click();
+  await staff.waitForTimeout(200);
+  const secondSrc = await modalImg.getAttribute("src");
+  log("next arrow (＞) slides to the 2nd image", secondSrc !== firstSrc && secondSrc === "https://example.com/mug2.png");
+  await staff.getByRole("button", { name: "前の画像" }).click();
+  await staff.waitForTimeout(200);
+  log("prev arrow (＜) slides back to the 1st image", (await modalImg.getAttribute("src")) === firstSrc);
 
   await staff.fill('input[placeholder="例：山田 太郎"]', "テスト 花子");
   await staff.fill('input[placeholder="例：123-4567"]', "160-0000");

@@ -245,6 +245,7 @@ export function StaffPointsView({
 
       {detailItem ? (
         <ItemDetailModal
+          key={detailItem.id}
           item={detailItem}
           balance={balance}
           pending={pending}
@@ -303,6 +304,7 @@ function ItemDetailModal({
   const insufficientPoints = balance < item.pointsCost;
   const canRedeem = !pendingSince && !outOfStock && !insufficientPoints;
   const images = [item.imageUrl, item.imageUrl2, item.imageUrl3].filter((u): u is string => Boolean(u));
+  const [imageIndex, setImageIndex] = useState(0);
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
@@ -317,14 +319,41 @@ function ItemDetailModal({
           </button>
         </div>
         {images.length > 0 ? (
-          <div className="mb-3 grid grid-cols-1 gap-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={images[0]} alt="" className="aspect-square w-full rounded-lg object-cover" />
+          <div className="relative mb-3">
+            <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-background">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={images[imageIndex]} alt="" className="h-full w-full object-cover" />
+              {images.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    aria-label="前の画像"
+                    onClick={() => setImageIndex((i) => (i - 1 + images.length) % images.length)}
+                    className="absolute left-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-sm text-white"
+                  >
+                    ＜
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="次の画像"
+                    onClick={() => setImageIndex((i) => (i + 1) % images.length)}
+                    className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-sm text-white"
+                  >
+                    ＞
+                  </button>
+                </>
+              ) : null}
+            </div>
             {images.length > 1 ? (
-              <div className="grid grid-cols-2 gap-2">
-                {images.slice(1).map((url) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={url} src={url} alt="" className="aspect-square w-full rounded-lg object-cover" />
+              <div className="mt-1.5 flex justify-center gap-1.5">
+                {images.map((url, i) => (
+                  <button
+                    key={url}
+                    type="button"
+                    aria-label={`${i + 1}枚目の画像を表示`}
+                    onClick={() => setImageIndex(i)}
+                    className={`h-1.5 w-1.5 rounded-full ${i === imageIndex ? "bg-primary" : "bg-border"}`}
+                  />
                 ))}
               </div>
             ) : null}
