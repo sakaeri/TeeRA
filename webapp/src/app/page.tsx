@@ -3,6 +3,12 @@ import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 
+// このページは唯一「未ログインの訪問者に実コンテンツを返す」公開ページ
+// のため、Next.jsのビルド時プリレンダー判定に賭けず明示的に動的指定する
+// （他の画面はログイン必須でauth()のredirectにしかならずこの問題が
+// 表面化しなかった）。
+export const dynamic = "force-dynamic";
+
 const PAIN_POINTS = [
   "紙やExcelでのシフト管理が属人化していて、担当者しか把握できない",
   "タイムカードの集計や給与計算に毎月時間がかかっている",
