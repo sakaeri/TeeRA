@@ -53,7 +53,6 @@ const styles = StyleSheet.create({
   totalBoxLabel: { fontSize: 11, color: "#45534d" },
   totalBoxAmount: { fontSize: 22, fontWeight: 700, color: "#0b3d2e" },
   section: { marginTop: 16 },
-  sectionTitle: { fontSize: 12, fontWeight: 700, color: "#0b3d2e", marginBottom: 6 },
   tableHeaderRow: {
     flexDirection: "row",
     paddingVertical: 5,
@@ -100,7 +99,19 @@ const styles = StyleSheet.create({
   summaryLabelFinal: { fontSize: 10, fontWeight: 700, color: "#0b3d2e" },
   summaryValue: { fontSize: 9 },
   summaryValueFinal: { fontSize: 12, fontWeight: 700, color: "#0b3d2e" },
-  note: { marginTop: 16, fontSize: 9, color: "#45534d" },
+  infoRow: { flexDirection: "row" },
+  infoLabelCell: { width: 140, backgroundColor: "#0b3d2e", paddingVertical: 6, paddingHorizontal: 8, justifyContent: "center" },
+  infoLabelText: { fontSize: 9, fontWeight: 700, color: "#f4ead0" },
+  infoValueCell: {
+    flexGrow: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e6e1d3",
+    justifyContent: "center",
+  },
+  infoValueText: { fontSize: 9 },
+  infoBodyCell: { paddingVertical: 8, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: "#e6e1d3" },
 });
 
 export type InvoicePdfData = {
@@ -215,23 +226,52 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
           </View>
         </View>
 
-        {data.bankName || data.accountNumber ? (
-          <View style={styles.note}>
-            <Text style={styles.sectionTitle}>お振込先</Text>
-            <Text>
-              {data.bankName}
-              {data.branchName ? ` ${data.branchName}` : ""}
-              {data.accountType ? ` ${data.accountType}` : ""}
-              {data.accountNumber ? ` ${data.accountNumber}` : ""}
-              {data.accountHolderName ? ` ${data.accountHolderName}` : ""}
-            </Text>
+        {data.bankName || data.accountNumber || data.accountHolderName ? (
+          <View style={styles.section}>
+            <View style={styles.tableHeaderRow}>
+              <Text style={styles.tableHeaderText}>お振込先</Text>
+            </View>
+            {data.bankName || data.branchName ? (
+              <View style={styles.infoRow}>
+                <View style={styles.infoLabelCell}>
+                  <Text style={styles.infoLabelText}>金融機関・支店名</Text>
+                </View>
+                <View style={styles.infoValueCell}>
+                  <Text style={styles.infoValueText}>{[data.bankName, data.branchName].filter(Boolean).join(" ")}</Text>
+                </View>
+              </View>
+            ) : null}
+            {data.accountNumber ? (
+              <View style={styles.infoRow}>
+                <View style={styles.infoLabelCell}>
+                  <Text style={styles.infoLabelText}>口座番号</Text>
+                </View>
+                <View style={styles.infoValueCell}>
+                  <Text style={styles.infoValueText}>{[data.accountType, data.accountNumber].filter(Boolean).join(" ")}</Text>
+                </View>
+              </View>
+            ) : null}
+            {data.accountHolderName ? (
+              <View style={styles.infoRow}>
+                <View style={styles.infoLabelCell}>
+                  <Text style={styles.infoLabelText}>口座名義</Text>
+                </View>
+                <View style={styles.infoValueCell}>
+                  <Text style={styles.infoValueText}>{data.accountHolderName}</Text>
+                </View>
+              </View>
+            ) : null}
           </View>
         ) : null}
 
         {data.note ? (
-          <View style={styles.note}>
-            <Text style={styles.sectionTitle}>備考</Text>
-            <Text>{data.note}</Text>
+          <View style={styles.section}>
+            <View style={styles.tableHeaderRow}>
+              <Text style={styles.tableHeaderText}>備考</Text>
+            </View>
+            <View style={styles.infoBodyCell}>
+              <Text style={styles.infoValueText}>{data.note}</Text>
+            </View>
           </View>
         ) : null}
       </Page>
