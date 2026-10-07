@@ -63,6 +63,11 @@ export default async function InvoicesPage({
     note: string;
     invoiceRegistrationNumber: string;
     registered: boolean;
+    bankName: string;
+    branchName: string;
+    accountType: string;
+    accountNumber: string;
+    accountHolderName: string;
     lines: { id: string; staffName: string; description: string; hours: number; rate: number; amount: number; taxRatePercent: number }[];
     totals: ReturnType<typeof computeInvoiceTotals>;
     issues: { id: string; issuedAt: string }[];
@@ -92,6 +97,11 @@ export default async function InvoicesPage({
       note: invoice.note ?? "",
       invoiceRegistrationNumber: invoice.invoiceRegistrationNumberSnapshot ?? "",
       registered,
+      bankName: invoice.bankName ?? "",
+      branchName: invoice.branchName ?? "",
+      accountType: invoice.accountType ?? "",
+      accountNumber: invoice.accountNumber ?? "",
+      accountHolderName: invoice.accountHolderName ?? "",
       lines: invoice.lines.map((l) => ({
         id: l.id,
         staffName: l.staffName,

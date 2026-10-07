@@ -7,6 +7,7 @@ import {
   deleteLineAction,
   setDueDateAction,
   setNoteAction,
+  setBankInfoAction,
   setInvoiceRegistrationNumberAction,
   issueInvoiceAction,
   reopenInvoiceForEditAction,
@@ -46,6 +47,11 @@ export function InvoiceEditor({
     note: string;
     invoiceRegistrationNumber: string;
     registered: boolean;
+    bankName: string;
+    branchName: string;
+    accountType: string;
+    accountNumber: string;
+    accountHolderName: string;
     lines: Line[];
     totals: Totals;
     unresolved: UnresolvedShift[];
@@ -59,10 +65,24 @@ export function InvoiceEditor({
   const [dueDate, setDueDateState] = useState(invoice.dueDate);
   const [note, setNoteState] = useState(invoice.note);
   const [regNumber, setRegNumber] = useState(invoice.invoiceRegistrationNumber);
+  const [bankName, setBankName] = useState(invoice.bankName);
+  const [branchName, setBranchName] = useState(invoice.branchName);
+  const [accountType, setAccountType] = useState(invoice.accountType);
+  const [accountNumber, setAccountNumber] = useState(invoice.accountNumber);
+  const [accountHolderName, setAccountHolderName] = useState(invoice.accountHolderName);
   const [showIssueConfirm, setShowIssueConfirm] = useState(false);
   const [showAddLineModal, setShowAddLineModal] = useState(false);
 
   const isEditable = invoice.status === "DRAFT";
+
+  // 振込先は5項目まとめて1つのアクションで保存する（依頼主ごとに異なり
+  // うるため、会社設定とは違いこの請求書だけの値として独立して持つ）。
+  function saveBankInfo() {
+    if (!isEditable) return;
+    startTransition(() =>
+      setBankInfoAction(invoice.id, { bankName, branchName, accountType, accountNumber, accountHolderName }),
+    );
+  }
 
   // 同月内の再発行、および無料枠内の発行は確認を挟まずそのまま発行する。
   // Teeを実際に課金する時だけ確認ダイアログを出す（無料なのに確認を
@@ -269,6 +289,69 @@ export function InvoiceEditor({
               className="rounded-lg border border-border px-2 py-1.5 text-sm"
             />
           </label>
+        </div>
+
+        <div className="mt-4 border-t border-border pt-3">
+          {/* 振込先は依頼主ごとに異なりうるため、会社設定の値を初期値として
+              コピーしつつ、この請求書だけで独立して編集できる。 */}
+          <p className="mb-2 text-xs font-semibold text-muted">振込先</p>
+          <div className="flex flex-col gap-3">
+            <label className="flex flex-col gap-1 text-xs">
+              銀行名
+              <input
+                type="text"
+                value={bankName}
+                disabled={!isEditable}
+                onChange={(e) => setBankName(e.target.value)}
+                onBlur={saveBankInfo}
+                className="rounded-lg border border-border px-2 py-1.5 text-sm"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              支店名
+              <input
+                type="text"
+                value={branchName}
+                disabled={!isEditable}
+                onChange={(e) => setBranchName(e.target.value)}
+                onBlur={saveBankInfo}
+                className="rounded-lg border border-border px-2 py-1.5 text-sm"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              口座種別
+              <input
+                type="text"
+                value={accountType}
+                disabled={!isEditable}
+                onChange={(e) => setAccountType(e.target.value)}
+                onBlur={saveBankInfo}
+                className="rounded-lg border border-border px-2 py-1.5 text-sm"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              口座番号
+              <input
+                type="text"
+                value={accountNumber}
+                disabled={!isEditable}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                onBlur={saveBankInfo}
+                className="rounded-lg border border-border px-2 py-1.5 text-sm"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              口座名義
+              <input
+                type="text"
+                value={accountHolderName}
+                disabled={!isEditable}
+                onChange={(e) => setAccountHolderName(e.target.value)}
+                onBlur={saveBankInfo}
+                className="rounded-lg border border-border px-2 py-1.5 text-sm"
+              />
+            </label>
+          </div>
         </div>
       </section>
 

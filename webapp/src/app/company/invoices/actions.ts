@@ -11,6 +11,7 @@ import {
   deleteLine,
   setDueDate,
   setNote,
+  setBankInfo,
   setInvoiceRegistrationNumber,
   issueInvoice,
   reopenInvoiceForEdit,
@@ -61,6 +62,15 @@ export async function setDueDateAction(invoiceId: string, dueDate: string) {
 export async function setNoteAction(invoiceId: string, note: string) {
   await assertAccess(invoiceId);
   await setNote(invoiceId, note);
+  revalidatePath("/company/invoices");
+}
+
+export async function setBankInfoAction(
+  invoiceId: string,
+  bankInfo: { bankName: string; branchName: string; accountType: string; accountNumber: string; accountHolderName: string },
+) {
+  await assertAccess(invoiceId);
+  await setBankInfo(invoiceId, bankInfo);
   revalidatePath("/company/invoices");
 }
 

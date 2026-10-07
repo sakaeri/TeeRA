@@ -92,6 +92,30 @@ try {
   bodyText = await admin.textContent("body");
   log("請求書エディタに「請求先：振込先確認取引先」が表示される", bodyText.includes("請求先：振込先確認取引先"));
 
+  // --- 振込先は依頼主ごとに異なりうる: 新規請求書は会社設定の値で初期化
+  // されるが、請求書側で個別に編集しても会社設定（他の請求書のデフォルト）
+  // には影響しない ---
+  const invoiceBankNameValue = await admin.getByLabel("銀行名").inputValue();
+  const invoiceAccountNumberValue = await admin.getByLabel("口座番号").inputValue();
+  log(
+    "新規請求書の振込先は会社設定の値で初期化される",
+    invoiceBankNameValue === "テスト銀行" && invoiceAccountNumberValue === "1234567",
+  );
+
+  await admin.getByLabel("銀行名").fill("この取引先専用銀行");
+  await admin.getByLabel("銀行名").blur();
+  await admin.waitForTimeout(600);
+  const invoiceIdForBank = psql(
+    `select id from "Invoice" where "issuingCompanyId"='${companyId}' and "companyRelationshipId"='${relationshipId}' and "periodLabel"='${thisMonth}';`,
+  );
+  const invoiceBankAfterEdit = psql(`select "bankName" from "Invoice" where id='${invoiceIdForBank}';`);
+  log("請求書側で編集した振込先がその請求書に保存される", invoiceBankAfterEdit === "この取引先専用銀行");
+  const companyBankAfterInvoiceEdit = psql(`select "bankName" from "Company" where id='${companyId}';`);
+  log(
+    "請求書側の編集は会社設定（他の請求書のデフォルト）には影響しない",
+    companyBankAfterInvoiceEdit === "テスト銀行",
+  );
+
   // custom line this month (will be carried over to next month with hours=0)
   await admin.getByRole("button", { name: "＋追加" }).click();
   await admin.waitForTimeout(300);
@@ -110,6 +134,11 @@ try {
   await admin.waitForTimeout(300);
   await admin.getByRole("button", { name: "発行する", exact: true }).click();
   await admin.waitForTimeout(800);
+
+  const issuedSnapshotBank = psql(
+    `select snapshot->>'bankName' from "InvoiceIssue" where "invoiceId"='${invoiceIdForBank}' order by "issuedAt" desc limit 1;`,
+  );
+  log("発行時スナップショットにも請求書側で編集した振込先が入る", issuedSnapshotBank === "この取引先専用銀行");
 
   const pdfLink = await admin.locator('a[href*="/api/invoices/"]').first().getAttribute("href");
   const pdfResp = await admin.request.get(`http://localhost:3000${pdfLink}`);

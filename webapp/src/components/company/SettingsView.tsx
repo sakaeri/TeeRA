@@ -262,7 +262,7 @@ function CompanyInfoSection({
               <p className="font-medium">{notificationEmailValue || "未設定（通知メールは送信されません）"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted">請求書の振込先</p>
+              <p className="text-xs text-muted">請求書の振込先（デフォルト）</p>
               <p className="font-medium">
                 {bankNameValue || accountNumberValue ? (
                   <>
@@ -340,7 +340,10 @@ function CompanyInfoSection({
           />
         </label>
         <div className="mt-2 border-t border-border pt-3">
-          <p className="mb-2 text-xs font-semibold text-muted">請求書の振込先</p>
+          <p className="mb-1 text-xs font-semibold text-muted">請求書の振込先（デフォルト）</p>
+          <p className="mb-2 text-xs text-muted">
+            新しく請求書を作成した時の初期値です。依頼主ごとに異なる場合は、各請求書の編集画面で個別に変更できます（ここを変更しても既存の請求書には影響しません）。
+          </p>
           <div className="flex flex-col gap-3">
             <label className="flex flex-col gap-1 text-xs">
               銀行名

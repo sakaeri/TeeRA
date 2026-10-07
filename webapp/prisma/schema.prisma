@@ -1018,6 +1018,15 @@ model Invoice {
   invoiceRegistrationNumberSnapshot String?
   dueDate                           DateTime?     @db.Date // required before confirm/issue
   note                              String?
+  // 振込先は依頼主ごとに異なりうるため、Company.bankName等とは別に請求書
+  // ごとに持つ（インボイス登録番号と違い双方向同期しない）。新規作成時に
+  // Companyの値をコピーして初期値とするだけで、以降は請求書側で独立して
+  // 編集できる（invoicing.tsのgetOrCreateInvoice/setBankInfo参照）。
+  bankName                          String?
+  branchName                        String?
+  accountType                       String?
+  accountNumber                     String?
+  accountHolderName                 String?
   invoicedShiftIds                  Json          @default("[]") // locked ONLY at actual issuance, not at confirm (chat29/30 bugfix)
   // 管理者が明細行を「削除」した対象のshiftId一覧。削除しただけだと、次の
   // regenerateLinesでその月の承認済み実績としてまた自動生成されてしまう

@@ -205,6 +205,14 @@ export async function getOrCreateInvoice(params: {
         companyRelationshipId: params.companyRelationshipId,
         periodLabel: params.periodLabel,
         invoiceRegistrationNumberSnapshot: company.invoiceRegistrationNumber,
+        // 振込先は依頼主ごとに異なりうるため、会社設定の値はあくまで新規
+        // 作成時の初期値としてコピーするだけ（インボイス番号と違い以降は
+        // 双方向同期しない — この請求書だけ編集すればよい）。
+        bankName: company.bankName,
+        branchName: company.branchName,
+        accountType: company.accountType,
+        accountNumber: company.accountNumber,
+        accountHolderName: company.accountHolderName,
       },
     });
     await carryOverCustomLines({
@@ -288,6 +296,22 @@ export async function setDueDate(invoiceId: string, dueDate: Date) {
 
 export async function setNote(invoiceId: string, note: string) {
   return prisma.invoice.update({ where: { id: invoiceId }, data: { note } });
+}
+
+export async function setBankInfo(
+  invoiceId: string,
+  bankInfo: { bankName: string; branchName: string; accountType: string; accountNumber: string; accountHolderName: string },
+) {
+  return prisma.invoice.update({
+    where: { id: invoiceId },
+    data: {
+      bankName: bankInfo.bankName.trim() || null,
+      branchName: bankInfo.branchName.trim() || null,
+      accountType: bankInfo.accountType.trim() || null,
+      accountNumber: bankInfo.accountNumber.trim() || null,
+      accountHolderName: bankInfo.accountHolderName.trim() || null,
+    },
+  });
 }
 
 // インボイス番号はここで編集すると本部設定へ自動的に反映される（双方向同期）。
@@ -375,6 +399,11 @@ export async function issueInvoice(params: { invoiceId: string; issuedByUserId: 
           lines: invoice.lines,
           registered,
           invoiceRegistrationNumber: invoice.invoiceRegistrationNumberSnapshot,
+          bankName: invoice.bankName,
+          branchName: invoice.branchName,
+          accountType: invoice.accountType,
+          accountNumber: invoice.accountNumber,
+          accountHolderName: invoice.accountHolderName,
           ...totals,
           issuedAt: new Date().toISOString(),
         },
