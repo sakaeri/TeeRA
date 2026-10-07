@@ -329,6 +329,40 @@ export async function renameUnresolvedTaskNames(params: {
   ]);
 }
 
+function previousTargetMonth(targetMonth: string) {
+  const [year, month] = targetMonth.split("-").map(Number);
+  const d = new Date(Date.UTC(year, month - 1 - 1, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+// 前月に手入力したカスタム項目（kind: CUSTOM）を、数量0で新しい月に
+// コピーしておく。毎月同じ項目を入れ直す手間を省くための引き継ぎで、
+// 不要なら翌月側で消せばよい（前月の行自体は変更しない）。
+async function carryOverCustomLines(params: { salarySlipId: string; companyId: string; staffUserId: string; targetMonth: string }) {
+  const prevSlip = await prisma.salarySlip.findUnique({
+    where: {
+      companyId_staffUserId_targetMonth: {
+        companyId: params.companyId,
+        staffUserId: params.staffUserId,
+        targetMonth: previousTargetMonth(params.targetMonth),
+      },
+    },
+    include: { lines: { where: { kind: "CUSTOM" }, orderBy: { sortOrder: "asc" } } },
+  });
+  if (!prevSlip || prevSlip.lines.length === 0) return;
+
+  await prisma.salarySlipLine.createMany({
+    data: prevSlip.lines.map((l) => ({
+      salarySlipId: params.salarySlipId,
+      kind: "CUSTOM" as const,
+      description: l.description,
+      hours: 0,
+      rate: l.rate,
+      amount: 0,
+    })),
+  });
+}
+
 export async function getOrCreateSalarySlip(params: {
   companyId: string;
   staffUserId: string;
@@ -357,6 +391,12 @@ export async function getOrCreateSalarySlip(params: {
         targetMonth: params.targetMonth,
         deductions,
       },
+    });
+    await carryOverCustomLines({
+      salarySlipId: slip.id,
+      companyId: params.companyId,
+      staffUserId: params.staffUserId,
+      targetMonth: params.targetMonth,
     });
   }
 

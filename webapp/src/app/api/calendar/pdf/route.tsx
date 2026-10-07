@@ -48,6 +48,10 @@ export async function GET(request: Request) {
     month,
     issuedAt: todayJst(),
     filterLabel,
+    // 依頼主/派遣会社で絞り込んでいる時は全行が同じ勤務先になり冗長なため、
+    // その時だけ業務内容を代わりに出す（絞り込みなし/チーム絞り込みのみの
+    // 時は、複数の勤務先が混在し得るので勤務先のまま）。
+    thirdColumn: companyRelationshipId ? "task" : "workplace",
     shifts: shifts.map((s) => ({
       date: s.date.toISOString().slice(0, 10),
       staffName: s.staff.name,
@@ -56,6 +60,7 @@ export async function GET(request: Request) {
       isAllDay: s.isAllDay,
       isUndecided: s.isUndecided,
       clientName: s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? null,
+      taskName: s.taskName,
     })),
   };
 

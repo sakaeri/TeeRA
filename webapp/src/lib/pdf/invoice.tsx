@@ -34,6 +34,7 @@ const styles = StyleSheet.create({
   recipientName: { fontSize: 14, fontWeight: 700, marginBottom: 10 },
   subjectLine: { fontSize: 10, marginBottom: 4 },
   issuerBlock: { alignItems: "flex-end", textAlign: "right" },
+  issuerName: { fontSize: 12, fontWeight: 700, color: "#0b3d2e", marginBottom: 3 },
   issuerLine: { fontSize: 9, color: "#45534d", marginBottom: 2 },
   metaBlock: { marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 24 },
   metaLine: { fontSize: 9, color: "#45534d" },
@@ -113,6 +114,11 @@ export type InvoicePdfData = {
   issuedAt: string;
   registered: boolean;
   invoiceRegistrationNumber: string | null;
+  bankName: string | null;
+  branchName: string | null;
+  accountType: string | null;
+  accountNumber: string | null;
+  accountHolderName: string | null;
   lines: { staffName: string; description: string; hours: number; rate: number; amount: number; taxRatePercent: number }[];
   brackets: { rate: number; subtotal: number; tax: number }[];
   subtotalAll: number;
@@ -143,7 +149,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
             <Text style={styles.subjectLine}>件名：{data.periodLabel}分 ご請求</Text>
           </View>
           <View style={styles.issuerBlock}>
-            <Text style={styles.issuerLine}>{data.issuingCompanyName}</Text>
+            <Text style={styles.issuerName}>{data.issuingCompanyName}</Text>
             {data.issuingCompanyAddress ? <Text style={styles.issuerLine}>{data.issuingCompanyAddress}</Text> : null}
             {data.issuingCompanyPhoneNumber ? (
               <Text style={styles.issuerLine}>TEL: {data.issuingCompanyPhoneNumber}</Text>
@@ -208,6 +214,19 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
             <Text style={styles.summaryValueFinal}>{data.total.toLocaleString()}円</Text>
           </View>
         </View>
+
+        {data.bankName || data.accountNumber ? (
+          <View style={styles.note}>
+            <Text style={styles.sectionTitle}>お振込先</Text>
+            <Text>
+              {data.bankName}
+              {data.branchName ? ` ${data.branchName}` : ""}
+              {data.accountType ? ` ${data.accountType}` : ""}
+              {data.accountNumber ? ` ${data.accountNumber}` : ""}
+              {data.accountHolderName ? ` ${data.accountHolderName}` : ""}
+            </Text>
+          </View>
+        ) : null}
 
         {data.note ? (
           <View style={styles.note}>

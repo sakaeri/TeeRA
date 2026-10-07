@@ -101,6 +101,15 @@ model Company {
   // 特定ユーザーのアカウントに紐付けない（担当者交代やチーム共有アドレスに
   // 対応するため）。未設定ならその会社への通知メールは一切送らない。
   notificationEmail         String?
+  // 請求書の振込先（自社の受取口座）。CompanyMembershipの振込先は
+  // スタッフ個人の給与受取口座で用途が異なるため、こちらは別フィールド。
+  // インボイス登録番号とは違い発行済み請求書へのスナップショットは
+  // 取らず、PDF生成時点の最新値をそのまま出す（銀行名等のメモ情報）。
+  bankName                  String?
+  branchName                String?
+  accountType               String? // 普通/当座 etc.
+  accountNumber             String?
+  accountHolderName         String?
   agencyEnabled             Boolean  @default(false) // 他社へスタッフを派遣する (companyModules.agency)
   dispatchEnabled           Boolean  @default(false) // 派遣会社と連携する (companyModules.dispatch)
   invoiceRegistrationNumber String? // インボイス（適格請求書発行事業者）登録番号

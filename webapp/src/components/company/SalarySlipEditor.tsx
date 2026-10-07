@@ -26,7 +26,9 @@ type UnresolvedShift = { shiftId: string; workReportId: string; date: string; ta
 
 export function SalarySlipEditor({
   slip,
+  staffName,
   willUseFreeQuota,
+  pdfQuota,
 }: {
   slip: {
     id: string;
@@ -41,7 +43,9 @@ export function SalarySlipEditor({
     unresolved: UnresolvedShift[];
     issues: { id: string }[];
   };
+  staffName: string;
   willUseFreeQuota: boolean;
+  pdfQuota: { remaining: number; quota: number } | null;
 }) {
   const [pending, startTransition] = useTransition();
   const [showAddLineModal, setShowAddLineModal] = useState(false);
@@ -49,10 +53,11 @@ export function SalarySlipEditor({
 
   const isEditable = slip.status === "DRAFT";
 
-  // 同月内の再発行は無料なので確認を挟まずそのまま発行する。Tee課金や
-  // 無料枠を使う「今月初めての発行」の時だけ確認ダイアログを出す。
+  // 同月内の再発行、および無料枠内の発行は確認を挟まずそのまま発行する。
+  // Teeを実際に課金する時だけ確認ダイアログを出す（無料なのに確認を
+  // 挟まれるのは煩わしいという指摘への対応）。
   function issueOrConfirm() {
-    if (slip.issues.length > 0) {
+    if (slip.issues.length > 0 || willUseFreeQuota) {
       startTransition(() => issueSalarySlipAction(slip.id));
     } else {
       setShowIssueConfirm(true);
@@ -61,6 +66,10 @@ export function SalarySlipEditor({
 
   return (
     <div className="flex flex-col gap-6">
+      <p className="-mt-2 text-sm text-muted">
+        対象スタッフ：<span className="font-semibold text-foreground">{staffName}</span>
+      </p>
+
       {slip.unresolved.length > 0 ? <UnresolvedWarning salarySlipId={slip.id} unresolved={slip.unresolved} /> : null}
 
       <section className="rounded-2xl border border-border bg-white/60 p-6">
@@ -167,15 +176,22 @@ export function SalarySlipEditor({
         </div>
 
         {isEditable ? (
-          <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={issueOrConfirm}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              PDFで明細を発行する
-            </button>
+          <div className="mt-4 flex flex-col gap-2">
+            {pdfQuota ? (
+              <p className="text-xs text-muted">
+                今月の無料発行枠（給与明細・請求書の合算）：残り{pdfQuota.remaining}/{pdfQuota.quota}件
+              </p>
+            ) : null}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={issueOrConfirm}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                PDFで明細を発行する
+              </button>
+            </div>
           </div>
         ) : (
           // 発行済みのPDFは下の発行履歴から直接開けるため、何も編集して
@@ -196,11 +212,9 @@ export function SalarySlipEditor({
 
         {showIssueConfirm ? (
           <div className="mt-4 rounded-lg border border-accent bg-accent/10 p-4 text-sm">
-            <p className="mb-3">
-              {willUseFreeQuota
-                ? "今月の無料発行枠を使って発行します（Teeは消費されません）。よろしいですか？"
-                : "1Teeを課金して発行します。よろしいですか？"}
-            </p>
+            {/* willUseFreeQuotaの時はissueOrConfirmが確認を挟まず即発行する
+                ため、ここに来るのは必ずTee課金が発生するケースだけ。 */}
+            <p className="mb-3">1Teeを課金して発行します。よろしいですか？</p>
             <div className="flex gap-2">
               <button
                 type="button"

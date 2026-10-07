@@ -121,6 +121,8 @@ export default async function InvoicesPage({
   // （既にある人は下書き中/発行履歴の行から直接開けるため）。
   const clientsWithRecordIds = new Set(invoicesThisMonth.map((inv) => inv.companyRelationshipId));
   const clientsAvailableForNewInvoice = clients.filter((c) => !clientsWithRecordIds.has(c.id));
+  const selectedClient = companyRelationshipId ? allClients.find((c) => c.id === companyRelationshipId) : undefined;
+  const selectedClientName = selectedClient?.clientCompany?.name ?? selectedClient?.proxyName ?? "";
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-8 sm:py-10">
@@ -136,12 +138,6 @@ export default async function InvoicesPage({
         </div>
       ) : null}
 
-      {pdfQuota.quota > 0 ? (
-        <p className="mb-4 text-xs text-muted">
-          今月の無料発行枠（給与明細・請求書の合算）：残り{pdfQuota.remaining}/{pdfQuota.quota}件
-        </p>
-      ) : null}
-
       <MonthNavBar basePath="/company/invoices" targetMonth={periodLabel} minMonth={minMonth} todayMonth={currentMonth()} />
 
       {invoiceData ? (
@@ -149,7 +145,12 @@ export default async function InvoicesPage({
           <Link href={`/company/invoices?month=${periodLabel}`} className="mb-4 inline-block text-sm text-primary underline">
             ← 一覧に戻る
           </Link>
-          <InvoiceEditor invoice={invoiceData} willUseFreeQuota={pdfQuota.quota > 0 && pdfQuota.remaining > 0} />
+          <InvoiceEditor
+            invoice={invoiceData}
+            clientName={selectedClientName}
+            willUseFreeQuota={pdfQuota.quota > 0 && pdfQuota.remaining > 0}
+            pdfQuota={pdfQuota.quota > 0 ? { remaining: pdfQuota.remaining, quota: pdfQuota.quota } : null}
+          />
           {invoiceData.issues.length ? (
             <div className="mt-6">
               <p className="mb-1.5 text-xs text-muted">発行履歴</p>

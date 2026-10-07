@@ -410,6 +410,30 @@ export async function updateCompanyNotificationEmailAction(notificationEmail: st
   revalidatePath("/company/settings");
 }
 
+export async function updateCompanyBankInfoAction(bankInfo: {
+  bankName: string;
+  branchName: string;
+  accountType: string;
+  accountNumber: string;
+  accountHolderName: string;
+}) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  await prisma.company.update({
+    where: { id: membership.companyId },
+    data: {
+      bankName: bankInfo.bankName.trim() || null,
+      branchName: bankInfo.branchName.trim() || null,
+      accountType: bankInfo.accountType.trim() || null,
+      accountNumber: bankInfo.accountNumber.trim() || null,
+      accountHolderName: bankInfo.accountHolderName.trim() || null,
+    },
+  });
+  revalidatePath("/company/settings");
+  revalidatePath("/company/invoices");
+}
+
 export async function setCompanyMemberRoleAction(
   targetUserId: string,
   role: "COMPANY_ADMIN" | "COMPANY_EDITOR",

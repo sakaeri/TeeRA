@@ -115,19 +115,19 @@ try {
   let bodyText = await admin.textContent("body");
   log("給与計算ページに無料発行枠「残り1/30件」が表示される", bodyText.includes("残り1/30件"));
   log(
-    "発行確認ダイアログの案内も無料枠を使う旨になる（1Tee課金の文言ではない）",
+    "無料枠が残っている間はTee課金の文言は出ない",
     !bodyText.includes("1Teeを課金して発行します"),
   );
 
-  // --- 30件目（給与明細）: 無料枠を使い、Teeは動かない ---
+  // --- 30件目（給与明細）: 無料枠を使い、Teeは動かない。無料枠内の発行は
+  // 確認ダイアログを挟まず1クリックでそのまま発行される（Teeを課金しない
+  // のに確認を挟まれるのは煩わしいという指摘への対応）。
   await admin.getByRole("button", { name: "PDFで明細を発行する", exact: true }).click();
-  bodyText = await admin.textContent("body");
-  log(
-    "30件目の発行確認では無料枠を使う旨のメッセージが出る",
-    bodyText.includes("今月の無料発行枠を使って発行します"),
-  );
-  await admin.getByRole("button", { name: "発行する", exact: true }).click();
   await admin.waitForTimeout(800);
+  log(
+    "無料枠内の発行は確認ダイアログを挟まず1クリックで発行される",
+    !(await admin.getByRole("button", { name: "発行する", exact: true }).isVisible().catch(() => false)),
+  );
 
   let balance = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
   log("30件目の発行ではTeeが消費されない（10のまま）", balance === 10);

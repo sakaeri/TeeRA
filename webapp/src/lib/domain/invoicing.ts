@@ -140,6 +140,44 @@ async function regenerateLines(invoiceId: string) {
   return { invoice, unresolved };
 }
 
+function previousPeriodLabel(periodLabel: string) {
+  const [year, month] = periodLabel.split("-").map(Number);
+  const d = new Date(Date.UTC(year, month - 1 - 1, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+// 前月に手入力したカスタム項目（shiftId無しの行）を、数量0で新しい月に
+// コピーしておく。毎月同じ項目を入れ直す手間を省くための引き継ぎで、
+// 不要なら翌月側で消せばよい（前月の行自体は変更しない）。
+async function carryOverCustomLines(params: {
+  invoiceId: string;
+  issuingCompanyId: string;
+  companyRelationshipId: string;
+  periodLabel: string;
+}) {
+  const prevInvoice = await prisma.invoice.findFirst({
+    where: {
+      issuingCompanyId: params.issuingCompanyId,
+      companyRelationshipId: params.companyRelationshipId,
+      periodLabel: previousPeriodLabel(params.periodLabel),
+    },
+    include: { lines: { where: { shiftId: null }, orderBy: { sortOrder: "asc" } } },
+  });
+  if (!prevInvoice || prevInvoice.lines.length === 0) return;
+
+  await prisma.invoiceLine.createMany({
+    data: prevInvoice.lines.map((l) => ({
+      invoiceId: params.invoiceId,
+      staffName: l.staffName,
+      description: l.description,
+      hours: 0,
+      rate: l.rate,
+      amount: 0,
+      taxRatePercent: l.taxRatePercent,
+    })),
+  });
+}
+
 export async function getOrCreateInvoice(params: {
   issuingCompanyId: string;
   companyRelationshipId: string;
@@ -168,6 +206,12 @@ export async function getOrCreateInvoice(params: {
         periodLabel: params.periodLabel,
         invoiceRegistrationNumberSnapshot: company.invoiceRegistrationNumber,
       },
+    });
+    await carryOverCustomLines({
+      invoiceId: invoice.id,
+      issuingCompanyId: params.issuingCompanyId,
+      companyRelationshipId: params.companyRelationshipId,
+      periodLabel: params.periodLabel,
     });
   }
 

@@ -51,6 +51,7 @@ export type CalendarPdfShift = {
   isAllDay: boolean;
   isUndecided: boolean;
   clientName?: string | null;
+  taskName?: string | null;
 };
 
 export type CalendarPdfData = {
@@ -61,6 +62,9 @@ export type CalendarPdfData = {
   filterLabel?: string | null;
   title?: string;
   shifts: CalendarPdfShift[];
+  // 依頼主/派遣会社で絞り込んでいる時は、全行が同じ勤務先になり冗長な
+  // ため、代わりに業務内容を出す方が参考になる（chat相談で決定）。
+  thirdColumn?: "workplace" | "task";
 };
 
 function timeLabel(s: CalendarPdfShift) {
@@ -103,7 +107,9 @@ export function CalendarPdfDocument({ data }: { data: CalendarPdfData }) {
                 <View key={i} style={styles.row}>
                   <Text style={styles.colStaff}>{s.staffName}</Text>
                   <Text style={styles.colTime}>{timeLabel(s)}</Text>
-                  <Text style={styles.colSource}>{s.clientName ?? "自社"}</Text>
+                  <Text style={styles.colSource}>
+                    {data.thirdColumn === "task" ? (s.taskName ?? "―") : (s.clientName ?? "自社")}
+                  </Text>
                 </View>
               ))}
             </View>

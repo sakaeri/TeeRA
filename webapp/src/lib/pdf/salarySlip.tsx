@@ -35,6 +35,7 @@ const styles = StyleSheet.create({
   recipientName: { fontSize: 14, fontWeight: 700, marginBottom: 10 },
   subjectLine: { fontSize: 10, marginBottom: 4 },
   issuerBlock: { alignItems: "flex-end", textAlign: "right" },
+  issuerName: { fontSize: 12, fontWeight: 700, color: "#0b3d2e", marginBottom: 3 },
   issuerLine: { fontSize: 9, color: "#45534d", marginBottom: 2 },
   metaBlock: { marginTop: 14, flexDirection: "row", gap: 24 },
   metaLine: { fontSize: 9, color: "#45534d" },
@@ -129,7 +130,7 @@ export function SalarySlipDocument({ data }: { data: SalarySlipPdfData }) {
             <Text style={styles.subjectLine}>件名：{data.targetMonth}分 給与</Text>
           </View>
           <View style={styles.issuerBlock}>
-            <Text style={styles.issuerLine}>{data.companyName}</Text>
+            <Text style={styles.issuerName}>{data.companyName}</Text>
             {data.companyAddress ? <Text style={styles.issuerLine}>{data.companyAddress}</Text> : null}
             {data.companyPhoneNumber ? <Text style={styles.issuerLine}>TEL: {data.companyPhoneNumber}</Text> : null}
           </View>

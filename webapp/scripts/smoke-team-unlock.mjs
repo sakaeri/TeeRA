@@ -67,8 +67,11 @@ try {
   await admin.waitForTimeout(300);
   const createButtonDisabled = await admin.getByRole("button", { name: "＋チームを作成" }).isDisabled();
   log("残高不足時は「＋チームを作成」ボタンが無効化される", createButtonDisabled);
+  // 常時表示の赤い警告文は、1チーム目（無料）を作っただけの大多数のユーザーにも
+  // 出てしまい「壊れている」と誤解されるため廃止 — ボタンの無効化と（i）の
+  // 説明文だけで十分と判断（chat相談で決定）。
   let bodyText = await admin.textContent("body");
-  log("残高不足のメッセージが表示される", bodyText.includes("Tee残高が不足しています"));
+  log("常時表示の赤い警告文は出ない（ボタンの無効化のみで案内）", !bodyText.includes("Tee残高が不足しています"));
 
   // --- Teeを付与すると2チーム目が作成できる ---
   psql(

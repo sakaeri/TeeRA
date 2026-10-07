@@ -21,14 +21,14 @@ export default async function CreateCompanyPage({
       </div>
       <div className="rounded-2xl border border-border bg-white/60 p-6">
         <h1 className="mb-2 text-lg font-semibold">
-          まだ事業所がありません
+          {inviteToken ? "まだ事業所がありません" : "シフト管理する事業所の登録をお願いします"}
         </h1>
         <p className="mb-6 text-sm text-muted">
           {inviteToken ? (
             <>取引先からの招待を受け取るには、まず事業所を作成してください。</>
           ) : (
             <>
-              事業所名を入力して、新しい事業所を作成してください。
+              事業所名を入力してください。
               スタッフとして参加する場合は、所属先から届く招待URLからご登録ください。
             </>
           )}

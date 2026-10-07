@@ -125,6 +125,7 @@ export default async function PayrollPage({
   // （既にある人は下書き中/発行履歴の行から直接開けるため）。
   const staffWithRecordIds = new Set(slipsThisMonth.map((s) => s.staffUserId));
   const staffAvailableForNewSlip = staff.filter((s) => !staffWithRecordIds.has(s.userId));
+  const selectedStaffName = staffUserId ? (allStaff.find((s) => s.userId === staffUserId)?.name ?? "") : "";
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-8 sm:py-10">
@@ -140,12 +141,6 @@ export default async function PayrollPage({
         </div>
       ) : null}
 
-      {pdfQuota.quota > 0 ? (
-        <p className="mb-4 text-xs text-muted">
-          今月の無料発行枠（給与明細・請求書の合算）：残り{pdfQuota.remaining}/{pdfQuota.quota}件
-        </p>
-      ) : null}
-
       <MonthNavBar basePath="/company/payroll" targetMonth={targetMonth} minMonth={minMonth} todayMonth={currentMonth()} />
 
       {slipData ? (
@@ -153,7 +148,12 @@ export default async function PayrollPage({
           <Link href={`/company/payroll?month=${targetMonth}`} className="mb-4 inline-block text-sm text-primary underline">
             ← 一覧に戻る
           </Link>
-          <SalarySlipEditor slip={slipData} willUseFreeQuota={pdfQuota.quota > 0 && pdfQuota.remaining > 0} />
+          <SalarySlipEditor
+            slip={slipData}
+            staffName={selectedStaffName}
+            willUseFreeQuota={pdfQuota.quota > 0 && pdfQuota.remaining > 0}
+            pdfQuota={pdfQuota.quota > 0 ? { remaining: pdfQuota.remaining, quota: pdfQuota.quota } : null}
+          />
           {slipData.issues.length ? (
             <div className="mt-6">
               <p className="mb-1.5 text-xs text-muted">発行履歴</p>

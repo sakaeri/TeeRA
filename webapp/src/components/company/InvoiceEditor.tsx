@@ -35,7 +35,9 @@ const STATUS_LABEL: Record<string, string> = { DRAFT: "下書き", ISSUED: "発�
 
 export function InvoiceEditor({
   invoice,
+  clientName,
   willUseFreeQuota,
+  pdfQuota,
 }: {
   invoice: {
     id: string;
@@ -49,7 +51,9 @@ export function InvoiceEditor({
     unresolved: UnresolvedShift[];
     issues: { id: string }[];
   };
+  clientName: string;
   willUseFreeQuota: boolean;
+  pdfQuota: { remaining: number; quota: number } | null;
 }) {
   const [pending, startTransition] = useTransition();
   const [dueDate, setDueDateState] = useState(invoice.dueDate);
@@ -60,10 +64,11 @@ export function InvoiceEditor({
 
   const isEditable = invoice.status === "DRAFT";
 
-  // 同月内の再発行は無料なので確認を挟まずそのまま発行する。Tee課金や
-  // 無料枠を使う「今月初めての発行」の時だけ確認ダイアログを出す。
+  // 同月内の再発行、および無料枠内の発行は確認を挟まずそのまま発行する。
+  // Teeを実際に課金する時だけ確認ダイアログを出す（無料なのに確認を
+  // 挟まれるのは煩わしいという指摘への対応）。
   function issueOrConfirm() {
-    if (invoice.issues.length > 0) {
+    if (invoice.issues.length > 0 || willUseFreeQuota) {
       startTransition(() => issueInvoiceAction(invoice.id));
     } else {
       setShowIssueConfirm(true);
@@ -72,6 +77,10 @@ export function InvoiceEditor({
 
   return (
     <div className="flex flex-col gap-6">
+      <p className="-mt-2 text-sm text-muted">
+        請求先：<span className="font-semibold text-foreground">{clientName}</span>
+      </p>
+
       {invoice.unresolved.length > 0 ? (
         <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
           <p className="mb-2 font-semibold">単価未設定のため明細に計上されていないシフトがあります</p>
@@ -272,15 +281,22 @@ export function InvoiceEditor({
         </div>
 
         {isEditable ? (
-          <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              disabled={pending || !dueDate}
-              onClick={issueOrConfirm}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              PDFで請求書を発行する
-            </button>
+          <div className="mt-4 flex flex-col gap-2">
+            {pdfQuota ? (
+              <p className="text-xs text-muted">
+                今月の無料発行枠（給与明細・請求書の合算）：残り{pdfQuota.remaining}/{pdfQuota.quota}件
+              </p>
+            ) : null}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={pending || !dueDate}
+                onClick={issueOrConfirm}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                PDFで請求書を発行する
+              </button>
+            </div>
           </div>
         ) : invoice.status === "ISSUED" ? (
           // 発行済みのPDFは下の発行履歴から直接開けるため、何も編集して
@@ -301,11 +317,9 @@ export function InvoiceEditor({
 
         {showIssueConfirm ? (
           <div className="mt-4 rounded-lg border border-accent bg-accent/10 p-4 text-sm">
-            <p className="mb-3">
-              {willUseFreeQuota
-                ? "今月の無料発行枠を使って発行します（Teeは消費されません）。よろしいですか？"
-                : "1Teeを課金して発行します。よろしいですか？"}
-            </p>
+            {/* willUseFreeQuotaの時はissueOrConfirmが確認を挟まず即発行する
+                ため、ここに来るのは必ずTee課金が発生するケースだけ。 */}
+            <p className="mb-3">1Teeを課金して発行します。よろしいですか？</p>
             <div className="flex gap-2">
               <button
                 type="button"
