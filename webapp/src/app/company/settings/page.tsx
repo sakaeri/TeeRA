@@ -75,6 +75,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
         teams={teams.map((t) => ({
           id: t.id,
           name: t.name,
+          notificationEmail: t.notificationEmail ?? "",
           members: t.memberships.map((m) => ({
             userId: m.userId,
             name: m.user.name,

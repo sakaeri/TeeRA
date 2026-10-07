@@ -43,6 +43,17 @@ export async function createTeam(params: {
   });
 }
 
+export async function renameTeam(teamId: string, name: string) {
+  return prisma.team.update({ where: { id: teamId }, data: { name } });
+}
+
+export async function updateTeamNotificationEmail(teamId: string, notificationEmail: string) {
+  return prisma.team.update({
+    where: { id: teamId },
+    data: { notificationEmail: notificationEmail.trim() || null },
+  });
+}
+
 export async function setTeamMemberRole(params: {
   teamId: string;
   userId: string;

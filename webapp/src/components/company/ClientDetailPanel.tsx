@@ -16,6 +16,7 @@ import {
   unplaceStaffAction,
   inviteAgencyTaggedStaffAction,
   setRelationshipStatusAction,
+  updateProxyNameAction,
 } from "@/app/company/actions";
 import { addPlacementRateVersionAction, deletePlacementTaskNameAction } from "@/app/company/contracts/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
@@ -135,6 +136,28 @@ export function ClientDetailPanel({
   const [editingWorkplaceInfo, setEditingWorkplaceInfo] = useState(false);
   const [workLocationDraft, setWorkLocationDraft] = useState("");
   const [emergencyContactDraft, setEmergencyContactDraft] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  function startEditName() {
+    setNameDraft(data?.name ?? "");
+    setNameError(null);
+    setEditingName(true);
+  }
+
+  function submitName() {
+    if (!nameDraft.trim()) return;
+    startTransition(async () => {
+      const result = await updateProxyNameAction(relationshipId, nameDraft);
+      if (result.error) {
+        setNameError("変更できませんでした。");
+        return;
+      }
+      setEditingName(false);
+      await refresh();
+    });
+  }
 
   function startEditWorkplaceInfo() {
     setWorkLocationDraft(data?.workLocation ?? "");
@@ -270,12 +293,51 @@ export function ClientDetailPanel({
         ) : (
           <>
             <div className="mb-3 flex items-start justify-between gap-2">
-              <h2 className="font-serif-jp text-xl font-bold">
-                {data.name}
-                {data.status === "INACTIVE" ? (
-                  <span className="ml-2 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-normal text-gray-600">連携終了済み</span>
-                ) : null}
-              </h2>
+              {editingName ? (
+                <div className="flex flex-1 flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={nameDraft}
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      className="min-w-0 flex-1 rounded-lg border border-border px-2 py-1 text-lg font-bold"
+                    />
+                    <button
+                      type="button"
+                      disabled={pending || !nameDraft.trim()}
+                      onClick={submitName}
+                      className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                    >
+                      保存
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingName(false)}
+                      className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs"
+                    >
+                      キャンセル
+                    </button>
+                  </div>
+                  {nameError ? <p className="text-xs text-red-600">{nameError}</p> : null}
+                </div>
+              ) : (
+                <h2 className="font-serif-jp text-xl font-bold">
+                  {data.name}
+                  {data.isProxy && data.isOwner ? (
+                    <button
+                      type="button"
+                      onClick={startEditName}
+                      aria-label="名称を変更"
+                      className="ml-1.5 align-middle text-xs text-muted hover:text-primary"
+                    >
+                      <span className="inline-block scale-x-[-1]">✎</span>
+                    </button>
+                  ) : null}
+                  {data.status === "INACTIVE" ? (
+                    <span className="ml-2 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-normal text-gray-600">連携終了済み</span>
+                  ) : null}
+                </h2>
+              )}
               <div className="flex shrink-0 items-center gap-3">
                 {data.canDeactivate ? (
                   data.status === "ACTIVE" ? (

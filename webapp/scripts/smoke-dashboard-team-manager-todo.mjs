@@ -54,7 +54,7 @@ try {
 
   const teamACard = admin
     .locator("div.rounded-xl.border.border-border.p-4")
-    .filter({ has: admin.locator("div.mb-3.font-semibold", { hasText: /^Aチーム$/ }) });
+    .filter({ has: admin.locator("span.font-semibold", { hasText: /^Aチーム$/ }) });
   await teamACard.getByRole("button", { name: "＋招待" }).click();
   await teamACard.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForTimeout(400);

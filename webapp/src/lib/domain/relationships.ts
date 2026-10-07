@@ -240,6 +240,27 @@ export async function deleteCompanyRelationship(params: { companyId: string; com
   await prisma.companyRelationship.delete({ where: { id: params.companyRelationshipId } });
 }
 
+// 仮アカウントの名称変更 — 入力ミス・社名変更に対応するため。本アカウント
+// として連携済み（相手に実Companyが紐づいた）後は、名称はその
+// Company.nameを編集すべきものに変わるためここでは変更できない
+// （name解決はgetClientMonthDetailのcounterpartCompany?.name ??
+// relationship.proxyNameと同じ考え方）。
+export async function updateProxyName(params: { companyId: string; companyRelationshipId: string; proxyName: string }) {
+  const relationship = await prisma.companyRelationship.findFirstOrThrow({
+    where: { id: params.companyRelationshipId, ownerCompanyId: params.companyId },
+  });
+  const isStillProxy =
+    relationship.agencyCompanyId === params.companyId
+      ? relationship.clientCompanyId === null
+      : relationship.agencyCompanyId === null;
+  if (!isStillProxy) throw new Error("not_a_proxy");
+
+  return prisma.companyRelationship.update({
+    where: { id: params.companyRelationshipId },
+    data: { proxyName: params.proxyName.trim() },
+  });
+}
+
 // 関係の当事者（オーナー or 本アカウント連携済みの相手）かどうかを確認する
 // — 双方向可視化に伴い、オーナー限定にすべきでない操作（配属解除など）は
 // こちらを使う。オーナー限定の操作（単価設定・チーム紐付け・関係の削除）は

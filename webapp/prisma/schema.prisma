@@ -145,10 +145,16 @@ model Company {
 }
 
 model Team {
-  id        String   @id @default(cuid())
-  companyId String
-  name      String
-  createdAt DateTime @default(now())
+  id                String   @id @default(cuid())
+  companyId         String
+  name              String
+  // チーム宛の通知（業務報告の提出・シフト希望の未確定ダイジェスト）の
+  // 送信先。未設定の場合はメール通知はスキップされる（本部の
+  // notificationEmailへはフォールバックしない — 本部へは会社全体の集計
+  // だけが別途届く設計のため。ログイン中のマネージャー/リーダーへの
+  // プッシュ通知はこの設定と関係なく常に届く）。
+  notificationEmail String?
+  createdAt         DateTime @default(now())
 
   company            Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   memberships        TeamMembership[]
@@ -230,12 +236,30 @@ model CompanyMembership {
   company               Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   viaAgencyRelationship CompanyRelationship? @relation(fields: [viaAgencyRelationshipId], references: [id], onDelete: SetNull)
 
-  staffNotes      StaffNote[]
-  paidLeaveEvents PaidLeaveEvent[]
+  staffNotes              StaffNote[]
+  paidLeaveEvents         PaidLeaveEvent[]
+  idDocumentUploadHistory IdDocumentUploadHistory[]
 
   @@unique([userId, companyId])
   @@index([companyId, role])
   @@index([viaAgencyRelationshipId])
+}
+
+// 本人確認書類の差し替え履歴。新しい画像をアップロードする直前の値を
+// ここに退避しておくことで、退職間際に故意に無関係な画像へ差し替える
+// といった操作からも、以前アップロードされた書類を追跡できるようにする
+// （CompanyMembership.idDocumentFrontUrl/idDocumentBackUrlは常に最新の
+// 表示用。PaidLeaveEventと同じ追記式ログで、更新・削除はしない）。
+model IdDocumentUploadHistory {
+  id           String   @id @default(cuid())
+  membershipId String
+  side         String // "front" | "back"
+  url          String
+  createdAt    DateTime @default(now())
+
+  membership CompanyMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId, createdAt])
 }
 
 enum PaidLeaveEventType {

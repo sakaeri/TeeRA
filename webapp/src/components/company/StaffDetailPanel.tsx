@@ -10,6 +10,7 @@ import {
   inviteProxyUpgradeAction,
   updateStaffIdDocumentAction,
   updateStaffBankInfoAction,
+  updateStaffProfileAction,
   setStaffTeamsAction,
   deleteStaffAction,
   setStaffHireDateAction,
@@ -49,6 +50,8 @@ type StaffNote = {
 type StaffMonthDetail = {
   membershipId: string;
   name: string;
+  address: string;
+  phoneNumber: string;
   isProxy: boolean;
   viaAgencyRelationshipId: string | null;
   viaAgencyRelationshipName: string | null;
@@ -75,6 +78,7 @@ type StaffMonthDetail = {
   };
   idDocumentFrontUrl: string | null;
   idDocumentBackUrl: string | null;
+  idDocumentHistory: { id: string; side: string; url: string; createdAt: string }[];
   bankInfo: {
     bankName: string;
     branchName: string;
@@ -205,10 +209,41 @@ export function StaffDetailPanel({
   const [generateCustomize, setGenerateCustomize] = useState(false);
   const [showContractHistory, setShowContractHistory] = useState(false);
   const [showPaidLeaveHistory, setShowPaidLeaveHistory] = useState(false);
+  const [showIdDocumentHistory, setShowIdDocumentHistory] = useState(false);
   const [editingTeams, setEditingTeams] = useState(false);
   const [teamSelection, setTeamSelection] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileNameDraft, setProfileNameDraft] = useState("");
+  const [profileAddressDraft, setProfileAddressDraft] = useState("");
+  const [profilePhoneDraft, setProfilePhoneDraft] = useState("");
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  function startEditProfile() {
+    setProfileNameDraft(data?.name ?? "");
+    setProfileAddressDraft(data?.address ?? "");
+    setProfilePhoneDraft(data?.phoneNumber ?? "");
+    setProfileError(null);
+    setEditingProfile(true);
+  }
+
+  function submitProfile(membershipId: string) {
+    if (!profileNameDraft.trim()) return;
+    startTransition(async () => {
+      try {
+        await updateStaffProfileAction(membershipId, {
+          name: profileNameDraft,
+          address: profileAddressDraft,
+          phoneNumber: profilePhoneDraft,
+        });
+        setEditingProfile(false);
+        await refresh();
+      } catch {
+        setProfileError("変更できませんでした。");
+      }
+    });
+  }
 
   function endGenerateFlow() {
     setShowGenerateChoose(false);
@@ -426,18 +461,84 @@ export function StaffDetailPanel({
           <p className="text-sm text-muted">読み込み中…</p>
         ) : (
           <>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-              <h2 className="font-serif-jp text-xl font-bold">{data.name}</h2>
-              {data.isProxy ? (
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="shrink-0 text-xs text-muted hover:text-red-600"
-                >
-                  スタッフ情報を削除
-                </button>
-              ) : null}
-            </div>
+            {editingProfile ? (
+              <div className="mb-3 flex flex-col gap-2 rounded-lg border border-border bg-background/40 p-3">
+                <input
+                  type="text"
+                  value={profileNameDraft}
+                  onChange={(e) => setProfileNameDraft(e.target.value)}
+                  className="rounded-lg border border-border px-2 py-1.5 text-lg font-bold"
+                />
+                <label className="flex flex-col gap-1 text-xs text-muted">
+                  住所
+                  <input
+                    type="text"
+                    value={profileAddressDraft}
+                    onChange={(e) => setProfileAddressDraft(e.target.value)}
+                    className="rounded-lg border border-border px-2 py-1.5 text-sm text-foreground"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-muted">
+                  電話番号
+                  <input
+                    type="text"
+                    value={profilePhoneDraft}
+                    onChange={(e) => setProfilePhoneDraft(e.target.value)}
+                    className="rounded-lg border border-border px-2 py-1.5 text-sm text-foreground"
+                  />
+                </label>
+                {profileError ? <p className="text-xs text-red-600">{profileError}</p> : null}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={pending || !profileNameDraft.trim()}
+                    onClick={() => submitProfile(data.membershipId)}
+                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                  >
+                    保存
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingProfile(false)}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <h2 className="font-serif-jp text-xl font-bold">{data.name}</h2>
+                    <button
+                      type="button"
+                      onClick={startEditProfile}
+                      aria-label="氏名・連絡先を編集"
+                      className="text-xs text-muted hover:text-primary"
+                    >
+                      <span className="inline-block scale-x-[-1]">✎</span>
+                    </button>
+                  </div>
+                  {data.address || data.phoneNumber ? (
+                    <p className="text-xs text-muted">
+                      {data.address}
+                      {data.address && data.phoneNumber ? " ／ " : ""}
+                      {data.phoneNumber}
+                    </p>
+                  ) : null}
+                </div>
+                {data.isProxy ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="shrink-0 text-xs text-muted hover:text-red-600"
+                  >
+                    スタッフ情報を削除
+                  </button>
+                ) : null}
+              </div>
+            )}
 
             {deleteError ? <p className="mb-3 text-xs text-red-600">{deleteError}</p> : null}
 
@@ -485,9 +586,7 @@ export function StaffDetailPanel({
               </div>
             ) : (
               <div className="mb-4 rounded-lg border border-border bg-background/40 p-3">
-                <p className="mb-2 text-xs text-muted">
-                  氏名：{data.name}（変更不可）
-                </p>
+                <p className="mb-2 text-xs text-muted">氏名：{data.name}</p>
                 <p className="mb-1 text-xs font-medium">所属チーム（複数選択可）</p>
                 <div className="mb-3 flex flex-col gap-1">
                   {allTeams.map((team) => {
@@ -879,6 +978,34 @@ export function StaffDetailPanel({
                       );
                     })}
                   </div>
+
+                  {data.idDocumentHistory.length > 0 ? (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowIdDocumentHistory((v) => !v)}
+                        className="text-xs text-muted hover:text-primary"
+                      >
+                        {showIdDocumentHistory
+                          ? "▲ 過去の提出履歴を閉じる"
+                          : `▼ 過去の提出履歴（${data.idDocumentHistory.length}件）`}
+                      </button>
+                      {showIdDocumentHistory ? (
+                        <ul className="mt-2 flex flex-col gap-1">
+                          {data.idDocumentHistory.map((h) => (
+                            <li key={h.id} className="flex items-center justify-between text-xs text-muted">
+                              <span>
+                                {h.side === "front" ? "表面" : "裏面"}／{h.createdAt.slice(0, 10)}まで提出されていたもの
+                              </span>
+                              <a href={h.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                                📎 画像を見る
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="rounded-lg border border-border p-3 text-sm">
@@ -1205,6 +1332,7 @@ export function StaffDetailPanel({
                 companyName={companyName}
                 clients={clients}
                 editingTemplate={detailContract.templateDetail}
+                viewingStaff={{ name: data.name, address: data.address, phoneNumber: data.phoneNumber }}
                 onClose={() => setDetailContractId(null)}
               />
             );
@@ -1289,7 +1417,7 @@ export function StaffDetailPanel({
           companyName={companyName}
           clients={clients}
           editingTemplate={generateBaseTemplate}
-          generateForStaff={{ userId, name: data.name }}
+          generateForStaff={{ userId, name: data.name, address: data.address, phoneNumber: data.phoneNumber }}
           onClose={endGenerateFlow}
         />
       ) : null}

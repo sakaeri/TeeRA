@@ -37,6 +37,7 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
   // 一意な組み合わせで所属を確認する。
   const myMembership = await prisma.companyMembership.findUnique({
     where: { userId_companyId: { userId, companyId } },
+    include: { user: true },
   });
   if (!myMembership) notFound();
 
@@ -158,6 +159,9 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
       <StaffContractsView
         companyId={companyId}
         companyName={company.name}
+        myName={myMembership.user.name}
+        myAddress={myMembership.user.address ?? ""}
+        myPhoneNumber={myMembership.user.phoneNumber ?? ""}
         myContracts={myContracts.map((c) => ({
           id: c.id,
           title: contractDisplayTitle(c.template.employmentType, c.template.jobDescription),

@@ -414,6 +414,7 @@ export function TemplateModal({
   companyName,
   editingTemplate,
   generateForStaff,
+  viewingStaff,
   duplicateAsNew,
   onClose,
   onSaved,
@@ -422,7 +423,11 @@ export function TemplateModal({
   clients: ClientOption[];
   companyName: string;
   editingTemplate?: Template;
-  generateForStaff?: { userId: string; name: string };
+  generateForStaff?: { userId: string; name: string; address?: string; phoneNumber?: string };
+  // readOnlyで既存の契約書を見るだけの時に、その契約の相手方（乙）の
+  // 氏名・住所・電話番号を表示するための情報。generateForStaffと違い
+  // 生成フロー（タイトル表示・送信先）には一切影響しない。
+  viewingStaff?: { name: string; address?: string; phoneNumber?: string };
   // trueの場合、editingTemplateの内容を初期値として引き継ぎつつ、更新では
   // なく新規の独立したテンプレートとして保存する（招待モーダルからの
   // 「このテンプレートを複製して新規作成」用）。
@@ -486,6 +491,10 @@ export function TemplateModal({
   const autoTitle = `${EMPLOYMENT_TYPE_LABEL[employmentType]}${jobDescription ? "・" + jobDescription : ""}`;
   const title = customTitle.trim() || autoTitle;
   const preview = mode === "preview";
+  // 契約相手方（乙）の表示用情報。generation中はgenerateForStaff、既存
+  // 契約の閲覧中はviewingStaffを使う（お互いタイトル表示や送信先には
+  // 影響しないよう完全に分離している）。
+  const partyInfo = generateForStaff ?? viewingStaff;
 
   const workingDayLabel = WEEKDAYS.filter((d) => fixedWeekdays.includes(d.value))
     .map((d) => d.label)
@@ -595,10 +604,16 @@ export function TemplateModal({
         )}
 
         <p className="text-sm leading-relaxed">
-          {companyName}（以下「甲」）と{generateForStaff?.name ?? "（スタッフ名/自動反映）"}（以下「乙」）は、
+          {companyName}（以下「甲」）と{partyInfo?.name ?? "（スタッフ名/自動反映）"}（以下「乙」）は、
           {contractStartDate || "開始日未設定"}
           より、以下の内容で雇用契約を締結する。
         </p>
+        {partyInfo?.address || partyInfo?.phoneNumber ? (
+          <p className="mt-1 text-xs text-muted">
+            乙の住所・連絡先：{partyInfo.address || "未登録"}
+            {partyInfo.phoneNumber ? ` ／ ${partyInfo.phoneNumber}` : ""}
+          </p>
+        ) : null}
         <div className="my-4 border-t border-border" />
 
         <div className="flex flex-col divide-y divide-border/40">

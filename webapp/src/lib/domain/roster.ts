@@ -322,10 +322,13 @@ export async function getStaffMonthDetail(params: {
   const salarySlipNet = salarySlip ? getTotals(salarySlip).net : null;
 
   const paidLeave = await getPaidLeaveInfo(membership.id);
+  const idDocumentHistory = await listIdDocumentUploadHistory(membership.id);
 
   return {
     membershipId: membership.id,
     name: membership.user.name,
+    address: membership.user.address ?? "",
+    phoneNumber: membership.user.phoneNumber ?? "",
     isProxy: membership.user.isProxy,
     viaAgencyRelationshipId: membership.viaAgencyRelationshipId,
     viaAgencyRelationshipName: membership.viaAgencyRelationship?.proxyName ?? null,
@@ -356,6 +359,12 @@ export async function getStaffMonthDetail(params: {
     },
     idDocumentFrontUrl: membership.idDocumentFrontUrl,
     idDocumentBackUrl: membership.idDocumentBackUrl,
+    idDocumentHistory: idDocumentHistory.map((h) => ({
+      id: h.id,
+      side: h.side,
+      url: h.url,
+      createdAt: h.createdAt.toISOString(),
+    })),
     bankInfo: {
       bankName: membership.bankName ?? "",
       branchName: membership.branchName ?? "",
@@ -486,16 +495,56 @@ export async function deleteStaffNote(id: string) {
   return prisma.staffNote.delete({ where: { id } });
 }
 
+// 氏名・住所・電話番号はUser単位（会社をまたいで共有）。本人が名字だけ
+// 入力してしまう等の誤入力を本部側で直せるようにするためのもの。
+// address/phoneNumberは販促品の配送先として入力されたものと同じ
+// フィールドをそのまま流用する（本人の住所・電話番号という点では同じ
+// 情報のため）。
+export async function updateStaffProfile(params: {
+  userId: string;
+  name: string;
+  address: string;
+  phoneNumber: string;
+}) {
+  return prisma.user.update({
+    where: { id: params.userId },
+    data: {
+      name: params.name.trim(),
+      address: params.address.trim() || null,
+      phoneNumber: params.phoneNumber.trim() || null,
+    },
+  });
+}
+
 // 本人確認書類（表面・裏面）。契約ごとではなく所属（会社との関係）単位で
 // 1組だけ持つ。スタッフ本人・会社どちらのアクションからも呼ばれる。
+// 差し替え前の値はIdDocumentUploadHistoryに退避してから上書きする —
+// 退職間際に故意に無関係な画像へ差し替える、といった操作があっても
+// 以前アップロードされた書類を追跡できるようにするため。
 export async function updateMembershipIdDocument(params: {
   membershipId: string;
   side: "front" | "back";
   url: string;
 }) {
-  return prisma.companyMembership.update({
-    where: { id: params.membershipId },
-    data: params.side === "front" ? { idDocumentFrontUrl: params.url } : { idDocumentBackUrl: params.url },
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.companyMembership.findUniqueOrThrow({ where: { id: params.membershipId } });
+    const previousUrl = params.side === "front" ? current.idDocumentFrontUrl : current.idDocumentBackUrl;
+    if (previousUrl) {
+      await tx.idDocumentUploadHistory.create({
+        data: { membershipId: params.membershipId, side: params.side, url: previousUrl },
+      });
+    }
+    return tx.companyMembership.update({
+      where: { id: params.membershipId },
+      data: params.side === "front" ? { idDocumentFrontUrl: params.url } : { idDocumentBackUrl: params.url },
+    });
+  });
+}
+
+export async function listIdDocumentUploadHistory(membershipId: string) {
+  return prisma.idDocumentUploadHistory.findMany({
+    where: { membershipId },
+    orderBy: { createdAt: "desc" },
   });
 }
 

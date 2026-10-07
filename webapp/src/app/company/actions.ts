@@ -16,6 +16,7 @@ import {
   updateMembershipIdDocument,
   updateMembershipBankInfo,
   updateStaffAgencyTag,
+  updateStaffProfile,
 } from "@/lib/domain/roster";
 import { setHireDate, grantPaidLeave, adjustPaidLeaveBalance, skipPaidLeaveGrant } from "@/lib/domain/paidLeave";
 import { earliestAllowedMonth, isBeforeCutoff } from "@/lib/date";
@@ -33,9 +34,12 @@ import {
   unplaceStaff,
   updateRelationshipWorkplaceInfo,
   setRelationshipStatus,
+  updateProxyName,
 } from "@/lib/domain/relationships";
 import {
   createTeam,
+  renameTeam,
+  updateTeamNotificationEmail,
   setTeamMemberRole,
   setCompanyMemberRole,
   setMemberCanWorkShifts,
@@ -238,6 +242,24 @@ export async function createTeamAction(
   revalidatePath("/company/settings");
 }
 
+export async function updateTeamNameAction(teamId: string, name: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertTeamOwnedByCompany(teamId, membership.companyId);
+
+  await renameTeam(teamId, name);
+  revalidatePath("/company/settings");
+}
+
+export async function updateTeamNotificationEmailAction(teamId: string, notificationEmail: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertTeamOwnedByCompany(teamId, membership.companyId);
+
+  await updateTeamNotificationEmail(teamId, notificationEmail);
+  revalidatePath("/company/settings");
+}
+
 export async function setTeamMemberRoleAction(
   teamId: string,
   userId: string,
@@ -317,6 +339,23 @@ export async function deleteCompanyRelationshipAction(companyRelationshipId: str
 
   try {
     await deleteCompanyRelationship({ companyId: membership.companyId, companyRelationshipId });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "unknown" };
+  }
+  revalidatePath("/company/roster");
+  return { error: null };
+}
+
+// 仮アカウントの名称変更 — 入力ミス・社名変更に対応するため。本アカウント
+// 連携済みになった後はupdateProxyName側でnot_a_proxyとして弾かれる
+// （その場合は相手企業自身のCompany.name編集に誘導すべき）。
+export async function updateProxyNameAction(companyRelationshipId: string, proxyName: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  if (!proxyName.trim()) throw new Error("invalid_name");
+
+  try {
+    await updateProxyName({ companyId: membership.companyId, companyRelationshipId, proxyName });
   } catch (error) {
     return { error: error instanceof Error ? error.message : "unknown" };
   }
@@ -536,6 +575,19 @@ export async function deleteStaffNoteAction(noteId: string) {
   });
   if (note.membership.companyId !== membership.companyId) throw new Error("forbidden");
   await deleteStaffNote(noteId);
+  revalidatePath("/company/roster");
+}
+
+export async function updateStaffProfileAction(
+  membershipId: string,
+  input: { name: string; address: string; phoneNumber: string },
+) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  if (!input.name.trim()) throw new Error("invalid_name");
+  const target = await assertMembershipOwnedByCompany(membershipId, membership.companyId);
+
+  await updateStaffProfile({ userId: target.userId, ...input });
   revalidatePath("/company/roster");
 }
 

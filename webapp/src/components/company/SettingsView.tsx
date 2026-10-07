@@ -14,6 +14,8 @@ import {
   removeCompanyMemberRoleAction,
   inviteCompanyAdminAction,
   createTeamAction,
+  updateTeamNameAction,
+  updateTeamNotificationEmailAction,
   setTeamMemberRoleAction,
   inviteTeamManagerAction,
   promoteExistingStaffToTeamRoleAction,
@@ -33,7 +35,7 @@ type Admin = {
 };
 
 type TeamMember = { userId: string; name: string; email: string; role: string };
-type Team = { id: string; name: string; members: TeamMember[] };
+type Team = { id: string; name: string; notificationEmail: string; members: TeamMember[] };
 type StaffOption = { userId: string; name: string };
 
 // 2チーム目以降の作成コスト。src/lib/domain/teams.tsのTEAM_UNLOCK_TEE_COSTと
@@ -609,6 +611,89 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
   );
 }
 
+function TeamHeaderEditor({
+  teamId,
+  name,
+  notificationEmail,
+}: {
+  teamId: string;
+  name: string;
+  notificationEmail: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [nameValue, setNameValue] = useState(name);
+  const [emailValue, setEmailValue] = useState(notificationEmail);
+  const [pending, startTransition] = useTransition();
+
+  if (!editing) {
+    return (
+      <div className="mb-3">
+        <div className="flex items-center gap-1.5">
+          <span className="font-semibold">{name}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setNameValue(name);
+              setEmailValue(notificationEmail);
+              setEditing(true);
+            }}
+            aria-label="チーム名・通知先を変更"
+            className="text-xs text-muted hover:text-primary"
+          >
+            <span className="inline-block scale-x-[-1]">✎</span>
+          </button>
+        </div>
+        <p className="text-xs text-muted">
+          通知先：{notificationEmail || "未設定（チーム宛メール通知は届きません。業務報告の提出・シフト希望の未確定件数をこのチームのマネージャー/リーダーに知らせたい場合に設定してください）"}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-3 flex flex-col gap-2 rounded-lg border border-border bg-background/40 p-3">
+      <label className="flex flex-col gap-1 text-xs">
+        チーム名
+        <input
+          type="text"
+          value={nameValue}
+          onChange={(e) => setNameValue(e.target.value)}
+          className="rounded-lg border border-border px-2 py-1 text-sm font-semibold"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-xs">
+        通知用メールアドレス（任意）
+        <input
+          type="email"
+          value={emailValue}
+          onChange={(e) => setEmailValue(e.target.value)}
+          placeholder="例：team-a@your-company.com"
+          className="rounded-lg border border-border px-2 py-1 text-sm"
+        />
+      </label>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={pending || !nameValue.trim()}
+          onClick={() =>
+            startTransition(async () => {
+              await updateTeamNameAction(teamId, nameValue.trim());
+              await updateTeamNotificationEmailAction(teamId, emailValue);
+              setEditing(false);
+            })
+          }
+          className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+        >
+          保存
+        </button>
+        <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted">
+          キャンセル
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TeamsSection({
   teams,
   staff,
@@ -669,7 +754,7 @@ function TeamsSection({
           const managers = team.members.filter((m) => m.role === "TEAM_MANAGER" || m.role === "TEAM_LEADER");
           return (
           <div key={team.id} className="rounded-xl border border-border p-4">
-            <div className="mb-3 font-semibold">{team.name}</div>
+            <TeamHeaderEditor teamId={team.id} name={team.name} notificationEmail={team.notificationEmail} />
 
             {managers.length > 0 ? (
               <div className="mb-2 overflow-x-auto">

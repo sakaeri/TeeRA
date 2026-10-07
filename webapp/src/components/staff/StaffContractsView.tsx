@@ -72,6 +72,9 @@ function groupTaskRatesByWorkplace(taskRates: TaskRate[]): { key: string; label:
 export function StaffContractsView({
   companyId,
   companyName,
+  myName,
+  myAddress,
+  myPhoneNumber,
   myContracts,
   pendingContracts,
   idDocumentFrontUrl,
@@ -83,6 +86,9 @@ export function StaffContractsView({
 }: {
   companyId: string;
   companyName: string;
+  myName: string;
+  myAddress: string;
+  myPhoneNumber: string;
   myContracts: {
     id: string;
     title: string;
@@ -332,6 +338,7 @@ export function StaffContractsView({
           companyName={companyName}
           clients={[]}
           editingTemplate={activePending.templateDetail}
+          viewingStaff={{ name: myName, address: myAddress, phoneNumber: myPhoneNumber }}
           onClose={() => setShowDetail(false)}
         />
       ) : null}
@@ -342,6 +349,7 @@ export function StaffContractsView({
           companyName={companyName}
           clients={[]}
           editingTemplate={detailContract.templateDetail}
+          viewingStaff={{ name: myName, address: myAddress, phoneNumber: myPhoneNumber }}
           onClose={() => setDetailContract(null)}
         />
       ) : null}

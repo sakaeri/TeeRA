@@ -158,13 +158,31 @@ export function WalletView({
               }
             />
             <UsageRow
-              last
               label="請求書の発行"
               detail="1件 1 Tee"
               icon={
                 <>
                   <path d="M5 2.5h10v15l-2-1.3-1.5 1.3-1.5-1.3-1.5 1.3L7 16.2l-2 1.3v-15z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
                   <path d="M7.5 6.5h5M7.5 9.5h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                </>
+              }
+            />
+            <UsageRow
+              last
+              label="追加チームの作成"
+              detail={
+                <>
+                  1チーム目は無料
+                  <br />
+                  2チーム目以降 1チーム 10 Tee
+                </>
+              }
+              icon={
+                <>
+                  <path d="M7 9a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" strokeWidth="1.4" />
+                  <path d="M13 9a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" strokeWidth="1.4" />
+                  <path d="M2.5 16c.5-3 2.5-4.5 4.5-4.5S11 13 11.5 16" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                  <path d="M8.5 16c.5-3 2.5-4.5 4.5-4.5s4 1.5 4.5 4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                 </>
               }
             />

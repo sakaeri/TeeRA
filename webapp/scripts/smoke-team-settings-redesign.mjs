@@ -63,7 +63,7 @@ try {
   // への昇格は参加後、一覧の「権限」セレクトから行う）。
   const teamACard = admin
     .locator("div.rounded-xl.border.border-border.p-4")
-    .filter({ has: admin.locator("div.mb-3.font-semibold", { hasText: /^Aチーム$/ }) });
+    .filter({ has: admin.locator("span.font-semibold", { hasText: /^Aチーム$/ }) });
   await teamACard.getByRole("button", { name: "＋招待" }).click();
   log("「新しく招待する」タブに権限セレクトが出ない（招待時に権限を選ばせない）", !(await teamACard.getByText("権限", { exact: true }).isVisible()));
   await teamACard.getByRole("button", { name: "招待URLを発行する" }).click();
@@ -94,7 +94,7 @@ try {
   // --- ②「権限を外す」で降格 ---
   const teamACard2 = admin
     .locator("div.rounded-xl.border.border-border.p-4")
-    .filter({ has: admin.locator("div.mb-3.font-semibold", { hasText: /^Aチーム$/ }) });
+    .filter({ has: admin.locator("span.font-semibold", { hasText: /^Aチーム$/ }) });
   await teamACard2.getByRole("button", { name: "権限を外す" }).click();
   await admin.waitForTimeout(300);
   await admin.locator("div.fixed.inset-0.z-40").last().getByRole("button", { name: "権限を外す" }).click();
@@ -107,7 +107,7 @@ try {
   // --- ③「既存スタッフから選ぶ」でBチームのリーダーに昇格 ---
   const teamBCard = admin
     .locator("div.rounded-xl.border.border-border.p-4")
-    .filter({ has: admin.locator("div.mb-3.font-semibold", { hasText: /^Bチーム$/ }) });
+    .filter({ has: admin.locator("span.font-semibold", { hasText: /^Bチーム$/ }) });
   await teamBCard.getByRole("button", { name: "＋招待" }).click();
   await teamBCard.getByRole("button", { name: "既存スタッフから選ぶ" }).click();
   await teamBCard.locator("select").first().selectOption({ label: "Aチームマネージャー" });
@@ -137,7 +137,7 @@ try {
   body = await staffPanel.textContent();
   log("一般スタッフは最初「チーム未所属」", body.includes("チーム未所属"));
 
-  await staffPanel.getByRole("button", { name: /編集/ }).click();
+  await staffPanel.getByRole("button", { name: "チーム所属を編集" }).click();
   await admin.waitForTimeout(200);
   await staffPanel.locator("label", { hasText: "Aチーム" }).locator('input[type=checkbox]').check();
   await staffPanel.getByRole("button", { name: "保存", exact: true }).click();
@@ -149,7 +149,7 @@ try {
   log("編集後はバッジにAチームが表示される", body.includes("Aチーム"));
 
   // 外す方向も確認
-  await staffPanel.getByRole("button", { name: /編集/ }).click();
+  await staffPanel.getByRole("button", { name: "チーム所属を編集" }).click();
   await admin.waitForTimeout(200);
   await staffPanel.locator("label", { hasText: "Aチーム" }).locator('input[type=checkbox]').uncheck();
   await staffPanel.getByRole("button", { name: "保存", exact: true }).click();
