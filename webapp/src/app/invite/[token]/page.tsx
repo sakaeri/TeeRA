@@ -149,13 +149,13 @@ export default async function InvitePage({
           !activeMembership ? (
             <div>
               <p className="mb-4 text-sm text-muted">
-                この招待は会社同士を結びつけるものです。先に自社の本部を作成してください。
+                この招待は事業所同士を結びつけるものです。先に事業所を作成してください。
               </p>
               <Link
                 href={`/register/company?invite=${token}`}
                 className="block rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
               >
-                本部を作成する
+                事業所を作成する
               </Link>
             </div>
           ) : activeMembership.role === "STAFF" ? (

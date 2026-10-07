@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { verifySession, getActiveMembership } from "@/lib/auth/session";
 import { CreateCompanyForm } from "@/components/auth/CreateCompanyForm";
+import { logoutAction } from "@/app/actions/auth";
 
 export default async function CreateCompanyPage({
   searchParams,
@@ -19,22 +20,26 @@ export default async function CreateCompanyPage({
         TeeRA
       </div>
       <div className="rounded-2xl border border-border bg-white/60 p-6">
-        <h1 className="mb-2 text-center text-lg font-semibold">
-          まだ本部がありません
+        <h1 className="mb-2 text-lg font-semibold">
+          まだ事業所がありません
         </h1>
-        <p className="mb-6 text-center text-sm text-muted">
+        <p className="mb-6 text-sm text-muted">
           {inviteToken ? (
-            <>取引先からの招待を受け取るには、まず自社の本部を作成してください。</>
+            <>取引先からの招待を受け取るには、まず事業所を作成してください。</>
           ) : (
             <>
-              本部名を入力して、新しい本部を作成してください。
-              <br />
+              事業所名を入力して、新しい事業所を作成してください。
               スタッフとして参加する場合は、所属先から届く招待URLからご登録ください。
             </>
           )}
         </p>
         <CreateCompanyForm inviteToken={inviteToken} />
       </div>
+      <form action={logoutAction} className="mt-4">
+        <button type="submit" className="w-full text-center text-sm text-muted hover:text-foreground">
+          別のアカウントでログインし直す（ログアウト）
+        </button>
+      </form>
     </main>
   );
 }

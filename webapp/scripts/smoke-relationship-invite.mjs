@@ -124,7 +124,7 @@ try {
   await counterpart.click("button[type=submit]");
   await counterpart.waitForURL(/\/register\/company\?invite=/);
   bodyText = await counterpart.textContent("body");
-  log("registering with a CLIENT_UPGRADE invite routes to company creation first", bodyText.includes("本部がありません"));
+  log("registering with a CLIENT_UPGRADE invite routes to company creation first", bodyText.includes("事業所がありません"));
 
   await counterpart.fill("#name", "招待先株式会社");
   await counterpart.click("button[type=submit]");

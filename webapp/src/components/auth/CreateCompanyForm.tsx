@@ -14,14 +14,14 @@ export function CreateCompanyForm({ inviteToken }: { inviteToken?: string }) {
       {inviteToken ? <input type="hidden" name="invite" value={inviteToken} /> : null}
       <div className="flex flex-col gap-1">
         <label htmlFor="name" className="text-sm text-foreground/80">
-          本部名
+          事業所名
         </label>
         <input
           id="name"
           name="name"
           type="text"
           required
-          placeholder="例）株式会社サンプル"
+          placeholder="例）サンプルゴルフ倶楽部"
           className="rounded-lg border border-border bg-white px-3.5 py-2.5 text-sm outline-none focus:border-primary"
         />
         {state?.errors?.name ? (
@@ -34,7 +34,7 @@ export function CreateCompanyForm({ inviteToken }: { inviteToken?: string }) {
         disabled={pending}
         className="mt-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
       >
-        {pending ? "作成中…" : "本部を作成"}
+        {pending ? "作成中…" : "事業所を作成"}
       </button>
     </form>
   );
