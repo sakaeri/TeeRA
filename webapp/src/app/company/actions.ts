@@ -143,9 +143,10 @@ export async function inviteProxyUpgradeAction(proxyUserId: string) {
   return absoluteInviteUrl(invite.token);
 }
 
-export async function addClientAction(proxyName: string) {
+export async function addClientAction(proxyName: string, teamId?: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  if (teamId) await assertTeamOwnedByCompany(teamId, membership.companyId);
 
   const company = await prisma.company.findUniqueOrThrow({
     where: { id: membership.companyId },
@@ -154,16 +155,18 @@ export async function addClientAction(proxyName: string) {
     await activateAgencyModuleWithProxyClient({
       companyId: membership.companyId,
       proxyName,
+      teamId,
     });
   } else {
-    await addRealClient({ companyId: membership.companyId, proxyName });
+    await addRealClient({ companyId: membership.companyId, proxyName, teamId });
   }
   revalidatePath("/company/roster");
 }
 
-export async function addAgencyAction(proxyName: string) {
+export async function addAgencyAction(proxyName: string, teamId?: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  if (teamId) await assertTeamOwnedByCompany(teamId, membership.companyId);
 
   const company = await prisma.company.findUniqueOrThrow({
     where: { id: membership.companyId },
@@ -172,9 +175,10 @@ export async function addAgencyAction(proxyName: string) {
     await activateDispatchModuleWithProxyAgency({
       companyId: membership.companyId,
       proxyName,
+      teamId,
     });
   } else {
-    await addRealAgency({ companyId: membership.companyId, proxyName });
+    await addRealAgency({ companyId: membership.companyId, proxyName, teamId });
   }
   revalidatePath("/company/roster");
 }

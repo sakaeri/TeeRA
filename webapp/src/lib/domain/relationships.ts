@@ -95,17 +95,20 @@ export async function listApprovedShiftsForTaggedAgencyStaff(params: {
 }
 
 // "+ 取引先名簿を追加" -> 依頼主名簿: activates companyModules.agency and
-// creates a proxy client relationship in one step (chat29's one-click flow).
+// creates a proxy client relationship in one step (chat29's one-click flow)。
+// teamIdを指定すると、作成と同時にそのチームと紐付ける（あとから
+// 「チームとの紐付けを編集」で手動設定する手間を省くための任意項目）。
 export async function activateAgencyModuleWithProxyClient(params: {
   companyId: string;
   proxyName: string;
+  teamId?: string;
 }) {
   return prisma.$transaction(async (tx) => {
     await tx.company.update({
       where: { id: params.companyId },
       data: { agencyEnabled: true },
     });
-    return tx.companyRelationship.create({
+    const relationship = await tx.companyRelationship.create({
       data: {
         ownerCompanyId: params.companyId,
         agencyCompanyId: params.companyId,
@@ -113,6 +116,12 @@ export async function activateAgencyModuleWithProxyClient(params: {
         proxyName: params.proxyName,
       },
     });
+    if (params.teamId) {
+      await tx.teamClientRelationship.create({
+        data: { teamId: params.teamId, companyRelationshipId: relationship.id },
+      });
+    }
+    return relationship;
   });
 }
 
@@ -121,13 +130,14 @@ export async function activateAgencyModuleWithProxyClient(params: {
 export async function activateDispatchModuleWithProxyAgency(params: {
   companyId: string;
   proxyName: string;
+  teamId?: string;
 }) {
   return prisma.$transaction(async (tx) => {
     await tx.company.update({
       where: { id: params.companyId },
       data: { dispatchEnabled: true },
     });
-    return tx.companyRelationship.create({
+    const relationship = await tx.companyRelationship.create({
       data: {
         ownerCompanyId: params.companyId,
         clientCompanyId: params.companyId,
@@ -135,28 +145,50 @@ export async function activateDispatchModuleWithProxyAgency(params: {
         proxyName: params.proxyName,
       },
     });
+    if (params.teamId) {
+      await tx.teamClientRelationship.create({
+        data: { teamId: params.teamId, companyRelationshipId: relationship.id },
+      });
+    }
+    return relationship;
   });
 }
 
-export async function addRealClient(params: { companyId: string; proxyName: string }) {
-  return prisma.companyRelationship.create({
-    data: {
-      ownerCompanyId: params.companyId,
-      agencyCompanyId: params.companyId,
-      clientCompanyId: null,
-      proxyName: params.proxyName,
-    },
+export async function addRealClient(params: { companyId: string; proxyName: string; teamId?: string }) {
+  return prisma.$transaction(async (tx) => {
+    const relationship = await tx.companyRelationship.create({
+      data: {
+        ownerCompanyId: params.companyId,
+        agencyCompanyId: params.companyId,
+        clientCompanyId: null,
+        proxyName: params.proxyName,
+      },
+    });
+    if (params.teamId) {
+      await tx.teamClientRelationship.create({
+        data: { teamId: params.teamId, companyRelationshipId: relationship.id },
+      });
+    }
+    return relationship;
   });
 }
 
-export async function addRealAgency(params: { companyId: string; proxyName: string }) {
-  return prisma.companyRelationship.create({
-    data: {
-      ownerCompanyId: params.companyId,
-      clientCompanyId: params.companyId,
-      agencyCompanyId: null,
-      proxyName: params.proxyName,
-    },
+export async function addRealAgency(params: { companyId: string; proxyName: string; teamId?: string }) {
+  return prisma.$transaction(async (tx) => {
+    const relationship = await tx.companyRelationship.create({
+      data: {
+        ownerCompanyId: params.companyId,
+        clientCompanyId: params.companyId,
+        agencyCompanyId: null,
+        proxyName: params.proxyName,
+      },
+    });
+    if (params.teamId) {
+      await tx.teamClientRelationship.create({
+        data: { teamId: params.teamId, companyRelationshipId: relationship.id },
+      });
+    }
+    return relationship;
   });
 }
 

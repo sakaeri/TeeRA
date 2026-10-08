@@ -91,6 +91,7 @@ const TABS = [
   { key: "basic", label: "基本情報" },
   { key: "contracts", label: "契約関連" },
   { key: "workreports", label: "業務報告" },
+  { key: "howto", label: "使い方" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -178,6 +179,86 @@ export function SettingsView({
       ) : null}
 
       {tab === "workreports" ? <WorkReportsQueue reports={workReports} /> : null}
+
+      {tab === "howto" ? <HowToSection /> : null}
+    </div>
+  );
+}
+
+function HowToSection() {
+  return (
+    <div className="flex flex-col gap-10">
+      <SectionCard title="権限ごとに使える機能">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-muted">
+                <th className="py-2 pr-4 font-semibold">役職</th>
+                <th className="py-2 pr-4 font-semibold">シフト作成・管理</th>
+                <th className="py-2 pr-4 font-semibold">給与計算・請求書・契約書</th>
+                <th className="py-2 pr-4 font-semibold">スタッフ・取引先の追加</th>
+                <th className="py-2 font-semibold">会社全体の設定</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-border/60">
+                <td className="py-2 pr-4 font-semibold text-primary">本部管理者・本部編集者</td>
+                <td className="py-2 pr-4">○（全社）</td>
+                <td className="py-2 pr-4">○（全社）</td>
+                <td className="py-2 pr-4">○（スタッフ・取引先・派遣会社とも）</td>
+                <td className="py-2">○</td>
+              </tr>
+              <tr className="border-b border-border/60">
+                <td className="py-2 pr-4 font-semibold text-primary">チームマネージャー</td>
+                <td className="py-2 pr-4">○（自チーム内）</td>
+                <td className="py-2 pr-4">○（自チーム内）</td>
+                <td className="py-2 pr-4">スタッフのみ○（自チームに追加）</td>
+                <td className="py-2">✕</td>
+              </tr>
+              <tr className="border-b border-border/60">
+                <td className="py-2 pr-4 font-semibold text-primary">チームリーダー</td>
+                <td className="py-2 pr-4">○（自チーム内）</td>
+                <td className="py-2 pr-4">✕（閲覧も不可）</td>
+                <td className="py-2 pr-4">✕</td>
+                <td className="py-2">✕</td>
+              </tr>
+              <tr>
+                <td className="py-2 pr-4 font-semibold text-primary">スタッフ</td>
+                <td className="py-2 pr-4">自分のシフト提出のみ</td>
+                <td className="py-2 pr-4">✕</td>
+                <td className="py-2 pr-4">✕</td>
+                <td className="py-2">✕</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <ul className="mt-4 list-disc pl-5 text-sm text-muted">
+          <li>本部管理者と本部編集者の権限は同じです。ただし本部管理者が0人になる変更（最後の1人の降格・削除など）はできません。</li>
+          <li>取引先・派遣会社の新規作成は本部管理者・編集者のみ行えます。仮アカウントを作成する際にチームを指定すれば、作成後すぐにそのチームに紐付けられます。</li>
+        </ul>
+      </SectionCard>
+
+      <SectionCard title="スマートフォンのホーム画面に追加する">
+        <div className="flex flex-col gap-4 text-sm">
+          <div>
+            <p className="mb-1 font-semibold text-primary">iPhone（Safari）</p>
+            <ol className="list-decimal pl-5 text-muted">
+              <li>SafariでTeeRAを開く</li>
+              <li>画面下の共有ボタン（□に↑）をタップ</li>
+              <li>「ホーム画面に追加」を選び、「追加」をタップ</li>
+            </ol>
+          </div>
+          <div>
+            <p className="mb-1 font-semibold text-primary">Android（Chrome）</p>
+            <ol className="list-decimal pl-5 text-muted">
+              <li>ChromeでTeeRAを開く</li>
+              <li>右上の「︙」メニューをタップ</li>
+              <li>「アプリをインストール」または「ホーム画面に追加」を選ぶ</li>
+            </ol>
+          </div>
+          <p className="text-muted">ホーム画面に追加すると、アプリのように起動でき、通知にもすぐ気づきやすくなります。</p>
+        </div>
+      </SectionCard>
     </div>
   );
 }

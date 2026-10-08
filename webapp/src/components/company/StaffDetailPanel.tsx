@@ -101,6 +101,7 @@ type StaffMonthDetail = {
     noticeGivenAt: string | null;
     wageVersions: { id: string; label: string; effectiveFrom: string }[];
     templateDetail: Template;
+    uploadedDocumentUrl: string | null;
   }[];
   taskRates: StaffTaskRate[];
   days: {
@@ -508,25 +509,16 @@ export function StaffDetailPanel({
               </div>
             ) : (
               <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <h2 className="font-serif-jp text-xl font-bold">{data.name}</h2>
-                    <button
-                      type="button"
-                      onClick={startEditProfile}
-                      aria-label="氏名・連絡先を編集"
-                      className="text-xs text-muted hover:text-primary"
-                    >
-                      <span className="inline-block scale-x-[-1]">✎</span>
-                    </button>
-                  </div>
-                  {data.address || data.phoneNumber ? (
-                    <p className="text-xs text-muted">
-                      {data.address}
-                      {data.address && data.phoneNumber ? " ／ " : ""}
-                      {data.phoneNumber}
-                    </p>
-                  ) : null}
+                <div className="flex items-center gap-1.5">
+                  <h2 className="font-serif-jp text-xl font-bold">{data.name}</h2>
+                  <button
+                    type="button"
+                    onClick={startEditProfile}
+                    aria-label="氏名・連絡先を編集"
+                    className="text-xs text-muted hover:text-primary"
+                  >
+                    <span className="inline-block scale-x-[-1]">✎</span>
+                  </button>
                 </div>
                 {data.isProxy ? (
                   <button
@@ -792,7 +784,10 @@ export function StaffDetailPanel({
                               契約期間: {c.contractStartDate} 〜 {c.contractEndDate ?? "期間の定めなし"}
                             </p>
                             <div className="mt-1 flex items-center justify-between">
-                              <p className="text-xs text-muted">{CONTRACT_STATUS_LABEL[c.status] ?? c.status}</p>
+                              <p className="text-xs text-muted">
+                                {CONTRACT_STATUS_LABEL[c.status] ?? c.status}
+                                {c.uploadedDocumentUrl ? "（書面アップロード）" : ""}
+                              </p>
                               <div className="flex items-center gap-3">
                                 <button
                                   type="button"
@@ -1332,7 +1327,12 @@ export function StaffDetailPanel({
                 companyName={companyName}
                 clients={clients}
                 editingTemplate={detailContract.templateDetail}
-                viewingStaff={{ name: data.name, address: data.address, phoneNumber: data.phoneNumber }}
+                viewingStaff={{
+                  name: data.name,
+                  address: data.address,
+                  phoneNumber: data.phoneNumber,
+                  uploadedDocumentUrl: detailContract.uploadedDocumentUrl,
+                }}
                 onClose={() => setDetailContractId(null)}
               />
             );

@@ -9,13 +9,18 @@ export function ImageDropzone({
   onChange,
   required,
   size = "lg",
+  accept = "image/*",
 }: {
   label: string;
   imageUrl: string;
   onChange: (url: string) => void;
   required?: boolean;
   size?: "sm" | "md" | "lg";
+  // PDFなど画像以外も受け付ける場合に指定（既定は画像のみ）。画像以外の
+  // URLはプレビューできないため、代わりにファイルを開くリンクを表示する。
+  accept?: string;
 }) {
+  const isImage = !imageUrl || /\.(png|jpe?g|gif|webp|heic)$/i.test(imageUrl);
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,9 +63,19 @@ export function ImageDropzone({
           size === "sm" ? "h-16 w-16 p-1" : size === "md" ? "h-32 w-32 p-2" : "aspect-square w-full p-3"
         } ${dragOver ? "border-primary bg-primary/5" : "border-border"}`}
       >
-        {imageUrl ? (
+        {imageUrl && isImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={imageUrl} alt="" className="h-full w-full rounded-lg object-cover" />
+        ) : imageUrl ? (
+          <a
+            href={imageUrl}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="text-xs text-primary underline"
+          >
+            📄 ファイルを見る
+          </a>
         ) : size === "sm" ? (
           <span className="text-lg">🖼</span>
         ) : size === "md" ? (
@@ -86,7 +101,7 @@ export function ImageDropzone({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept={accept}
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];

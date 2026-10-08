@@ -54,6 +54,16 @@ async function companyAdminUserIds(companyId: string) {
   return members.map((m) => m.userId);
 }
 
+// チーム宛の通知（業務報告の提出・シフト希望の未確定）をプッシュで届ける
+// 先 — そのチームのTEAM_MANAGER/TEAM_LEADERのuserId一覧。
+async function teamManagerUserIds(teamId: string) {
+  const members = await prisma.teamMembership.findMany({
+    where: { teamId, role: { in: ["TEAM_MANAGER", "TEAM_LEADER"] } },
+    select: { userId: true },
+  });
+  return members.map((m) => m.userId);
+}
+
 function formatJstTime(date: Date) {
   return new Intl.DateTimeFormat("ja-JP", {
     hour: "2-digit",
@@ -102,7 +112,7 @@ export async function notifyCompanyOfWorkReportSubmission(workReportId: string) 
   console.log(`[email-notif] notifyCompanyOfWorkReportSubmission called workReportId=${workReportId}`);
   const report = await prisma.workReport.findUnique({
     where: { id: workReportId },
-    include: { staff: true, shift: { include: { company: true } } },
+    include: { staff: true, shift: { include: { company: true, team: true } } },
   });
   if (!report) {
     console.log(`[email-notif] report not found for workReportId=${workReportId}`);
@@ -110,9 +120,18 @@ export async function notifyCompanyOfWorkReportSubmission(workReportId: string) 
   }
 
   const company = report.shift.company;
+  const team = report.shift.team;
 
-  if (company.notificationEmail) {
-    console.log(`[email-notif] sending to ${company.notificationEmail} for company ${company.id}`);
+  // チーム所属のシフトは、そのチームに通知先メアド・マネージャー/リーダー
+  // がいればそちらへ届け、本部へは送らない（本部は業務報告キューでいつでも
+  // 全件確認できるため、関係ないチームの通知で受信箱・プッシュが埋まる
+  // のを避ける）。チーム未設定のシフト、またはチームに通知先メアドが
+  // 無い場合は、これまでどおり本部のnotificationEmail・本部管理者/編集者
+  // へのプッシュにフォールバックする。
+  const destinationEmail = team?.notificationEmail || company.notificationEmail;
+
+  if (destinationEmail) {
+    console.log(`[email-notif] sending to ${destinationEmail} for company ${company.id}${team ? ` team ${team.id}` : ""}`);
 
     const token = generateToken();
     await prisma.accountActionToken.create({
@@ -124,7 +143,7 @@ export async function notifyCompanyOfWorkReportSubmission(workReportId: string) 
       },
     });
 
-    await sendWorkReportSubmittedEmail(company.notificationEmail, {
+    await sendWorkReportSubmittedEmail(destinationEmail, {
       companyName: company.name,
       staffName: report.staff.name,
       date: report.shift.date.toISOString().slice(0, 10),
@@ -138,7 +157,8 @@ export async function notifyCompanyOfWorkReportSubmission(workReportId: string) 
     console.log(`[email-notif] company ${company.id} has no notificationEmail set, skipping email`);
   }
 
-  await sendPushToUsers(await companyAdminUserIds(company.id), {
+  const pushTargetUserIds = team ? await teamManagerUserIds(team.id) : await companyAdminUserIds(company.id);
+  await sendPushToUsers(pushTargetUserIds, {
     title: "業務報告が届きました",
     body: `${report.staff.name}さん（${report.shift.date.toISOString().slice(0, 10)}）`,
     url: "/company/settings?tab=workreports",
@@ -216,19 +236,42 @@ export async function runShiftRequestDigest() {
   for (const company of companies) {
     const requests = await prisma.shiftRequest.findMany({
       where: { companyId: company.id, status: "PENDING" },
-      select: { dates: true },
+      select: { teamId: true, dates: true },
     });
-    const count = requests.filter((r) => r.dates.some((d) => d >= today)).length;
-    if (count === 0) continue;
+    const pending = requests.filter((r) => r.dates.some((d) => d >= today));
+    const totalCount = pending.length;
+    if (totalCount === 0) continue;
 
+    // 会社全体の集計はこれまでどおり本部へ（メール＋本部管理者/編集者への
+    // プッシュ）。チームごとの内訳は本部へは送らず、下でチームごとに
+    // 個別に届ける（本部は全体件数だけ把握できればよく、関係ないチームの
+    // 内訳で受信箱・プッシュが埋まらないようにする）。
     if (company.notificationEmail) {
-      await sendShiftRequestDigestEmail(company.notificationEmail, company.name, count, absoluteUrl("/company"));
+      await sendShiftRequestDigestEmail(company.notificationEmail, company.name, totalCount, absoluteUrl("/company"));
     }
     await sendPushToUsers(await companyAdminUserIds(company.id), {
       title: "未確定のシフト希望があります",
-      body: `${company.name}：${count}件`,
+      body: `${company.name}：${totalCount}件`,
       url: "/company",
     });
+
+    const countByTeamId = new Map<string, number>();
+    for (const r of pending) {
+      if (!r.teamId) continue;
+      countByTeamId.set(r.teamId, (countByTeamId.get(r.teamId) ?? 0) + 1);
+    }
+    for (const [teamId, count] of countByTeamId) {
+      const team = await prisma.team.findUnique({ where: { id: teamId }, select: { name: true, notificationEmail: true } });
+      if (!team) continue;
+      if (team.notificationEmail) {
+        await sendShiftRequestDigestEmail(team.notificationEmail, `${company.name}（${team.name}）`, count, absoluteUrl("/company"));
+      }
+      await sendPushToUsers(await teamManagerUserIds(teamId), {
+        title: "未確定のシフト希望があります",
+        body: `${team.name}：${count}件`,
+        url: "/company",
+      });
+    }
   }
 }
 

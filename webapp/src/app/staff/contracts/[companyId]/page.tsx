@@ -170,6 +170,7 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
           wageType: c.template.wageType,
           contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
           templateDetail: buildTemplateDetail(c),
+          uploadedDocumentUrl: c.uploadedDocumentUrl,
         }))}
         pendingContracts={pendingContracts.map((c) => ({
           id: c.id,

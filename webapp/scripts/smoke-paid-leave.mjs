@@ -123,8 +123,9 @@ try {
   // 残日数の訂正（付与・使用の間違いを直す専用の経路。「＋付与する」は
   // 正の日数しか受け付けないため、これが唯一の減算・訂正手段）
   await admin.getByRole("button", { name: "残日数を訂正する" }).click();
-  await admin.locator('input[type=number]').fill("-1");
-  await admin.locator('input[type=text]').fill("テスト訂正");
+  const correctModal = admin.locator("div.fixed.inset-0.z-30").last();
+  await correctModal.locator('input[type=number]').fill("-1");
+  await correctModal.locator('input[type=text]').fill("テスト訂正");
   await admin.getByRole("button", { name: "訂正する", exact: true }).click();
   await admin.waitForTimeout(500);
   body = await admin.textContent("body");

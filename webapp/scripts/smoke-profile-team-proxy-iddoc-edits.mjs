@@ -116,12 +116,12 @@ try {
   await staffPanel.getByRole("button", { name: "保存", exact: true }).click();
   await admin.waitForTimeout(600);
   bodyText = await admin.textContent("body");
-  log(
-    "本部が編集した氏名・住所・電話番号がUIに反映される",
-    bodyText.includes("田中 太郎") && bodyText.includes("東京都千代田区1-1-1") && bodyText.includes("090-1234-5678"),
-  );
+  // 住所・電話番号は常時表示はしない仕様（社内メモ運用に一本化）。
+  // 氏名はヘッダーに常時表示されるので確認する。住所・電話番号はDB
+  // 反映のみ確認する（契約書表示用の構造化データとしては引き続き保持）。
+  log("本部が編集した氏名がUIに反映される", bodyText.includes("田中 太郎"));
   const updatedName = psql(`select name, address, "phoneNumber" from "User" where id='${staffUserId}';`);
-  log("DBにも反映される", updatedName === "田中 太郎|東京都千代田区1-1-1|090-1234-5678");
+  log("本部が編集した氏名・住所・電話番号がDBに反映される", updatedName === "田中 太郎|東京都千代田区1-1-1|090-1234-5678");
 
   // --- ①本人確認書類のアップロード履歴（差し替え前の画像が履歴に退避される） ---
   const membershipId = psql(

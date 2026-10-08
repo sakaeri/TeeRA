@@ -179,8 +179,12 @@ export async function createCompanyAction(
     return { errors: z_flatten(parsed) };
   }
 
+  // 通知用メールアドレスは作成者のメアドを初期値にしておく（空のままだと
+  // アプリの存在に気づく前に通知が一切届かず離脱しやすいため）。あくまで
+  // 初期値なので、不要なら設定画面から空に変更できる。
+  const creator = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
   const company = await prisma.company.create({
-    data: { name: parsed.data.name },
+    data: { name: parsed.data.name, notificationEmail: creator.email },
   });
   await prisma.companyMembership.create({
     data: { userId, companyId: company.id, role: "COMPANY_ADMIN" },

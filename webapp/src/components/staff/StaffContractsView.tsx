@@ -97,6 +97,7 @@ export function StaffContractsView({
     wageType: string;
     contractStartDate: string;
     templateDetail: Template;
+    uploadedDocumentUrl: string | null;
   }[];
   pendingContracts: PendingContract[];
   idDocumentFrontUrl: string | null;
@@ -120,7 +121,10 @@ export function StaffContractsView({
   const [bankEditing, setBankEditing] = useState(false);
   const [showPastContracts, setShowPastContracts] = useState(false);
   const [expandedRateId, setExpandedRateId] = useState<string | null>(null);
-  const [detailContract, setDetailContract] = useState<{ templateDetail: Template } | null>(null);
+  const [detailContract, setDetailContract] = useState<{
+    templateDetail: Template;
+    uploadedDocumentUrl?: string | null;
+  } | null>(null);
   const [openWorkplaceId, setOpenWorkplaceId] = useState<string | null>(null);
   const [newNoteContent, setNewNoteContent] = useState("");
 
@@ -349,7 +353,12 @@ export function StaffContractsView({
           companyName={companyName}
           clients={[]}
           editingTemplate={detailContract.templateDetail}
-          viewingStaff={{ name: myName, address: myAddress, phoneNumber: myPhoneNumber }}
+          viewingStaff={{
+            name: myName,
+            address: myAddress,
+            phoneNumber: myPhoneNumber,
+            uploadedDocumentUrl: detailContract.uploadedDocumentUrl,
+          }}
           onClose={() => setDetailContract(null)}
         />
       ) : null}

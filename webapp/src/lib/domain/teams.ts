@@ -24,7 +24,16 @@ export async function createTeam(params: {
 }) {
   return prisma.$transaction(async (tx) => {
     const existingTeamCount = await tx.team.count({ where: { companyId: params.companyId } });
-    const team = await tx.team.create({ data: { companyId: params.companyId, name: params.name } });
+    // 通知用メールアドレスは、作成時点で担当者を割り当てていればそのメアド
+    // を初期値にしておく（空のままだと気づかれないまま通知が届かず離脱
+    // しやすいため）。あくまで初期値なので、不要なら設定画面から空に
+    // 変更できる。担当者を割り当てない場合は従来どおり未設定のまま。
+    const assigneeEmail = params.assignment
+      ? (await tx.user.findUnique({ where: { id: params.assignment.userId }, select: { email: true } }))?.email
+      : null;
+    const team = await tx.team.create({
+      data: { companyId: params.companyId, name: params.name, notificationEmail: assigneeEmail },
+    });
     if (params.assignment) {
       await tx.teamMembership.create({
         data: { teamId: team.id, userId: params.assignment.userId, role: params.assignment.role },

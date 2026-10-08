@@ -15,6 +15,7 @@ import {
   addStaffTaskRateVersion,
   deleteStaffTaskRate,
   generateStaffContractFromNewTemplate,
+  generateStaffContractFromNewTemplateViaUpload,
   assignExistingTemplate,
   addStaffContractWageVersion,
   endStaffContract,
@@ -236,6 +237,34 @@ export async function generateStaffContractAction(input: CreateTemplateInput, st
     companyId: membership.companyId,
     staffUserId,
     templateInput: input,
+  });
+  revalidatePath("/company/settings");
+  revalidatePath("/company");
+  revalidatePath("/company/roster");
+}
+
+// 「アップロードのみ」経路: 既に書面で契約済みのスタッフについて、本人の
+// デジタル同意を求めず、署名済み書面のURLを添えて即時ACTIVEの契約として
+// 生成する。
+export async function generateStaffContractFromUploadAction(
+  input: CreateTemplateInput,
+  staffUserId: string,
+  uploadedDocumentUrl: string,
+) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const staffTeamIds = await getStaffTeamIds(staffUserId);
+  if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
+
+  const staffMembership = await prisma.companyMembership.findFirst({
+    where: { userId: staffUserId, companyId: membership.companyId, OR: [{ role: "STAFF" }, { canWorkShifts: true }] },
+  });
+  if (!staffMembership) throw new Error("forbidden");
+
+  await generateStaffContractFromNewTemplateViaUpload({
+    companyId: membership.companyId,
+    staffUserId,
+    templateInput: input,
+    uploadedDocumentUrl,
   });
   revalidatePath("/company/settings");
   revalidatePath("/company");

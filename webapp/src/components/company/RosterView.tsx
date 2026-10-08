@@ -117,12 +117,25 @@ export function RosterView({
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showAddMenuInfo, setShowAddMenuInfo] = useState(false);
   const [teamFilter, setTeamFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   // 実体のない（TeeRAを使っていない）派遣会社にタグ付けされているスタッフは
   // 自社スタッフの名簿には出さない（その派遣会社の詳細パネル側だけに出す）。
   const ownStaff = staff.filter((s) => !s.viaAgencyRelationshipName);
-  const filteredStaff = teamFilter ? ownStaff.filter((s) => s.teams.some((t) => t.teamId === teamFilter)) : ownStaff;
-  const filteredClients = teamFilter ? clients.filter((c) => c.teams.some((t) => t.id === teamFilter)) : clients;
-  const filteredAgencies = teamFilter ? agencies.filter((a) => a.teams.some((t) => t.id === teamFilter)) : agencies;
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const staffAfterTeamFilter = teamFilter ? ownStaff.filter((s) => s.teams.some((t) => t.teamId === teamFilter)) : ownStaff;
+  const filteredStaff = normalizedQuery
+    ? staffAfterTeamFilter.filter(
+        (s) => s.name.toLowerCase().includes(normalizedQuery) || s.email.toLowerCase().includes(normalizedQuery),
+      )
+    : staffAfterTeamFilter;
+  const clientsAfterTeamFilter = teamFilter ? clients.filter((c) => c.teams.some((t) => t.id === teamFilter)) : clients;
+  const filteredClients = normalizedQuery
+    ? clientsAfterTeamFilter.filter((c) => c.name.toLowerCase().includes(normalizedQuery))
+    : clientsAfterTeamFilter;
+  const agenciesAfterTeamFilter = teamFilter ? agencies.filter((a) => a.teams.some((t) => t.id === teamFilter)) : agencies;
+  const filteredAgencies = normalizedQuery
+    ? agenciesAfterTeamFilter.filter((a) => a.name.toLowerCase().includes(normalizedQuery))
+    : agenciesAfterTeamFilter;
   const [proxyNamePromptFor, setProxyNamePromptFor] = useState<
     "client" | "agency" | "staff" | null
   >(null);
@@ -158,10 +171,10 @@ export function RosterView({
       if (kind === "staff") {
         await createProxyStaffAction(proxyNameInput.trim(), proxyStaffTeamId);
       } else if (kind === "client") {
-        await addClientAction(proxyNameInput.trim());
+        await addClientAction(proxyNameInput.trim(), proxyTeamId || undefined);
         setTab("clients");
       } else {
-        await addAgencyAction(proxyNameInput.trim());
+        await addAgencyAction(proxyNameInput.trim(), proxyTeamId || undefined);
         setTab("agencies");
       }
       setProxyTeamId("");
@@ -294,7 +307,20 @@ export function RosterView({
         />
       </div>
 
-      <div className="mb-4" />
+      <div className="mb-4 flex items-center gap-2">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder={tab === "staff" ? "氏名・メールアドレスで検索" : "名称で検索"}
+          className="w-full max-w-xs rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
+        />
+        {searchQuery ? (
+          <button type="button" onClick={() => setSearchQuery("")} className="text-xs text-muted hover:text-primary">
+            クリア
+          </button>
+        ) : null}
+      </div>
 
       {proxyNamePromptFor ? (
         <div
@@ -302,6 +328,7 @@ export function RosterView({
           onClick={() => {
             setProxyNamePromptFor(null);
             setProxyNameInput("");
+            setProxyTeamId("");
           }}
         >
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
@@ -314,6 +341,7 @@ export function RosterView({
                 onClick={() => {
                   setProxyNamePromptFor(null);
                   setProxyNameInput("");
+                  setProxyTeamId("");
                 }}
                 className="text-muted"
               >
@@ -338,6 +366,23 @@ export function RosterView({
                 >
                   <option value="">選択してください</option>
                   {myManagedTeams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            {(proxyNamePromptFor === "client" || proxyNamePromptFor === "agency") && teams.length > 0 ? (
+              <div className="mb-4">
+                <label className="mb-1 block text-xs text-muted">チームと紐付ける（任意）</label>
+                <select
+                  value={proxyTeamId}
+                  onChange={(e) => setProxyTeamId(e.target.value)}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                >
+                  <option value="">紐付けない（あとから設定できます）</option>
+                  {teams.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.name}
                     </option>

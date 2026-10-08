@@ -149,10 +149,12 @@ model Team {
   companyId         String
   name              String
   // チーム宛の通知（業務報告の提出・シフト希望の未確定ダイジェスト）の
-  // 送信先。未設定の場合はメール通知はスキップされる（本部の
-  // notificationEmailへはフォールバックしない — 本部へは会社全体の集計
-  // だけが別途届く設計のため。ログイン中のマネージャー/リーダーへの
-  // プッシュ通知はこの設定と関係なく常に届く）。
+  // 送信先。シフト希望ダイジェストは本部へ会社全体の集計が別途必ず届く
+  // ため、未設定ならこのチーム分のメールは単に送らない。一方、業務報告の
+  // 提出通知はチーム単位でしか届けないため、未設定の場合のみ本部の
+  // notificationEmailへフォールバックする（emailNotifications.ts参照）。
+  // ログイン中のマネージャー/リーダーへのプッシュ通知はこの設定と関係なく
+  // 常に届く。
   notificationEmail String?
   createdAt         DateTime @default(now())
 
@@ -910,20 +912,26 @@ enum StaffContractStatus {
 }
 
 model StaffContract {
-  id                 String              @id @default(cuid())
-  templateId         String
-  staffUserId        String
-  wageAmountSnapshot Int // wage amount at the moment of consent — a rate change invalidates consent (chat27 fix)
-  contractStartDate  DateTime?           @db.Date // snapshot at consent; independent per staff even when sharing a template
-  contractEndDate    DateTime?           @db.Date
-  consentedAt        DateTime?
-  status             StaffContractStatus @default(PENDING_CONSENT)
+  id                  String              @id @default(cuid())
+  templateId          String
+  staffUserId         String
+  wageAmountSnapshot  Int // wage amount at the moment of consent — a rate change invalidates consent (chat27 fix)
+  contractStartDate   DateTime?           @db.Date // snapshot at consent; independent per staff even when sharing a template
+  contractEndDate     DateTime?           @db.Date
+  consentedAt         DateTime?
+  status              StaffContractStatus @default(PENDING_CONSENT)
+  // 「アップロードのみ」モード（既に書面で契約済みのスタッフ向け）で、本人の
+  // デジタル同意を求める代わりに添付した署名済み書面のURL。この場合
+  // status/consentedAtは生成と同時にACTIVE/現在時刻になる（通常フローの
+  // PENDING_CONSENT→consentStaffContractは経由しない）。通常フローの契約には
+  // 常にnull。
+  uploadedDocumentUrl String?
   // 手動で「終了する」を押した際に本人へ通知した日（任意入力）。解雇予告・
   // 雇止め予告・フリーランス新法などの事前通知義務の確認補助として記録する
   // だけで、システム側で法律要件の充足を判定するものではない。
-  noticeGivenAt      DateTime?           @db.Date
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  noticeGivenAt       DateTime?           @db.Date
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
   template     ContractTemplate           @relation(fields: [templateId], references: [id], onDelete: Cascade)
   staff        User                       @relation(fields: [staffUserId], references: [id], onDelete: Cascade)

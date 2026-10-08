@@ -172,6 +172,58 @@ export async function startStaffContract(params: { templateId: string; staffUser
   return contract;
 }
 
+// 「アップロードのみ」経路: 既に書面で契約済みのスタッフ向け。本人への
+// デジタル同意（PENDING_CONSENT→consentStaffContract）は求めず、添付した
+// 署名済み書面のURLを記録して即座にACTIVEにする。給与計算に必要な単価・
+// 契約期間などの構造化データはstartStaffContractと同じく必須 — 省略できる
+// のは本人の同意ステップだけで、契約内容自体の入力は省略できない。
+export async function startStaffContractFromUpload(params: {
+  templateId: string;
+  staffUserId: string;
+  contractStartDate?: Date;
+  uploadedDocumentUrl: string;
+}) {
+  const contract = await prisma.$transaction(async (tx) => {
+    const template = await tx.contractTemplate.findUniqueOrThrow({ where: { id: params.templateId } });
+    const contractStartDate = params.contractStartDate ?? template.contractStartDate;
+
+    return tx.staffContract.create({
+      data: {
+        templateId: template.id,
+        staffUserId: params.staffUserId,
+        wageAmountSnapshot: template.wageAmount,
+        contractStartDate,
+        contractEndDate: template.contractEndDate,
+        status: "ACTIVE",
+        consentedAt: new Date(),
+        uploadedDocumentUrl: params.uploadedDocumentUrl,
+        wageVersions: {
+          create: { wageAmount: template.wageAmount, effectiveFrom: contractStartDate },
+        },
+      },
+    });
+  });
+
+  await recomputeTemplateLock(contract.templateId);
+  return contract;
+}
+
+// ダッシュボードの「契約書を生成」のアップロードのみ版。generateStaffContractFromNewTemplateと
+// 同じく専用テンプレートを作ってから、startStaffContractFromUploadで即時ACTIVEにする。
+export async function generateStaffContractFromNewTemplateViaUpload(params: {
+  companyId: string;
+  staffUserId: string;
+  templateInput: Omit<TemplateInput, "companyId">;
+  uploadedDocumentUrl: string;
+}) {
+  const template = await createTemplate({ ...params.templateInput, companyId: params.companyId });
+  return startStaffContractFromUpload({
+    templateId: template.id,
+    staffUserId: params.staffUserId,
+    uploadedDocumentUrl: params.uploadedDocumentUrl,
+  });
+}
+
 // 「そのまま契約する」経路: 内容を複製・編集せず、既存のテンプレートを
 // そのまま別のスタッフにも割り当てる。LOCKED（既に誰か契約中）でも使える
 // — 内容を変えないなら複製する必要が無く、1つのテンプレートを複数人で
