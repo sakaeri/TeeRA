@@ -145,7 +145,7 @@ export function StaffContractsView({
     return frontUrl !== "" && backUrl !== "";
   }
   function bankComplete() {
-    return bankName.trim() !== "" && accountNumber.trim() !== "";
+    return bankName.trim() !== "" && accountNumber.trim() !== "" && accountHolderName.trim() !== "";
   }
   function nextStepAfter(current: "review" | "id" | "bank"): WizardStep {
     if (current === "review" && !idComplete()) return "id";
