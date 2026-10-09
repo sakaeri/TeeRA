@@ -77,7 +77,8 @@ try {
   log("proxy staff not shown in the popup", !body.includes("仮契約スタッフ"));
   log("no 再送信 button (not needed)", !body.includes("再送信"));
 
-  await page.click("text=契約書を生成");
+  await page.click("text=契約書管理");
+  await page.getByRole("button", { name: "契約書を生成" }).click();
   await page.waitForTimeout(400);
   body = await page.textContent("body");
   log("base-template picker shows the template option", body.includes("アルバイト・事務"));

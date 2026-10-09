@@ -53,7 +53,7 @@ try {
   await page.waitForURL("http://localhost:3000/company/roster");
   await page.click("text=依頼主一覧");
   await page.waitForTimeout(200);
-  await page.click("text=＋依頼主を追加する");
+  await page.click("text=＋依頼主を追加");
   await page.waitForTimeout(200);
   await page.click("text=仮アカウントを作成");
   await page.waitForTimeout(200);
@@ -77,7 +77,7 @@ try {
   log("TeamClientRelationship row created when a team was selected", linkCountA === "1");
 
   // create a SECOND proxy client WITHOUT selecting a team (default "紐付けない")
-  await page.click("text=＋依頼主を追加する");
+  await page.click("text=＋依頼主を追加");
   await page.waitForTimeout(200);
   await page.click("text=仮アカウントを作成");
   await page.waitForTimeout(200);
@@ -96,7 +96,7 @@ try {
   // same check for 派遣会社 tab (shares the same code path)
   await page.click("text=派遣会社一覧");
   await page.waitForTimeout(200);
-  await page.click("text=＋派遣会社を追加する");
+  await page.click("text=＋派遣会社を追加");
   await page.waitForTimeout(200);
   await page.click("text=仮アカウントを作成");
   await page.waitForTimeout(200);

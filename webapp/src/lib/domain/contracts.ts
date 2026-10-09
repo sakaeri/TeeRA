@@ -172,19 +172,60 @@ export async function startStaffContract(params: { templateId: string; staffUser
   return contract;
 }
 
+// 「アップロードのみ」専用の軽量テンプレート入力。契約書本文の見た目にしか
+// 関わらない項目（勤務形態・スケジュール区分・契約期間区分など）は、既に
+// 署名済みの書面そのものが正式な記録なのでアプリ側で再現する必要が無く、
+// 給与計算に要る最小限（雇用形態・業務内容・基本給・契約開始日）だけを
+// 入力させる。
+export type UploadOnlyTemplateInput = {
+  companyId: string;
+  title: string;
+  employmentType: EmploymentType;
+  jobDescription: string;
+  wageType: WageType;
+  wageAmount: number;
+  contractStartDate: Date;
+};
+
+export async function createUploadOnlyTemplate(input: UploadOnlyTemplateInput) {
+  assertPositiveAmount(input.wageAmount);
+  return prisma.contractTemplate.create({
+    data: {
+      companyId: input.companyId,
+      title: input.title,
+      employmentType: input.employmentType,
+      jobDescription: input.jobDescription,
+      wageType: input.wageType,
+      wageAmount: input.wageAmount,
+      contractStartDate: input.contractStartDate,
+      hasOvertime: false,
+      fixedWeekdays: [],
+      hasRenewal: false,
+      extraItems: [],
+      isUploadOnly: true,
+    },
+  });
+}
+
+export async function listUploadOnlyTemplates(companyId: string) {
+  return prisma.contractTemplate.findMany({
+    where: { companyId, isUploadOnly: true },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
 // 「アップロードのみ」経路: 既に書面で契約済みのスタッフ向け。本人への
 // デジタル同意（PENDING_CONSENT→consentStaffContract）は求めず、添付した
-// 署名済み書面のURLを記録して即座にACTIVEにする。給与計算に必要な単価・
-// 契約期間などの構造化データはstartStaffContractと同じく必須 — 省略できる
-// のは本人の同意ステップだけで、契約内容自体の入力は省略できない。
+// 署名済み書面のURLを記録して即座にACTIVEにする。氏名は名簿の氏名で足りる
+// ため記録しない（紛争時は添付した署名済み書面そのものを確認すればよい）。
+// 住所・電話番号は任意 — 後からスタッフ詳細の各タブで入力しても構わない。
 export async function startStaffContractFromUpload(params: {
   templateId: string;
   staffUserId: string;
   contractStartDate?: Date;
   uploadedDocumentUrl: string;
-  partyName: string;
-  partyAddress: string;
-  partyPhoneNumber: string;
+  partyAddress?: string;
+  partyPhoneNumber?: string;
 }) {
   const contract = await prisma.$transaction(async (tx) => {
     const template = await tx.contractTemplate.findUniqueOrThrow({ where: { id: params.templateId } });
@@ -200,9 +241,8 @@ export async function startStaffContractFromUpload(params: {
         status: "ACTIVE",
         consentedAt: new Date(),
         uploadedDocumentUrl: params.uploadedDocumentUrl,
-        partyName: params.partyName,
-        partyAddress: params.partyAddress,
-        partyPhoneNumber: params.partyPhoneNumber,
+        partyAddress: params.partyAddress || undefined,
+        partyPhoneNumber: params.partyPhoneNumber || undefined,
         wageVersions: {
           create: { wageAmount: template.wageAmount, effectiveFrom: contractStartDate },
         },
@@ -214,23 +254,22 @@ export async function startStaffContractFromUpload(params: {
   return contract;
 }
 
-// ダッシュボードの「契約書を生成」のアップロードのみ版。generateStaffContractFromNewTemplateと
-// 同じく専用テンプレートを作ってから、startStaffContractFromUploadで即時ACTIVEにする。
+// ダッシュボードの「契約書を生成」のアップロードのみ版。専用の軽量テンプ
+// レート（isUploadOnly=true、再利用可能）を作ってから、
+// startStaffContractFromUploadで即時ACTIVEにする。
 export async function generateStaffContractFromNewTemplateViaUpload(params: {
   companyId: string;
   staffUserId: string;
-  templateInput: Omit<TemplateInput, "companyId">;
+  templateInput: Omit<UploadOnlyTemplateInput, "companyId">;
   uploadedDocumentUrl: string;
-  partyName: string;
-  partyAddress: string;
-  partyPhoneNumber: string;
+  partyAddress?: string;
+  partyPhoneNumber?: string;
 }) {
-  const template = await createTemplate({ ...params.templateInput, companyId: params.companyId });
+  const template = await createUploadOnlyTemplate({ ...params.templateInput, companyId: params.companyId });
   return startStaffContractFromUpload({
     templateId: template.id,
     staffUserId: params.staffUserId,
     uploadedDocumentUrl: params.uploadedDocumentUrl,
-    partyName: params.partyName,
     partyAddress: params.partyAddress,
     partyPhoneNumber: params.partyPhoneNumber,
   });

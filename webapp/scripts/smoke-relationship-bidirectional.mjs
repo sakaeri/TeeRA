@@ -37,7 +37,7 @@ try {
   const agencyCompanyId = psql(`select id from "Company" where name='${agencyCompanyName}';`);
 
   await agency.goto("http://localhost:3000/company/roster");
-  await agency.click("text=＋スタッフを追加する");
+  await agency.click("text=＋スタッフを追加");
   await agency.click("text=仮アカウントを作成");
   await agency.fill('input[placeholder="名称を入力"]', "両方向確認スタッフ");
   await agency.getByRole("button", { name: "作成", exact: true }).click();
@@ -47,7 +47,7 @@ try {
   await agency.goto("http://localhost:3000/company/roster");
   await agency.click("text=依頼主一覧");
   await agency.waitForTimeout(200);
-  await agency.click("text=＋依頼主を追加する");
+  await agency.click("text=＋依頼主を追加");
   await agency.waitForTimeout(200);
   await agency.click("text=本アカウントを招待");
   await agency.waitForTimeout(200);

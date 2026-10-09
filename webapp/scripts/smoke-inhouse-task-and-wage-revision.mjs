@@ -35,7 +35,7 @@ try {
 
   // invite + register staff
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=本アカウントを招待");
   await admin.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForSelector("input[readonly]");
@@ -232,7 +232,7 @@ try {
   // --- 月給は月初（1日）からのみ改定可能（他契約の影響を避けるため別スタッフで検証）
   const staffEmail2 = `inhousetask-staff2-${Date.now()}@example.com`;
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=本アカウントを招待");
   await admin.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForSelector("input[readonly]");

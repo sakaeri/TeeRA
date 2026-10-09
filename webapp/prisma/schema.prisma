@@ -338,19 +338,25 @@ enum RelationshipStatus {
 // holds its display name in that case, until upgraded via CLIENT_UPGRADE /
 // AGENCY_UPGRADE invite redemption.
 model CompanyRelationship {
-  id               String             @id @default(cuid())
-  ownerCompanyId   String
-  agencyCompanyId  String?
-  clientCompanyId  String?
-  proxyName        String?
-  status           RelationshipStatus @default(ACTIVE)
-  createdAt        DateTime           @default(now())
+  id                String             @id @default(cuid())
+  ownerCompanyId    String
+  agencyCompanyId   String?
+  clientCompanyId   String?
+  proxyName         String?
+  status            RelationshipStatus @default(ACTIVE)
+  createdAt         DateTime           @default(now())
   // 配属先のルール連絡先。配属先自身の住所（Company.address）は「本社所在
   // 地≠実際の勤務地」のケースがあるため参照せず、この2項目は常に手入力
   // ＋固定フォームにする。配属されているスタッフ本人にも「業務単価」の
   // 勤務先詳細で表示される（社内専用メモとは別軸の共有情報）。
-  workLocation     String?
-  emergencyContact String?
+  workLocation      String?
+  emergencyContact  String?
+  // 社内メモ欄の先頭に出す「現在の」住所・電話番号（相手がproxyで実体の
+  // Companyを持たない場合もあるため、関係ごとに保持する）。上書きすると
+  // 旧値はRelationshipNoteへ普通のメモとして自動で積まれる
+  // （updateClientAddressPhone参照）。
+  clientAddress     String?
+  clientPhoneNumber String?
 
   ownerCompany  Company  @relation("OwnerSide", fields: [ownerCompanyId], references: [id], onDelete: Cascade)
   agencyCompany Company? @relation("AgencySide", fields: [agencyCompanyId], references: [id], onDelete: SetNull)
@@ -865,11 +871,15 @@ model ContractTemplate {
   companyId             String
   title                 String // auto: 雇用形態＋業務内容 (editable, internal-only)
   employmentType        EmploymentType
-  workplaceType         WorkplaceType
+  // 「アップロードのみ」専用テンプレート（isUploadOnly=true）では、契約書
+  // 本文の見た目に関わるだけで給与計算やロジックには使われないこの3項目
+  // (workplaceType/scheduleType/contractPeriodType) を入力させない運用の
+  // ため null を許容する。通常のテンプレートでは常に非null。
+  workplaceType         WorkplaceType?
   companyRelationshipId String? // optional link to a registered client (display only, not required)
   workplaceNote         String? // free-text workplace label shown on the contract when workplaceType = CLIENT
   jobDescription        String
-  scheduleType          ContractScheduleType
+  scheduleType          ContractScheduleType?
   workStartTime         String?
   workEndTime           String?
   actualWorkMinutes     Int?
@@ -884,13 +894,17 @@ model ContractTemplate {
   paymentClosingDay     String? // 締め日
   paymentDay            String? // 支払日
   paymentMethod         String?
-  contractPeriodType    ContractPeriodType
+  contractPeriodType    ContractPeriodType?
   contractStartDate     DateTime               @db.Date
   contractEndDate       DateTime?              @db.Date
   hasRenewal            Boolean                @default(false)
   probationPeriodNote   String?
   extraItems            Json                   @default("[]") // quick-add chips: 交通費/社会保険/... [{label, value}]
   status                ContractTemplateStatus @default(ACTIVE)
+  // 「アップロードのみ」経路でその場限定に作られた軽量テンプレート。
+  // 通常のテンプレート一覧（契約書を生成/設定画面）には出さず、アップロード
+  // 画面専用の再利用候補としてのみ一覧表示する。
+  isUploadOnly          Boolean                @default(false)
   parentTemplateId      String?
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt

@@ -330,6 +330,8 @@ export async function getStaffMonthDetail(params: {
     isProxy: membership.user.isProxy,
     viaAgencyRelationshipId: membership.viaAgencyRelationshipId,
     viaAgencyRelationshipName: membership.viaAgencyRelationship?.proxyName ?? null,
+    currentAddress: membership.user.address,
+    currentPhoneNumber: membership.user.phoneNumber,
     staffNotes: staffNotes.map((n) => ({
       id: n.id,
       content: n.content,
@@ -395,6 +397,8 @@ export async function getStaffMonthDetail(params: {
         contractEndDate: (c.contractEndDate ?? c.template.contractEndDate)?.toISOString().slice(0, 10) ?? null,
         noticeGivenAt: c.noticeGivenAt?.toISOString().slice(0, 10) ?? null,
         uploadedDocumentUrl: c.uploadedDocumentUrl,
+        isUploadOnly: c.template.isUploadOnly,
+        consentedAt: c.consentedAt?.toISOString() ?? null,
         partyName: c.partyName,
         partyAddress: c.partyAddress,
         partyPhoneNumber: c.partyPhoneNumber,
@@ -495,6 +499,40 @@ export async function addStaffNote(params: { membershipId: string; authorUserId:
 
 export async function deleteStaffNote(id: string) {
   return prisma.staffNote.delete({ where: { id } });
+}
+
+// 社内メモ欄の先頭に出す「現在の」住所・電話番号。実体はUser.address/
+// phoneNumber（販促品の配送先と共用）だが、ここで上書きすると変更前の値を
+// 普通のメモとして履歴に積んでから更新する — 契約同意・アップロード時の
+// 自動反映も含め、「特別枠を書き換える」操作は常にこの関数を通す。
+export async function updateStaffAddressPhone(params: {
+  userId: string;
+  membershipId: string;
+  authorUserId: string;
+  address: string;
+  phoneNumber: string;
+}) {
+  const address = params.address.trim();
+  const phoneNumber = params.phoneNumber.trim();
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: params.userId } });
+
+  const changed = (user.address ?? "") !== address || (user.phoneNumber ?? "") !== phoneNumber;
+  if (changed && (user.address || user.phoneNumber)) {
+    await prisma.staffNote.create({
+      data: {
+        membershipId: params.membershipId,
+        authorUserId: params.authorUserId,
+        content: `（変更前の住所・電話番号）住所：${user.address || "未設定"}／電話番号：${user.phoneNumber || "未設定"}`,
+      },
+    });
+  }
+
+  if (changed) {
+    await prisma.user.update({
+      where: { id: params.userId },
+      data: { address: address || null, phoneNumber: phoneNumber || null },
+    });
+  }
 }
 
 // 氏名・住所・電話番号はUser単位（会社をまたいで共有）。本人が名字だけ

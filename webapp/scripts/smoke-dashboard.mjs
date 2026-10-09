@@ -30,7 +30,7 @@ try {
   // for the team-manager case; a plain staff member with no team role has
   // no access here at all)
   await page.click("text=スタッフ名簿");
-  await page.click("text=＋スタッフを追加する");
+  await page.click("text=＋スタッフを追加");
   await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "一般スタッフ");
   await page.getByRole("button", { name: "作成", exact: true }).click();

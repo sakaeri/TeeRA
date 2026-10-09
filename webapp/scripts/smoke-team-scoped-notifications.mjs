@@ -97,7 +97,7 @@ try {
   // スタッフ2名を招待し、それぞれチームA/チームBのシフトに割り当てる
   async function inviteStaff(page, name, email) {
     await admin.goto("http://localhost:3000/company/roster");
-    await admin.click("text=＋スタッフを追加する");
+    await admin.click("text=＋スタッフを追加");
     await admin.click("text=本アカウントを招待");
     await admin.getByRole("button", { name: "招待URLを発行する" }).click();
     await admin.waitForSelector("input[readonly]");

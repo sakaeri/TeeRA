@@ -46,11 +46,11 @@ type ContractTemplate = {
   id: string;
   title: string;
   employmentType: string;
-  workplaceType: string;
+  workplaceType: string | null;
   workplaceNote: string | null;
   clientName: string | null;
   jobDescription: string;
-  scheduleType: string;
+  scheduleType: string | null;
   workStartTime: string | null;
   workEndTime: string | null;
   actualWorkMinutes: number | null;
@@ -65,7 +65,7 @@ type ContractTemplate = {
   paymentClosingDay: string | null;
   paymentDay: string | null;
   paymentMethod: string | null;
-  contractPeriodType: string;
+  contractPeriodType: string | null;
   contractStartDate: string;
   contractEndDate: string | null;
   extraItems: { label: string; value: string }[];

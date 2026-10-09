@@ -41,7 +41,7 @@ try {
   await client.goto("http://localhost:3000/company/roster");
   await client.click("text=派遣会社一覧");
   await client.waitForTimeout(200);
-  await client.click("text=＋派遣会社を追加する");
+  await client.click("text=＋派遣会社を追加");
   await client.waitForTimeout(200);
   await client.click("text=本アカウントを招待");
   await client.waitForTimeout(200);
@@ -75,7 +75,7 @@ try {
 
   // --- ② the agency (non-owner) can still register a new 業務内容 via シフト作成 ---
   await agency.goto("http://localhost:3000/company/roster");
-  await agency.click("text=＋スタッフを追加する");
+  await agency.click("text=＋スタッフを追加");
   await agency.click("text=仮アカウントを作成");
   await agency.fill('input[placeholder="名称を入力"]', "権限確認スタッフ");
   await agency.getByRole("button", { name: "作成", exact: true }).click();

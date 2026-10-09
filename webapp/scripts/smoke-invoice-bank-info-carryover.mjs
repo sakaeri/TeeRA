@@ -76,7 +76,7 @@ try {
   await admin.goto("http://localhost:3000/company/roster");
   await admin.click("text=依頼主一覧");
   await admin.waitForTimeout(200);
-  await admin.click("text=＋依頼主を追加する");
+  await admin.click("text=＋依頼主を追加");
   await admin.waitForTimeout(200);
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "振込先確認取引先");

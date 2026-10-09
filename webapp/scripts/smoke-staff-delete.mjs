@@ -37,12 +37,12 @@ try {
 
   // 間違えて同じ人の仮アカウントを2件作ってしまったケースを再現
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "重複太郎");
   await admin.getByRole("button", { name: "作成", exact: true }).click();
   await admin.waitForTimeout(600);
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "重複太郎");
   await admin.getByRole("button", { name: "作成", exact: true }).click();
@@ -82,7 +82,7 @@ try {
 
   // --- 稼働がある仮アカウントは削除できない ---
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=本アカウントを招待");
   await admin.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForSelector('input[readonly]');
@@ -105,7 +105,7 @@ try {
 
   // --- 稼働がある仮アカウントは削除ボタンを押してもサーバー側で弾かれる ---
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "稼働あり仮太郎");
   await admin.getByRole("button", { name: "作成", exact: true }).click();
@@ -132,7 +132,7 @@ try {
 
   // --- シフトはまだ無くても、配属（StaffPlacement）実績があれば削除できない ---
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "配属あり仮太郎");
   await admin.getByRole("button", { name: "作成", exact: true }).click();

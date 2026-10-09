@@ -53,7 +53,7 @@ try {
 
   // manager account, invited into Team A, then promoted to TEAM_MANAGER
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=本アカウントを招待");
   await admin.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForSelector('input[readonly]');
@@ -72,7 +72,7 @@ try {
 
   // plain staff on team A (target the manager should be able to act on)
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "Aチームスタッフ");
   await admin.getByRole("button", { name: "作成", exact: true }).click();
@@ -82,7 +82,7 @@ try {
 
   // plain staff on team B (target the manager should be FORBIDDEN from acting on)
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "Bチームスタッフ");
   await admin.getByRole("button", { name: "作成", exact: true }).click();
@@ -111,7 +111,7 @@ try {
   await admin.goto("http://localhost:3000/company/roster");
   await admin.click("text=依頼主一覧");
   await admin.waitForTimeout(200);
-  await admin.click("text=＋依頼主を追加する");
+  await admin.click("text=＋依頼主を追加");
   await admin.waitForTimeout(200);
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "Bチーム取引先");

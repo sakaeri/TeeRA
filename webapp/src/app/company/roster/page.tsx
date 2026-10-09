@@ -3,7 +3,7 @@ import { isCompanyScopeAdmin } from "@/lib/auth/permissions";
 import { listStaffWithSummary } from "@/lib/domain/roster";
 import { listClients, listAgencies } from "@/lib/domain/relationships";
 import { listTeams } from "@/lib/domain/teams";
-import { listTemplates, listKnownTaskNames } from "@/lib/domain/contracts";
+import { listTemplates, listUploadOnlyTemplates, listKnownTaskNames } from "@/lib/domain/contracts";
 import { RosterView } from "@/components/company/RosterView";
 import { prisma } from "@/lib/prisma";
 
@@ -25,12 +25,13 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
   // 依頼主一覧/派遣会社一覧タブは常時表示する（スタッフ一覧と同じく、0件でも
   // 「追加する」ボタン付きの空状態を出す）ので、agencyEnabled/dispatchEnabled
   // に関わらず常に取得する。
-  const [staff, clients, agencies, teams, templates, knownTaskNames, company] = await Promise.all([
+  const [staff, clients, agencies, teams, templates, uploadOnlyTemplates, knownTaskNames, company] = await Promise.all([
     listStaffWithSummary(membership.companyId),
     listClients(membership.companyId),
     listAgencies(membership.companyId),
     listTeams(membership.companyId),
     listTemplates(membership.companyId),
+    listUploadOnlyTemplates(membership.companyId),
     listKnownTaskNames(membership.companyId),
     prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
   ]);
@@ -65,7 +66,7 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
           .filter((tm) => tm.role === "TEAM_MANAGER")
           .map((tm) => ({ id: tm.teamId, name: tm.teamName }))}
         templates={templates
-          .filter((t) => t.status !== "ARCHIVED")
+          .filter((t) => t.status !== "ARCHIVED" && !t.isUploadOnly)
           .map((t) => ({
             id: t.id,
             title: t.title,
@@ -80,7 +81,8 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
         contractTemplates={templates
           // LOCKED（既に誰か契約中）でも「そのまま契約する」で複数人に
           // 割り当てられるようにするため、ARCHIVED以外は選択肢に含める。
-          .filter((t) => t.status !== "ARCHIVED")
+          // isUploadOnlyの軽量テンプレは通常の生成フローの選択肢には出さない。
+          .filter((t) => t.status !== "ARCHIVED" && !t.isUploadOnly)
           .map((t) => ({
             id: t.id,
             title: t.title,
@@ -111,6 +113,14 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
             status: t.status,
             contractedStaffNames: t.staffContracts.filter((sc) => sc.status !== "ENDED").map((sc) => sc.staff.name),
           }))}
+        uploadOnlyTemplates={uploadOnlyTemplates.map((t) => ({
+          id: t.id,
+          title: t.title,
+          employmentTypeLabel: EMPLOYMENT_TYPE_LABEL[t.employmentType] ?? t.employmentType,
+          jobDescription: t.jobDescription,
+          wageLabel: `${WAGE_TYPE_LABEL[t.wageType]}${t.wageAmount}円`,
+          contractStartDate: t.contractStartDate.toISOString().slice(0, 10),
+        }))}
       />
     </main>
   );

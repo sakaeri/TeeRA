@@ -20,7 +20,7 @@ const adminEmail = `sharedtpl-admin-${Date.now()}@example.com`;
 
 async function createProxyStaff(name) {
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=仮アカウントを作成");
   await admin.locator('input[type=text]').last().fill(name);
   await admin.getByRole("button", { name: "作成" }).click();
@@ -35,7 +35,8 @@ async function openGenerateFlow(staffName) {
   await admin.waitForTimeout(300);
   const panel = admin.locator("div.fixed.inset-0.z-30").first();
   await panel.getByRole("button", { name: "契約書管理" }).click();
-  await panel.getByRole("button", { name: "＋契約書を生成" }).click();
+  await panel.getByRole("button", { name: "＋契約書を追加" }).click();
+  await panel.getByRole("button", { name: "契約書を生成" }).click();
   await admin.waitForTimeout(200);
   const choose = admin.locator("div.fixed.inset-0.z-30").last();
   await choose.locator("select").selectOption({ label: "アルバイト・キャディ業務" });
@@ -138,7 +139,8 @@ try {
   await admin.waitForTimeout(300);
   const panel4 = admin.locator("div.fixed.inset-0.z-30").first();
   await panel4.getByRole("button", { name: "契約書管理" }).click();
-  await panel4.getByRole("button", { name: "＋契約書を生成" }).click();
+  await panel4.getByRole("button", { name: "＋契約書を追加" }).click();
+  await panel4.getByRole("button", { name: "契約書を生成" }).click();
   await admin.waitForTimeout(200);
   const choose4Options = await admin.locator("div.fixed.inset-0.z-30").last().locator("select option").allTextContents();
   log(

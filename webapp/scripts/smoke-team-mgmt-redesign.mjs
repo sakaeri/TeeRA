@@ -44,7 +44,7 @@ try {
 
   // --- スタッフを1名作成しておく（チーム作成時の担当者割り当て用） ---
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "担当予定スタッフ");
   await admin.getByRole("button", { name: "作成", exact: true }).click();

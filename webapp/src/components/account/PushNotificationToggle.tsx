@@ -40,7 +40,7 @@ function Switch({ on, disabled, onToggle }: { on: boolean; disabled: boolean; on
       className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-60 ${on ? "bg-primary" : "bg-border"}`}
     >
       <span
-        className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${on ? "translate-x-5" : "translate-x-0.5"}`}
+        className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${on ? "translate-x-5" : "translate-x-0"}`}
       />
     </button>
   );

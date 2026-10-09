@@ -31,11 +31,11 @@ try {
   // --- staff label wording ---
   await page.goto("http://localhost:3000/company/roster");
   let bodyText = await page.textContent("body");
-  log("staff tab add button now says ＋スタッフを追加する", bodyText.includes("＋スタッフを追加する"));
+  log("staff tab add button now says ＋スタッフを追加", bodyText.includes("＋スタッフを追加"));
   log("old ＋スタッフを招待する wording is gone", !bodyText.includes("＋スタッフを招待する"));
 
   // --- roster add-menu closes on outside click ---
-  await page.click("text=＋スタッフを追加する");
+  await page.click("text=＋スタッフを追加");
   await page.waitForTimeout(200);
   bodyText = await page.textContent("body");
   log("roster add-menu opens", bodyText.includes("本アカウントを招待") && bodyText.includes("仮アカウントを作成"));

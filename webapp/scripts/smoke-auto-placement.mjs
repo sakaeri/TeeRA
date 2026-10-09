@@ -44,7 +44,7 @@ try {
   psql(`update "Company" set "agencyEnabled" = true where id='${agencyCompanyId}';`);
 
   await agency.goto("http://localhost:3000/company/roster");
-  await agency.click("text=＋スタッフを追加する");
+  await agency.click("text=＋スタッフを追加");
   await agency.click("text=本アカウントを招待");
   await agency.getByRole("button", { name: "招待URLを発行する" }).click();
   await agency.waitForSelector('input[readonly]');
@@ -63,7 +63,7 @@ try {
   await agency.goto("http://localhost:3000/company/roster");
   await agency.click("text=依頼主一覧");
   await agency.waitForTimeout(200);
-  await agency.click("text=＋依頼主を追加する");
+  await agency.click("text=＋依頼主を追加");
   await agency.waitForTimeout(200);
   await agency.click("text=仮アカウントを作成");
   await agency.fill('input[placeholder="名称を入力"]', "配属確認先");

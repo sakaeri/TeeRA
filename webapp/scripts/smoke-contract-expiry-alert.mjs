@@ -103,7 +103,9 @@ try {
   log("「契約内容を確認」からスタッフ詳細の契約書管理タブへ直接遷移する", body.includes("満了５日後太郎") && body.includes("契約書管理"));
   log("契約書管理タブが開いた状態で表示される（現在の契約が見える）", body.includes("現在の契約"));
 
-  await page.getByRole("button", { name: "＋契約書を生成" }).click();
+  await page.getByRole("button", { name: "＋契約書を追加" }).click();
+
+  await page.getByRole("button", { name: "契約書を生成" }).click();
   await page.waitForTimeout(200);
   const chooseModal = page.locator("div.fixed.inset-0.z-30").last();
   body = await chooseModal.textContent();

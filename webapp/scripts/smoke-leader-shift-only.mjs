@@ -48,7 +48,7 @@ try {
 
   // Aチームのリーダーを招待
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=本アカウントを招待");
   await admin.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForSelector('input[readonly]');
@@ -67,7 +67,7 @@ try {
 
   // シフトを受け取る一般スタッフ
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "Aチームスタッフ");
   await admin.getByRole("button", { name: "作成", exact: true }).click();
@@ -111,7 +111,7 @@ try {
   await admin.goto("http://localhost:3000/company/roster");
   await admin.click("text=派遣会社一覧");
   await admin.waitForTimeout(200);
-  await admin.click("text=＋派遣会社を追加する");
+  await admin.click("text=＋派遣会社を追加");
   await admin.waitForTimeout(200);
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "確認用派遣会社");

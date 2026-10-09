@@ -20,7 +20,10 @@ import {
   TemplateModal,
   ChooseBaseTemplateModal,
   AssignOrCustomizeModal,
+  GenerateOrUploadChoiceModal,
+  UploadContractModal,
   type Template as ContractTemplate,
+  type UploadOnlyTemplate,
   type ClientOption,
 } from "@/components/company/ContractsView";
 import { ImageDropzone } from "@/components/ImageDropzone";
@@ -192,6 +195,7 @@ export function DashboardView({
   expiringContractStaff,
   duePaidLeaveGrants,
   contractTemplates,
+  uploadOnlyTemplates,
   companyName,
   contractClients,
   initialTab,
@@ -213,6 +217,7 @@ export function DashboardView({
   expiringContractStaff: ExpiringContractStaff[];
   duePaidLeaveGrants: DuePaidLeaveGrant[];
   contractTemplates: ContractTemplate[];
+  uploadOnlyTemplates: UploadOnlyTemplate[];
   companyName: string;
   contractClients: ClientOption[];
   initialTab?: DashboardTab;
@@ -228,15 +233,15 @@ export function DashboardView({
     initialReportDetailId ? (pendingReportEntries.find((r) => r.id === initialReportDetailId) ?? null) : null,
   );
   const [generateTarget, setGenerateTarget] = useState<PendingContractStaff | null>(null);
+  const [generateMode, setGenerateMode] = useState<"generate" | "upload" | null>(null);
   const [generateBaseTemplate, setGenerateBaseTemplate] = useState<ContractTemplate | null>(null);
   const [generateCustomize, setGenerateCustomize] = useState(false);
-  const [generateUploadOnly, setGenerateUploadOnly] = useState(false);
 
   function endGenerateFlow() {
     setGenerateTarget(null);
+    setGenerateMode(null);
     setGenerateBaseTemplate(null);
     setGenerateCustomize(false);
-    setGenerateUploadOnly(false);
   }
 
   return (
@@ -349,7 +354,15 @@ export function DashboardView({
       {openPopup === "paidLeave" ? (
         <DuePaidLeaveGrantsPopup entries={duePaidLeaveGrants} onClose={() => setOpenPopup(null)} />
       ) : null}
-      {generateTarget && !generateBaseTemplate ? (
+      {generateTarget && !generateMode ? (
+        <GenerateOrUploadChoiceModal
+          staffName={generateTarget.name}
+          onGenerate={() => setGenerateMode("generate")}
+          onUpload={() => setGenerateMode("upload")}
+          onClose={() => setGenerateTarget(null)}
+        />
+      ) : null}
+      {generateTarget && generateMode === "generate" && !generateBaseTemplate ? (
         <ChooseBaseTemplateModal
           staffName={generateTarget.name}
           templates={contractTemplates}
@@ -357,27 +370,31 @@ export function DashboardView({
           onClose={() => setGenerateTarget(null)}
         />
       ) : null}
-      {generateTarget && generateBaseTemplate && !generateCustomize ? (
+      {generateTarget && generateMode === "generate" && generateBaseTemplate && !generateCustomize ? (
         <AssignOrCustomizeModal
           staffName={generateTarget.name}
           staffUserId={generateTarget.userId}
           template={generateBaseTemplate}
           onAssigned={endGenerateFlow}
           onCustomize={() => setGenerateCustomize(true)}
-          onUploadOnly={() => {
-            setGenerateCustomize(true);
-            setGenerateUploadOnly(true);
-          }}
           onClose={endGenerateFlow}
         />
       ) : null}
-      {generateTarget && generateBaseTemplate && generateCustomize ? (
+      {generateTarget && generateMode === "generate" && generateBaseTemplate && generateCustomize ? (
         <TemplateModal
           clients={contractClients}
           companyName={companyName}
           editingTemplate={generateBaseTemplate}
           generateForStaff={{ userId: generateTarget.userId, name: generateTarget.name }}
-          initialUploadMode={generateUploadOnly}
+          onClose={endGenerateFlow}
+        />
+      ) : null}
+      {generateTarget && generateMode === "upload" ? (
+        <UploadContractModal
+          staffName={generateTarget.name}
+          staffUserId={generateTarget.userId}
+          uploadOnlyTemplates={uploadOnlyTemplates}
+          onDone={endGenerateFlow}
           onClose={endGenerateFlow}
         />
       ) : null}
@@ -936,7 +953,7 @@ function PendingContractPopup({
             onClick={() => onSelect(s)}
             className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
           >
-            契約書を生成
+            契約書管理
           </button>
         </div>
       ))}

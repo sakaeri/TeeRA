@@ -123,7 +123,7 @@ try {
 
   // --- ④ 一般スタッフのチーム所属をスタッフ詳細の編集パネルで変更 ---
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "一般スタッフ太郎");
   await admin.getByRole("button", { name: "作成", exact: true }).click();

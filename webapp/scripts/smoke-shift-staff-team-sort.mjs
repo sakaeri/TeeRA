@@ -32,7 +32,7 @@ try {
 
   // 先にチームに属さない一般スタッフを作る（＝並び順の最後に残るはず）
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "無所属スタッフ");
   await admin.getByRole("button", { name: "作成", exact: true }).click();
@@ -53,7 +53,7 @@ try {
   );
 
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "チーム所属スタッフ");
   await admin.getByRole("button", { name: "作成", exact: true }).click();

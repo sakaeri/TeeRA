@@ -10,10 +10,19 @@ import {
   listDashboardAudience,
 } from "@/lib/domain/dashboard";
 import { listPromoItems, listRedemptionsForCompany } from "@/lib/domain/promo";
-import { listTemplates } from "@/lib/domain/contracts";
+import { listTemplates, listUploadOnlyTemplates } from "@/lib/domain/contracts";
 import { listClients } from "@/lib/domain/relationships";
 import { prisma } from "@/lib/prisma";
 import { DashboardView } from "@/components/company/DashboardView";
+
+const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
+  PART_TIME: "アルバイト",
+  FIXED_TERM_EMPLOYEE: "契約社員",
+  FULL_TIME: "正社員",
+  CONTRACTOR: "業務委託",
+  DISPATCH_STAFF: "派遣社員",
+};
+const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
 
 export default async function CompanyDashboardPage({ searchParams }: PageProps<"/company">) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
@@ -29,6 +38,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
     promoItems,
     redemptions,
     templates,
+    uploadOnlyTemplates,
     company,
   ] = await Promise.all([
     loadDashboardData(membership.companyId),
@@ -38,6 +48,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
     listPromoItems(membership.companyId),
     listRedemptionsForCompany(membership.companyId),
     listTemplates(membership.companyId),
+    listUploadOnlyTemplates(membership.companyId),
     prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
   ]);
 
@@ -127,7 +138,8 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
         contractTemplates={templates
           // LOCKED（既に誰か契約中）でも「そのまま契約する」で複数人に
           // 割り当てられるようにするため、ARCHIVED以外は選択肢に含める。
-          .filter((t) => t.status !== "ARCHIVED")
+          // isUploadOnlyの軽量テンプレは通常の生成フローの選択肢には出さない。
+          .filter((t) => t.status !== "ARCHIVED" && !t.isUploadOnly)
           .map((t) => ({
             id: t.id,
             title: t.title,
@@ -158,6 +170,14 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
             status: t.status,
             contractedStaffNames: t.staffContracts.filter((sc) => sc.status !== "ENDED").map((sc) => sc.staff.name),
           }))}
+        uploadOnlyTemplates={uploadOnlyTemplates.map((t) => ({
+          id: t.id,
+          title: t.title,
+          employmentTypeLabel: EMPLOYMENT_TYPE_LABEL[t.employmentType] ?? t.employmentType,
+          jobDescription: t.jobDescription,
+          wageLabel: `${WAGE_TYPE_LABEL[t.wageType]}${t.wageAmount}円`,
+          contractStartDate: t.contractStartDate.toISOString().slice(0, 10),
+        }))}
         initialTab={initialTab}
         initialOpenPopup={initialOpenPopup}
         initialReportDetailId={initialReportDetailId}

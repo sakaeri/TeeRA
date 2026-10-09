@@ -20,16 +20,8 @@ try {
   await admin.click("button[type=submit]");
   await admin.waitForURL("http://localhost:3000/company");
 
-  await admin.goto("http://localhost:3000/company/settings?tab=contracts");
-  await admin.getByRole("button", { name: "＋テンプレートを作成" }).click();
-  await admin.getByText("業務内容", { exact: true }).locator("xpath=..").locator("input").fill("検証業務");
-  await admin.getByText("賃金", { exact: true }).locator("xpath=..").locator("select").selectOption("HOURLY");
-  await admin.getByText("賃金", { exact: true }).locator("xpath=..").locator("input[type=number]").fill("1000");
-  await admin.getByRole("button", { name: "テンプレートを生成" }).click();
-  await admin.waitForTimeout(600);
-
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "ショートカット花子");
   await admin.getByRole("button", { name: "作成", exact: true }).click();
@@ -41,29 +33,30 @@ try {
   await admin.waitForTimeout(300);
   const panel = admin.locator("div.fixed.inset-0.z-30, div.fixed.inset-0.z-20").last();
   await panel.getByRole("button", { name: "契約書管理" }).click();
-  await panel.getByRole("button", { name: "＋契約書を生成" }).click();
+  await panel.getByRole("button", { name: "＋契約書を追加" }).click();
   await admin.waitForTimeout(200);
-  const chooseModal = admin.locator("div.fixed.inset-0.z-30").last();
-  await chooseModal.locator("select").selectOption({ label: "アルバイト・検証業務" });
-  await chooseModal.getByRole("button", { name: "次へ" }).click();
+
+  // 「＋契約書を追加」をタップした直後に、テンプレート選択を経由せず
+  // 「契約書を生成」「アップロード」の2択がすぐ出ることを確認する
+  // （以前はアップロードが生成フローの3番目のボタンとして埋もれていた）。
+  const choiceModal = admin.locator("div.fixed.inset-0.z-30").last();
+  log(
+    "「＋契約書を追加」をタップすると即座に「契約書を生成」「アップロード」の2択が出る",
+    (await choiceModal.getByRole("button", { name: "契約書を生成" }).isVisible()) &&
+      (await choiceModal.getByRole("button", { name: /^アップロード/ }).isVisible()),
+  );
+
+  await choiceModal.getByRole("button", { name: /^アップロード/ }).click();
   await admin.waitForTimeout(300);
 
-  const assignModal = admin.locator("div.fixed.inset-0.z-30").last();
+  // アップロードを選ぶと、テンプレート選択を一切経由せず直接アップロード
+  // 専用フォーム（必須4項目＋添付）に入る。
+  const uploadModal = admin.locator("div.fixed.inset-0.z-30").last();
   log(
-    "テンプレート選択後の分岐に「アップロードのみ」ボタンが出る",
-    await assignModal.getByRole("button", { name: "アップロードのみ（書面で契約済み）" }).isVisible(),
+    "アップロードを選ぶとテンプレート選択を経由せず直接アップロードフォームに入る",
+    await uploadModal.getByText("本人への同意依頼は送られません").isVisible(),
   );
-  await assignModal.getByRole("button", { name: "アップロードのみ（書面で契約済み）" }).click();
-  await admin.waitForTimeout(300);
-
-  const genModal = admin.locator("div.fixed.inset-0.z-30").last();
-  const uploadModeBtn = genModal.getByRole("button", { name: "アップロードのみ（既に書面で契約済み）" });
-  const className = await uploadModeBtn.getAttribute("class");
-  log("ショートカットから入るとアップロードのみが最初から選択されている", className.includes("bg-primary"));
-  log(
-    "アップロード必須の案内も最初から表示される",
-    await genModal.getByText("本人への同意依頼は送られません").isVisible(),
-  );
+  log("雇用形態の入力欄が直接表示される（テンプレート選択は不要）", await uploadModal.getByText("雇用形態").isVisible());
 
   console.log(process.exitCode ? "CONTRACT UPLOAD SHORTCUT SMOKE TEST HAD FAILURES" : "CONTRACT UPLOAD SHORTCUT SMOKE TEST PASSED");
 } catch (err) {

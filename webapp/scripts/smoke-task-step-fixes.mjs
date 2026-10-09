@@ -28,7 +28,7 @@ try {
   await admin.goto("http://localhost:3000/company/roster");
   await admin.click("text=依頼主一覧");
   await admin.waitForTimeout(200);
-  await admin.click("text=＋依頼主を追加する");
+  await admin.click("text=＋依頼主を追加");
   await admin.waitForTimeout(200);
   await admin.click("text=仮アカウントを作成");
   await admin.fill('input[placeholder="名称を入力"]', "戻る先");
@@ -36,7 +36,7 @@ try {
   await admin.waitForTimeout(600);
 
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=本アカウントを招待");
   await admin.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForSelector('input[readonly]');

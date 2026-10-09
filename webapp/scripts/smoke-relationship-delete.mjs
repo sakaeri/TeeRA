@@ -34,7 +34,7 @@ try {
   await page.goto("http://localhost:3000/company/roster");
   await page.click("text=依頼主一覧");
   await page.waitForTimeout(200);
-  await page.click("text=＋依頼主を追加する");
+  await page.click("text=＋依頼主を追加");
   await page.waitForTimeout(200);
   await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "削除確認取引先");
@@ -67,7 +67,7 @@ try {
   await page.goto("http://localhost:3000/company/roster");
   await page.click("text=依頼主一覧");
   await page.waitForTimeout(200);
-  await page.click("text=＋依頼主を追加する");
+  await page.click("text=＋依頼主を追加");
   await page.waitForTimeout(200);
   await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "稼働あり取引先");
@@ -76,7 +76,7 @@ try {
   const workedRelId = psql(`select id from "CompanyRelationship" where "ownerCompanyId"='${companyId}' and "proxyName"='稼働あり取引先' order by "createdAt" desc limit 1;`);
 
   await page.goto("http://localhost:3000/company/roster");
-  await page.click("text=＋スタッフを追加する");
+  await page.click("text=＋スタッフを追加");
   await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "稼働あり取引先担当");
   await page.getByRole("button", { name: "作成", exact: true }).click();
@@ -108,7 +108,7 @@ try {
   await page.goto("http://localhost:3000/company/roster");
   await page.click("text=派遣会社一覧");
   await page.waitForTimeout(200);
-  await page.click("text=＋派遣会社を追加する");
+  await page.click("text=＋派遣会社を追加");
   await page.waitForTimeout(200);
   await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "配属あり派遣会社");
@@ -146,7 +146,7 @@ try {
   await page.goto("http://localhost:3000/company/roster");
   await page.click("text=依頼主一覧");
   await page.waitForTimeout(200);
-  await page.click("text=＋依頼主を追加する");
+  await page.click("text=＋依頼主を追加");
   await page.waitForTimeout(200);
   await page.click("text=本アカウントを招待");
   await page.waitForTimeout(200);

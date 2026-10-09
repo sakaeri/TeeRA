@@ -9,6 +9,7 @@ import {
   generateStaffContractAction,
   generateStaffContractFromUploadAction,
   assignExistingTemplateAction,
+  assignUploadOnlyTemplateAction,
 } from "@/app/company/contracts/actions";
 import { ImageDropzone } from "@/components/ImageDropzone";
 
@@ -16,11 +17,11 @@ export type Template = {
   id: string;
   title: string;
   employmentType: string;
-  workplaceType: string;
+  workplaceType: string | null;
   workplaceNote: string | null;
   clientName: string | null;
   jobDescription: string;
-  scheduleType: string;
+  scheduleType: string | null;
   workStartTime: string | null;
   workEndTime: string | null;
   actualWorkMinutes: number | null;
@@ -35,12 +36,23 @@ export type Template = {
   paymentClosingDay: string | null;
   paymentDay: string | null;
   paymentMethod: string | null;
-  contractPeriodType: string;
+  contractPeriodType: string | null;
   contractStartDate: string;
   contractEndDate: string | null;
   extraItems: { label: string; value: string }[];
   status: string;
   contractedStaffNames: string[];
+};
+
+// 「アップロードのみ」専用の軽量テンプレート — 雇用形態・業務内容・基本給・
+// 契約開始日だけを持つ、通常のテンプレート一覧には出さない再利用候補。
+export type UploadOnlyTemplate = {
+  id: string;
+  title: string;
+  employmentTypeLabel: string;
+  jobDescription: string;
+  wageLabel: string;
+  contractStartDate: string;
 };
 
 export type ClientOption = { id: string; name: string };
@@ -54,6 +66,18 @@ const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
 };
 
 const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
+
+function formatSignedAt(isoString: string): string {
+  return new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Tokyo",
+  }).format(new Date(isoString));
+}
 
 export function ContractsView({
   templates,
@@ -256,6 +280,56 @@ const fieldInput = "w-full min-w-0 rounded-lg border border-border px-2 py-2 tex
 
 // 「契約書を生成」フローの1段階目 — ベースにするテンプレートを選ぶ。ダッシュ
 // ボードの「契約書未確認」とスタッフ詳細の両方から使う共有モーダル。
+// 「契約書管理」の入口 — まず「契約書を生成」（本人に確認・同意してもらう
+// 通常フロー）と「アップロード」（既に書面で契約済み、署名済み書面を添付
+// するだけのフロー）のどちらにするかを最初に選ばせる。以前はアップロード
+// が生成フローの3番目の選択肢として埋もれていて分かりにくかったための変更。
+export function GenerateOrUploadChoiceModal({
+  staffName,
+  onGenerate,
+  onUpload,
+  onClose,
+}: {
+  staffName: string;
+  onGenerate: () => void;
+  onUpload: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">契約書管理</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-muted">{staffName}さんの契約書をどちらで用意しますか？</p>
+        <button
+          type="button"
+          onClick={onGenerate}
+          className="w-full rounded-lg border border-border px-4 py-3 text-left text-sm font-semibold text-primary hover:border-primary"
+        >
+          契約書を生成
+          <span className="mt-1 block text-xs font-normal text-muted">
+            テンプレートから契約書を作り、本人に内容を確認・同意してもらいます
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onUpload}
+          className="mt-2 w-full rounded-lg border border-border px-4 py-3 text-left text-sm font-semibold text-primary hover:border-primary"
+        >
+          アップロード
+          <span className="mt-1 block text-xs font-normal text-muted">
+            既に書面で契約済みのスタッフ向け。署名済みの契約書を添付して記録します
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ChooseBaseTemplateModal({
   staffName,
   templates,
@@ -341,7 +415,6 @@ export function AssignOrCustomizeModal({
   template,
   onAssigned,
   onCustomize,
-  onUploadOnly,
   onClose,
 }: {
   staffName: string;
@@ -349,7 +422,6 @@ export function AssignOrCustomizeModal({
   template: Template;
   onAssigned: () => void;
   onCustomize: () => void;
-  onUploadOnly: () => void;
   onClose: () => void;
 }) {
   const [contractStartDate, setContractStartDate] = useState(todayJst());
@@ -405,16 +477,315 @@ export function AssignOrCustomizeModal({
         >
           内容を編集して専用の契約書を作る
         </button>
+        <p className="mt-2 text-xs text-muted">
+          「このテンプレートのまま」を選ぶと、他の人と同じテンプレートを共有します（設定画面の契約書テンプレート一覧の「契約中」欄に追加されます）。内容を変えたい場合は編集を選んでください。
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// 「アップロード」経路: 既に書面で契約済みのスタッフ向け。署名済み書面は
+// それ自体が正式な記録なので、アプリ側で契約書本文を再現する必要は無く、
+// 給与計算に要る最小限（雇用形態・業務内容・基本給・契約開始日）だけを
+// 入力させる。氏名は名簿の氏名で足りるため聞かない — 本人確認が要る場面
+// では添付した署名済み書面そのものを見ればよい。住所・電話番号・有給・
+// 本人確認書類・振込先情報・業務単価は、ここでは触れず保存後に案内する
+// （それぞれ既存の専用画面がある）。
+export function UploadContractModal({
+  staffName,
+  staffUserId,
+  uploadOnlyTemplates,
+  onDone,
+  onClose,
+}: {
+  staffName: string;
+  staffUserId: string;
+  uploadOnlyTemplates: UploadOnlyTemplate[];
+  onDone: () => void;
+  onClose: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"pick" | "new">(uploadOnlyTemplates.length > 0 ? "pick" : "new");
+  const [templateId, setTemplateId] = useState("");
+  const [employmentType, setEmploymentType] = useState("PART_TIME");
+  const [jobDescription, setJobDescription] = useState("");
+  const [wageType, setWageType] = useState("HOURLY");
+  const [wageAmount, setWageAmount] = useState("");
+  const [contractStartDate, setContractStartDate] = useState(todayJst());
+  const [uploadedDocumentUrl, setUploadedDocumentUrl] = useState("");
+  const [partyAddress, setPartyAddress] = useState("");
+  const [partyPhoneNumber, setPartyPhoneNumber] = useState("");
+
+  const canSubmit =
+    Boolean(uploadedDocumentUrl) &&
+    (mode === "pick"
+      ? Boolean(templateId)
+      : Boolean(jobDescription) && Number(wageAmount) > 0 && Boolean(contractStartDate));
+
+  function submit() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const party = { address: partyAddress.trim() || undefined, phoneNumber: partyPhoneNumber.trim() || undefined };
+        if (mode === "pick") {
+          await assignUploadOnlyTemplateAction(templateId, staffUserId, uploadedDocumentUrl, party);
+        } else {
+          await generateStaffContractFromUploadAction(
+            {
+              title: `${EMPLOYMENT_TYPE_LABEL[employmentType]}・${jobDescription}`,
+              employmentType: employmentType as never,
+              jobDescription,
+              wageType: wageType as never,
+              wageAmount: Number(wageAmount),
+              contractStartDate: new Date(`${contractStartDate}T00:00:00.000Z`),
+            },
+            staffUserId,
+            uploadedDocumentUrl,
+            party,
+          );
+        }
+        onDone();
+      } catch {
+        setError("保存できませんでした。もう一度お試しください。");
+      }
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div
+        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">アップロード（{staffName}様）</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-muted">
+          本人への同意依頼は送られません。既に署名済みの契約書（写真・PDF）を添付してください。
+        </p>
+
+        {uploadOnlyTemplates.length > 0 ? (
+          <div className="mb-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("pick")}
+              className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                mode === "pick" ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted"
+              }`}
+            >
+              既存の条件から選ぶ
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("new")}
+              className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                mode === "new" ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted"
+              }`}
+            >
+              ＋新しい条件を入力
+            </button>
+          </div>
+        ) : null}
+
+        {mode === "pick" ? (
+          <label className="mb-4 flex flex-col gap-1 text-xs">
+            <span>
+              雇用条件<span className="text-red-600"> *</span>
+            </span>
+            <select
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              className="rounded-lg border border-border px-2 py-2 text-sm"
+            >
+              <option value="">選択してください</option>
+              {uploadOnlyTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <div className="mb-4 flex flex-col gap-3">
+            <label className="flex flex-col gap-1 text-xs">
+              <span>
+                雇用形態<span className="text-red-600"> *</span>
+              </span>
+              <select
+                value={employmentType}
+                onChange={(e) => setEmploymentType(e.target.value)}
+                className="rounded-lg border border-border px-2 py-2 text-sm"
+              >
+                {Object.entries(EMPLOYMENT_TYPE_LABEL).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span>
+                業務内容<span className="text-red-600"> *</span>
+              </span>
+              <input
+                type="text"
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+                className="rounded-lg border border-border px-2 py-2 text-sm"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span>
+                基本給<span className="text-red-600"> *</span>
+              </span>
+              <div className="flex gap-2">
+                <select
+                  value={wageType}
+                  onChange={(e) => setWageType(e.target.value)}
+                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                >
+                  {Object.entries(WAGE_TYPE_LABEL).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  value={wageAmount}
+                  onChange={(e) => setWageAmount(e.target.value)}
+                  placeholder="金額"
+                  className="w-full rounded-lg border border-border px-2 py-2 text-sm"
+                />
+                <span className="flex items-center text-sm text-muted">円</span>
+              </div>
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span>
+                契約開始日（入社日）<span className="text-red-600"> *</span>
+              </span>
+              <input
+                type="date"
+                value={contractStartDate}
+                onChange={(e) => setContractStartDate(e.target.value)}
+                className="rounded-lg border border-border px-2 py-2 text-sm"
+              />
+            </label>
+          </div>
+        )}
+
+        <div className="mb-4">
+          <ImageDropzone
+            label="署名済み書面"
+            required
+            accept="image/*,application/pdf"
+            imageUrl={uploadedDocumentUrl}
+            onChange={setUploadedDocumentUrl}
+            size="md"
+          />
+        </div>
+
+        <details className="mb-4 rounded-lg border border-border/60 p-3 text-xs">
+          <summary className="cursor-pointer font-semibold text-muted">住所・電話番号を入力する（任意）</summary>
+          <div className="mt-2 flex flex-col gap-2">
+            <label className="flex flex-col gap-1">
+              住所
+              <input
+                type="text"
+                value={partyAddress}
+                onChange={(e) => setPartyAddress(e.target.value)}
+                className="rounded-lg border border-border px-2 py-2 text-sm"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              電話番号
+              <input
+                type="text"
+                value={partyPhoneNumber}
+                onChange={(e) => setPartyPhoneNumber(e.target.value)}
+                className="rounded-lg border border-border px-2 py-2 text-sm"
+              />
+            </label>
+          </div>
+        </details>
+
+        {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
         <button
           type="button"
-          onClick={onUploadOnly}
-          className="mt-2 w-full rounded-lg border border-border px-4 py-2 text-sm font-semibold text-primary"
+          disabled={pending || !canSubmit}
+          onClick={submit}
+          className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
-          アップロードのみ（書面で契約済み）
+          保存する
         </button>
-        <p className="mt-2 text-xs text-muted">
-          「このテンプレートのまま」を選ぶと、他の人と同じテンプレートを共有します（設定画面の契約書テンプレート一覧の「契約中」欄に追加されます）。内容を変えたい場合は編集を選んでください。「アップロードのみ」は、既に書面で契約済みのスタッフ向けに、本人への同意依頼を送らず署名済み書面を添付するモードです。
+      </div>
+    </div>
+  );
+}
+
+// 「アップロード」経路で作った契約の「詳細確認」。署名済み書面そのものが
+// 正式な記録のため、契約書本文風の表示はせず、給与計算に使う必須項目と
+// アップロードした書面を開くリンクだけを見せるシンプルな画面。
+export function UploadOnlyContractDetail({
+  staffName,
+  contract,
+  onClose,
+}: {
+  staffName: string;
+  contract: {
+    employmentTypeLabel: string;
+    jobDescription: string;
+    wageLabel: string;
+    contractStartDate: string;
+    uploadedDocumentUrl: string | null;
+  };
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">アップロードされた契約書（{staffName}様）</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-muted">
+          書面で契約済みのため、内容は添付された署名済み書面が正式な記録です。ここでは給与計算に使う項目のみ表示します。
         </p>
+        <div className="flex flex-col divide-y divide-border/40 text-sm">
+          <div className="flex items-center justify-between py-2">
+            <span className="text-muted">雇用形態</span>
+            <span>{contract.employmentTypeLabel}</span>
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-muted">業務内容</span>
+            <span>{contract.jobDescription}</span>
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-muted">基本給</span>
+            <span>{contract.wageLabel}</span>
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-muted">契約開始日</span>
+            <span>{contract.contractStartDate}</span>
+          </div>
+        </div>
+        {contract.uploadedDocumentUrl ? (
+          <a
+            href={contract.uploadedDocumentUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-4 block rounded-lg border border-primary px-4 py-2 text-center text-sm font-semibold text-primary hover:bg-primary/5"
+          >
+            📄 アップロードされた署名済み書面を見る
+          </a>
+        ) : null}
       </div>
     </div>
   );
@@ -427,7 +798,6 @@ export function TemplateModal({
   generateForStaff,
   viewingStaff,
   duplicateAsNew,
-  initialUploadMode,
   consentForm,
   onClose,
   onSaved,
@@ -440,10 +810,7 @@ export function TemplateModal({
   // readOnlyで既存の契約書を見るだけの時に、その契約の相手方（乙）の
   // 氏名・住所・電話番号を表示するための情報。generateForStaffと違い
   // 生成フロー（タイトル表示・送信先）には一切影響しない。
-  viewingStaff?: { name: string; address?: string; phoneNumber?: string; uploadedDocumentUrl?: string | null };
-  // AssignOrCustomizeModalの「アップロードのみ」から来た場合にtrue —
-  // アップロードのみモードの切り替えを最初から選んだ状態で開く。
-  initialUploadMode?: boolean;
+  viewingStaff?: { name: string; address?: string; phoneNumber?: string; consentedAt?: string | null };
   // PENDING_CONSENTの契約をスタッフ本人が全文確認した末尾に出す、氏名・
   // 住所・電話番号の入力欄＋同意ボタン。これが渡された場合のみ、readOnly
   // でも末尾にこのフォームを表示する（「見てません」防止のため、全文を
@@ -512,14 +879,6 @@ export function TemplateModal({
   const [customChipValue, setCustomChipValue] = useState("");
   const [showCustomChipForm, setShowCustomChipForm] = useState(false);
   const [mode, setMode] = useState<"edit" | "preview">(readOnly ? "preview" : "edit");
-  // アップロードのみモード: 既に書面で契約済みのスタッフ向け。本人への
-  // 同意依頼は送らず、署名済み書面を添付して即時ACTIVEの契約として生成する。
-  const [uploadMode, setUploadMode] = useState(initialUploadMode ?? false);
-  const [uploadedDocumentUrl, setUploadedDocumentUrl] = useState("");
-  // アップロードのみモード: 本人の同意ステップを経ないため、署名済み書面の
-  // 住所・電話番号も本部がここで入力する。
-  const [uploadPartyAddress, setUploadPartyAddress] = useState("");
-  const [uploadPartyPhoneNumber, setUploadPartyPhoneNumber] = useState("");
   // 同意フォーム（consentForm）用の入力欄。全文を確認した本人がここで
   // 氏名・住所・電話番号を入力してから同意する（署名代わり）。
   const [consentName, setConsentName] = useState(viewingStaff?.name ?? "");
@@ -531,13 +890,9 @@ export function TemplateModal({
   const preview = mode === "preview";
   // 契約相手方（乙）の表示用情報。generation中はgenerateForStaff、既存
   // 契約の閲覧中はviewingStaffを使う（お互いタイトル表示や送信先には
-  // 影響しないよう完全に分離している）。アップロードのみモードの生成中は
-  // 本部がその場で入力した住所・電話番号をプレビューに反映する。
-  const partyInfo: { name: string; address?: string; phoneNumber?: string } | undefined = generateForStaff
-    ? uploadMode
-      ? { name: generateForStaff.name, address: uploadPartyAddress, phoneNumber: uploadPartyPhoneNumber }
-      : { name: generateForStaff.name }
-    : viewingStaff;
+  // 影響しないよう完全に分離している）。
+  const partyInfo: { name: string; address?: string; phoneNumber?: string; consentedAt?: string | null } | undefined =
+    generateForStaff ? { name: generateForStaff.name } : viewingStaff;
 
   const workingDayLabel = WEEKDAYS.filter((d) => fixedWeekdays.includes(d.value))
     .map((d) => d.label)
@@ -562,11 +917,7 @@ export function TemplateModal({
     setExtraItems((prev) => prev.filter((i) => i.label !== label));
   }
 
-  const canSubmit =
-    Boolean(jobDescription) &&
-    Number(wageAmount) > 0 &&
-    (!uploadMode ||
-      (Boolean(uploadedDocumentUrl) && Boolean(uploadPartyAddress.trim()) && Boolean(uploadPartyPhoneNumber.trim())));
+  const canSubmit = Boolean(jobDescription) && Number(wageAmount) > 0;
 
   async function submitTemplate() {
     const payload = {
@@ -599,14 +950,6 @@ export function TemplateModal({
       extraItems,
     };
 
-    if (generateForStaff && uploadMode) {
-      await generateStaffContractFromUploadAction(payload, generateForStaff.userId, uploadedDocumentUrl, {
-        name: generateForStaff.name,
-        address: uploadPartyAddress,
-        phoneNumber: uploadPartyPhoneNumber,
-      });
-      return null;
-    }
     if (generateForStaff) {
       await generateStaffContractAction(payload, generateForStaff.userId);
       return null;
@@ -643,69 +986,6 @@ export function TemplateModal({
           </p>
         ) : null}
 
-        {generateForStaff && !preview ? (
-          <div className="mb-4 flex flex-col gap-2 rounded-lg border border-border bg-background/40 p-3">
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setUploadMode(false)}
-                className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold ${
-                  !uploadMode ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted"
-                }`}
-              >
-                通常通り生成してスタッフに同意してもらう
-              </button>
-              <button
-                type="button"
-                onClick={() => setUploadMode(true)}
-                className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold ${
-                  uploadMode ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted"
-                }`}
-              >
-                アップロードのみ（既に書面で契約済み）
-              </button>
-            </div>
-            {uploadMode ? (
-              <>
-                <p className="text-xs text-muted">
-                  内容は入力したまま保存されますが、本人への同意依頼は送られません。既に署名済みの契約書（写真・PDF）を添付してください。
-                </p>
-                <div className="w-40">
-                  <ImageDropzone
-                    label="署名済み書面"
-                    required
-                    accept="image/*,application/pdf"
-                    imageUrl={uploadedDocumentUrl}
-                    onChange={setUploadedDocumentUrl}
-                    size="md"
-                  />
-                </div>
-                <p className="text-xs text-muted">
-                  本人の同意ステップを経ないため、契約書に記載する住所・電話番号をここで入力してください（署名済み書面の記載内容と合わせてください）。
-                </p>
-                <label className="flex flex-col gap-1 text-xs">
-                  住所
-                  <input
-                    type="text"
-                    value={uploadPartyAddress}
-                    onChange={(e) => setUploadPartyAddress(e.target.value)}
-                    className={fieldInput}
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-xs">
-                  電話番号
-                  <input
-                    type="text"
-                    value={uploadPartyPhoneNumber}
-                    onChange={(e) => setUploadPartyPhoneNumber(e.target.value)}
-                    className={fieldInput}
-                  />
-                </label>
-              </>
-            ) : null}
-          </div>
-        ) : null}
-
         {preview ? (
           readOnly ? null : <p className="mb-3 text-xs text-muted">テンプレート名：{title}</p>
         ) : (
@@ -726,17 +1006,15 @@ export function TemplateModal({
           {contractStartDate || "開始日未設定"}
           より、以下の内容で雇用契約を締結する。
         </p>
-        {partyInfo?.address || partyInfo?.phoneNumber ? (
+        {partyInfo?.consentedAt ? (
+          <p className="mt-1 text-xs text-muted">
+            署名日時：{formatSignedAt(partyInfo.consentedAt)}／氏名：{partyInfo.name}／住所：
+            {partyInfo.address || "未登録"}／電話番号：{partyInfo.phoneNumber || "未登録"}
+          </p>
+        ) : partyInfo?.address || partyInfo?.phoneNumber ? (
           <p className="mt-1 text-xs text-muted">
             乙の住所・連絡先：{partyInfo.address || "未登録"}
             {partyInfo.phoneNumber ? ` ／ ${partyInfo.phoneNumber}` : ""}
-          </p>
-        ) : null}
-        {viewingStaff?.uploadedDocumentUrl ? (
-          <p className="mt-1 text-xs">
-            <a href={viewingStaff.uploadedDocumentUrl} target="_blank" rel="noreferrer" className="text-primary underline">
-              📄 アップロードされた署名済み書面を見る
-            </a>
           </p>
         ) : null}
         <div className="my-4 border-t border-border" />
@@ -1135,7 +1413,9 @@ export function TemplateModal({
             </p>
             <div className="flex flex-col gap-3">
               <label className="flex flex-col gap-1 text-xs">
-                氏名<span className="text-red-600"> *</span>
+                <span>
+                  氏名<span className="text-red-600"> *</span>
+                </span>
                 <input
                   type="text"
                   value={consentName}
@@ -1144,7 +1424,9 @@ export function TemplateModal({
                 />
               </label>
               <label className="flex flex-col gap-1 text-xs">
-                住所<span className="text-red-600"> *</span>
+                <span>
+                  住所<span className="text-red-600"> *</span>
+                </span>
                 <input
                   type="text"
                   value={consentAddress}
@@ -1153,7 +1435,9 @@ export function TemplateModal({
                 />
               </label>
               <label className="flex flex-col gap-1 text-xs">
-                電話番号<span className="text-red-600"> *</span>
+                <span>
+                  電話番号<span className="text-red-600"> *</span>
+                </span>
                 <input
                   type="text"
                   value={consentPhoneNumber}

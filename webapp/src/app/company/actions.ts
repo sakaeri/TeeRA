@@ -17,6 +17,7 @@ import {
   updateMembershipBankInfo,
   updateStaffAgencyTag,
   updateStaffProfile,
+  updateStaffAddressPhone,
 } from "@/lib/domain/roster";
 import { setHireDate, grantPaidLeave, adjustPaidLeaveBalance, skipPaidLeaveGrant } from "@/lib/domain/paidLeave";
 import { earliestAllowedMonth, isBeforeCutoff } from "@/lib/date";
@@ -33,6 +34,7 @@ import {
   assertRelationshipParty,
   unplaceStaff,
   updateRelationshipWorkplaceInfo,
+  updateClientAddressPhone,
   setRelationshipStatus,
   updateProxyName,
 } from "@/lib/domain/relationships";
@@ -592,6 +594,25 @@ export async function updateStaffProfileAction(membershipId: string, input: { na
   revalidatePath("/company/roster");
 }
 
+// 社内メモ欄の先頭の特別枠（住所・電話番号）を本部側から編集する。
+export async function updateStaffAddressPhoneAction(
+  membershipId: string,
+  input: { address: string; phoneNumber: string },
+) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  const target = await assertMembershipOwnedByCompany(membershipId, membership.companyId);
+
+  await updateStaffAddressPhone({
+    userId: target.userId,
+    membershipId,
+    authorUserId: userId,
+    address: input.address,
+    phoneNumber: input.phoneNumber,
+  });
+  revalidatePath("/company/roster");
+}
+
 export async function updateStaffIdDocumentAction(membershipId: string, side: "front" | "back", url: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
@@ -737,5 +758,24 @@ export async function updateRelationshipWorkplaceInfoAction(
   if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
   await assertRelationshipAgencySide(companyRelationshipId, membership.companyId);
   await updateRelationshipWorkplaceInfo({ companyRelationshipId, workLocation, emergencyContact });
+  revalidatePath("/company/roster");
+}
+
+// 社内メモ欄の先頭の特別枠（住所・電話番号）— 社内メモ本体（addRelationshipNoteAction）
+// と同じ権限（関係の当事者であれば双方向どちらからでも編集できる）。
+export async function updateClientAddressPhoneAction(
+  companyRelationshipId: string,
+  input: { address: string; phoneNumber: string },
+) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertRelationshipParty(companyRelationshipId, membership.companyId);
+  await updateClientAddressPhone({
+    companyRelationshipId,
+    companyId: membership.companyId,
+    authorUserId: userId,
+    address: input.address,
+    phoneNumber: input.phoneNumber,
+  });
   revalidatePath("/company/roster");
 }

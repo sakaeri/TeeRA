@@ -66,7 +66,7 @@ try {
 
   // --- staff invite from company A: brand-new account, redeems normally ---
   await adminA.goto("http://localhost:3000/company/roster");
-  await adminA.click("text=＋スタッフを追加する");
+  await adminA.click("text=＋スタッフを追加");
   await adminA.click("text=本アカウントを招待");
   await adminA.getByRole("button", { name: "招待URLを発行する" }).click();
   await adminA.waitForSelector('input[readonly]');
@@ -88,7 +88,7 @@ try {
   // user had ANY membership anywhere. Now it should only block if they are
   // already a member of THIS SAME company. ---
   await adminB.goto("http://localhost:3000/company/roster");
-  await adminB.click("text=＋スタッフを追加する");
+  await adminB.click("text=＋スタッフを追加");
   await adminB.click("text=本アカウントを招待");
   await adminB.getByRole("button", { name: "招待URLを発行する" }).click();
   await adminB.waitForSelector('input[readonly]');

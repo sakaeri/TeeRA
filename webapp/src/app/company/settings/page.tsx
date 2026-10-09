@@ -84,7 +84,9 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
           })),
         }))}
         staff={staff.map((s) => ({ userId: s.userId, name: s.name }))}
-        contractTemplates={templates.map((t) => ({
+        contractTemplates={templates
+          .filter((t) => !t.isUploadOnly)
+          .map((t) => ({
           id: t.id,
           title: t.title,
           employmentType: t.employmentType,

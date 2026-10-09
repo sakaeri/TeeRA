@@ -13,7 +13,7 @@ function psql(sql) {
     .trim();
 }
 
-// フェーズ①の本修正の検証: ロースターの「＋スタッフを追加する」がteamId
+// フェーズ①の本修正の検証: ロースターの「＋スタッフを追加」がteamId
 // を渡していなかったため、チームマネージャーがクリックすると必ず
 // forbiddenでクラッシュしていた不具合を、追加モーダルにチーム選択を
 // 組み込むことで解消した。ここでは2チームを管理するマネージャーで
@@ -66,7 +66,7 @@ try {
 
   // --- マネージャーを招待し、両チームのマネージャーにする ---
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=本アカウントを招待");
   await admin.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForSelector('input[readonly]');
@@ -97,12 +97,12 @@ try {
   await manager.click("text=依頼主一覧");
   await manager.waitForTimeout(200);
   let managerBody = await manager.textContent("main");
-  log("マネージャーには依頼主の追加ボタンが出ない（会社全体の資産のため）", !managerBody.includes("＋依頼主を追加する"));
+  log("マネージャーには依頼主の追加ボタンが出ない（会社全体の資産のため）", !managerBody.includes("＋依頼主を追加"));
 
   // --- マネージャーが仮アカウントを作成: チーム選択が必須で出る ---
   await manager.click("text=スタッフ一覧");
   await manager.waitForTimeout(200);
-  await manager.click("text=＋スタッフを追加する");
+  await manager.click("text=＋スタッフを追加");
   await manager.click("text=仮アカウントを作成");
   await manager.waitForTimeout(200);
   let modalText = await manager.textContent("body");
@@ -125,7 +125,7 @@ try {
 
   // --- マネージャーが本アカウント招待: チーム選択→Aチームで招待→redeem ---
   await manager.goto("http://localhost:3000/company/roster");
-  await manager.click("text=＋スタッフを追加する");
+  await manager.click("text=＋スタッフを追加");
   await manager.click("text=本アカウントを招待");
   await manager.waitForTimeout(200);
   modalText = await manager.textContent("body");
@@ -157,7 +157,7 @@ try {
 
   // --- 本部管理者は今まで通りチーム選択なしで動く（回帰確認） ---
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=仮アカウントを作成");
   await admin.waitForTimeout(200);
   const adminModalText = await admin.textContent("body");

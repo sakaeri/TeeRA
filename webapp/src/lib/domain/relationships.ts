@@ -441,6 +441,8 @@ export async function getClientMonthDetail(params: {
     status: relationship.status,
     workLocation: relationship.workLocation,
     emergencyContact: relationship.emergencyContact,
+    clientAddress: relationship.clientAddress,
+    clientPhoneNumber: relationship.clientPhoneNumber,
     teams: teamLinks.map((l) => ({ teamId: l.teamId, teamName: l.team.name })),
     placements: placements.map((p) => ({
       staffUserId: p.staffUserId,
@@ -580,4 +582,42 @@ export async function updateRelationshipWorkplaceInfo(params: {
       emergencyContact: params.emergencyContact.trim() || null,
     },
   });
+}
+
+// 社内メモ欄の先頭に出す「現在の」住所・電話番号（スタッフ側の
+// updateStaffAddressPhoneと同じ考え方）。上書きすると変更前の値を普通の
+// メモとして履歴に積んでから更新する。
+export async function updateClientAddressPhone(params: {
+  companyRelationshipId: string;
+  companyId: string;
+  authorUserId: string;
+  address: string;
+  phoneNumber: string;
+}) {
+  const address = params.address.trim();
+  const phoneNumber = params.phoneNumber.trim();
+  const relationship = await prisma.companyRelationship.findUniqueOrThrow({
+    where: { id: params.companyRelationshipId },
+  });
+
+  const changed =
+    (relationship.clientAddress ?? "") !== address || (relationship.clientPhoneNumber ?? "") !== phoneNumber;
+  if (changed && (relationship.clientAddress || relationship.clientPhoneNumber)) {
+    await prisma.relationshipNote.create({
+      data: {
+        companyRelationshipId: params.companyRelationshipId,
+        companyId: params.companyId,
+        authorUserId: params.authorUserId,
+        content: `（変更前の住所・電話番号）住所：${relationship.clientAddress || "未設定"}／電話番号：${relationship.clientPhoneNumber || "未設定"}`,
+        visibleToStaff: false,
+      },
+    });
+  }
+
+  if (changed) {
+    await prisma.companyRelationship.update({
+      where: { id: params.companyRelationshipId },
+      data: { clientAddress: address || null, clientPhoneNumber: phoneNumber || null },
+    });
+  }
 }

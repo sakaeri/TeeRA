@@ -48,7 +48,7 @@ try {
   await page.goto("http://localhost:3000/company/roster");
   await page.click("text=依頼主一覧");
   await page.waitForTimeout(200);
-  await page.click("text=＋依頼主を追加する");
+  await page.click("text=＋依頼主を追加");
   await page.waitForTimeout(200);
   await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "編集確認取引先");

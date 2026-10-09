@@ -85,7 +85,7 @@ try {
   // 同じ会社宛のスタッフ招待をもう1つ発行し、既にこの会社のメンバーである
   // スタッフ（上で作成済み）に開かせて「すでに所属しています」状態を作る。
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=本アカウントを招待");
   await admin.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForSelector('input[readonly]');

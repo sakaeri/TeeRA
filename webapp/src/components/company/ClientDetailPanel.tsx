@@ -8,6 +8,7 @@ import {
   addRelationshipNoteAction,
   deleteRelationshipNoteAction,
   updateRelationshipWorkplaceInfoAction,
+  updateClientAddressPhoneAction,
   updateStaffAgencyTagAction,
   inviteClientUpgradeAction,
   inviteAgencyUpgradeAction,
@@ -55,6 +56,8 @@ type ClientMonthDetail = {
   status: "ACTIVE" | "INACTIVE";
   workLocation: string | null;
   emergencyContact: string | null;
+  clientAddress: string | null;
+  clientPhoneNumber: string | null;
   historyCutoff: { year: number; month: number } | null;
   teams: { teamId: string; teamName: string }[];
   placements: Placement[];
@@ -136,6 +139,9 @@ export function ClientDetailPanel({
   const [editingWorkplaceInfo, setEditingWorkplaceInfo] = useState(false);
   const [workLocationDraft, setWorkLocationDraft] = useState("");
   const [emergencyContactDraft, setEmergencyContactDraft] = useState("");
+  const [editingAddressPhone, setEditingAddressPhone] = useState(false);
+  const [addressDraft, setAddressDraft] = useState("");
+  const [phoneDraft, setPhoneDraft] = useState("");
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
@@ -163,6 +169,20 @@ export function ClientDetailPanel({
     setWorkLocationDraft(data?.workLocation ?? "");
     setEmergencyContactDraft(data?.emergencyContact ?? "");
     setEditingWorkplaceInfo(true);
+  }
+
+  function startEditAddressPhone() {
+    setAddressDraft(data?.clientAddress ?? "");
+    setPhoneDraft(data?.clientPhoneNumber ?? "");
+    setEditingAddressPhone(true);
+  }
+
+  function submitAddressPhone() {
+    startTransition(async () => {
+      await updateClientAddressPhoneAction(relationshipId, { address: addressDraft, phoneNumber: phoneDraft });
+      setEditingAddressPhone(false);
+      await refresh();
+    });
   }
 
   function submitWorkplaceInfo() {
@@ -762,6 +782,61 @@ export function ClientDetailPanel({
                 ) : null}
 
                 <div>
+                  <div className="mb-2 rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
+                    {editingAddressPhone ? (
+                      <div className="flex flex-col gap-2">
+                        <label className="flex flex-col gap-1 text-xs">
+                          住所
+                          <input
+                            type="text"
+                            value={addressDraft}
+                            onChange={(e) => setAddressDraft(e.target.value)}
+                            className="rounded-lg border border-border px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-xs">
+                          電話番号
+                          <input
+                            type="text"
+                            value={phoneDraft}
+                            onChange={(e) => setPhoneDraft(e.target.value)}
+                            className="rounded-lg border border-border px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingAddressPhone(false)}
+                            className="rounded-lg border border-border px-3 py-1.5 text-xs"
+                          >
+                            キャンセル
+                          </button>
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={submitAddressPhone}
+                            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                          >
+                            保存する
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p>住所：{data.clientAddress || "未設定"}</p>
+                          <p>電話番号：{data.clientPhoneNumber || "未設定"}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={startEditAddressPhone}
+                          className="shrink-0 text-xs text-primary hover:underline"
+                        >
+                          編集
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <div className="mb-2 flex items-center justify-end">
                     <button
                       type="button"

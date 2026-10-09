@@ -60,7 +60,7 @@ try {
 
   // --- agency: invite + register a staff member ---
   await agency.goto("http://localhost:3000/company/roster");
-  await agency.click("text=＋スタッフを追加する");
+  await agency.click("text=＋スタッフを追加");
   await agency.click("text=本アカウントを招待");
   await agency.getByRole("button", { name: "招待URLを発行する" }).click();
   await agency.waitForSelector('input[readonly]');

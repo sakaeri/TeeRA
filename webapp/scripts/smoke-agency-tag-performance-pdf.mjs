@@ -44,7 +44,7 @@ try {
 
   // --- client: invite + register a staff member (自社スタッフとして) ---
   await client.goto("http://localhost:3000/company/roster");
-  await client.click("text=＋スタッフを追加する");
+  await client.click("text=＋スタッフを追加");
   await client.click("text=本アカウントを招待");
   await client.getByRole("button", { name: "招待URLを発行する" }).click();
   await client.waitForSelector('input[readonly]');

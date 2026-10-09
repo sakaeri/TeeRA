@@ -32,7 +32,7 @@ try {
   await admin.waitForTimeout(600);
 
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=本アカウントを招待");
   await admin.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForSelector("input[readonly]");
@@ -55,7 +55,8 @@ try {
   await admin.waitForTimeout(300);
   const panel = admin.locator("div.fixed.inset-0.z-30").first();
   await panel.getByRole("button", { name: "契約書管理" }).click();
-  await panel.getByRole("button", { name: "＋契約書を生成" }).click();
+  await panel.getByRole("button", { name: "＋契約書を追加" }).click();
+  await panel.getByRole("button", { name: "契約書を生成" }).click();
   await admin.waitForTimeout(200);
   const chooseModal = admin.locator("div.fixed.inset-0.z-30").last();
   await chooseModal.locator("select").selectOption({ label: "アルバイト・検証業務" });

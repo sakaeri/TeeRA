@@ -51,7 +51,7 @@ try {
 
   // Staff X = A社自身のスタッフ（既につながりがある）
   await adminA.click("text=スタッフ名簿");
-  await adminA.click("text=＋スタッフを追加する");
+  await adminA.click("text=＋スタッフを追加");
   await adminA.click("text=本アカウントを招待");
   await adminA.getByRole("button", { name: "招待URLを発行する" }).click();
   await adminA.waitForSelector('input[readonly]');
@@ -71,7 +71,7 @@ try {
   // Staff X2 = A社自身の別スタッフ（管理者アサインの検証用 — Xは後で同日の
   // 別募集にも応募させるため、同日重複扱いを避けるために別人にする）
   await adminA.click("text=スタッフ名簿");
-  await adminA.click("text=＋スタッフを追加する");
+  await adminA.click("text=＋スタッフを追加");
   await adminA.click("text=本アカウントを招待");
   await adminA.getByRole("button", { name: "招待URLを発行する" }).click();
   await adminA.waitForSelector('input[readonly]');
@@ -100,7 +100,7 @@ try {
   await adminB.waitForURL("http://localhost:3000/company");
 
   await adminB.click("text=スタッフ名簿");
-  await adminB.click("text=＋スタッフを追加する");
+  await adminB.click("text=＋スタッフを追加");
   await adminB.click("text=本アカウントを招待");
   await adminB.getByRole("button", { name: "招待URLを発行する" }).click();
   await adminB.waitForSelector('input[readonly]');

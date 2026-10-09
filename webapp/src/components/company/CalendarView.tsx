@@ -2729,7 +2729,7 @@ function AssignShiftModal({
                     setStartTime(e.target.value);
                     clearStaleConflicts();
                   }}
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                  className="w-full min-w-0 rounded-lg border border-border px-3 py-2 text-sm"
                 />
               </Field>
               <Field label="終了時刻">
@@ -2740,7 +2740,7 @@ function AssignShiftModal({
                     setEndTime(e.target.value);
                     clearStaleConflicts();
                   }}
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                  className="w-full min-w-0 rounded-lg border border-border px-3 py-2 text-sm"
                 />
               </Field>
             </div>
@@ -3159,7 +3159,7 @@ function RecruitmentFormModal({
                 type="time"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
-                className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                className="w-full min-w-0 rounded-lg border border-border px-3 py-2 text-sm"
               />
             </Field>
             <Field label="終了時刻">
@@ -3167,7 +3167,7 @@ function RecruitmentFormModal({
                 type="time"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
-                className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                className="w-full min-w-0 rounded-lg border border-border px-3 py-2 text-sm"
               />
             </Field>
           </div>
@@ -3559,7 +3559,7 @@ function Field({
   className?: string;
 }) {
   return (
-    <label className={`flex flex-1 flex-col gap-1 text-xs text-foreground/80 ${className ?? ""}`}>
+    <label className={`flex min-w-0 flex-1 flex-col gap-1 text-xs text-foreground/80 ${className ?? ""}`}>
       {label}
       {children}
     </label>

@@ -48,7 +48,7 @@ try {
 
   await agency.goto("http://localhost:3000/company/roster");
   await agency.getByRole("button", { name: "依頼主一覧" }).click();
-  await agency.getByRole("button", { name: "＋依頼主を追加する" }).click();
+  await agency.getByRole("button", { name: "＋依頼主を追加" }).click();
   await agency.getByRole("button", { name: "仮アカウントを作成" }).click();
   await agency.getByPlaceholder("名称を入力").fill("仮依頼主本アカ連携テスト社");
   await agency.getByRole("button", { name: "作成" }).click();
@@ -103,7 +103,7 @@ try {
   const staffTestCompanyId = psql(`select id from "Company" where name='${staffTestCompanyName}';`);
 
   await staff.goto("http://localhost:3000/company/roster");
-  await staff.getByRole("button", { name: "＋スタッフを追加する" }).click();
+  await staff.getByRole("button", { name: "＋スタッフを追加" }).click();
   await staff.getByRole("button", { name: "仮アカウントを作成" }).click();
   await staff.getByPlaceholder("名称を入力").fill("仮スタッフ本アカ連携テスト");
   await staff.getByRole("button", { name: "作成" }).click();

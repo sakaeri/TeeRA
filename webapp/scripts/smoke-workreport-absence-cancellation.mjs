@@ -51,7 +51,7 @@ try {
   const companyId = psql(`select id from "Company" where name='${companyName}';`);
 
   await admin.click("text=スタッフ名簿");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=本アカウントを招待");
   await admin.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForSelector('input[readonly]');

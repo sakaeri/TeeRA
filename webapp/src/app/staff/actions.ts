@@ -7,7 +7,7 @@ import { applyToRecruitment } from "@/lib/domain/recruitment";
 import { clockIn, clockOut, submitWorkReport, confirmCorrectedWorkReport } from "@/lib/domain/workReports";
 import { notifyCompanyOfWorkReportSubmission } from "@/lib/domain/emailNotifications";
 import { markStaffNoticeRead } from "@/lib/domain/notices";
-import { updateMembershipIdDocument, updateMembershipBankInfo } from "@/lib/domain/roster";
+import { updateMembershipIdDocument, updateMembershipBankInfo, updateStaffAddressPhone } from "@/lib/domain/roster";
 import { addStaffRelationshipNote } from "@/lib/domain/relationships";
 import { prisma } from "@/lib/prisma";
 
@@ -47,6 +47,24 @@ export async function updateMyBankInfoAction(
   const { userId } = await requireCompanyStaffRole();
   const membershipId = await myMembershipId(userId, companyId);
   await updateMembershipBankInfo({ membershipId, ...input });
+  revalidatePath(`/staff/contracts/${companyId}`);
+}
+
+// 本人が自分の住所・電話番号を編集する（社内メモ欄の特別枠）。変更前の値は
+// 普通のメモとして会社側から見える履歴に積まれる。
+export async function updateMyAddressPhoneAction(
+  companyId: string,
+  input: { address: string; phoneNumber: string },
+) {
+  const { userId } = await requireCompanyStaffRole();
+  const membershipId = await myMembershipId(userId, companyId);
+  await updateStaffAddressPhone({
+    userId,
+    membershipId,
+    authorUserId: userId,
+    address: input.address,
+    phoneNumber: input.phoneNumber,
+  });
   revalidatePath(`/staff/contracts/${companyId}`);
 }
 

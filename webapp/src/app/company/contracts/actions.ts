@@ -5,6 +5,7 @@ import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManage, canManageAny, canManageShifts } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { getStaffTeamIds, getClientTeamIds } from "@/lib/domain/teams";
+import { updateStaffAddressPhone } from "@/lib/domain/roster";
 import {
   createTemplate,
   updateOrDuplicateTemplate,
@@ -16,10 +17,12 @@ import {
   deleteStaffTaskRate,
   generateStaffContractFromNewTemplate,
   generateStaffContractFromNewTemplateViaUpload,
+  startStaffContractFromUpload,
   assignExistingTemplate,
   addStaffContractWageVersion,
   endStaffContract,
   type TemplateInput,
+  type UploadOnlyTemplateInput,
 } from "@/lib/domain/contracts";
 import { createStaffNotice } from "@/lib/domain/notices";
 
@@ -245,14 +248,14 @@ export async function generateStaffContractAction(input: CreateTemplateInput, st
 
 // 「アップロードのみ」経路: 既に書面で契約済みのスタッフについて、本人の
 // デジタル同意を求めず、署名済み書面のURLを添えて即時ACTIVEの契約として
-// 生成する。
+// 生成する。専用の軽量テンプレート（isUploadOnly=true）を新規に作る版。
 export async function generateStaffContractFromUploadAction(
-  input: CreateTemplateInput,
+  input: Omit<UploadOnlyTemplateInput, "companyId">,
   staffUserId: string,
   uploadedDocumentUrl: string,
-  party: { name: string; address: string; phoneNumber: string },
+  party?: { address?: string; phoneNumber?: string },
 ) {
-  const { membership } = await requireCompanyAdminOrEditor();
+  const { userId, membership } = await requireCompanyAdminOrEditor();
   const staffTeamIds = await getStaffTeamIds(staffUserId);
   if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
 
@@ -266,10 +269,61 @@ export async function generateStaffContractFromUploadAction(
     staffUserId,
     templateInput: input,
     uploadedDocumentUrl,
-    partyName: party.name,
-    partyAddress: party.address,
-    partyPhoneNumber: party.phoneNumber,
+    partyAddress: party?.address,
+    partyPhoneNumber: party?.phoneNumber,
   });
+  // 本部が代理入力した住所・電話番号を、社内メモの特別枠にも反映する。
+  if (party?.address || party?.phoneNumber) {
+    await updateStaffAddressPhone({
+      userId: staffUserId,
+      membershipId: staffMembership.id,
+      authorUserId: userId,
+      address: party.address ?? "",
+      phoneNumber: party.phoneNumber ?? "",
+    });
+  }
+  revalidatePath("/company/settings");
+  revalidatePath("/company");
+  revalidatePath("/company/roster");
+}
+
+// 「アップロードのみ」経路のうち、既存の「アップロード用テンプレ」（同じ
+// 雇用条件で前にも使ったもの）を再利用する版。
+export async function assignUploadOnlyTemplateAction(
+  templateId: string,
+  staffUserId: string,
+  uploadedDocumentUrl: string,
+  party?: { address?: string; phoneNumber?: string },
+) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  const staffTeamIds = await getStaffTeamIds(staffUserId);
+  if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
+
+  await prisma.contractTemplate.findFirstOrThrow({
+    where: { id: templateId, companyId: membership.companyId, isUploadOnly: true },
+  });
+  const staffMembership = await prisma.companyMembership.findFirst({
+    where: { userId: staffUserId, companyId: membership.companyId, OR: [{ role: "STAFF" }, { canWorkShifts: true }] },
+  });
+  if (!staffMembership) throw new Error("forbidden");
+
+  await startStaffContractFromUpload({
+    templateId,
+    staffUserId,
+    uploadedDocumentUrl,
+    partyAddress: party?.address,
+    partyPhoneNumber: party?.phoneNumber,
+  });
+  // 本部が代理入力した住所・電話番号を、社内メモの特別枠にも反映する。
+  if (party?.address || party?.phoneNumber) {
+    await updateStaffAddressPhone({
+      userId: staffUserId,
+      membershipId: staffMembership.id,
+      authorUserId: userId,
+      address: party.address ?? "",
+      phoneNumber: party.phoneNumber ?? "",
+    });
+  }
   revalidatePath("/company/settings");
   revalidatePath("/company");
   revalidatePath("/company/roster");

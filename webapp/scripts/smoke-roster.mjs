@@ -28,7 +28,7 @@ try {
   await page.waitForURL("http://localhost:3000/company/roster");
 
   // invite real staff
-  await page.click("text=＋スタッフを追加する");
+  await page.click("text=＋スタッフを追加");
   await page.click("text=本アカウントを招待");
   await page.getByRole("button", { name: "招待URLを発行する" }).click();
   await page.waitForSelector('input[readonly]');
@@ -38,7 +38,7 @@ try {
   let bodyText = await page.textContent("body");
 
   // create proxy staff
-  await page.click("text=＋スタッフを追加する");
+  await page.click("text=＋スタッフを追加");
   await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "仮スタッフ花子");
   await page.getByRole("button", { name: "作成", exact: true }).click();
@@ -55,11 +55,11 @@ try {
   await page.click("text=閉じる");
   await page.waitForTimeout(300);
 
-  // 依頼主一覧タブ -> ＋依頼主を追加する -> 仮アカウントを作成
+  // 依頼主一覧タブ -> ＋依頼主を追加 -> 仮アカウントを作成
   await page.click("text=依頼主一覧");
   await page.waitForTimeout(200);
   log("依頼主一覧 tab visible without any 依頼主 yet", bodyText.includes("依頼主一覧"));
-  await page.click("text=＋依頼主を追加する");
+  await page.click("text=＋依頼主を追加");
   await page.waitForTimeout(200);
   await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "仮依頼主サンプル");
@@ -69,7 +69,7 @@ try {
   log("proxy client relationship listed", bodyText.includes("仮依頼主サンプル"));
 
   // add a SECOND 依頼主 to confirm the list supports more than one entry
-  await page.click("text=＋依頼主を追加する");
+  await page.click("text=＋依頼主を追加");
   await page.waitForTimeout(200);
   await page.click("text=仮アカウントを作成");
   await page.fill('input[placeholder="名称を入力"]', "仮依頼主サンプル2");

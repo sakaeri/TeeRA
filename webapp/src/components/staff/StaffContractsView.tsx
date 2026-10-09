@@ -2,9 +2,22 @@
 
 import { useState, useTransition } from "react";
 import { consentContractAction } from "@/app/staff/contracts/actions";
-import { updateMyIdDocumentAction, updateMyBankInfoAction, addStaffRelationshipNoteAction } from "@/app/staff/actions";
+import {
+  updateMyIdDocumentAction,
+  updateMyBankInfoAction,
+  addStaffRelationshipNoteAction,
+  updateMyAddressPhoneAction,
+} from "@/app/staff/actions";
 import { ImageDropzone } from "@/components/ImageDropzone";
-import { TemplateModal, type Template } from "@/components/company/ContractsView";
+import { TemplateModal, UploadOnlyContractDetail, type Template } from "@/components/company/ContractsView";
+
+const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
+  PART_TIME: "アルバイト",
+  FIXED_TERM_EMPLOYEE: "契約社員",
+  FULL_TIME: "正社員",
+  CONTRACTOR: "業務委託",
+  DISPATCH_STAFF: "派遣社員",
+};
 
 const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
 const STATUS_LABEL: Record<string, string> = {
@@ -78,6 +91,8 @@ export function StaffContractsView({
   idDocumentFrontUrl,
   idDocumentBackUrl,
   bankInfo,
+  currentAddress,
+  currentPhoneNumber,
   baseWage,
   taskRates,
   workplaces,
@@ -85,6 +100,8 @@ export function StaffContractsView({
   companyId: string;
   companyName: string;
   myName: string;
+  currentAddress: string | null;
+  currentPhoneNumber: string | null;
   myContracts: {
     id: string;
     title: string;
@@ -94,6 +111,8 @@ export function StaffContractsView({
     contractStartDate: string;
     templateDetail: Template;
     uploadedDocumentUrl: string | null;
+    isUploadOnly: boolean;
+    consentedAt: string | null;
     partyName: string | null;
     partyAddress: string | null;
     partyPhoneNumber: string | null;
@@ -118,11 +137,16 @@ export function StaffContractsView({
   const [saved, setSaved] = useState(false);
   const [idEditing, setIdEditing] = useState(false);
   const [bankEditing, setBankEditing] = useState(false);
+  const [addressEditing, setAddressEditing] = useState(false);
+  const [address, setAddress] = useState(currentAddress ?? "");
+  const [phoneNumber, setPhoneNumber] = useState(currentPhoneNumber ?? "");
   const [showPastContracts, setShowPastContracts] = useState(false);
   const [expandedRateId, setExpandedRateId] = useState<string | null>(null);
   const [detailContract, setDetailContract] = useState<{
     templateDetail: Template;
     uploadedDocumentUrl?: string | null;
+    isUploadOnly: boolean;
+    consentedAt?: string | null;
     partyName?: string | null;
     partyAddress?: string | null;
     partyPhoneNumber?: string | null;
@@ -192,6 +216,13 @@ export function StaffContractsView({
         setBankEditing(false);
         setTimeout(() => setSaved(false), 2000);
       }
+    });
+  }
+
+  function submitAddressPhone() {
+    startTransition(async () => {
+      await updateMyAddressPhoneAction(companyId, { address, phoneNumber });
+      setAddressEditing(false);
     });
   }
 
@@ -356,7 +387,21 @@ export function StaffContractsView({
         />
       ) : null}
 
-      {detailContract ? (
+      {detailContract?.isUploadOnly ? (
+        <UploadOnlyContractDetail
+          staffName={myName}
+          contract={{
+            employmentTypeLabel:
+              EMPLOYMENT_TYPE_LABEL[detailContract.templateDetail.employmentType] ??
+              detailContract.templateDetail.employmentType,
+            jobDescription: detailContract.templateDetail.jobDescription,
+            wageLabel: `${WAGE_TYPE_LABEL[detailContract.templateDetail.wageType]}${detailContract.templateDetail.wageAmount}円`,
+            contractStartDate: detailContract.templateDetail.contractStartDate,
+            uploadedDocumentUrl: detailContract.uploadedDocumentUrl ?? null,
+          }}
+          onClose={() => setDetailContract(null)}
+        />
+      ) : detailContract ? (
         <TemplateModal
           readOnly
           companyName={companyName}
@@ -366,7 +411,7 @@ export function StaffContractsView({
             name: detailContract.partyName || myName,
             address: detailContract.partyAddress ?? undefined,
             phoneNumber: detailContract.partyPhoneNumber ?? undefined,
-            uploadedDocumentUrl: detailContract.uploadedDocumentUrl,
+            consentedAt: detailContract.consentedAt,
           }}
           onClose={() => setDetailContract(null)}
         />
@@ -723,6 +768,57 @@ export function StaffContractsView({
               type="button"
               disabled={pending}
               onClick={() => submitBankInfo(false)}
+              className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              保存する
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="rounded-lg border border-border p-3 text-sm">
+        <div className="flex items-center justify-between">
+          <p className="font-semibold">住所・電話番号</p>
+          <button
+            type="button"
+            onClick={() => setAddressEditing((v) => !v)}
+            className="text-xs text-primary hover:underline"
+          >
+            {address ? "編集" : "登録"}
+          </button>
+        </div>
+        {address || phoneNumber ? (
+          <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted">
+            <span>住所：{address || "未設定"}</span>
+            <span>電話番号：{phoneNumber || "未設定"}</span>
+          </div>
+        ) : (
+          <p className="mt-1 text-xs text-muted">未設定</p>
+        )}
+        {addressEditing ? (
+          <div className="mt-4 flex flex-col gap-3 border-t border-border/60 pt-4">
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted">住所</span>
+              <input
+                type="text"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted">電話番号</span>
+              <input
+                type="text"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={submitAddressPhone}
               className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
               保存する

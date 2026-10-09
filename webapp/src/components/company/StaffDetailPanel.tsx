@@ -16,6 +16,7 @@ import {
   setStaffHireDateAction,
   grantStaffPaidLeaveAction,
   adjustStaffPaidLeaveBalanceAction,
+  updateStaffAddressPhoneAction,
 } from "@/app/company/actions";
 import {
   addStaffTaskRateVersionAction,
@@ -27,7 +28,18 @@ import { todayJstParts, todayJst } from "@/lib/date";
 import { CopyUrlField } from "@/components/CopyUrlField";
 import { ImageDropzone } from "@/components/ImageDropzone";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { TemplateModal, ChooseBaseTemplateModal, AssignOrCustomizeModal, type Template } from "@/components/company/ContractsView";
+import {
+  TemplateModal,
+  ChooseBaseTemplateModal,
+  AssignOrCustomizeModal,
+  GenerateOrUploadChoiceModal,
+  UploadContractModal,
+  UploadOnlyContractDetail,
+  type Template,
+  type UploadOnlyTemplate,
+} from "@/components/company/ContractsView";
+
+const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
 
 type StaffTaskRate = {
   id: string;
@@ -53,6 +65,8 @@ type StaffMonthDetail = {
   isProxy: boolean;
   viaAgencyRelationshipId: string | null;
   viaAgencyRelationshipName: string | null;
+  currentAddress: string | null;
+  currentPhoneNumber: string | null;
   historyCutoff: { year: number; month: number } | null;
   staffNotes: StaffNote[];
   teams: { teamId: string; teamName: string; role: "TEAM_MANAGER" | "TEAM_LEADER" | "TEAM_MEMBER" }[];
@@ -100,6 +114,8 @@ type StaffMonthDetail = {
     wageVersions: { id: string; label: string; effectiveFrom: string }[];
     templateDetail: Template;
     uploadedDocumentUrl: string | null;
+    isUploadOnly: boolean;
+    consentedAt: string | null;
     partyName: string | null;
     partyAddress: string | null;
     partyPhoneNumber: string | null;
@@ -167,6 +183,7 @@ export function StaffDetailPanel({
   companyName,
   clients,
   contractTemplates,
+  uploadOnlyTemplates,
   knownTaskNames,
   allTeams,
   initialTab,
@@ -176,6 +193,7 @@ export function StaffDetailPanel({
   companyName: string;
   clients: ClientOption[];
   contractTemplates: Template[];
+  uploadOnlyTemplates: UploadOnlyTemplate[];
   knownTaskNames: string[];
   allTeams: { id: string; name: string }[];
   initialTab?: "contracts";
@@ -197,6 +215,9 @@ export function StaffDetailPanel({
   const [adjustDeltaInput, setAdjustDeltaInput] = useState("");
   const [adjustNoteInput, setAdjustNoteInput] = useState("");
   const [deleteNoteConfirmTarget, setDeleteNoteConfirmTarget] = useState<StaffNote | null>(null);
+  const [editingAddressPhone, setEditingAddressPhone] = useState(false);
+  const [addressDraft, setAddressDraft] = useState("");
+  const [phoneDraft, setPhoneDraft] = useState("");
   const [pending, startTransition] = useTransition();
   const [upgradeUrl, setUpgradeUrl] = useState<string | null>(null);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
@@ -207,9 +228,10 @@ export function StaffDetailPanel({
   const [detailContractId, setDetailContractId] = useState<string | null>(null);
   const [editingIdDocument, setEditingIdDocument] = useState(false);
   const [showGenerateChoose, setShowGenerateChoose] = useState(false);
+  const [generateMode, setGenerateMode] = useState<"generate" | "upload" | null>(null);
   const [generateBaseTemplate, setGenerateBaseTemplate] = useState<Template | null>(null);
   const [generateCustomize, setGenerateCustomize] = useState(false);
-  const [generateUploadOnly, setGenerateUploadOnly] = useState(false);
+  const [showUploadGuidance, setShowUploadGuidance] = useState(false);
   const [showContractHistory, setShowContractHistory] = useState(false);
   const [showPaidLeaveHistory, setShowPaidLeaveHistory] = useState(false);
   const [showIdDocumentHistory, setShowIdDocumentHistory] = useState(false);
@@ -240,11 +262,25 @@ export function StaffDetailPanel({
     });
   }
 
+  function startEditAddressPhone() {
+    setAddressDraft(data?.currentAddress ?? "");
+    setPhoneDraft(data?.currentPhoneNumber ?? "");
+    setEditingAddressPhone(true);
+  }
+
+  function submitAddressPhone(membershipId: string) {
+    startTransition(async () => {
+      await updateStaffAddressPhoneAction(membershipId, { address: addressDraft, phoneNumber: phoneDraft });
+      setEditingAddressPhone(false);
+      await refresh();
+    });
+  }
+
   function endGenerateFlow() {
     setShowGenerateChoose(false);
+    setGenerateMode(null);
     setGenerateBaseTemplate(null);
     setGenerateCustomize(false);
-    setGenerateUploadOnly(false);
     refresh();
   }
 
@@ -747,7 +783,7 @@ export function StaffDetailPanel({
                           onClick={() => setShowGenerateChoose(true)}
                           className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
                         >
-                          ＋契約書を生成
+                          ＋契約書を追加
                         </button>
                       </div>
                       <ul className="flex flex-col gap-2">
@@ -1020,6 +1056,61 @@ export function StaffDetailPanel({
 
             {tab === "note" ? (
               <div className="flex flex-col gap-2">
+                <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
+                  {editingAddressPhone ? (
+                    <div className="flex flex-col gap-2">
+                      <label className="flex flex-col gap-1 text-xs">
+                        住所
+                        <input
+                          type="text"
+                          value={addressDraft}
+                          onChange={(e) => setAddressDraft(e.target.value)}
+                          className="rounded-lg border border-border px-2 py-1.5 text-sm"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs">
+                        電話番号
+                        <input
+                          type="text"
+                          value={phoneDraft}
+                          onChange={(e) => setPhoneDraft(e.target.value)}
+                          className="rounded-lg border border-border px-2 py-1.5 text-sm"
+                        />
+                      </label>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingAddressPhone(false)}
+                          className="rounded-lg border border-border px-3 py-1.5 text-xs"
+                        >
+                          キャンセル
+                        </button>
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => submitAddressPhone(data.membershipId)}
+                          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                        >
+                          保存する
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p>住所：{data.currentAddress || "未設定"}</p>
+                        <p>電話番号：{data.currentPhoneNumber || "未設定"}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={startEditAddressPhone}
+                        className="shrink-0 text-xs text-primary hover:underline"
+                      >
+                        編集
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div className="flex items-center justify-end">
                   <button
                     type="button"
@@ -1298,6 +1389,21 @@ export function StaffDetailPanel({
         ? (() => {
             const detailContract = data.contracts.find((c) => c.id === detailContractId);
             if (!detailContract) return null;
+            if (detailContract.isUploadOnly) {
+              return (
+                <UploadOnlyContractDetail
+                  staffName={data.name}
+                  contract={{
+                    employmentTypeLabel: detailContract.employmentTypeLabel,
+                    jobDescription: detailContract.jobDescription,
+                    wageLabel: detailContract.wageLabel,
+                    contractStartDate: detailContract.contractStartDate,
+                    uploadedDocumentUrl: detailContract.uploadedDocumentUrl,
+                  }}
+                  onClose={() => setDetailContractId(null)}
+                />
+              );
+            }
             return (
               <TemplateModal
                 readOnly
@@ -1308,7 +1414,7 @@ export function StaffDetailPanel({
                   name: detailContract.partyName || data.name,
                   address: detailContract.partyAddress ?? undefined,
                   phoneNumber: detailContract.partyPhoneNumber ?? undefined,
-                  uploadedDocumentUrl: detailContract.uploadedDocumentUrl,
+                  consentedAt: detailContract.consentedAt,
                 }}
                 onClose={() => setDetailContractId(null)}
               />
@@ -1370,7 +1476,15 @@ export function StaffDetailPanel({
         </div>
       ) : null}
 
-      {showGenerateChoose && !generateBaseTemplate && data ? (
+      {showGenerateChoose && !generateMode && data ? (
+        <GenerateOrUploadChoiceModal
+          staffName={data.name}
+          onGenerate={() => setGenerateMode("generate")}
+          onUpload={() => setGenerateMode("upload")}
+          onClose={() => setShowGenerateChoose(false)}
+        />
+      ) : null}
+      {showGenerateChoose && generateMode === "generate" && !generateBaseTemplate && data ? (
         <ChooseBaseTemplateModal
           staffName={data.name}
           templates={contractTemplates}
@@ -1379,29 +1493,97 @@ export function StaffDetailPanel({
           onClose={() => setShowGenerateChoose(false)}
         />
       ) : null}
-      {showGenerateChoose && generateBaseTemplate && !generateCustomize && data ? (
+      {showGenerateChoose && generateMode === "generate" && generateBaseTemplate && !generateCustomize && data ? (
         <AssignOrCustomizeModal
           staffName={data.name}
           staffUserId={userId}
           template={generateBaseTemplate}
           onAssigned={endGenerateFlow}
           onCustomize={() => setGenerateCustomize(true)}
-          onUploadOnly={() => {
-            setGenerateCustomize(true);
-            setGenerateUploadOnly(true);
-          }}
           onClose={endGenerateFlow}
         />
       ) : null}
-      {showGenerateChoose && generateBaseTemplate && generateCustomize && data ? (
+      {showGenerateChoose && generateMode === "generate" && generateBaseTemplate && generateCustomize && data ? (
         <TemplateModal
           companyName={companyName}
           clients={clients}
           editingTemplate={generateBaseTemplate}
           generateForStaff={{ userId, name: data.name }}
-          initialUploadMode={generateUploadOnly}
           onClose={endGenerateFlow}
         />
+      ) : null}
+      {showGenerateChoose && generateMode === "upload" && data ? (
+        <UploadContractModal
+          staffName={data.name}
+          staffUserId={userId}
+          uploadOnlyTemplates={uploadOnlyTemplates}
+          onDone={() => {
+            setShowGenerateChoose(false);
+            setGenerateMode(null);
+            setShowUploadGuidance(true);
+            refresh();
+          }}
+          onClose={endGenerateFlow}
+        />
+      ) : null}
+
+      {showUploadGuidance && data ? (
+        <div
+          className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4"
+          onClick={() => setShowUploadGuidance(false)}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="font-serif-jp text-base font-bold text-primary">契約書を保存しました</h4>
+              <button
+                type="button"
+                onClick={() => setShowUploadGuidance(false)}
+                aria-label="閉じる"
+                className="text-muted hover:text-primary"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mb-3 text-sm text-muted">
+              続けて、以下の項目を今すぐ入力しますか？（後からいつでも入力できます）
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUploadGuidance(false);
+                  setShowGrantForm(true);
+                }}
+                className="w-full rounded-lg border border-border px-4 py-2 text-left text-sm font-semibold text-primary hover:border-primary"
+              >
+                有給休暇を付与する
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUploadGuidance(false);
+                  setEditingIdDocument(true);
+                }}
+                className="w-full rounded-lg border border-border px-4 py-2 text-left text-sm font-semibold text-primary hover:border-primary"
+              >
+                本人確認書類をアップロードする
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUploadGuidance(false);
+                  startEditBankInfo(data.bankInfo);
+                }}
+                className="w-full rounded-lg border border-border px-4 py-2 text-left text-sm font-semibold text-primary hover:border-primary"
+              >
+                振込先情報を入力する
+              </button>
+              <p className="text-xs text-muted">
+                業務内容ごとの単価は「業務内容単価」タブから追加できます。
+              </p>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {editingIdDocument && data ? (
@@ -1654,12 +1836,13 @@ function StaffTaskRatesTab({
       <ul className="flex flex-col gap-2">
         {baseContract ? (
           <li className="rounded-lg border border-border bg-background/40 p-3 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="font-medium">
-                基本給・{baseContract.employmentTypeLabel}{" "}
-                <span className="text-xs font-normal text-muted">（{baseContract.jobDescription}）</span>
-              </span>
-              <span className="text-muted">{baseContract.wageLabel}</span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium">基本給・{baseContract.employmentTypeLabel}</span>
+              <span className="shrink-0 text-muted">{WAGE_TYPE_LABEL[baseContract.wageType]}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-normal text-muted">（{baseContract.jobDescription}）</span>
+              <span className="shrink-0 text-muted">{baseContract.wageAmount}円</span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
               <button

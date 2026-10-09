@@ -43,7 +43,7 @@ try {
 
   // --- ① proxy (仮) staff: generate from StaffDetailPanel
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=仮アカウントを作成");
   await admin.locator('input[type=text]').last().fill("契約管理仮太郎");
   await admin.getByRole("button", { name: "作成" }).click();
@@ -55,7 +55,8 @@ try {
   await admin.waitForTimeout(300);
   const proxyPanel = admin.locator("div.fixed.inset-0.z-30").first();
   await proxyPanel.getByRole("button", { name: "契約書管理" }).click();
-  await proxyPanel.getByRole("button", { name: "＋契約書を生成" }).click();
+  await proxyPanel.getByRole("button", { name: "＋契約書を追加" }).click();
+  await proxyPanel.getByRole("button", { name: "契約書を生成" }).click();
   await admin.waitForTimeout(200);
   const chooseModal = admin.locator("div.fixed.inset-0.z-30").last();
   await chooseModal.locator("select").selectOption({ label: "アルバイト・キャディ業務" });
@@ -73,7 +74,7 @@ try {
 
   // --- ② real staff: generate + end + re-generate (re-hire after gap)
   await admin.goto("http://localhost:3000/company/roster");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=本アカウントを招待");
   await admin.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForSelector("input[readonly]");
@@ -94,7 +95,8 @@ try {
   await admin.waitForTimeout(300);
   const panel = admin.locator("div.fixed.inset-0.z-30").first();
   await panel.getByRole("button", { name: "契約書管理" }).click();
-  await panel.getByRole("button", { name: "＋契約書を生成" }).click();
+  await panel.getByRole("button", { name: "＋契約書を追加" }).click();
+  await panel.getByRole("button", { name: "契約書を生成" }).click();
   await admin.waitForTimeout(200);
   const chooseModal2 = admin.locator("div.fixed.inset-0.z-30").last();
   await chooseModal2.locator("select").selectOption({ label: "アルバイト・キャディ業務" });
@@ -143,7 +145,8 @@ try {
   log("履歴を開くと終了扱いの契約が表示され「終了」ラベルになる", panelText.includes("終了") && panelText.includes("キャディ業務"));
 
   // re-hire after a gap: generate a NEW contract for the SAME staff/template
-  await panel.getByRole("button", { name: "＋契約書を生成" }).click();
+  await panel.getByRole("button", { name: "＋契約書を追加" }).click();
+  await panel.getByRole("button", { name: "契約書を生成" }).click();
   await admin.waitForTimeout(200);
   const chooseModal3 = admin.locator("div.fixed.inset-0.z-30").last();
   await chooseModal3.locator("select").selectOption({ label: "アルバイト・キャディ業務" });

@@ -13,7 +13,7 @@ import { StaffDetailPanel } from "@/components/company/StaffDetailPanel";
 import { ClientDetailPanel } from "@/components/company/ClientDetailPanel";
 import { useClickOutside } from "@/lib/useClickOutside";
 import { CopyUrlField } from "@/components/CopyUrlField";
-import { TemplateModal, type Template, type ClientOption } from "@/components/company/ContractsView";
+import { TemplateModal, type Template, type UploadOnlyTemplate, type ClientOption } from "@/components/company/ContractsView";
 import { todayJst } from "@/lib/date";
 
 type StaffRow = {
@@ -42,9 +42,9 @@ const PROXY_PROMPT_TITLE: Record<"client" | "agency" | "staff", string> = {
 };
 
 const ADD_BUTTON_LABEL: Record<Tab, string> = {
-  staff: "＋スタッフを追加する",
-  clients: "＋依頼主を追加する",
-  agencies: "＋派遣会社を追加する",
+  staff: "＋スタッフを追加",
+  clients: "＋依頼主を追加",
+  agencies: "＋派遣会社を追加",
 };
 
 // 追加メニューの見出し（プロトタイプの「依頼主名簿 (i)」「派遣会社名簿 (i)」に対応）。
@@ -88,6 +88,7 @@ export function RosterView({
   teams,
   templates,
   contractTemplates,
+  uploadOnlyTemplates,
   knownTaskNames,
   initialStaffId,
   initialStaffTab,
@@ -101,6 +102,7 @@ export function RosterView({
   teams: Team[];
   templates: ContractTemplateOption[];
   contractTemplates: Template[];
+  uploadOnlyTemplates: UploadOnlyTemplate[];
   knownTaskNames: string[];
   initialStaffId?: string;
   initialStaffTab?: "contracts";
@@ -189,7 +191,7 @@ export function RosterView({
           <select
             value={teamFilter}
             onChange={(e) => setTeamFilter(e.target.value)}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
+            className="hidden rounded-lg border border-border bg-white px-3 py-1.5 text-sm sm:block"
           >
             <option value="">全社（すべて表示）</option>
             {teams.map((t) => (
@@ -214,14 +216,14 @@ export function RosterView({
             </button>
           ) : null}
           {canShowAddButton ? (
-          <div className="relative" ref={addMenuRef}>
+          <div className="relative shrink-0" ref={addMenuRef}>
           <button
             type="button"
             onClick={() => {
               setShowAddMenu((v) => !v);
               setShowAddMenuInfo(false);
             }}
-            className="shrink-0 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+            className="shrink-0 whitespace-nowrap rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
           >
             {ADD_BUTTON_LABEL[tab]}
           </button>
@@ -275,15 +277,48 @@ export function RosterView({
       </div>
 
       <div className="mb-4 flex items-center gap-1 overflow-x-auto border-b border-border">
-        <TabButton active={tab === "staff"} onClick={() => setTab("staff")}>
+        <TabButton active={tab === "staff"} onClick={() => setTab("staff")} className="hidden sm:inline-flex">
           スタッフ一覧
         </TabButton>
-        <TabButton active={tab === "clients"} onClick={() => setTab("clients")}>
+        <MobileTabSelect
+          active={tab === "staff"}
+          value={teamFilter}
+          defaultLabel="スタッフ一覧"
+          teams={teams}
+          onActivate={() => setTab("staff")}
+          onChange={(v) => {
+            setTab("staff");
+            setTeamFilter(v);
+          }}
+        />
+        <TabButton active={tab === "clients"} onClick={() => setTab("clients")} className="hidden sm:inline-flex">
           依頼主一覧
         </TabButton>
-        <TabButton active={tab === "agencies"} onClick={() => setTab("agencies")}>
+        <MobileTabSelect
+          active={tab === "clients"}
+          value={teamFilter}
+          defaultLabel="依頼主一覧"
+          teams={teams}
+          onActivate={() => setTab("clients")}
+          onChange={(v) => {
+            setTab("clients");
+            setTeamFilter(v);
+          }}
+        />
+        <TabButton active={tab === "agencies"} onClick={() => setTab("agencies")} className="hidden sm:inline-flex">
           派遣会社一覧
         </TabButton>
+        <MobileTabSelect
+          active={tab === "agencies"}
+          value={teamFilter}
+          defaultLabel="派遣会社一覧"
+          teams={teams}
+          onActivate={() => setTab("agencies")}
+          onChange={(v) => {
+            setTab("agencies");
+            setTeamFilter(v);
+          }}
+        />
       </div>
 
       {proxyNamePromptFor ? (
@@ -489,6 +524,7 @@ export function RosterView({
           companyName={companyName}
           clients={clients.map((c) => ({ id: c.id, name: c.name }))}
           contractTemplates={contractTemplates}
+          uploadOnlyTemplates={uploadOnlyTemplates}
           knownTaskNames={knownTaskNames}
           allTeams={teams}
           initialTab={selectedStaffId === initialStaffId ? initialStaffTab : undefined}
@@ -773,6 +809,63 @@ function TabButton({
     >
       {children}
     </button>
+  );
+}
+
+function MobileTabSelect({
+  active,
+  value,
+  defaultLabel,
+  teams,
+  onActivate,
+  onChange,
+}: {
+  active: boolean;
+  value: string;
+  defaultLabel: string;
+  teams: Team[];
+  onActivate: () => void;
+  onChange: (value: string) => void;
+}) {
+  // 非アクティブな間はただのボタンにしておく — ネイティブselectのまま
+  // タップと同時にタブを切り替えると、OS側のピッカーが開こうとする動きと
+  // 競合し、閉じきらなかったピッカーの残像が一瞬別の場所に表示されて
+  // 「チーム選択が出た」ように見えるバグがあった（中身が空の一覧だと
+  // 隠れる物が無いため特に目立つ）。アクティブになったタブだけ実際の
+  // selectにすることで、タブ切替の瞬間にピッカーが開く余地を無くす。
+  if (!active) {
+    return (
+      <button
+        type="button"
+        onClick={onActivate}
+        className="shrink-0 whitespace-nowrap border-b-2 border-transparent py-2 pl-3 pr-6 text-sm font-semibold text-muted sm:hidden"
+      >
+        {defaultLabel}
+      </button>
+    );
+  }
+  return (
+    <span className="relative shrink-0 sm:hidden">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="appearance-none whitespace-nowrap border-b-2 border-accent bg-transparent py-2 pl-3 pr-6 text-sm font-semibold text-primary"
+      >
+        <option value="">{defaultLabel}</option>
+        {teams.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+      </select>
+      <svg
+        className="pointer-events-none absolute right-1 top-1/2 h-3 w-3 -translate-y-1/2 text-muted"
+        viewBox="0 0 20 20"
+        fill="currentColor"
+      >
+        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
+      </svg>
+    </span>
   );
 }
 

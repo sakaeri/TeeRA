@@ -41,10 +41,10 @@ try {
   await owner.click("text=依頼主一覧");
   await owner.waitForTimeout(200);
   let bodyText = await owner.textContent("body");
-  log("clients tab shows dedicated ＋依頼主を追加する button", bodyText.includes("＋依頼主を追加する"));
+  log("clients tab shows dedicated ＋依頼主を追加 button", bodyText.includes("＋依頼主を追加"));
   log("old shared 取引先名簿を追加 button is gone", !bodyText.includes("取引先名簿を追加"));
 
-  await owner.click("text=＋依頼主を追加する");
+  await owner.click("text=＋依頼主を追加");
   await owner.waitForTimeout(200);
   bodyText = await owner.textContent("body");
   log("add-menu shows 依頼主名簿 header", bodyText.includes("依頼主名簿"));
@@ -59,14 +59,14 @@ try {
     "clicking the (i) icon reveals the explanation inside the add-menu",
     bodyText.includes("スタッフの配属先の依頼主の名簿です。依頼主ごとに請求書を作成できます。"),
   );
-  await owner.click("text=＋依頼主を追加する");
+  await owner.click("text=＋依頼主を追加");
   await owner.waitForTimeout(200);
 
   await owner.click("text=派遣会社一覧");
   await owner.waitForTimeout(200);
   bodyText = await owner.textContent("body");
-  log("agencies tab shows dedicated ＋派遣会社を追加する button", bodyText.includes("＋派遣会社を追加する"));
-  await owner.click("text=＋派遣会社を追加する");
+  log("agencies tab shows dedicated ＋派遣会社を追加 button", bodyText.includes("＋派遣会社を追加"));
+  await owner.click("text=＋派遣会社を追加");
   await owner.waitForTimeout(200);
   bodyText = await owner.textContent("body");
   log("add-menu shows 派遣会社名簿 header", bodyText.includes("派遣会社名簿"));
@@ -77,13 +77,13 @@ try {
     "clicking the (i) icon reveals the 派遣会社 explanation",
     bodyText.includes("自社にスタッフを派遣してくれている会社の名簿です。"),
   );
-  await owner.click("text=＋派遣会社を追加する");
+  await owner.click("text=＋派遣会社を追加");
   await owner.waitForTimeout(200);
 
   // --- ⑨ generating an invite URL must NOT add a row to the list yet ---
   await owner.click("text=依頼主一覧");
   await owner.waitForTimeout(200);
-  await owner.click("text=＋依頼主を追加する");
+  await owner.click("text=＋依頼主を追加");
   await owner.waitForTimeout(200);
   bodyText = await owner.textContent("body");
   log("add-menu shows 本アカウントを招待 option", bodyText.includes("本アカウントを招待"));
@@ -156,7 +156,7 @@ try {
   await owner.goto("http://localhost:3000/company/roster");
   await owner.click("text=派遣会社一覧");
   await owner.waitForTimeout(200);
-  await owner.click("text=＋派遣会社を追加する");
+  await owner.click("text=＋派遣会社を追加");
   await owner.waitForTimeout(200);
   await owner.click("text=本アカウントを招待");
   await owner.waitForTimeout(200);
@@ -167,7 +167,7 @@ try {
 
   // register a fresh personal account, join owner's own company as STAFF via a staff invite, then try to redeem the agency-relationship invite
   await owner.goto("http://localhost:3000/company/roster");
-  await owner.click("text=＋スタッフを追加する");
+  await owner.click("text=＋スタッフを追加");
   await owner.click("text=本アカウントを招待");
   await owner.getByRole("button", { name: "招待URLを発行する" }).click();
   await owner.waitForSelector('input[readonly]');
@@ -207,7 +207,7 @@ try {
   await owner.goto("http://localhost:3000/company/roster");
   await owner.click("text=派遣会社一覧");
   await owner.waitForTimeout(200);
-  await owner.click("text=＋派遣会社を追加する");
+  await owner.click("text=＋派遣会社を追加");
   await owner.waitForTimeout(200);
   await owner.click("text=仮アカウントを作成");
   await owner.fill('input[placeholder="名称を入力"]', "仮派遣会社サンプル");

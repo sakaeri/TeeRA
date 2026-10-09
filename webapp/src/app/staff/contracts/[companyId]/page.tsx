@@ -160,6 +160,8 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
         companyId={companyId}
         companyName={company.name}
         myName={myMembership.user.name}
+        currentAddress={myMembership.user.address}
+        currentPhoneNumber={myMembership.user.phoneNumber}
         myContracts={myContracts.map((c) => ({
           id: c.id,
           title: contractDisplayTitle(c.template.employmentType, c.template.jobDescription),
@@ -169,6 +171,8 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
           contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
           templateDetail: buildTemplateDetail(c),
           uploadedDocumentUrl: c.uploadedDocumentUrl,
+          isUploadOnly: c.template.isUploadOnly,
+          consentedAt: c.consentedAt?.toISOString() ?? null,
           partyName: c.partyName,
           partyAddress: c.partyAddress,
           partyPhoneNumber: c.partyPhoneNumber,

@@ -26,7 +26,7 @@ try {
   await admin.waitForURL("http://localhost:3000/company");
 
   await admin.click("text=スタッフ名簿");
-  await admin.click("text=＋スタッフを追加する");
+  await admin.click("text=＋スタッフを追加");
   await admin.click("text=本アカウントを招待");
   await admin.getByRole("button", { name: "招待URLを発行する" }).click();
   await admin.waitForSelector('input[readonly]');
@@ -61,7 +61,8 @@ try {
   await admin.waitForTimeout(300);
   const panel = admin.locator("div.fixed.inset-0.z-30").first();
   await panel.getByRole("button", { name: "契約書管理" }).click();
-  await panel.getByRole("button", { name: "＋契約書を生成" }).click();
+  await panel.getByRole("button", { name: "＋契約書を追加" }).click();
+  await panel.getByRole("button", { name: "契約書を生成" }).click();
   await admin.waitForTimeout(200);
   const choose = admin.locator("div.fixed.inset-0.z-30").last();
   await choose.locator("select").selectOption({ index: 1 });
