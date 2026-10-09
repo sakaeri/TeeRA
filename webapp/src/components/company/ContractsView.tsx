@@ -1488,7 +1488,16 @@ export function TemplateModal({
               }
               className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
-              {generateForStaff ? "生成する" : editingTemplate && !duplicateAsNew ? "更新する" : "テンプレートを生成"}
+              {generateForStaff ? (
+                "生成する"
+              ) : editingTemplate && !duplicateAsNew ? (
+                "更新する"
+              ) : (
+                <>
+                  <span className="sm:hidden">テンプレ生成</span>
+                  <span className="hidden sm:inline">テンプレートを生成</span>
+                </>
+              )}
             </button>
           </div>
         ) : null}

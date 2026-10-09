@@ -1836,14 +1836,14 @@ function StaffTaskRatesTab({
       <ul className="flex flex-col gap-2">
         {baseContract ? (
           <li className="rounded-lg border border-border bg-background/40 p-3 text-sm">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-medium">基本給・{baseContract.employmentTypeLabel}</span>
-              <span className="shrink-0 text-muted">{WAGE_TYPE_LABEL[baseContract.wageType]}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-normal text-muted">（{baseContract.jobDescription}）</span>
-              <span className="shrink-0 text-muted">{baseContract.wageAmount}円</span>
-            </div>
+            <p className="font-medium">
+              基本給・{baseContract.employmentTypeLabel} /{" "}
+              <span className="text-muted">
+                {WAGE_TYPE_LABEL[baseContract.wageType]}
+                {baseContract.wageAmount}円
+              </span>
+            </p>
+            <p className="mt-0.5 text-xs font-normal text-muted">（{baseContract.jobDescription}）</p>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
               <button
                 type="button"

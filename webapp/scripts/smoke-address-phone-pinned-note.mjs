@@ -169,17 +169,18 @@ try {
   await detailModal.locator("text=✕").click();
   await admin.waitForTimeout(200);
 
-  // ❹ base wage row renders type and amount on separate lines
+  // ❹ base wage row shows "基本給・雇用形態 / 時給1000円" on one line, with
+  // （業務内容）on its own line below it
   await panel3.getByRole("button", { name: "業務内容単価" }).click();
   await admin.waitForTimeout(200);
   const baseWageRow = panel3.locator("li", { hasText: "基本給" }).first();
-  const typeLine = baseWageRow.getByText("時給", { exact: true });
-  const amountLine = baseWageRow.getByText("1000円", { exact: true });
-  const typeBox = await typeLine.boundingBox();
-  const amountBox = await amountLine.boundingBox();
+  const wageLine = baseWageRow.getByText("時給1000円", { exact: false });
+  const jobDescLine = baseWageRow.getByText("（検証業務）", { exact: true });
+  const wageBox = await wageLine.boundingBox();
+  const jobDescBox = await jobDescLine.boundingBox();
   log(
-    "❹ 基本給の時給/日給/月給と金額が別の行に表示される（2段レイアウト）",
-    Boolean(typeBox && amountBox && Math.abs(typeBox.y - amountBox.y) > 10),
+    "❹ 基本給・雇用形態と時給・金額が1行にまとまり、（業務内容）は別行に表示される",
+    Boolean(wageBox && jobDescBox && Math.abs(wageBox.y - jobDescBox.y) > 10),
   );
 
   // --- client side pinned block ---

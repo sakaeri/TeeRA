@@ -665,7 +665,7 @@ function InviteStaffModal({
                 </label>
               </div>
             ) : null}
-            <div className="mt-2 flex gap-3 text-xs">
+            <div className="mt-2 flex flex-col items-start gap-1 text-xs sm:flex-row sm:items-center sm:gap-3">
               <button
                 type="button"
                 onClick={() => setTemplateModalMode("new")}

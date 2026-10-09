@@ -492,13 +492,10 @@ export function StaffContractsView({
           {baseWage ? (
             <ul className="mb-4 flex flex-col gap-2">
               <li className="rounded-lg border border-border bg-background/40 p-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">
-                    基本給・{baseWage.employmentTypeLabel}{" "}
-                    <span className="text-xs font-normal text-muted">（{baseWage.jobDescription}）</span>
-                  </span>
-                  <span className="text-muted">{baseWage.currentLabel}</span>
-                </div>
+                <p className="font-medium">
+                  基本給・{baseWage.employmentTypeLabel} / <span className="text-muted">{baseWage.currentLabel}</span>
+                </p>
+                <p className="mt-0.5 text-xs font-normal text-muted">（{baseWage.jobDescription}）</p>
                 {baseWage.versions.length > 0 ? (
                   <button
                     type="button"
