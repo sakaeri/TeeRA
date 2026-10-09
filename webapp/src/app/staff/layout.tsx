@@ -44,6 +44,7 @@ export default async function StaffLayout({
       showCompanyScreenLink={membership.role !== "STAFF" || hasAnyTeamManagementRole(membership)}
       openRecruitmentCount={openRecruitmentCount}
       contractSettingsBadgeCount={contractSettingsBadgeCount}
+      hasPendingContracts={pendingContractCount > 0}
     >
       {children}
     </StaffShell>

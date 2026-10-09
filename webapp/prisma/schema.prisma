@@ -926,6 +926,15 @@ model StaffContract {
   // PENDING_CONSENT→consentStaffContractは経由しない）。通常フローの契約には
   // 常にnull。
   uploadedDocumentUrl String?
+  // 契約書の甲乙欄に載せる本人側の氏名・住所・電話番号。本部が常設で管理
+  // するUser.address/phoneNumber（販促品の配送先と共用）とは別物とし、
+  // この契約ごとのスナップショットとして持つ。通常フローは本人が同意する
+  // 瞬間（consentStaffContract）に入力、アップロードのみ/仮アカウントなど
+  // 本人の同意ステップを経ない契約は生成時に本部が入力する。未入力のまま
+  // （古い契約や入力省略）のこともあるためすべて任意。
+  partyName           String?
+  partyAddress        String?
+  partyPhoneNumber    String?
   // 手動で「終了する」を押した際に本人へ通知した日（任意入力）。解雇予告・
   // 雇止め予告・フリーランス新法などの事前通知義務の確認補助として記録する
   // だけで、システム側で法律要件の充足を判定するものではない。

@@ -230,11 +230,13 @@ export function DashboardView({
   const [generateTarget, setGenerateTarget] = useState<PendingContractStaff | null>(null);
   const [generateBaseTemplate, setGenerateBaseTemplate] = useState<ContractTemplate | null>(null);
   const [generateCustomize, setGenerateCustomize] = useState(false);
+  const [generateUploadOnly, setGenerateUploadOnly] = useState(false);
 
   function endGenerateFlow() {
     setGenerateTarget(null);
     setGenerateBaseTemplate(null);
     setGenerateCustomize(false);
+    setGenerateUploadOnly(false);
   }
 
   return (
@@ -362,6 +364,10 @@ export function DashboardView({
           template={generateBaseTemplate}
           onAssigned={endGenerateFlow}
           onCustomize={() => setGenerateCustomize(true)}
+          onUploadOnly={() => {
+            setGenerateCustomize(true);
+            setGenerateUploadOnly(true);
+          }}
           onClose={endGenerateFlow}
         />
       ) : null}
@@ -371,6 +377,7 @@ export function DashboardView({
           companyName={companyName}
           editingTemplate={generateBaseTemplate}
           generateForStaff={{ userId: generateTarget.userId, name: generateTarget.name }}
+          initialUploadMode={generateUploadOnly}
           onClose={endGenerateFlow}
         />
       ) : null}

@@ -161,10 +161,17 @@ try {
   );
   log("再雇用の新しい契約もまずPENDING_CONSENT（本人の同意待ち）で作られる", pendingAfterRehire === "PENDING_CONSENT");
 
-  // 本人が同意して初めてACTIVEになる
+  // 本人が同意して初めてACTIVEになる（全文を確認した末尾で氏名・住所・
+  // 電話番号を入力してから同意するフローに変更済み）
   await staff.goto(`http://localhost:3000/staff/contracts/${companyId}`);
   await staff.waitForTimeout(500);
-  await staff.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
+  await staff.getByRole("button", { name: "契約書の全文を確認する" }).click();
+  await staff.waitForTimeout(300);
+  const consentModal = staff.locator("div.fixed.inset-0.z-30").last();
+  await consentModal.locator('label:has-text("氏名") input').fill("契約管理花子");
+  await consentModal.locator('label:has-text("住所") input').fill("東京都新宿区4-4-4");
+  await consentModal.locator('label:has-text("電話番号") input').fill("090-7777-8888");
+  await consentModal.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
   await staff.waitForTimeout(600);
 
   const activeCount = psql(

@@ -327,8 +327,6 @@ export async function getStaffMonthDetail(params: {
   return {
     membershipId: membership.id,
     name: membership.user.name,
-    address: membership.user.address ?? "",
-    phoneNumber: membership.user.phoneNumber ?? "",
     isProxy: membership.user.isProxy,
     viaAgencyRelationshipId: membership.viaAgencyRelationshipId,
     viaAgencyRelationshipName: membership.viaAgencyRelationship?.proxyName ?? null,
@@ -397,6 +395,9 @@ export async function getStaffMonthDetail(params: {
         contractEndDate: (c.contractEndDate ?? c.template.contractEndDate)?.toISOString().slice(0, 10) ?? null,
         noticeGivenAt: c.noticeGivenAt?.toISOString().slice(0, 10) ?? null,
         uploadedDocumentUrl: c.uploadedDocumentUrl,
+        partyName: c.partyName,
+        partyAddress: c.partyAddress,
+        partyPhoneNumber: c.partyPhoneNumber,
         wageVersions: excludeBaselineVersion(c.wageVersions).map((v) => ({
           id: v.id,
           label: `${WAGE_TYPE_LABEL[c.template.wageType]}${v.wageAmount}円`,
@@ -498,22 +499,13 @@ export async function deleteStaffNote(id: string) {
 
 // 氏名・住所・電話番号はUser単位（会社をまたいで共有）。本人が名字だけ
 // 入力してしまう等の誤入力を本部側で直せるようにするためのもの。
-// address/phoneNumberは販促品の配送先として入力されたものと同じ
-// フィールドをそのまま流用する（本人の住所・電話番号という点では同じ
-// 情報のため）。
-export async function updateStaffProfile(params: {
-  userId: string;
-  name: string;
-  address: string;
-  phoneNumber: string;
-}) {
+// 住所・電話番号はここでは扱わない — 契約書の甲乙欄にはStaffContract側の
+// スナップショット（本人が契約同意時に入力、またはアップロードのみ等の
+// 代理生成時に本部が入力）を使う。
+export async function updateStaffProfile(params: { userId: string; name: string }) {
   return prisma.user.update({
     where: { id: params.userId },
-    data: {
-      name: params.name.trim(),
-      address: params.address.trim() || null,
-      phoneNumber: params.phoneNumber.trim() || null,
-    },
+    data: { name: params.name.trim() },
   });
 }
 

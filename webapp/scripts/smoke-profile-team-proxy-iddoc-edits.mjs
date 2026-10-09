@@ -111,17 +111,15 @@ try {
   await admin.waitForTimeout(200);
   const profileInputs = staffPanel.locator("input[type=text]");
   await profileInputs.nth(0).fill("田中 太郎");
-  await staffPanel.getByLabel("住所").fill("東京都千代田区1-1-1");
-  await staffPanel.getByLabel("電話番号").fill("090-1234-5678");
+  // 住所・電話番号の編集欄はここには無い（契約同意時に本人が入力する
+  // 方式に変更したため、本部側の構造化フィールドは廃止した）。
+  log("住所・電話番号の編集欄は表示されない（契約同意時に本人が入力する方式のため）", (await staffPanel.getByLabel("住所").count()) === 0);
   await staffPanel.getByRole("button", { name: "保存", exact: true }).click();
   await admin.waitForTimeout(600);
   bodyText = await admin.textContent("body");
-  // 住所・電話番号は常時表示はしない仕様（社内メモ運用に一本化）。
-  // 氏名はヘッダーに常時表示されるので確認する。住所・電話番号はDB
-  // 反映のみ確認する（契約書表示用の構造化データとしては引き続き保持）。
   log("本部が編集した氏名がUIに反映される", bodyText.includes("田中 太郎"));
-  const updatedName = psql(`select name, address, "phoneNumber" from "User" where id='${staffUserId}';`);
-  log("本部が編集した氏名・住所・電話番号がDBに反映される", updatedName === "田中 太郎|東京都千代田区1-1-1|090-1234-5678");
+  const updatedName = psql(`select name from "User" where id='${staffUserId}';`);
+  log("本部が編集した氏名がDBに反映される", updatedName === "田中 太郎");
 
   // --- ①本人確認書類のアップロード履歴（差し替え前の画像が履歴に退避される） ---
   const membershipId = psql(

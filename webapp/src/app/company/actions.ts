@@ -582,16 +582,13 @@ export async function deleteStaffNoteAction(noteId: string) {
   revalidatePath("/company/roster");
 }
 
-export async function updateStaffProfileAction(
-  membershipId: string,
-  input: { name: string; address: string; phoneNumber: string },
-) {
+export async function updateStaffProfileAction(membershipId: string, input: { name: string }) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
   if (!input.name.trim()) throw new Error("invalid_name");
   const target = await assertMembershipOwnedByCompany(membershipId, membership.companyId);
 
-  await updateStaffProfile({ userId: target.userId, ...input });
+  await updateStaffProfile({ userId: target.userId, name: input.name });
   revalidatePath("/company/roster");
 }
 

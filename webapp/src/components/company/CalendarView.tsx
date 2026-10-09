@@ -68,7 +68,7 @@ const APPROVAL_LABEL: Record<string, string> = {
 
 type StaffOption = { id: string; name: string; viaAgencyRelationshipName?: string | null };
 type AgencyStaffOption = { staffUserId: string; staffName: string; companyRelationshipId: string; agencyName: string };
-type Team = { id: string; name: string; clientIds: string[] };
+type Team = { id: string; name: string; clientIds: string[]; staffIds: string[] };
 
 type ShiftRequestRow = {
   id: string;
@@ -2454,6 +2454,12 @@ function AssignShiftModal({
   const filteredClients = clients
     .filter((c) => c.name.includes(clientSearch))
     .sort((a, b) => Number(teamClientIds.includes(b.id)) - Number(teamClientIds.includes(a.id)));
+  // 選んだチームのメンバーを上に出す（絞り込みはしない — 依頼主選択と
+  // 同じ考え方。チーム外のスタッフに単発でシフトを作ることもあるため）。
+  const teamStaffIds = teams.find((t) => t.id === teamId)?.staffIds ?? [];
+  const sortedStaffOptions = [...staffOptions].sort(
+    (a, b) => Number(teamStaffIds.includes(b.id)) - Number(teamStaffIds.includes(a.id)),
+  );
 
   const backButton =
     steps.indexOf(step) > 0 ? (
@@ -2672,7 +2678,7 @@ function AssignShiftModal({
           <div className="flex max-h-96 flex-col gap-2 overflow-y-auto">
             {(agencyRelationshipId
               ? agencyStaffOptions.filter((s) => s.companyRelationshipId === agencyRelationshipId)
-              : staffOptions.map((s) => ({
+              : sortedStaffOptions.map((s) => ({
                   staffUserId: s.id,
                   staffName: s.viaAgencyRelationshipName ? `${s.name}（${s.viaAgencyRelationshipName}）` : s.name,
                 }))
@@ -2714,7 +2720,7 @@ function AssignShiftModal({
             時間未定
           </label>
           {!isUndecided ? (
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
               <Field label="開始時刻">
                 <input
                   type="time"
@@ -3147,7 +3153,7 @@ function RecruitmentFormModal({
           時間未定
         </label>
         {!isUndecided ? (
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
             <Field label="開始時刻">
               <input
                 type="time"

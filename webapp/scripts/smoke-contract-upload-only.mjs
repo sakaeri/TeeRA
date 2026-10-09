@@ -97,7 +97,13 @@ try {
   await genModal.locator('input[type="file"]').setInputFiles(fakePdfPath);
   await admin.waitForTimeout(1000);
 
-  log("ファイル添付後は生成ボタンが有効になる", !(await submitButton.isDisabled()));
+  log("ファイル添付のみでは住所・電話番号未入力のため生成ボタンは無効のまま", await submitButton.isDisabled());
+
+  await genModal.locator('label:has-text("住所") input').fill("東京都港区3-3-3");
+  await genModal.locator('label:has-text("電話番号") input').fill("090-5555-6666");
+  await admin.waitForTimeout(200);
+
+  log("住所・電話番号も入力すると生成ボタンが有効になる", !(await submitButton.isDisabled()));
   await submitButton.click();
   await admin.waitForTimeout(1000);
 
@@ -109,6 +115,14 @@ try {
   log("アップロードのみモードで作成した契約は即座にACTIVEになる（同意待ちを経由しない）", status === "ACTIVE");
   log("アップロードした署名済み書面のURLが記録される", uploadedUrl === "https://example.com/signed-contract.pdf");
   log("consentedAtも同時に記録される", hasConsentedAt === "true");
+
+  const partyRow = psql(
+    `select "partyName" || '|' || "partyAddress" || '|' || "partyPhoneNumber" from "StaffContract" where "staffUserId"='${proxyUserId}' order by "createdAt" desc limit 1;`,
+  );
+  log(
+    "本部が入力した氏名・住所・電話番号がアップロードのみ契約に記録される",
+    partyRow === "アップロード太郎|東京都港区3-3-3|090-5555-6666",
+  );
 
   await admin.waitForTimeout(500);
   const panelText = await panel.textContent();

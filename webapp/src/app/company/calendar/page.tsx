@@ -131,7 +131,12 @@ export default async function CompanyCalendarPage({
         staffOptions={staff.map((s) => ({ id: s.userId, name: s.name, viaAgencyRelationshipName: s.viaAgencyRelationshipName }))}
         teams={teams
           .filter((t) => isAdmin || myTeamIds.includes(t.id))
-          .map((t) => ({ id: t.id, name: t.name, clientIds: t.clientLinks.map((l) => l.companyRelationshipId) }))}
+          .map((t) => ({
+            id: t.id,
+            name: t.name,
+            clientIds: t.clientLinks.map((l) => l.companyRelationshipId),
+            staffIds: t.memberships.map((m) => m.userId),
+          }))}
         shiftRequests={shiftRequests.map((r) => ({
           id: r.id,
           staffUserId: r.staffUserId,

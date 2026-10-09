@@ -124,16 +124,24 @@ try {
   await staffA.waitForTimeout(300);
   bodyA = await staffA.textContent("body");
   log("全文確認ポップアップが開く（読み取り専用）", bodyA.includes("キャディ業務"));
-  await staffA.getByRole("button", { name: "✕" }).click();
-  await staffA.waitForTimeout(200);
+  log("同意フォーム（氏名・住所・電話番号）が末尾に表示される", bodyA.includes("氏名") && bodyA.includes("住所") && bodyA.includes("電話番号"));
 
-  await staffA.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
+  const consentModalA = staffA.locator("div.fixed.inset-0.z-30").last();
+  const consentButtonA = consentModalA.getByRole("button", { name: "内容を確認しました（同意する）" });
+  log("氏名・住所・電話番号が未入力のうちは同意ボタンが無効", await consentButtonA.isDisabled());
+  await consentModalA.locator('label:has-text("氏名") input').fill("同意花子");
+  await consentModalA.locator('label:has-text("住所") input').fill("東京都千代田区1-1-1");
+  await consentModalA.locator('label:has-text("電話番号") input').fill("090-1111-2222");
+  await consentButtonA.click();
   await staffA.waitForTimeout(600);
 
   const statusAfterConsent = psql(
-    `select status || '|' || ("consentedAt" is not null)::text from "StaffContract" where "staffUserId"='${staffAUserId}';`,
+    `select status || '|' || ("consentedAt" is not null)::text || '|' || "partyName" || '|' || "partyAddress" || '|' || "partyPhoneNumber" from "StaffContract" where "staffUserId"='${staffAUserId}';`,
   );
-  log("同意ボタンでACTIVEになり、同意日時が記録される", statusAfterConsent === "ACTIVE|true");
+  log(
+    "同意ボタンでACTIVEになり、同意日時・入力した氏名住所電話番号が記録される",
+    statusAfterConsent === "ACTIVE|true|同意花子|東京都千代田区1-1-1|090-1111-2222",
+  );
 
   bodyA = await staffA.textContent("body");
   log("同意後は自動的に② 本人確認書類のステップに進む（未提出のため）", bodyA.includes("② 本人確認書類を提出"));
@@ -154,7 +162,13 @@ try {
   await generateContract("同意次郎");
   await staffC.goto(`http://localhost:3000/staff/contracts/${companyId}`);
   await staffC.waitForTimeout(500);
-  await staffC.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
+  await staffC.getByRole("button", { name: "契約書の全文を確認する" }).click();
+  await staffC.waitForTimeout(300);
+  const consentModalC = staffC.locator("div.fixed.inset-0.z-30").last();
+  await consentModalC.locator('label:has-text("氏名") input').fill("同意次郎");
+  await consentModalC.locator('label:has-text("住所") input').fill("東京都中央区2-2-2");
+  await consentModalC.locator('label:has-text("電話番号") input').fill("090-3333-4444");
+  await consentModalC.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
   await staffC.waitForTimeout(600);
 
   let bodyC = await staffC.textContent("body");

@@ -341,6 +341,7 @@ export function AssignOrCustomizeModal({
   template,
   onAssigned,
   onCustomize,
+  onUploadOnly,
   onClose,
 }: {
   staffName: string;
@@ -348,6 +349,7 @@ export function AssignOrCustomizeModal({
   template: Template;
   onAssigned: () => void;
   onCustomize: () => void;
+  onUploadOnly: () => void;
   onClose: () => void;
 }) {
   const [contractStartDate, setContractStartDate] = useState(todayJst());
@@ -403,8 +405,15 @@ export function AssignOrCustomizeModal({
         >
           内容を編集して専用の契約書を作る
         </button>
+        <button
+          type="button"
+          onClick={onUploadOnly}
+          className="mt-2 w-full rounded-lg border border-border px-4 py-2 text-sm font-semibold text-primary"
+        >
+          アップロードのみ（書面で契約済み）
+        </button>
         <p className="mt-2 text-xs text-muted">
-          「このテンプレートのまま」を選ぶと、他の人と同じテンプレートを共有します（設定画面の契約書テンプレート一覧の「契約中」欄に追加されます）。内容を変えたい場合は編集を選んでください。
+          「このテンプレートのまま」を選ぶと、他の人と同じテンプレートを共有します（設定画面の契約書テンプレート一覧の「契約中」欄に追加されます）。内容を変えたい場合は編集を選んでください。「アップロードのみ」は、既に書面で契約済みのスタッフ向けに、本人への同意依頼を送らず署名済み書面を添付するモードです。
         </p>
       </div>
     </div>
@@ -418,6 +427,8 @@ export function TemplateModal({
   generateForStaff,
   viewingStaff,
   duplicateAsNew,
+  initialUploadMode,
+  consentForm,
   onClose,
   onSaved,
   readOnly,
@@ -425,11 +436,23 @@ export function TemplateModal({
   clients: ClientOption[];
   companyName: string;
   editingTemplate?: Template;
-  generateForStaff?: { userId: string; name: string; address?: string; phoneNumber?: string };
+  generateForStaff?: { userId: string; name: string };
   // readOnlyで既存の契約書を見るだけの時に、その契約の相手方（乙）の
   // 氏名・住所・電話番号を表示するための情報。generateForStaffと違い
   // 生成フロー（タイトル表示・送信先）には一切影響しない。
   viewingStaff?: { name: string; address?: string; phoneNumber?: string; uploadedDocumentUrl?: string | null };
+  // AssignOrCustomizeModalの「アップロードのみ」から来た場合にtrue —
+  // アップロードのみモードの切り替えを最初から選んだ状態で開く。
+  initialUploadMode?: boolean;
+  // PENDING_CONSENTの契約をスタッフ本人が全文確認した末尾に出す、氏名・
+  // 住所・電話番号の入力欄＋同意ボタン。これが渡された場合のみ、readOnly
+  // でも末尾にこのフォームを表示する（「見てません」防止のため、全文を
+  // 開かないと同意できない動線にするのが目的）。
+  consentForm?: {
+    pending: boolean;
+    error?: string | null;
+    onConsent: (party: { name: string; address: string; phoneNumber: string }) => void;
+  };
   // trueの場合、editingTemplateの内容を初期値として引き継ぎつつ、更新では
   // なく新規の独立したテンプレートとして保存する（招待モーダルからの
   // 「このテンプレートを複製して新規作成」用）。
@@ -491,16 +514,30 @@ export function TemplateModal({
   const [mode, setMode] = useState<"edit" | "preview">(readOnly ? "preview" : "edit");
   // アップロードのみモード: 既に書面で契約済みのスタッフ向け。本人への
   // 同意依頼は送らず、署名済み書面を添付して即時ACTIVEの契約として生成する。
-  const [uploadMode, setUploadMode] = useState(false);
+  const [uploadMode, setUploadMode] = useState(initialUploadMode ?? false);
   const [uploadedDocumentUrl, setUploadedDocumentUrl] = useState("");
+  // アップロードのみモード: 本人の同意ステップを経ないため、署名済み書面の
+  // 住所・電話番号も本部がここで入力する。
+  const [uploadPartyAddress, setUploadPartyAddress] = useState("");
+  const [uploadPartyPhoneNumber, setUploadPartyPhoneNumber] = useState("");
+  // 同意フォーム（consentForm）用の入力欄。全文を確認した本人がここで
+  // 氏名・住所・電話番号を入力してから同意する（署名代わり）。
+  const [consentName, setConsentName] = useState(viewingStaff?.name ?? "");
+  const [consentAddress, setConsentAddress] = useState("");
+  const [consentPhoneNumber, setConsentPhoneNumber] = useState("");
 
   const autoTitle = `${EMPLOYMENT_TYPE_LABEL[employmentType]}${jobDescription ? "・" + jobDescription : ""}`;
   const title = customTitle.trim() || autoTitle;
   const preview = mode === "preview";
   // 契約相手方（乙）の表示用情報。generation中はgenerateForStaff、既存
   // 契約の閲覧中はviewingStaffを使う（お互いタイトル表示や送信先には
-  // 影響しないよう完全に分離している）。
-  const partyInfo = generateForStaff ?? viewingStaff;
+  // 影響しないよう完全に分離している）。アップロードのみモードの生成中は
+  // 本部がその場で入力した住所・電話番号をプレビューに反映する。
+  const partyInfo: { name: string; address?: string; phoneNumber?: string } | undefined = generateForStaff
+    ? uploadMode
+      ? { name: generateForStaff.name, address: uploadPartyAddress, phoneNumber: uploadPartyPhoneNumber }
+      : { name: generateForStaff.name }
+    : viewingStaff;
 
   const workingDayLabel = WEEKDAYS.filter((d) => fixedWeekdays.includes(d.value))
     .map((d) => d.label)
@@ -526,7 +563,10 @@ export function TemplateModal({
   }
 
   const canSubmit =
-    Boolean(jobDescription) && Number(wageAmount) > 0 && (!uploadMode || Boolean(uploadedDocumentUrl));
+    Boolean(jobDescription) &&
+    Number(wageAmount) > 0 &&
+    (!uploadMode ||
+      (Boolean(uploadedDocumentUrl) && Boolean(uploadPartyAddress.trim()) && Boolean(uploadPartyPhoneNumber.trim())));
 
   async function submitTemplate() {
     const payload = {
@@ -560,7 +600,11 @@ export function TemplateModal({
     };
 
     if (generateForStaff && uploadMode) {
-      await generateStaffContractFromUploadAction(payload, generateForStaff.userId, uploadedDocumentUrl);
+      await generateStaffContractFromUploadAction(payload, generateForStaff.userId, uploadedDocumentUrl, {
+        name: generateForStaff.name,
+        address: uploadPartyAddress,
+        phoneNumber: uploadPartyPhoneNumber,
+      });
       return null;
     }
     if (generateForStaff) {
@@ -636,6 +680,27 @@ export function TemplateModal({
                     size="md"
                   />
                 </div>
+                <p className="text-xs text-muted">
+                  本人の同意ステップを経ないため、契約書に記載する住所・電話番号をここで入力してください（署名済み書面の記載内容と合わせてください）。
+                </p>
+                <label className="flex flex-col gap-1 text-xs">
+                  住所
+                  <input
+                    type="text"
+                    value={uploadPartyAddress}
+                    onChange={(e) => setUploadPartyAddress(e.target.value)}
+                    className={fieldInput}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs">
+                  電話番号
+                  <input
+                    type="text"
+                    value={uploadPartyPhoneNumber}
+                    onChange={(e) => setUploadPartyPhoneNumber(e.target.value)}
+                    className={fieldInput}
+                  />
+                </label>
               </>
             ) : null}
           </div>
@@ -974,8 +1039,8 @@ export function TemplateModal({
                     value={item.value}
                     onChange={(e) => updateChipValue(item.label, e.target.value)}
                     placeholder="内容（任意）"
-                    rows={1}
-                    className="min-w-0 flex-1 resize-none rounded-lg border border-border px-2 py-1.5 text-sm"
+                    rows={3}
+                    className="min-w-0 flex-1 resize-y rounded-lg border border-border px-2 py-1.5 text-sm"
                   />
                   <button type="button" onClick={() => removeChip(item.label)} className="shrink-0 text-red-600">
                     ✕
@@ -1062,6 +1127,60 @@ export function TemplateModal({
             </Row>
           ) : null}
         </div>
+
+        {consentForm ? (
+          <div className="mt-6 rounded-lg border border-primary/40 bg-primary/5 p-4">
+            <p className="mb-3 text-sm font-semibold text-primary">
+              以上の内容を確認しました。氏名・住所・電話番号を入力のうえ同意してください。
+            </p>
+            <div className="flex flex-col gap-3">
+              <label className="flex flex-col gap-1 text-xs">
+                氏名<span className="text-red-600"> *</span>
+                <input
+                  type="text"
+                  value={consentName}
+                  onChange={(e) => setConsentName(e.target.value)}
+                  className={fieldInput}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs">
+                住所<span className="text-red-600"> *</span>
+                <input
+                  type="text"
+                  value={consentAddress}
+                  onChange={(e) => setConsentAddress(e.target.value)}
+                  className={fieldInput}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs">
+                電話番号<span className="text-red-600"> *</span>
+                <input
+                  type="text"
+                  value={consentPhoneNumber}
+                  onChange={(e) => setConsentPhoneNumber(e.target.value)}
+                  className={fieldInput}
+                />
+              </label>
+            </div>
+            {consentForm.error ? <p className="mt-2 text-xs text-red-600">{consentForm.error}</p> : null}
+            <button
+              type="button"
+              disabled={
+                consentForm.pending || !consentName.trim() || !consentAddress.trim() || !consentPhoneNumber.trim()
+              }
+              onClick={() =>
+                consentForm.onConsent({
+                  name: consentName.trim(),
+                  address: consentAddress.trim(),
+                  phoneNumber: consentPhoneNumber.trim(),
+                })
+              }
+              className="mt-4 w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              内容を確認しました（同意する）
+            </button>
+          </div>
+        ) : null}
 
         {!readOnly ? (
           <div className="mt-6 flex gap-2">

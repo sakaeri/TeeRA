@@ -73,8 +73,6 @@ export function StaffContractsView({
   companyId,
   companyName,
   myName,
-  myAddress,
-  myPhoneNumber,
   myContracts,
   pendingContracts,
   idDocumentFrontUrl,
@@ -87,8 +85,6 @@ export function StaffContractsView({
   companyId: string;
   companyName: string;
   myName: string;
-  myAddress: string;
-  myPhoneNumber: string;
   myContracts: {
     id: string;
     title: string;
@@ -98,6 +94,9 @@ export function StaffContractsView({
     contractStartDate: string;
     templateDetail: Template;
     uploadedDocumentUrl: string | null;
+    partyName: string | null;
+    partyAddress: string | null;
+    partyPhoneNumber: string | null;
   }[];
   pendingContracts: PendingContract[];
   idDocumentFrontUrl: string | null;
@@ -124,7 +123,12 @@ export function StaffContractsView({
   const [detailContract, setDetailContract] = useState<{
     templateDetail: Template;
     uploadedDocumentUrl?: string | null;
+    partyName?: string | null;
+    partyAddress?: string | null;
+    partyPhoneNumber?: string | null;
   } | null>(null);
+  const [consentPending, setConsentPending] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
   const [openWorkplaceId, setOpenWorkplaceId] = useState<string | null>(null);
   const [newNoteContent, setNewNoteContent] = useState("");
 
@@ -153,12 +157,21 @@ export function StaffContractsView({
     return "done";
   }
 
-  function submitConsent() {
+  function handleConsent(party: { name: string; address: string; phoneNumber: string }) {
     if (!activePending) return;
     const id = activePending.id;
+    setConsentError(null);
+    setConsentPending(true);
     startTransition(async () => {
-      await consentContractAction(id, companyId);
-      setWizardStep(nextStepAfter("review"));
+      try {
+        await consentContractAction(id, companyId, party);
+        setShowDetail(false);
+        setWizardStep(nextStepAfter("review"));
+      } catch {
+        setConsentError("同意できませんでした。もう一度お試しください。");
+      } finally {
+        setConsentPending(false);
+      }
     });
   }
 
@@ -220,20 +233,15 @@ export function StaffContractsView({
                 </p>
                 <p className="text-xs text-muted">契約開始日: {activePending.templateDetail.contractStartDate}</p>
               </div>
+              <p className="text-xs text-muted">
+                全文の最後に氏名・住所・電話番号の入力欄があります。内容を確認し、同意してください。
+              </p>
               <button
                 type="button"
                 onClick={() => setShowDetail(true)}
-                className="self-start text-xs text-primary hover:underline"
+                className="mt-2 self-start rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground"
               >
                 契約書の全文を確認する
-              </button>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={submitConsent}
-                className="mt-2 self-start rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-              >
-                内容を確認しました（同意する）
               </button>
             </div>
           ) : null}
@@ -342,7 +350,8 @@ export function StaffContractsView({
           companyName={companyName}
           clients={[]}
           editingTemplate={activePending.templateDetail}
-          viewingStaff={{ name: myName, address: myAddress, phoneNumber: myPhoneNumber }}
+          viewingStaff={{ name: myName }}
+          consentForm={{ pending: consentPending, error: consentError, onConsent: handleConsent }}
           onClose={() => setShowDetail(false)}
         />
       ) : null}
@@ -354,9 +363,9 @@ export function StaffContractsView({
           clients={[]}
           editingTemplate={detailContract.templateDetail}
           viewingStaff={{
-            name: myName,
-            address: myAddress,
-            phoneNumber: myPhoneNumber,
+            name: detailContract.partyName || myName,
+            address: detailContract.partyAddress ?? undefined,
+            phoneNumber: detailContract.partyPhoneNumber ?? undefined,
             uploadedDocumentUrl: detailContract.uploadedDocumentUrl,
           }}
           onClose={() => setDetailContract(null)}

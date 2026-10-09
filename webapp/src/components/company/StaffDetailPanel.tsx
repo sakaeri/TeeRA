@@ -50,8 +50,6 @@ type StaffNote = {
 type StaffMonthDetail = {
   membershipId: string;
   name: string;
-  address: string;
-  phoneNumber: string;
   isProxy: boolean;
   viaAgencyRelationshipId: string | null;
   viaAgencyRelationshipName: string | null;
@@ -102,6 +100,9 @@ type StaffMonthDetail = {
     wageVersions: { id: string; label: string; effectiveFrom: string }[];
     templateDetail: Template;
     uploadedDocumentUrl: string | null;
+    partyName: string | null;
+    partyAddress: string | null;
+    partyPhoneNumber: string | null;
   }[];
   taskRates: StaffTaskRate[];
   days: {
@@ -208,6 +209,7 @@ export function StaffDetailPanel({
   const [showGenerateChoose, setShowGenerateChoose] = useState(false);
   const [generateBaseTemplate, setGenerateBaseTemplate] = useState<Template | null>(null);
   const [generateCustomize, setGenerateCustomize] = useState(false);
+  const [generateUploadOnly, setGenerateUploadOnly] = useState(false);
   const [showContractHistory, setShowContractHistory] = useState(false);
   const [showPaidLeaveHistory, setShowPaidLeaveHistory] = useState(false);
   const [showIdDocumentHistory, setShowIdDocumentHistory] = useState(false);
@@ -217,14 +219,10 @@ export function StaffDetailPanel({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileNameDraft, setProfileNameDraft] = useState("");
-  const [profileAddressDraft, setProfileAddressDraft] = useState("");
-  const [profilePhoneDraft, setProfilePhoneDraft] = useState("");
   const [profileError, setProfileError] = useState<string | null>(null);
 
   function startEditProfile() {
     setProfileNameDraft(data?.name ?? "");
-    setProfileAddressDraft(data?.address ?? "");
-    setProfilePhoneDraft(data?.phoneNumber ?? "");
     setProfileError(null);
     setEditingProfile(true);
   }
@@ -233,11 +231,7 @@ export function StaffDetailPanel({
     if (!profileNameDraft.trim()) return;
     startTransition(async () => {
       try {
-        await updateStaffProfileAction(membershipId, {
-          name: profileNameDraft,
-          address: profileAddressDraft,
-          phoneNumber: profilePhoneDraft,
-        });
+        await updateStaffProfileAction(membershipId, { name: profileNameDraft });
         setEditingProfile(false);
         await refresh();
       } catch {
@@ -250,6 +244,7 @@ export function StaffDetailPanel({
     setShowGenerateChoose(false);
     setGenerateBaseTemplate(null);
     setGenerateCustomize(false);
+    setGenerateUploadOnly(false);
     refresh();
   }
 
@@ -451,7 +446,7 @@ export function StaffDetailPanel({
   return (
     <div className="fixed inset-0 z-30 flex justify-end bg-black/30" onClick={onClose}>
       <div
-        className="flex h-full w-full max-w-md flex-col overflow-y-auto bg-white p-6 shadow-lg"
+        className="flex h-full w-full max-w-md flex-col overflow-y-auto bg-white px-6 pb-6 pt-[calc(1.5rem+env(safe-area-inset-top))] shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <button type="button" onClick={onClose} className="mb-2 self-start text-sm text-muted">
@@ -470,24 +465,6 @@ export function StaffDetailPanel({
                   onChange={(e) => setProfileNameDraft(e.target.value)}
                   className="rounded-lg border border-border px-2 py-1.5 text-lg font-bold"
                 />
-                <label className="flex flex-col gap-1 text-xs text-muted">
-                  住所
-                  <input
-                    type="text"
-                    value={profileAddressDraft}
-                    onChange={(e) => setProfileAddressDraft(e.target.value)}
-                    className="rounded-lg border border-border px-2 py-1.5 text-sm text-foreground"
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-xs text-muted">
-                  電話番号
-                  <input
-                    type="text"
-                    value={profilePhoneDraft}
-                    onChange={(e) => setProfilePhoneDraft(e.target.value)}
-                    className="rounded-lg border border-border px-2 py-1.5 text-sm text-foreground"
-                  />
-                </label>
                 {profileError ? <p className="text-xs text-red-600">{profileError}</p> : null}
                 <div className="flex gap-2">
                   <button
@@ -1328,9 +1305,9 @@ export function StaffDetailPanel({
                 clients={clients}
                 editingTemplate={detailContract.templateDetail}
                 viewingStaff={{
-                  name: data.name,
-                  address: data.address,
-                  phoneNumber: data.phoneNumber,
+                  name: detailContract.partyName || data.name,
+                  address: detailContract.partyAddress ?? undefined,
+                  phoneNumber: detailContract.partyPhoneNumber ?? undefined,
                   uploadedDocumentUrl: detailContract.uploadedDocumentUrl,
                 }}
                 onClose={() => setDetailContractId(null)}
@@ -1409,6 +1386,10 @@ export function StaffDetailPanel({
           template={generateBaseTemplate}
           onAssigned={endGenerateFlow}
           onCustomize={() => setGenerateCustomize(true)}
+          onUploadOnly={() => {
+            setGenerateCustomize(true);
+            setGenerateUploadOnly(true);
+          }}
           onClose={endGenerateFlow}
         />
       ) : null}
@@ -1417,7 +1398,8 @@ export function StaffDetailPanel({
           companyName={companyName}
           clients={clients}
           editingTemplate={generateBaseTemplate}
-          generateForStaff={{ userId, name: data.name, address: data.address, phoneNumber: data.phoneNumber }}
+          generateForStaff={{ userId, name: data.name }}
+          initialUploadMode={generateUploadOnly}
           onClose={endGenerateFlow}
         />
       ) : null}

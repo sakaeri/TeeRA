@@ -182,6 +182,9 @@ export async function startStaffContractFromUpload(params: {
   staffUserId: string;
   contractStartDate?: Date;
   uploadedDocumentUrl: string;
+  partyName: string;
+  partyAddress: string;
+  partyPhoneNumber: string;
 }) {
   const contract = await prisma.$transaction(async (tx) => {
     const template = await tx.contractTemplate.findUniqueOrThrow({ where: { id: params.templateId } });
@@ -197,6 +200,9 @@ export async function startStaffContractFromUpload(params: {
         status: "ACTIVE",
         consentedAt: new Date(),
         uploadedDocumentUrl: params.uploadedDocumentUrl,
+        partyName: params.partyName,
+        partyAddress: params.partyAddress,
+        partyPhoneNumber: params.partyPhoneNumber,
         wageVersions: {
           create: { wageAmount: template.wageAmount, effectiveFrom: contractStartDate },
         },
@@ -215,12 +221,18 @@ export async function generateStaffContractFromNewTemplateViaUpload(params: {
   staffUserId: string;
   templateInput: Omit<TemplateInput, "companyId">;
   uploadedDocumentUrl: string;
+  partyName: string;
+  partyAddress: string;
+  partyPhoneNumber: string;
 }) {
   const template = await createTemplate({ ...params.templateInput, companyId: params.companyId });
   return startStaffContractFromUpload({
     templateId: template.id,
     staffUserId: params.staffUserId,
     uploadedDocumentUrl: params.uploadedDocumentUrl,
+    partyName: params.partyName,
+    partyAddress: params.partyAddress,
+    partyPhoneNumber: params.partyPhoneNumber,
   });
 }
 
@@ -234,14 +246,27 @@ export async function assignExistingTemplate(params: { templateId: string; staff
 
 // スタッフ本人が確認待ちの契約書の内容を確認し、同意する。ここで初めて
 // ACTIVEになり、稼働・給与計算の対象になる（payroll.tsはPENDING_CONSENTの
-// 契約を計算に使わない）。
-export async function consentStaffContract(params: { staffContractId: string; staffUserId: string }) {
+// 契約を計算に使わない）。氏名・住所・電話番号は契約書の全文を読んだ
+// その場で本人が入力したものをスナップショットとして記録する（署名代わり）。
+export async function consentStaffContract(params: {
+  staffContractId: string;
+  staffUserId: string;
+  partyName: string;
+  partyAddress: string;
+  partyPhoneNumber: string;
+}) {
   const contract = await prisma.staffContract.findFirstOrThrow({
     where: { id: params.staffContractId, staffUserId: params.staffUserId, status: "PENDING_CONSENT" },
   });
   return prisma.staffContract.update({
     where: { id: contract.id },
-    data: { status: "ACTIVE", consentedAt: new Date() },
+    data: {
+      status: "ACTIVE",
+      consentedAt: new Date(),
+      partyName: params.partyName,
+      partyAddress: params.partyAddress,
+      partyPhoneNumber: params.partyPhoneNumber,
+    },
   });
 }
 

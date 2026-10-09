@@ -250,6 +250,7 @@ export async function generateStaffContractFromUploadAction(
   input: CreateTemplateInput,
   staffUserId: string,
   uploadedDocumentUrl: string,
+  party: { name: string; address: string; phoneNumber: string },
 ) {
   const { membership } = await requireCompanyAdminOrEditor();
   const staffTeamIds = await getStaffTeamIds(staffUserId);
@@ -265,6 +266,9 @@ export async function generateStaffContractFromUploadAction(
     staffUserId,
     templateInput: input,
     uploadedDocumentUrl,
+    partyName: party.name,
+    partyAddress: party.address,
+    partyPhoneNumber: party.phoneNumber,
   });
   revalidatePath("/company/settings");
   revalidatePath("/company");

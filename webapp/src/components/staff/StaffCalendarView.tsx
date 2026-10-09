@@ -281,7 +281,7 @@ export function StaffCalendarView({
                     {isReportOverdue(s) ? (
                       <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" aria-label="未報告" />
                     ) : null}
-                    {shortCompanyName(s.companyName)}
+                    {shortCompanyName(s.workplaceName ?? s.companyName)}
                   </span>
                 ))}
                 {visibleRequests.map((r) =>

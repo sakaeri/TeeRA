@@ -124,9 +124,7 @@ export function RosterView({
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const staffAfterTeamFilter = teamFilter ? ownStaff.filter((s) => s.teams.some((t) => t.teamId === teamFilter)) : ownStaff;
   const filteredStaff = normalizedQuery
-    ? staffAfterTeamFilter.filter(
-        (s) => s.name.toLowerCase().includes(normalizedQuery) || s.email.toLowerCase().includes(normalizedQuery),
-      )
+    ? staffAfterTeamFilter.filter((s) => s.name.toLowerCase().includes(normalizedQuery))
     : staffAfterTeamFilter;
   const clientsAfterTeamFilter = teamFilter ? clients.filter((c) => c.teams.some((t) => t.id === teamFilter)) : clients;
   const filteredClients = normalizedQuery
@@ -191,7 +189,7 @@ export function RosterView({
           <select
             value={teamFilter}
             onChange={(e) => setTeamFilter(e.target.value)}
-            className="hidden rounded-lg border border-border bg-white px-3 py-1.5 text-sm sm:block"
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
           >
             <option value="">全社（すべて表示）</option>
             {teams.map((t) => (
@@ -202,15 +200,28 @@ export function RosterView({
           </select>
         </div>
 
-        {canShowAddButton ? (
-        <div className="relative" ref={addMenuRef}>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={tab === "staff" ? "氏名で検索" : "名称で検索"}
+            className="w-full max-w-[12rem] rounded-lg border border-border bg-white px-3 py-1.5 text-sm sm:max-w-xs"
+          />
+          {searchQuery ? (
+            <button type="button" onClick={() => setSearchQuery("")} className="shrink-0 text-xs text-muted hover:text-primary">
+              クリア
+            </button>
+          ) : null}
+          {canShowAddButton ? (
+          <div className="relative" ref={addMenuRef}>
           <button
             type="button"
             onClick={() => {
               setShowAddMenu((v) => !v);
               setShowAddMenuInfo(false);
             }}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+            className="shrink-0 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
           >
             {ADD_BUTTON_LABEL[tab]}
           </button>
@@ -260,66 +271,19 @@ export function RosterView({
           ) : null}
         </div>
         ) : null}
+        </div>
       </div>
 
-      <div className="mb-1 flex items-center gap-1 overflow-x-auto border-b border-border">
-        <TabButton active={tab === "staff"} onClick={() => setTab("staff")} className="hidden sm:inline-flex">
+      <div className="mb-4 flex items-center gap-1 overflow-x-auto border-b border-border">
+        <TabButton active={tab === "staff"} onClick={() => setTab("staff")}>
           スタッフ一覧
         </TabButton>
-        <MobileTabSelect
-          active={tab === "staff"}
-          value={teamFilter}
-          defaultLabel="スタッフ一覧"
-          teams={teams}
-          onActivate={() => setTab("staff")}
-          onChange={(v) => {
-            setTab("staff");
-            setTeamFilter(v);
-          }}
-        />
-        <TabButton active={tab === "clients"} onClick={() => setTab("clients")} className="hidden sm:inline-flex">
+        <TabButton active={tab === "clients"} onClick={() => setTab("clients")}>
           依頼主一覧
         </TabButton>
-        <MobileTabSelect
-          active={tab === "clients"}
-          value={teamFilter}
-          defaultLabel="依頼主一覧"
-          teams={teams}
-          onActivate={() => setTab("clients")}
-          onChange={(v) => {
-            setTab("clients");
-            setTeamFilter(v);
-          }}
-        />
-        <TabButton active={tab === "agencies"} onClick={() => setTab("agencies")} className="hidden sm:inline-flex">
+        <TabButton active={tab === "agencies"} onClick={() => setTab("agencies")}>
           派遣会社一覧
         </TabButton>
-        <MobileTabSelect
-          active={tab === "agencies"}
-          value={teamFilter}
-          defaultLabel="派遣会社一覧"
-          teams={teams}
-          onActivate={() => setTab("agencies")}
-          onChange={(v) => {
-            setTab("agencies");
-            setTeamFilter(v);
-          }}
-        />
-      </div>
-
-      <div className="mb-4 flex items-center gap-2">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={tab === "staff" ? "氏名・メールアドレスで検索" : "名称で検索"}
-          className="w-full max-w-xs rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
-        />
-        {searchQuery ? (
-          <button type="button" onClick={() => setSearchQuery("")} className="text-xs text-muted hover:text-primary">
-            クリア
-          </button>
-        ) : null}
       </div>
 
       {proxyNamePromptFor ? (
@@ -477,32 +441,34 @@ export function RosterView({
               key={s.membershipId}
               type="button"
               onClick={() => setSelectedStaffId(s.userId)}
-              className="flex flex-col gap-1.5 rounded-xl border border-border/60 bg-white p-3 text-left"
+              className="flex items-start justify-between gap-2 rounded-xl border border-border/60 bg-white p-3 text-left"
             >
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 flex-col gap-1">
                 <span className="font-medium">
                   {s.name}
                   {s.isProxy ? (
                     <span className="ml-2 rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">仮</span>
                   ) : null}
                 </span>
-                <span className={`shrink-0 rounded-md px-2 py-1 text-xs font-semibold ${CONTRACT_STATUS_STYLE[s.contractStatus]}`}>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                  <span>今月稼働 {s.monthlyHours}h</span>
+                  <span>{s.contractLabel}</span>
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <span className={`rounded-md px-2 py-1 text-xs font-semibold ${CONTRACT_STATUS_STYLE[s.contractStatus]}`}>
                   {s.contractStatus}
                 </span>
+                {s.teams.length > 0 ? (
+                  <div className="flex flex-wrap justify-end gap-1">
+                    {s.teams.map((t) => (
+                      <span key={t.teamId} className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-900">
+                        {t.teamName}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-                <span>今月稼働 {s.monthlyHours}h</span>
-                <span>{s.contractLabel}</span>
-              </div>
-              {s.teams.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
-                  {s.teams.map((t) => (
-                    <span key={t.teamId} className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-900">
-                      {t.teamName}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
             </button>
           ))}
           {filteredStaff.length === 0 ? <p className="py-8 text-center text-muted">スタッフが登録されていません。</p> : null}
@@ -810,55 +776,6 @@ function TabButton({
   );
 }
 
-function MobileTabSelect({
-  active,
-  value,
-  defaultLabel,
-  teams,
-  onActivate,
-  onChange,
-}: {
-  active: boolean;
-  value: string;
-  defaultLabel: string;
-  teams: Team[];
-  onActivate: () => void;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <span className="relative shrink-0 sm:hidden">
-      <select
-        value={active ? value : ""}
-        // ネイティブselectは「今表示中の値と同じ選択肢」を選び直しても
-        // onChangeが発火しない(値が変わらないため)。非アクティブなタブの
-        // プレースホルダーを選んだだけではタブが切り替わらない不具合の
-        // 原因だったため、開こうとタップした瞬間(pointerdown)に即座に
-        // タブを切り替える — ちょうど普通のタブボタンと同じ挙動になる。
-        onPointerDown={onActivate}
-        onChange={(e) => onChange(e.target.value)}
-        className={`appearance-none whitespace-nowrap border-b-2 bg-transparent py-2 pl-3 pr-6 text-sm font-semibold ${
-          active ? "border-accent text-primary" : "border-transparent text-muted"
-        }`}
-      >
-        <option value="">{defaultLabel}</option>
-        {teams.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.name}
-          </option>
-        ))}
-      </select>
-      <svg
-        viewBox="0 0 20 20"
-        fill="none"
-        className="pointer-events-none absolute right-1 top-1/2 h-3 w-3 -translate-y-1/2 text-muted"
-        aria-hidden
-      >
-        <path d="M5 7.5l5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </span>
-  );
-}
-
 function RelationshipTable({
   rows,
   onRowClick,
@@ -869,59 +786,92 @@ function RelationshipTable({
   showTeamColumn?: boolean;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-border">
-      <div className="overflow-x-auto">
-      <table className="w-full min-w-max text-sm">
-        <thead>
-          <tr className="border-b border-border bg-background/60 text-left text-xs text-muted">
-            <th className="px-4 py-3 font-semibold">名称</th>
-            {showTeamColumn ? <th className="px-4 py-3 font-semibold">チーム</th> : null}
-            <th className="px-4 py-3 font-semibold">スタッフ人数</th>
-          </tr>
-        </thead>
-        <tbody className="bg-white">
-          {rows.map((r) => (
-            <tr
-              key={r.id}
-              className="cursor-pointer border-b border-border/60 last:border-b-0 hover:bg-background/60"
-              onClick={() => onRowClick(r.id)}
-            >
-              <td className="px-4 py-3.5">
+    <>
+      <div className="hidden overflow-hidden rounded-xl border border-border sm:block">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-max text-sm">
+          <thead>
+            <tr className="border-b border-border bg-background/60 text-left text-xs text-muted">
+              <th className="px-4 py-3 font-semibold">名称</th>
+              {showTeamColumn ? <th className="px-4 py-3 font-semibold">チーム</th> : null}
+              <th className="px-4 py-3 font-semibold">スタッフ人数</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white">
+            {rows.map((r) => (
+              <tr
+                key={r.id}
+                className="cursor-pointer border-b border-border/60 last:border-b-0 hover:bg-background/60"
+                onClick={() => onRowClick(r.id)}
+              >
+                <td className="px-4 py-3.5">
+                  {r.name}
+                  {r.isProxy ? (
+                    <span className="ml-2 rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">
+                      仮
+                    </span>
+                  ) : null}
+                </td>
+                {showTeamColumn ? (
+                  <td className="px-4 py-3.5">
+                    <div className="flex flex-wrap gap-1">
+                      {r.teams.length === 0 ? (
+                        <span className="text-muted">—</span>
+                      ) : (
+                        r.teams.map((t) => (
+                          <span key={t.id} className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-900">
+                            {t.name}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </td>
+                ) : null}
+                <td className="px-4 py-3.5 text-muted">{r.staffCount}名</td>
+              </tr>
+            ))}
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="py-8 text-center text-muted">
+                  登録されていません。
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 sm:hidden">
+        {rows.map((r) => (
+          <button
+            key={r.id}
+            type="button"
+            onClick={() => onRowClick(r.id)}
+            className="flex items-start justify-between gap-2 rounded-xl border border-border/60 bg-white p-3 text-left"
+          >
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="font-medium">
                 {r.name}
                 {r.isProxy ? (
-                  <span className="ml-2 rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">
-                    仮
-                  </span>
+                  <span className="ml-2 rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">仮</span>
                 ) : null}
-              </td>
-              {showTeamColumn ? (
-                <td className="px-4 py-3.5">
-                  <div className="flex flex-wrap gap-1">
-                    {r.teams.length === 0 ? (
-                      <span className="text-muted">—</span>
-                    ) : (
-                      r.teams.map((t) => (
-                        <span key={t.id} className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-900">
-                          {t.name}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                </td>
-              ) : null}
-              <td className="px-4 py-3.5 text-muted">{r.staffCount}名</td>
-            </tr>
-          ))}
-          {rows.length === 0 ? (
-            <tr>
-              <td colSpan={3} className="py-8 text-center text-muted">
-                登録されていません。
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
+              </span>
+              <span className="text-xs text-muted">スタッフ {r.staffCount}名</span>
+            </div>
+            {showTeamColumn && r.teams.length > 0 ? (
+              <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                {r.teams.map((t) => (
+                  <span key={t.id} className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-900">
+                    {t.name}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </button>
+        ))}
+        {rows.length === 0 ? <p className="py-8 text-center text-muted">登録されていません。</p> : null}
       </div>
-    </div>
+    </>
   );
 }

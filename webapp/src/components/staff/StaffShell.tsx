@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { logoutAction } from "@/app/actions/auth";
 import { useClickOutside } from "@/lib/useClickOutside";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
@@ -77,6 +77,7 @@ export function StaffShell({
   showCompanyScreenLink,
   openRecruitmentCount,
   contractSettingsBadgeCount,
+  hasPendingContracts,
   children,
 }: {
   userName: string;
@@ -86,12 +87,22 @@ export function StaffShell({
   showCompanyScreenLink: boolean;
   openRecruitmentCount: number;
   contractSettingsBadgeCount: number;
+  // 確認待ち（PENDING_CONSENT）の契約書が1件以上ある間は、「見てません」
+  // 問題を防ぐため契約書ページ以外への遷移を禁止する。
+  hasPendingContracts: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useClickOutside<HTMLDivElement>(profileOpen, () => setProfileOpen(false));
   const initial = userName.slice(0, 1);
+
+  useEffect(() => {
+    if (hasPendingContracts && !pathname.startsWith("/staff/contracts")) {
+      router.replace("/staff/contracts");
+    }
+  }, [hasPendingContracts, pathname, router]);
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
@@ -187,11 +198,20 @@ export function StaffShell({
               : item.href === "/staff/contracts"
                 ? contractSettingsBadgeCount
                 : 0;
+          // 確認待ちの契約書がある間は、契約書ページ以外のナビをタップしても
+          // 遷移しない（useEffectの強制リダイレクトと二重の防止策）。
+          const blocked = hasPendingContracts && item.href !== "/staff/contracts";
           return (
             <Link
               key={item.href}
               href={item.href}
-              className="flex flex-1 flex-col items-center gap-1 rounded-xl py-1.5 sm:flex-none sm:px-3"
+              aria-disabled={blocked}
+              onClick={(e) => {
+                if (blocked) e.preventDefault();
+              }}
+              className={`flex flex-1 flex-col items-center gap-1 rounded-xl py-1.5 sm:flex-none sm:px-3 ${
+                blocked ? "pointer-events-none opacity-40" : ""
+              }`}
             >
               <span
                 className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${

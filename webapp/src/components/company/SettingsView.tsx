@@ -838,7 +838,8 @@ function TeamsSection({
             <TeamHeaderEditor teamId={team.id} name={team.name} notificationEmail={team.notificationEmail} />
 
             {managers.length > 0 ? (
-              <div className="mb-2 overflow-x-auto">
+              <>
+              <div className="mb-2 hidden overflow-x-auto sm:block">
               <table className="w-full min-w-max text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-muted">
@@ -887,6 +888,43 @@ function TeamsSection({
                 </tbody>
               </table>
               </div>
+
+              <div className="mb-2 flex flex-col gap-2 sm:hidden">
+                {managers.map((m) => (
+                  <div key={m.userId} className="rounded-lg border border-border/60 p-2.5 text-sm">
+                    <p className="font-medium">{m.name}</p>
+                    <p className="text-xs text-muted">{m.email}</p>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <select
+                        defaultValue={m.role}
+                        disabled={pending}
+                        onChange={(e) =>
+                          startTransition(() =>
+                            setTeamMemberRoleAction(
+                              team.id,
+                              m.userId,
+                              e.target.value as "TEAM_MANAGER" | "TEAM_LEADER",
+                            ),
+                          )
+                        }
+                        className="rounded-lg border border-border px-2 py-1 text-xs"
+                      >
+                        <option value="TEAM_MANAGER">マネージャー</option>
+                        <option value="TEAM_LEADER">リーダー</option>
+                      </select>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => setRemoveConfirmTarget({ teamId: team.id, userId: m.userId, name: m.name })}
+                        className="text-xs text-muted hover:text-red-600 disabled:opacity-60"
+                      >
+                        権限を外す
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              </>
             ) : (
               <p className="mb-2 text-xs text-muted">まだマネージャー/リーダーがいません。</p>
             )}
