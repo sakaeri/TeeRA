@@ -202,7 +202,7 @@ function HowToSection() {
             </thead>
             <tbody>
               <tr className="border-b border-border/60">
-                <td className="py-2 pr-4 font-semibold text-primary">本部管理者・本部編集者</td>
+                <td className="py-2 pr-4 font-semibold text-primary">本部管理者／編集者</td>
                 <td className="py-2 pr-4">○（全社）</td>
                 <td className="py-2 pr-4">○（全社）</td>
                 <td className="py-2 pr-4">○（スタッフ・取引先・派遣会社とも）</td>
@@ -212,7 +212,7 @@ function HowToSection() {
                 <td className="py-2 pr-4 font-semibold text-primary">チームマネージャー</td>
                 <td className="py-2 pr-4">○（自チーム内）</td>
                 <td className="py-2 pr-4">○（自チーム内）</td>
-                <td className="py-2 pr-4">スタッフのみ○（自チームに追加）</td>
+                <td className="py-2 pr-4">○（スタッフのみ、自チームに追加）</td>
                 <td className="py-2">✕</td>
               </tr>
               <tr className="border-b border-border/60">
@@ -233,7 +233,7 @@ function HowToSection() {
           </table>
         </div>
         <ul className="mt-4 list-disc pl-5 text-sm text-muted">
-          <li>本部管理者と本部編集者の権限は同じです。ただし本部管理者が0人になる変更（最後の1人の降格・削除など）はできません。</li>
+          <li>本部管理者と編集者は同じ権限です。ただし本部管理者を全員外す操作（最後の1人の降格・削除など）はできません。</li>
           <li>取引先・派遣会社の新規作成は本部管理者・編集者のみ行えます。仮アカウントを作成する際にチームを指定すれば、作成後すぐにそのチームに紐付けられます。</li>
         </ul>
       </SectionCard>
@@ -705,6 +705,8 @@ function TeamHeaderEditor({
   const [nameValue, setNameValue] = useState(name);
   const [emailValue, setEmailValue] = useState(notificationEmail);
   const [pending, startTransition] = useTransition();
+  const [showInfo, setShowInfo] = useState(false);
+  const infoRef = useClickOutside<HTMLSpanElement>(showInfo, () => setShowInfo(false));
 
   if (!editing) {
     return (
@@ -724,9 +726,24 @@ function TeamHeaderEditor({
             <span className="inline-block scale-x-[-1]">✎</span>
           </button>
         </div>
-        <p className="text-xs text-muted">
-          通知先：{notificationEmail || "未設定（チーム宛メール通知は届きません。業務報告の提出・シフト希望の未確定件数をこのチームのマネージャー/リーダーに知らせたい場合に設定してください）"}
-        </p>
+        <div className="flex items-center gap-1 text-xs text-muted">
+          通知先：{notificationEmail || "未設定"}
+          <span className="relative" ref={infoRef}>
+            <button
+              type="button"
+              onClick={() => setShowInfo((v) => !v)}
+              aria-label="説明を見る"
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted/20 text-[10px] font-bold text-muted"
+            >
+              i
+            </button>
+            {showInfo ? (
+              <div className="absolute left-0 top-full z-10 mt-1.5 w-64 rounded-lg border border-border bg-white p-3 text-xs font-normal normal-case leading-relaxed text-muted shadow-md">
+                チーム宛メール通知は未設定だと届きません。業務報告の提出・シフト希望の未確定件数をこのチームのマネージャー/リーダーに知らせたい場合に設定してください。
+              </div>
+            ) : null}
+          </span>
+        </div>
       </div>
     );
   }

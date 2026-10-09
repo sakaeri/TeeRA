@@ -313,6 +313,7 @@ export async function runShiftStartReminders() {
     const remindAt = new Date(startAt.getTime() - REMIND_BEFORE_MS);
     const giveUpAt = new Date(startAt.getTime() + GIVE_UP_AFTER_MS);
     if (now < remindAt || now > giveUpAt) continue;
+    if (shift.staff.isProxy) continue;
 
     await prisma.shift.update({ where: { id: shift.id }, data: { reminderSentAt: new Date() } });
     await sendShiftReminderEmail(shift.staff.email, {
@@ -346,6 +347,7 @@ export async function runShiftStartReminders() {
     });
 
     for (const shift of allDayCandidates) {
+      if (shift.staff.isProxy) continue;
       await prisma.shift.update({ where: { id: shift.id }, data: { reminderSentAt: new Date() } });
       await sendShiftReminderEmail(shift.staff.email, {
         staffName: shift.staff.name,
@@ -381,6 +383,7 @@ export async function runUnsubmittedWorkReportReminders() {
 
   const byStaff = new Map<string, { email: string; name: string; count: number }>();
   for (const shift of shifts) {
+    if (shift.staff.isProxy) continue;
     const entry = byStaff.get(shift.staffUserId) ?? { email: shift.staff.email, name: shift.staff.name, count: 0 };
     entry.count += 1;
     byStaff.set(shift.staffUserId, entry);
@@ -400,6 +403,7 @@ export async function runContractConsentReminders() {
 
   const byStaff = new Map<string, { email: string; name: string; companyNames: Set<string> }>();
   for (const contract of pending) {
+    if (contract.staff.isProxy) continue;
     const entry = byStaff.get(contract.staffUserId) ?? {
       email: contract.staff.email,
       name: contract.staff.name,
