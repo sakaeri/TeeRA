@@ -142,7 +142,7 @@ try {
   await admin.waitForTimeout(300);
 
   let dialogBodyText = await admin.textContent("body");
-  log("本部側「権限を外す」クリックで確認ダイアログが出る", dialogBodyText.includes("本部管理者/編集者権限を外し"));
+  log("本部側「権限を外す」クリックで確認ダイアログが出る", dialogBodyText.includes("本部管理者権限を外し"));
 
   const editorUserId = psql(`select id from "User" where email='${editorEmail}';`);
 
@@ -152,7 +152,7 @@ try {
   const editorRoleAfterCancel = psql(
     `select role from "CompanyMembership" where "companyId"='${companyId}' and "userId"='${editorUserId}';`,
   );
-  log("本部側: キャンセルすると権限は変わらない", editorRoleAfterCancel === "COMPANY_EDITOR");
+  log("本部側: キャンセルすると権限は変わらない", editorRoleAfterCancel === "COMPANY_ADMIN");
 
   // 改めて実行し、確認ダイアログの「権限を外す」を押すと実行される
   adminsSection = admin.locator("section", { hasText: "本部メンバー権限" });

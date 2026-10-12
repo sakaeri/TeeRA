@@ -9,7 +9,6 @@ import {
   updateCompanyPhoneNumberAction,
   updateCompanyNotificationEmailAction,
   updateCompanyBankInfoAction,
-  setCompanyMemberRoleAction,
   setMemberCanWorkShiftsAction,
   removeCompanyMemberRoleAction,
   inviteCompanyAdminAction,
@@ -202,7 +201,7 @@ function HowToSection() {
             </thead>
             <tbody>
               <tr className="border-b border-border/60">
-                <td className="py-2 pr-4 font-semibold text-primary">本部管理者／編集者</td>
+                <td className="py-2 pr-4 font-semibold text-primary">本部管理者</td>
                 <td className="py-2 pr-4">○（全社）</td>
                 <td className="py-2 pr-4">○（全社）</td>
                 <td className="py-2 pr-4">○（スタッフ・取引先・派遣会社とも）</td>
@@ -233,8 +232,8 @@ function HowToSection() {
           </table>
         </div>
         <ul className="mt-4 list-disc pl-5 text-sm text-muted">
-          <li>本部管理者と編集者は同じ権限です。ただし本部管理者を全員外す操作（最後の1人の降格・削除など）はできません。</li>
-          <li>取引先・派遣会社の新規作成は本部管理者・編集者のみ行えます。仮アカウントを作成する際にチームを指定すれば、作成後すぐにそのチームに紐付けられます。</li>
+          <li>本部管理者を全員外す操作（最後の1人の降格・削除など）はできません。</li>
+          <li>取引先・派遣会社の新規作成は本部管理者のみ行えます。仮アカウントを作成する際にチームを指定すれば、作成後すぐにそのチームに紐付けられます。</li>
         </ul>
       </SectionCard>
 
@@ -524,28 +523,6 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
   const [detailTarget, setDetailTarget] = useState<Admin | null>(null);
   const adminCount = admins.filter((a) => a.role === "COMPANY_ADMIN").length;
 
-  const roleSelect = (a: Admin, isLastAdmin: boolean) => (
-    <select
-      defaultValue={a.role}
-      disabled={pending || isLastAdmin}
-      title={isLastAdmin ? "本部管理者は最低1名必要です" : undefined}
-      onChange={(e) => {
-        setError(null);
-        startTransition(async () => {
-          try {
-            await setCompanyMemberRoleAction(a.userId, e.target.value as "COMPANY_ADMIN" | "COMPANY_EDITOR");
-          } catch {
-            setError("本部管理者は最低1名必要なため変更できませんでした。");
-          }
-        });
-      }}
-      className="rounded-lg border border-border px-2 py-1 text-sm disabled:opacity-60"
-    >
-      <option value="COMPANY_ADMIN">本部管理者</option>
-      <option value="COMPANY_EDITOR">本部編集者</option>
-    </select>
-  );
-
   const canWorkCheckbox = (a: Admin) => (
     <label className="flex items-center gap-1.5 text-xs text-muted">
       <input
@@ -585,7 +562,7 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
             >
               <span className="font-medium">{a.name}</span>
               <span className="flex shrink-0 items-center gap-1 text-xs text-muted">
-                {a.role === "COMPANY_ADMIN" ? "本部管理者" : "本部編集者"}
+                本部管理者
                 <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5" aria-hidden>
                   <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -608,12 +585,12 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
         </thead>
         <tbody>
           {admins.map((a) => {
-            const isLastAdmin = a.role === "COMPANY_ADMIN" && adminCount <= 1;
+            const isLastAdmin = adminCount <= 1;
             return (
               <tr key={a.userId} className="border-b border-border/60">
                 <td className="py-2">{a.name}</td>
                 <td className="py-2 text-muted">{a.email}</td>
-                <td className="py-2">{roleSelect(a, isLastAdmin)}</td>
+                <td className="py-2">本部管理者</td>
                 <td className="py-2">{canWorkCheckbox(a)}</td>
                 <td className="py-2">{removeButton(a, isLastAdmin)}</td>
               </tr>
@@ -640,11 +617,11 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
               <p className="text-muted">{detailTarget.email}</p>
               <div>
                 <p className="mb-1 text-xs text-muted">権限</p>
-                {roleSelect(detailTarget, detailTarget.role === "COMPANY_ADMIN" && adminCount <= 1)}
+                <p className="text-sm">本部管理者</p>
               </div>
               {canWorkCheckbox(detailTarget)}
               <div className="border-t border-border pt-3">
-                {removeButton(detailTarget, detailTarget.role === "COMPANY_ADMIN" && adminCount <= 1)}
+                {removeButton(detailTarget, adminCount <= 1)}
               </div>
             </div>
           </div>
@@ -653,7 +630,7 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
 
       {removeConfirmTarget ? (
         <ConfirmDialog
-          message={`「${removeConfirmTarget.name}」の本部管理者/編集者権限を外し、一般スタッフに戻します。よろしいですか？`}
+          message={`「${removeConfirmTarget.name}」の本部管理者権限を外し、一般スタッフに戻します。よろしいですか？`}
           confirmLabel="権限を外す"
           pending={pending}
           onConfirm={() =>
@@ -674,7 +651,7 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
           disabled={pending}
           onClick={() =>
             startTransition(async () => {
-              const url = await inviteCompanyAdminAction("COMPANY_EDITOR");
+              const url = await inviteCompanyAdminAction("COMPANY_ADMIN");
               setInviteUrl(url);
             })
           }

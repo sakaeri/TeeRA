@@ -43,7 +43,6 @@ import {
   renameTeam,
   updateTeamNotificationEmail,
   setTeamMemberRole,
-  setCompanyMemberRole,
   setMemberCanWorkShifts,
   removeCompanyMemberRole,
   setStaffPlainTeamMemberships,
@@ -477,21 +476,6 @@ export async function updateCompanyBankInfoAction(bankInfo: {
   });
   revalidatePath("/company/settings");
   revalidatePath("/company/invoices");
-}
-
-export async function setCompanyMemberRoleAction(
-  targetUserId: string,
-  role: "COMPANY_ADMIN" | "COMPANY_EDITOR",
-) {
-  const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
-
-  await setCompanyMemberRole({
-    companyId: membership.companyId,
-    userId: targetUserId,
-    role,
-  });
-  revalidatePath("/company/settings");
 }
 
 // 兼務フラグの切り替え（管理者/編集者が自分もシフトに入って稼働するか）。
