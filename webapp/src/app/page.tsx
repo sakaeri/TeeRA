@@ -16,36 +16,36 @@ export default async function LandingPage() {
   }
 
   return (
-    <main className="flex flex-1 flex-col">
+    <main className="flex flex-1 flex-col bg-primary text-primary-foreground">
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-6">
-        <div className="flex items-center gap-2 font-serif-jp text-xl font-bold text-primary">
+        <div className="flex items-center gap-2 font-serif-jp text-xl font-bold text-primary-foreground">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/icon.png" alt="" className="h-8 w-8 rounded-lg" />
           TeeRA
         </div>
-        <Link href="/login" className="text-sm font-semibold text-primary hover:underline">
+        <Link href="/login" className="text-sm font-semibold text-accent hover:underline">
           ログイン
         </Link>
       </header>
 
       {/* Hero */}
       <section className="mx-auto flex w-full max-w-3xl flex-col items-center gap-6 px-6 py-16 text-center sm:py-20">
-        <h1 className="font-serif-jp text-3xl font-bold leading-snug text-primary sm:text-4xl">
+        <h1 className="font-serif-jp text-3xl font-bold leading-snug text-primary-foreground sm:text-4xl">
           シフト管理から給与計算まで、
           <br />
           ひとつのアプリで。
         </h1>
-        <p className="max-w-xl text-sm leading-relaxed text-muted sm:text-base">
+        <p className="max-w-xl text-sm leading-relaxed text-primary-foreground/75 sm:text-base">
           シフト作成、タイムカード、業務報告、給与計算、請求書発行までをひとつにまとめた、
           企業とスタッフのためのシフト管理プラットフォームです。基本機能は無料でご利用いただけます。
         </p>
         <Link
           href="/register"
-          className="rounded-lg bg-primary px-8 py-3 text-base font-semibold text-primary-foreground shadow-md"
+          className="rounded-lg bg-accent px-8 py-3 text-base font-semibold text-primary shadow-md"
         >
           無料で始める
         </Link>
-        <div className="mt-4 w-full max-w-3xl overflow-hidden rounded-2xl border border-border bg-white shadow-lg">
+        <div className="mt-4 w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-xl">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/lp/calendar.png" alt="シフトカレンダーの画面" className="w-full" />
         </div>
@@ -54,18 +54,18 @@ export default async function LandingPage() {
       <LandingNav />
 
       {/* Footer CTA */}
-      <section className="bg-primary px-6 py-16 text-center text-primary-foreground">
+      <section className="bg-accent px-6 py-16 text-center text-primary">
         <h2 className="mb-4 font-serif-jp text-2xl font-bold">まずは無料で、始めてみませんか？</h2>
         <Link
           href="/register"
-          className="inline-block rounded-lg bg-accent px-8 py-3 text-base font-semibold text-primary shadow-md"
+          className="inline-block rounded-lg bg-primary px-8 py-3 text-base font-semibold text-primary-foreground shadow-md"
         >
           無料で始める
         </Link>
       </section>
 
-      <footer className="px-6 py-8 text-center text-xs text-muted">
-        <div className="mb-2 font-serif-jp text-base font-bold text-primary">TeeRA</div>
+      <footer className="px-6 py-8 text-center text-xs text-primary-foreground/60">
+        <div className="mb-2 font-serif-jp text-base font-bold text-primary-foreground">TeeRA</div>
         <Link href="/login" className="hover:underline">
           ログイン
         </Link>

@@ -2,10 +2,14 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 
-const OVERVIEW_TEXT =
-  "紙やExcelでのシフト管理が属人化していて担当者しか把握できない、タイムカードの集計や給与計算に毎月時間がかかる、" +
-  "給与明細や請求書の発行・配布が面倒、派遣スタッフや複数の取引先とのやりとりが煩雑——そんな悩みをまとめて解決するのがTeeRAです。" +
-  "基本機能は無料でご利用いただけます。";
+const PAIN_POINTS = [
+  "紙やExcelでのシフト管理が属人化していて、担当者しか把握できない",
+  "タイムカードの集計や給与計算に毎月時間がかかっている",
+  "給与明細や請求書の発行・配布が面倒",
+  "派遣スタッフや複数の取引先とのやりとりが煩雑",
+];
+
+const OVERVIEW_CLOSING_TEXT = "そんな悩みをまとめて解決するのがTeeRAです。基本機能は無料でご利用いただけます。";
 
 const STEPS = [
   { title: "無料登録", description: "会社情報を入力するだけ、1分で完了します。" },
@@ -57,12 +61,14 @@ const FEATURES: { key: string; icon: ReactNode; title: string; description: stri
     icon: <IconCalendar />,
     title: "シフト管理",
     description: "カレンダーでシフトを作成・調整。欠員や未確定のシフトもひと目で把握できます。",
+    screenshot: "/lp/calendar.png",
   },
   {
     key: "timecard",
     icon: <IconClock />,
     title: "タイムカード・業務報告",
     description: "スタッフはスマホで出退勤を記録し、業務報告を提出。企業側はそのまま確認・承認するだけ。",
+    screenshot: "/lp/timecard.png",
   },
   {
     key: "payroll",
@@ -76,12 +82,14 @@ const FEATURES: { key: string; icon: ReactNode; title: string; description: stri
     icon: <IconDocument />,
     title: "請求書発行",
     description: "取引先ごとの実績から請求書を自動で作成し、PDFで発行できます。",
+    screenshot: "/lp/invoice.png",
   },
   {
     key: "agency",
     icon: <IconLink />,
     title: "派遣会社連携",
     description: "自社・取引先・派遣スタッフの関係をまとめて管理。誰がどこで働いているか迷いません。",
+    screenshot: "/lp/agency.png",
   },
   {
     key: "points",
@@ -155,26 +163,46 @@ export function LandingNav() {
         <NavButton onClick={() => open("pricing")}>料金プラン</NavButton>
       </div>
 
-      <h2 className="mb-4 mt-10 text-center font-serif-jp text-lg font-bold text-primary">できること</h2>
-      <div className="grid grid-cols-3 gap-3">
-        {FEATURES.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            onClick={() => open(`feature-${f.key}`)}
-            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-white/60 p-3 text-center"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-              {f.icon}
-            </span>
-            <span className="text-xs font-semibold leading-tight text-foreground">{f.title}</span>
-          </button>
-        ))}
+      <div className="mt-10 rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8">
+        <h2 className="mb-1 text-center font-serif-jp text-lg font-bold text-primary-foreground">機能紹介</h2>
+        <p className="mb-6 text-center text-xs text-primary-foreground/70">
+          打刻からシフト管理、給与計算まで。気になる項目をタップしてご覧ください。
+        </p>
+        <div className="grid grid-cols-3 gap-3">
+          {FEATURES.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => open(`feature-${f.key}`)}
+              className="flex flex-col items-center gap-2 rounded-xl bg-white p-3 text-center shadow-sm transition-transform hover:-translate-y-0.5"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                {f.icon}
+              </span>
+              <span className="inline-flex items-center gap-0.5 text-xs font-semibold leading-tight text-foreground">
+                {f.title}
+                <IconChevronDown className="h-3 w-3 shrink-0 text-muted" />
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {openKey === "overview" ? (
         <PopupShell title="TeeRAとは？" onClose={close}>
-          <p className="text-sm leading-relaxed text-muted">{OVERVIEW_TEXT}</p>
+          <h4 className="mb-3 text-sm font-bold text-primary">こんな悩み、ありませんか？</h4>
+          <ul className="mb-4 flex flex-col gap-2">
+            {PAIN_POINTS.map((point) => (
+              <li
+                key={point}
+                className="flex items-start gap-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs"
+              >
+                <span className="mt-0.5 text-accent">✓</span>
+                <span>{point}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm leading-relaxed text-muted">{OVERVIEW_CLOSING_TEXT}</p>
         </PopupShell>
       ) : null}
 
@@ -250,10 +278,19 @@ function NavButton({ onClick, children }: { onClick: () => void; children: React
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg border border-primary px-5 py-2.5 text-sm font-semibold text-primary"
+      className="inline-flex items-center gap-1.5 rounded-lg border border-primary-foreground/40 px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-white/10"
     >
       {children}
+      <IconChevronDown className="h-3.5 w-3.5 opacity-70" />
     </button>
+  );
+}
+
+function IconChevronDown({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
+      <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

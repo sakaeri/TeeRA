@@ -13,7 +13,7 @@ try {
   let body = await page.textContent("body");
 
   log("hero headline shown", body.includes("シフト管理から給与計算まで"));
-  log("4 nav buttons shown (TeeRAとは？/できること見出し/はじめかた/料金プラン)", body.includes("TeeRAとは？") && body.includes("できること") && body.includes("はじめかた") && body.includes("料金プラン"));
+  log("4 nav buttons shown (TeeRAとは？/機能紹介見出し/はじめかた/料金プラン)", body.includes("TeeRAとは？") && body.includes("機能紹介") && body.includes("はじめかた") && body.includes("料金プラン"));
   log("6 feature buttons shown (long descriptions NOT inlined before opening)", body.includes("スタッフ向けポイント制度") && !body.includes("業務報告の承認でポイントが貯まり"));
 
   // --- TeeRAとは？popup ---
@@ -57,6 +57,27 @@ try {
   log(`${payrollShotSrc} loads without an auth redirect (status ${payrollRes.status()})`, payrollRes.status() === 200);
   await page.getByRole("button", { name: "閉じる" }).click();
   await page.waitForTimeout(200);
+
+  // --- 残り5機能も、すべてスクリーンショットが表示されることを確認 ---
+  const remainingShots = [
+    ["シフト管理", "/lp/calendar.png"],
+    ["タイムカード・業務報告", "/lp/timecard.png"],
+    ["請求書発行", "/lp/invoice.png"],
+    ["派遣会社連携", "/lp/agency.png"],
+    ["スタッフ向けポイント制度", "/lp/points.png"],
+  ];
+  for (const [label, src] of remainingShots) {
+    await page.getByRole("button", { name: label, exact: true }).click();
+    await page.waitForTimeout(200);
+    // calendar.pngはヒーロー画像としても常時表示されているため、ポップアップ
+    // 内の1枚と合わせて2件ヒットすることがある（他の画像は1件のみ）。
+    const shotCount = await page.locator(`img[src="${src}"]`).count();
+    log(`機能ポップアップ（${label}）にスクリーンショットが表示される`, shotCount >= 1);
+    const res = await page.request.get(`http://localhost:3000${src}`);
+    log(`${src} loads without an auth redirect (status ${res.status()})`, res.status() === 200);
+    await page.getByRole("button", { name: "閉じる" }).click();
+    await page.waitForTimeout(200);
+  }
 
   // --- ブラウザの戻るボタンでポップアップだけ閉じ、ページ自体は離脱しない ---
   await page.getByRole("button", { name: "TeeRAとは？" }).click();
