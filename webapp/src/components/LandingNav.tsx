@@ -195,7 +195,7 @@ export function LandingNav() {
             {PAIN_POINTS.map((point) => (
               <li
                 key={point}
-                className="flex items-start gap-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs"
+                className="flex items-start gap-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs text-foreground"
               >
                 <span className="mt-0.5 text-accent">✓</span>
                 <span>{point}</span>

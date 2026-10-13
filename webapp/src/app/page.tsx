@@ -54,14 +54,18 @@ export default async function LandingPage() {
       <LandingNav />
 
       {/* Footer CTA */}
-      <section className="bg-accent px-6 py-16 text-center text-primary">
-        <h2 className="mb-4 font-serif-jp text-2xl font-bold">まずは無料で、始めてみませんか？</h2>
-        <Link
-          href="/register"
-          className="inline-block rounded-lg bg-primary px-8 py-3 text-base font-semibold text-primary-foreground shadow-md"
-        >
-          無料で始める
-        </Link>
+      <section className="mx-auto w-full max-w-3xl px-6 pb-16">
+        <div className="rounded-3xl border border-accent/30 bg-accent/10 px-6 py-10 text-center sm:py-12">
+          <h2 className="mb-4 font-serif-jp text-xl font-bold text-primary-foreground sm:text-2xl">
+            まずは無料で、始めてみませんか？
+          </h2>
+          <Link
+            href="/register"
+            className="inline-block rounded-lg bg-accent px-8 py-3 text-base font-semibold text-primary shadow-md"
+          >
+            無料で始める
+          </Link>
+        </div>
       </section>
 
       <footer className="px-6 py-8 text-center text-xs text-primary-foreground/60">
