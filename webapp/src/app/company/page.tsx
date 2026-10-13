@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
+import { isLeaderOnly } from "@/lib/auth/permissions";
 import {
   loadDashboardData,
   computeKpis,
@@ -26,6 +28,7 @@ const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日�
 
 export default async function CompanyDashboardPage({ searchParams }: PageProps<"/company">) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
+  if (isLeaderOnly(membership)) redirect("/company/calendar");
   const sp = await searchParams;
   const open = typeof sp.open === "string" ? sp.open : undefined;
   const reportId = typeof sp.reportId === "string" ? sp.reportId : undefined;
@@ -89,7 +92,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
           title: t.title,
           dueDate: t.dueDate?.toISOString().slice(0, 10) ?? "",
           recipientName: t.recipient?.name ?? "",
-          comments: t.comments.map((c) => ({ id: c.id, authorName: c.author.name, body: c.body })),
+          comments: t.comments.map((c) => ({ id: c.id, authorUserId: c.authorUserId, authorName: c.author.name, body: c.body })),
         }))}
         resolvedTodos={resolvedTodos.map((t) => ({
           id: t.id,
@@ -98,8 +101,9 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
           createdByName: t.createdBy?.name ?? "",
           recipientName: t.recipient?.name ?? "",
           resolvedAt: t.resolvedAt?.toISOString().slice(0, 10) ?? "",
-          comments: t.comments.map((c) => ({ id: c.id, authorName: c.author.name, body: c.body })),
+          comments: t.comments.map((c) => ({ id: c.id, authorUserId: c.authorUserId, authorName: c.author.name, body: c.body })),
         }))}
+        currentUserId={userId}
         currentUserName={currentUserName}
         recipientOptions={audience.map((a) => ({ id: a.userId, name: a.name }))}
         promoItems={promoItems.map((p) => ({

@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
+import { isLeaderOnly } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { listTeams } from "@/lib/domain/teams";
 import { listStaff } from "@/lib/domain/roster";
@@ -24,6 +26,7 @@ function formatJstTime(date: Date) {
 
 export default async function SettingsPage({ searchParams }: PageProps<"/company/settings">) {
   const { membership } = await requireCompanyAdminOrEditor();
+  if (isLeaderOnly(membership)) redirect("/company/calendar");
   const sp = await searchParams;
   const initialTab = typeof sp.tab === "string" ? sp.tab : "basic";
 

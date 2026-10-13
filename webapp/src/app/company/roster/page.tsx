@@ -1,5 +1,6 @@
+import { redirect } from "next/navigation";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { isCompanyScopeAdmin } from "@/lib/auth/permissions";
+import { isCompanyScopeAdmin, isLeaderOnly, myManagedOrLedTeamIds } from "@/lib/auth/permissions";
 import { listStaffWithSummary } from "@/lib/domain/roster";
 import { listClients, listAgencies } from "@/lib/domain/relationships";
 import { listTeams } from "@/lib/domain/teams";
@@ -18,17 +19,23 @@ const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日�
 
 export default async function RosterPage({ searchParams }: PageProps<"/company/roster">) {
   const { membership } = await requireCompanyAdminOrEditor();
+  if (isLeaderOnly(membership)) redirect("/company/calendar");
   const sp = await searchParams;
   const initialStaffId = typeof sp.staff === "string" ? sp.staff : undefined;
   const initialStaffTab = sp.tab === "contracts" ? ("contracts" as const) : undefined;
+
+  // 本部管理者/編集者以外（チームマネージャー/リーダー）には、自分が
+  // 管轄するチームに所属するスタッフ・依頼主・派遣会社だけを見せる
+  // （無関係な他チームの情報が邪魔にならないように）。
+  const restrictToTeamIds = isCompanyScopeAdmin(membership) ? undefined : myManagedOrLedTeamIds(membership);
 
   // 依頼主一覧/派遣会社一覧タブは常時表示する（スタッフ一覧と同じく、0件でも
   // 「追加する」ボタン付きの空状態を出す）ので、agencyEnabled/dispatchEnabled
   // に関わらず常に取得する。
   const [staff, clients, agencies, teams, templates, uploadOnlyTemplates, knownTaskNames, company] = await Promise.all([
-    listStaffWithSummary(membership.companyId),
-    listClients(membership.companyId),
-    listAgencies(membership.companyId),
+    listStaffWithSummary(membership.companyId, restrictToTeamIds),
+    listClients(membership.companyId, restrictToTeamIds),
+    listAgencies(membership.companyId, restrictToTeamIds),
     listTeams(membership.companyId),
     listTemplates(membership.companyId),
     listUploadOnlyTemplates(membership.companyId),
@@ -60,7 +67,9 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
           staffCount: a.agencyCompany ? a._count.staffPlacements : a._count.membershipsViaAgency,
           teams: a.teamLinks.map((l) => ({ id: l.team.id, name: l.team.name })),
         }))}
-        teams={teams.map((t) => ({ id: t.id, name: t.name }))}
+        teams={teams
+          .filter((t) => !restrictToTeamIds || restrictToTeamIds.includes(t.id))
+          .map((t) => ({ id: t.id, name: t.name }))}
         isCompanyScopeAdmin={isCompanyScopeAdmin(membership)}
         myManagedTeams={membership.teamMemberships
           .filter((tm) => tm.role === "TEAM_MANAGER")

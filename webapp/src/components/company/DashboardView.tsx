@@ -7,6 +7,7 @@ import {
   resolveTodoAction,
   reopenTodoAction,
   addTodoCommentAction,
+  deleteTodoCommentAction,
 } from "@/app/company/actions-todo";
 import {
   createPromoItemAction,
@@ -53,12 +54,14 @@ type Kpis = {
 
 type AutoTodo = { id: string; kind: string; text: string; actionLabel: string; actionHref: string };
 
+type TodoCommentItem = { id: string; authorUserId: string; authorName: string; body: string };
+
 type OpenTodo = {
   id: string;
   title: string;
   dueDate: string;
   recipientName: string;
-  comments: { id: string; authorName: string; body: string }[];
+  comments: TodoCommentItem[];
 };
 
 type ResolvedTodo = {
@@ -68,7 +71,7 @@ type ResolvedTodo = {
   createdByName: string;
   recipientName: string;
   resolvedAt: string;
-  comments: { id: string; authorName: string; body: string }[];
+  comments: TodoCommentItem[];
 };
 
 type ShortageEntry = {
@@ -184,6 +187,7 @@ export function DashboardView({
   autoTodos,
   openTodos,
   resolvedTodos,
+  currentUserId,
   currentUserName,
   recipientOptions,
   promoItems,
@@ -206,6 +210,7 @@ export function DashboardView({
   autoTodos: AutoTodo[];
   openTodos: OpenTodo[];
   resolvedTodos: ResolvedTodo[];
+  currentUserId: string;
   currentUserName: string;
   recipientOptions: { id: string; name: string }[];
   promoItems: PromoItem[];
@@ -304,6 +309,7 @@ export function DashboardView({
         autoTodos={autoTodos}
         openTodos={openTodos}
         resolvedTodos={resolvedTodos}
+        currentUserId={currentUserId}
         promoItems={promoItems}
         promoOrders={promoOrders}
         onEditPromoItem={setEditingPromoItem}
@@ -1036,6 +1042,7 @@ function TodoSection({
   autoTodos,
   openTodos,
   resolvedTodos,
+  currentUserId,
   promoItems,
   promoOrders,
   onEditPromoItem,
@@ -1045,6 +1052,7 @@ function TodoSection({
   autoTodos: AutoTodo[];
   openTodos: OpenTodo[];
   resolvedTodos: ResolvedTodo[];
+  currentUserId: string;
   promoItems: PromoItem[];
   promoOrders: PromoOrder[];
   onEditPromoItem: (item: PromoItem) => void;
@@ -1130,9 +1138,21 @@ function TodoSection({
               {expandedId === t.id ? (
                 <div className="mt-2 border-t border-border/50 pt-2">
                   {t.comments.map((c) => (
-                    <p key={c.id} className="text-xs text-muted">
-                      {c.authorName}: {c.body}
-                    </p>
+                    <div key={c.id} className="flex items-start justify-between gap-2">
+                      <p className="text-xs text-muted">
+                        {c.authorName}: {c.body}
+                      </p>
+                      {c.authorUserId === currentUserId ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => startTransition(() => deleteTodoCommentAction(c.id))}
+                          className="shrink-0 text-xs text-muted hover:text-red-600 disabled:opacity-60"
+                        >
+                          削除
+                        </button>
+                      ) : null}
+                    </div>
                   ))}
                   <div className="mt-2 flex gap-2">
                     <input
@@ -1198,9 +1218,21 @@ function TodoSection({
               {expandedId === t.id ? (
                 <div className="mt-2 border-t border-border/50 pt-2">
                   {t.comments.map((c) => (
-                    <p key={c.id} className="text-xs text-muted">
-                      {c.authorName}: {c.body}
-                    </p>
+                    <div key={c.id} className="flex items-start justify-between gap-2">
+                      <p className="text-xs text-muted">
+                        {c.authorName}: {c.body}
+                      </p>
+                      {c.authorUserId === currentUserId ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => startTransition(() => deleteTodoCommentAction(c.id))}
+                          className="shrink-0 text-xs text-muted hover:text-red-600 disabled:opacity-60"
+                        >
+                          削除
+                        </button>
+                      ) : null}
+                    </div>
                   ))}
                   {t.comments.length === 0 ? <p className="text-xs text-muted">コメントはありません。</p> : null}
                 </div>

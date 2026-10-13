@@ -11,10 +11,25 @@ import type { TeamRole } from "@/generated/prisma/enums";
 
 // role=STAFFの人に加え、兼務でcanWorkShifts=trueの管理者/編集者も含む —
 // シフト割当の選択肢に出す・稼働実績を記録する対象という意味では両者は
-// 同じ扱いになる。
-export async function listStaff(companyId: string) {
+// 同じ扱いになる。restrictToTeamIdsを渡すと、いずれかのチームに所属する
+// スタッフだけに絞る（チームマネージャー/リーダーが自チーム外の無関係な
+// スタッフまで見えてしまわないようにするため）。
+export async function listStaff(companyId: string, restrictToTeamIds?: string[]) {
+  let restrictToUserIds: string[] | undefined;
+  if (restrictToTeamIds) {
+    const teamMembers = await prisma.teamMembership.findMany({
+      where: { teamId: { in: restrictToTeamIds } },
+      select: { userId: true },
+    });
+    restrictToUserIds = teamMembers.map((tm) => tm.userId);
+  }
+
   const memberships = await prisma.companyMembership.findMany({
-    where: { companyId, OR: [{ role: "STAFF" }, { canWorkShifts: true }] },
+    where: {
+      companyId,
+      OR: [{ role: "STAFF" }, { canWorkShifts: true }],
+      ...(restrictToUserIds ? { userId: { in: restrictToUserIds } } : {}),
+    },
     include: { user: true, viaAgencyRelationship: true },
     orderBy: { createdAt: "asc" },
   });
@@ -68,8 +83,8 @@ function contractDisplayTitle(employmentType: string, jobDescription: string) {
 
 // Roster table summary: 今月稼働 (hours worked this month from approved WORKED
 // reports), 契約内容 (from the staff's active contract), 契約書 status pill.
-export async function listStaffWithSummary(companyId: string) {
-  const staff = await listStaff(companyId);
+export async function listStaffWithSummary(companyId: string, restrictToTeamIds?: string[]) {
+  const staff = await listStaff(companyId, restrictToTeamIds);
   const userIds = staff.map((s) => s.userId);
   if (userIds.length === 0) return staff.map((s) => ({ ...s, monthlyHours: 0, contractLabel: "—", contractStatus: "未送付" as const }));
 

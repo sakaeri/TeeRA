@@ -75,6 +75,14 @@ try {
   );
   log("チームマネージャーの会社レベルroleはSTAFFのまま", managerRole === "STAFF");
 
+  // チーム招待は（権限を選ばせない設計のため）まずTEAM_LEADERとして参加する。
+  // このテストはチームマネージャーの挙動を確認したいので、ここでTEAM_MANAGERに
+  // 昇格させる（本来は設定画面の「権限」セレクトから行う操作をSQLで代替）。
+  // リーダーはシフトカレンダー以外へ一切アクセスできない仕様のため、
+  // マネージャーに昇格しないとこの後のダッシュボード確認が成立しない。
+  const teamAId = psql(`select id from "Team" where "companyId"='${companyId}' and name='Aチーム' order by "createdAt" desc limit 1;`);
+  psql(`update "TeamMembership" set role='TEAM_MANAGER' where "teamId"='${teamAId}' and "userId"='${managerUserId}';`);
+
   // --- 管理者側: 説明文と、チームマネージャーが「誰宛か」候補に出ること ---
   await admin.goto("http://localhost:3000/company");
   await admin.click("text=＋やることリスト作成");

@@ -8,9 +8,15 @@ import { computeInvoiceTotals } from "@/lib/domain/invoicing";
 // companies this company sends staff to. ownerCompanyIdでは絞らない —
 // 関係を作った側でなくても、自分がagencyCompanyId側として紐づいて
 // いれば見える（本アカウント連携の意味を持たせるための双方向可視化）。
-export async function listClients(companyId: string) {
+// restrictToTeamIdsを渡すと、いずれかのチームに紐付く依頼主だけに絞る
+// （チームマネージャー/リーダーが自チーム外の無関係な依頼主まで見えて
+// しまわないようにするため）。
+export async function listClients(companyId: string, restrictToTeamIds?: string[]) {
   return prisma.companyRelationship.findMany({
-    where: { agencyCompanyId: companyId },
+    where: {
+      agencyCompanyId: companyId,
+      ...(restrictToTeamIds ? { teamLinks: { some: { teamId: { in: restrictToTeamIds } } } } : {}),
+    },
     include: {
       clientCompany: true,
       _count: { select: { staffPlacements: { where: { active: true } } } },
@@ -27,9 +33,14 @@ export async function listClients(companyId: string) {
 // 作られるため）ので、人数はmembershipsViaAgency（所属タグ付けされた
 // スタッフ）側で数える。実体のある派遣会社はこれまで通り配属実績
 // （staffPlacements）で数える。
-export async function listAgencies(companyId: string) {
+// restrictToTeamIdsを渡すと、いずれかのチームに紐付く派遣会社だけに絞る
+// （listClients参照）。
+export async function listAgencies(companyId: string, restrictToTeamIds?: string[]) {
   return prisma.companyRelationship.findMany({
-    where: { clientCompanyId: companyId },
+    where: {
+      clientCompanyId: companyId,
+      ...(restrictToTeamIds ? { teamLinks: { some: { teamId: { in: restrictToTeamIds } } } } : {}),
+    },
     include: {
       agencyCompany: true,
       _count: { select: { staffPlacements: { where: { active: true } }, membershipsViaAgency: true } },

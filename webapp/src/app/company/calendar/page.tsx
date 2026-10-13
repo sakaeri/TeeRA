@@ -58,7 +58,7 @@ export default async function CompanyCalendarPage({
   const [shifts, shiftHistory, staff, teams, shiftRequests, recruitments, clientRecruitments] = await Promise.all([
     listShiftsForMonth({ companyId: membership.companyId, year, month, teamId, restrictToTeamIds, companyRelationshipId: relationshipId }),
     listShiftHistoryForMonth({ companyId: membership.companyId, year, month, teamId, restrictToTeamIds }),
-    listStaff(membership.companyId),
+    listStaff(membership.companyId, restrictToTeamIds),
     listTeams(membership.companyId),
     listShiftRequests({ companyId: membership.companyId, status: "PENDING" }),
     listPublicRecruitments({ companyId: membership.companyId }),
@@ -66,8 +66,8 @@ export default async function CompanyCalendarPage({
   ]);
 
   const affordable = await affordableMaxEntries(membership.companyId);
-  const clients = company.agencyEnabled ? await listClients(membership.companyId) : [];
-  const agencies = company.dispatchEnabled ? await listAgencies(membership.companyId) : [];
+  const clients = company.agencyEnabled ? await listClients(membership.companyId, restrictToTeamIds) : [];
+  const agencies = company.dispatchEnabled ? await listAgencies(membership.companyId, restrictToTeamIds) : [];
   const assignableAgencyStaff = company.dispatchEnabled ? await listAssignableAgencyStaff(membership.companyId) : [];
   const agencyRelationshipIds = [...new Set(assignableAgencyStaff.map((s) => s.companyRelationshipId))];
   const agencyTaskNamesByRelationship = Object.fromEntries(

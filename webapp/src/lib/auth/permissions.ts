@@ -67,6 +67,16 @@ export function myManagedOrLedTeamIds(membership: ActiveMembership) {
     .map((tm) => tm.teamId);
 }
 
+// 会社スコープの管理者/編集者でも、いずれかのチームのマネージャーでもなく
+// （どこかのチームの）リーダーだけを務めている状態。リーダーの権限は
+// 「自チームのシフト作成のみ」なので、ダッシュボード・スタッフ名簿・
+// 給料明細/請求書・設定へはナビゲーションを出さず、URLを直接叩かれても
+// /company/calendarへ戻す（各ページのガード側で使う）。
+export function isLeaderOnly(membership: ActiveMembership) {
+  if (isCompanyScopeAdmin(membership)) return false;
+  return !membership.teamMemberships.some((tm) => tm.role === "TEAM_MANAGER");
+}
+
 // Only company-scope admins/editors manage company-wide settings: modules
 // (agency/dispatch toggles), team creation, company-scope member roles.
 export function canManageCompanySettings(membership: ActiveMembership) {

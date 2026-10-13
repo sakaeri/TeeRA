@@ -20,6 +20,11 @@ const NAV = [
   { href: "/company/settings", label: "設定", mobileLabel: "設定" },
 ];
 
+// リーダーの権限は自チームのシフト作成のみ — シフトカレンダー以外の
+// ナビゲーションは出さない（各ページ側もURL直打ち対策でリダイレクトする
+// ので、こちらは「迷わないための」表示上の出し分け）。
+const LEADER_ONLY_NAV = NAV.filter((item) => item.href === "/company/calendar");
+
 function isNavItemActive(item: (typeof NAV)[number], pathname: string) {
   return item.matchPrefixes
     ? item.matchPrefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))
@@ -39,6 +44,7 @@ export function CompanyShell({
   teeBalance,
   hasMultipleCompanies,
   showStaffScreenLink,
+  leaderOnly,
   children,
 }: {
   companyName: string;
@@ -48,12 +54,14 @@ export function CompanyShell({
   teeBalance: number;
   hasMultipleCompanies: boolean;
   showStaffScreenLink: boolean;
+  leaderOnly: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useClickOutside<HTMLDivElement>(profileOpen, () => setProfileOpen(false));
   const initial = userName.slice(0, 1);
+  const nav = leaderOnly ? LEADER_ONLY_NAV : NAV;
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
@@ -154,7 +162,7 @@ export function CompanyShell({
       */}
       <div className="order-2 flex flex-1 flex-col sm:flex-row">
         <nav className="hidden w-52 shrink-0 bg-primary py-6 text-primary-foreground sm:block">
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const active = isNavItemActive(item, pathname);
             return (
               <Link
@@ -174,7 +182,7 @@ export function CompanyShell({
       </div>
 
       <nav className="order-1 flex items-stretch justify-around border-b border-accent/60 bg-primary text-primary-foreground sm:hidden">
-        {NAV.map((item) => {
+        {nav.map((item) => {
           const active = isNavItemActive(item, pathname);
           return (
             <Link

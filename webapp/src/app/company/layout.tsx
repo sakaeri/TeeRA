@@ -1,5 +1,5 @@
 import { requireCompanyAdminOrEditor, listMyMemberships } from "@/lib/auth/session";
-import { hasAnyTeamManagementRole } from "@/lib/auth/permissions";
+import { hasAnyTeamManagementRole, isLeaderOnly } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { CompanyShell } from "@/components/company/CompanyShell";
 
@@ -44,6 +44,7 @@ export default async function CompanyLayout({
       teeBalance={company.teeBalance}
       hasMultipleCompanies={myMemberships.length > 1}
       showStaffScreenLink={membership.canWorkShifts || hasAnyTeamManagementRole(membership)}
+      leaderOnly={isLeaderOnly(membership)}
     >
       {children}
     </CompanyShell>

@@ -352,3 +352,9 @@ export async function addTodoComment(params: { todoItemId: string; authorUserId:
     data: { todoItemId: params.todoItemId, authorUserId: params.authorUserId, body: params.body },
   });
 }
+
+// 誤投稿の訂正用 — 自分が書いたコメントだけ削除できる（他人の投稿は消せない）。
+// 呼び出し元(actions-todo.ts)でauthorUserId一致を確認済みの前提。
+export async function deleteTodoComment(id: string) {
+  return prisma.todoComment.delete({ where: { id } });
+}

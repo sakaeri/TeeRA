@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { canManageAny, isCompanyScopeAdmin } from "@/lib/auth/permissions";
+import { canManageAny, isCompanyScopeAdmin, isLeaderOnly } from "@/lib/auth/permissions";
 import { listClients } from "@/lib/domain/relationships";
 import { getOrCreateInvoice, computeInvoiceTotals, listInvoicesForCompany } from "@/lib/domain/invoicing";
 import { pdfQuotaRemaining } from "@/lib/domain/plans";
@@ -21,6 +21,7 @@ export default async function InvoicesPage({
   searchParams,
 }: PageProps<"/company/invoices">) {
   const { membership } = await requireCompanyAdminOrEditor();
+  if (isLeaderOnly(membership)) redirect("/company/calendar");
   const company = await prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } });
   if (!company.agencyEnabled) {
     redirect("/company/roster");

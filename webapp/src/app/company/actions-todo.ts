@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { createManualTodo, resolveTodo, reopenTodo, addTodoComment } from "@/lib/domain/dashboard";
+import { createManualTodo, resolveTodo, reopenTodo, addTodoComment, deleteTodoComment } from "@/lib/domain/dashboard";
 import { prisma } from "@/lib/prisma";
 
 async function assertTodoOwnedByCompany(todoItemId: string, companyId: string) {
@@ -47,5 +47,16 @@ export async function addTodoCommentAction(todoItemId: string, body: string) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   await assertTodoOwnedByCompany(todoItemId, membership.companyId);
   await addTodoComment({ todoItemId, authorUserId: userId, body });
+  revalidatePath("/company");
+}
+
+// 自分が書いたコメントの誤投稿訂正用。他人のコメントは削除できない。
+export async function deleteTodoCommentAction(commentId: string) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  const comment = await prisma.todoComment.findFirstOrThrow({
+    where: { id: commentId, todoItem: { companyId: membership.companyId } },
+  });
+  if (comment.authorUserId !== userId) throw new Error("forbidden");
+  await deleteTodoComment(commentId);
   revalidatePath("/company");
 }

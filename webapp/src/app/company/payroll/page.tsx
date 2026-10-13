@@ -1,5 +1,5 @@
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { canManageAny, isCompanyScopeAdmin } from "@/lib/auth/permissions";
+import { canManageAny, isCompanyScopeAdmin, isLeaderOnly } from "@/lib/auth/permissions";
 import { listStaff } from "@/lib/domain/roster";
 import { getOrCreateSalarySlip, getTotals, listSalarySlipsForCompany } from "@/lib/domain/payroll";
 import { pdfQuotaRemaining } from "@/lib/domain/plans";
@@ -21,6 +21,7 @@ export default async function PayrollPage({
   searchParams,
 }: PageProps<"/company/payroll">) {
   const { membership } = await requireCompanyAdminOrEditor();
+  if (isLeaderOnly(membership)) redirect("/company/calendar");
   const sp = await searchParams;
   const requestedMonth = typeof sp.month === "string" ? sp.month : currentMonth();
   const staffUserId = typeof sp.staff === "string" ? sp.staff : undefined;

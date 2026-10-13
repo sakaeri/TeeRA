@@ -20,6 +20,10 @@ function psql(sql) {
 // 「会社画面へ」）がチームマネージャー/リーダーにもちゃんと出ることを
 // 確認する（元々はcanWorkShiftsの管理者だけが対象で、チームリーダーには
 // 出ていなかった不具合の再発防止）。
+// ※リーダーの権限は自チームのシフト作成のみなので、「会社画面へ」で
+//   /companyに入っても即座に/company/calendarへリダイレクトされる
+//   （ダッシュボード等には入れない）。シェル切替自体は機能している
+//   ことの確認が目的なので、着地先がcalendarであることを確認する。
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 const adminCtx = await browser.newContext();
@@ -80,10 +84,11 @@ try {
   const membershipRole = psql(`select role from "CompanyMembership" where "userId"='${leaderUserId}';`);
   log("リーダーの会社レベルroleはSTAFFのまま", membershipRole === "STAFF");
 
-  // --- リーダーは/companyに入れる（hasAnyTeamManagementRoleの例外）---
+  // --- リーダーは/companyに入れる（hasAnyTeamManagementRoleの例外）が、
+  //     権限はシフト作成のみなので即座に/company/calendarへ着地する ---
   await leader.goto("http://localhost:3000/company");
   await leader.waitForTimeout(300);
-  log("リーダーは/companyに入れる", leader.url().endsWith("/company"));
+  log("リーダーは/companyへ行くと/company/calendarに着地する", leader.url().endsWith("/company/calendar"));
 
   await leader.click('button[aria-label="プロフィールメニュー"]');
   await leader.waitForTimeout(200);
@@ -99,8 +104,8 @@ try {
   menuText = await leader.locator('button[aria-label="プロフィールメニュー"] + div').textContent();
   log("スタッフ画面で「会社画面へ」リンクが表示される", menuText.includes("会社画面へ"));
   await leader.click("text=会社画面へ");
-  await leader.waitForURL("http://localhost:3000/company", { timeout: 10000 });
-  log("「会社画面へ」で会社画面に戻れる", leader.url().endsWith("/company"));
+  await leader.waitForURL("http://localhost:3000/company/calendar", { timeout: 10000 });
+  log("「会社画面へ」で会社画面に戻れる（リーダーはカレンダーに着地）", leader.url().endsWith("/company/calendar"));
 
   console.log(process.exitCode ? "TEAM LEAD SHELL SWITCH SMOKE TEST HAD FAILURES" : "TEAM LEAD SHELL SWITCH SMOKE TEST PASSED");
 } catch (err) {

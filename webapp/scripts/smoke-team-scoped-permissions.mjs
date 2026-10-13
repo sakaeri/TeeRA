@@ -202,6 +202,44 @@ try {
   const staffBTeamIds = JSON.parse(psql(`select coalesce(json_agg("teamId"),'[]') from "TeamMembership" where "userId"='${staffBId}';`));
   log("Bチームスタッフの所属チームはBチームのみ（Aチームマネージャーの管轄外）", staffBTeamIds.length === 1 && staffBTeamIds[0] === teamBId);
 
+  // --- roster/calendar: Aチームマネージャーには自チーム外の人・取引先が見えない ---
+  // body.textContent()は、画面には出ない埋め込みJSON（ハイドレーション用の
+  // contractTemplates.contractedStaffNames等）まで拾ってしまい偽陽性になる
+  // ため、実際に目に見える要素だけを:visibleで絞って確認する。
+  await mgr.goto("http://localhost:3000/company/roster");
+  await mgr.waitForTimeout(500);
+  log("スタッフ名簿にAチームスタッフは見える", (await mgr.locator(':visible:text("Aチームスタッフ")').count()) > 0);
+  log("スタッフ名簿にBチームスタッフは見えない", (await mgr.locator(':visible:text("Bチームスタッフ")').count()) === 0);
+
+  await mgr.click("text=依頼主一覧");
+  await mgr.waitForTimeout(300);
+  log(
+    "依頼主一覧にBチーム取引先（自チーム外）は見えない",
+    (await mgr.locator(':visible:text("Bチーム取引先")').count()) === 0,
+  );
+
+  // roster's team-filter dropdown should only offer Aチーム, not Bチーム
+  const rosterTeamOptionTexts = await mgr
+    .locator("select")
+    .filter({ has: mgr.locator('option:has-text("全社")') })
+    .first()
+    .locator("option")
+    .allTextContents()
+    .catch(() => []);
+  const rosterTeamSelectVisible = rosterTeamOptionTexts.length > 0;
+  log(
+    "スタッフ名簿のチーム絞り込みにBチームの選択肢が無い（絞り込みselectが見える場合）",
+    !rosterTeamSelectVisible || !rosterTeamOptionTexts.some((t) => t.includes("Bチーム")),
+  );
+
+  // calendar's client/agency filter dropdown should not offer Bチーム取引先
+  await mgr.goto("http://localhost:3000/company/calendar");
+  await mgr.waitForTimeout(500);
+  log(
+    "カレンダー画面にBチーム取引先（自チーム外の依頼主）の文言が見えない",
+    (await mgr.locator(':visible:text("Bチーム取引先")').count()) === 0,
+  );
+
   console.log(process.exitCode ? "TEAM-SCOPED PERMISSIONS SMOKE TEST HAD FAILURES" : "TEAM-SCOPED PERMISSIONS SMOKE TEST PASSED");
 } catch (err) {
   console.error("TEAM-SCOPED PERMISSIONS SMOKE TEST FAILED", err);

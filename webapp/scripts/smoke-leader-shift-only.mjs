@@ -98,11 +98,11 @@ try {
   const shiftCount = psql(`select count(*) from "Shift" where "staffUserId"='${plainStaffId}' and "taskName"='リーダー確認業務';`);
   log("リーダーがシフトを作成できる", shiftCount === "1");
 
-  // --- リーダーは給与計算・請求書・契約書に触れない ---
+  // --- リーダーは給与計算・請求書・契約書に触れない（URL直打ちでも
+  //     /company/calendarへリダイレクトされ、ページ自体にすら入れない）---
   await leader.goto(`http://localhost:3000/company/payroll?month=${thisMonth}&staff=${plainStaffId}`);
   await leader.waitForTimeout(500);
-  let body = await leader.textContent("body");
-  log("リーダーは給与計算を閲覧できない", body.includes("下書き中") && !body.includes("勤務内訳"));
+  log("リーダーは給与計算を閲覧できない（/company/calendarへリダイレクト）", leader.url().endsWith("/company/calendar"));
 
   // --- 派遣会社詳細にはチーム編集セクションが出ない（依頼主のみ）---
   await admin.goto("http://localhost:3000/company/roster");
@@ -124,7 +124,7 @@ try {
   await admin.click("text=確認用派遣会社");
   await admin.waitForTimeout(300);
   const agencyPanel = admin.locator("div.fixed.inset-0.z-30").last();
-  body = await agencyPanel.textContent();
+  const body = await agencyPanel.textContent();
   log("派遣会社詳細にはチーム編集ボタンが出ない", !body.includes("チームとの紐付けを編集"));
 
   console.log(process.exitCode ? "LEADER SHIFT-ONLY SMOKE TEST HAD FAILURES" : "LEADER SHIFT-ONLY SMOKE TEST PASSED");

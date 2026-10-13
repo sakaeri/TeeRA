@@ -121,6 +121,7 @@ export function ClientDetailPanel({
   const [month, setMonth] = useState(initToday.month);
   const [tab, setTab] = useState<"history" | "staff" | "rates" | "note">("history");
   const [data, setData] = useState<ClientMonthDetail | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [pending, startTransition] = useTransition();
   const [upgradeUrl, setUpgradeUrl] = useState<string | null>(null);
   const [showAgencyInviteModal, setShowAgencyInviteModal] = useState(false);
@@ -255,9 +256,13 @@ export function ClientDetailPanel({
   }
 
   function refresh() {
-    return getClientMonthDetailAction(relationshipId, year, month).then((d) => {
-      setData(d);
-    });
+    return getClientMonthDetailAction(relationshipId, year, month)
+      .then((d) => {
+        setData(d);
+      })
+      .catch(() => {
+        setLoadError(true);
+      });
   }
 
   function startEditTeams(teams: ClientMonthDetail["teams"]) {
@@ -275,10 +280,15 @@ export function ClientDetailPanel({
 
   useEffect(() => {
     let cancelled = false;
-    getClientMonthDetailAction(relationshipId, year, month).then((d) => {
-      if (cancelled) return;
-      setData(d);
-    });
+    getClientMonthDetailAction(relationshipId, year, month)
+      .then((d) => {
+        if (cancelled) return;
+        setData(d);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLoadError(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -309,7 +319,11 @@ export function ClientDetailPanel({
         </button>
 
         {!data ? (
-          <p className="text-sm text-muted">読み込み中…</p>
+          loadError ? (
+            <p className="text-sm text-muted">この情報は表示できません（権限がないか、対象が見つかりません）。</p>
+          ) : (
+            <p className="text-sm text-muted">読み込み中…</p>
+          )
         ) : (
           <>
             <div className="mb-3 flex items-start justify-between gap-2">
