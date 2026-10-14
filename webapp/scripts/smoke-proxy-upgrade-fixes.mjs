@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
+import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 // 2つの不具合を検証する：
 // ①CLIENT_UPGRADE/AGENCY_UPGRADE（既存の仮依頼主/仮派遣会社を本アカウント
@@ -38,8 +39,9 @@ try {
   await agency.goto("http://localhost:3000/register");
   await agency.fill("#name", "本アカ連携確認派遣元管理者");
   await agency.fill("#email", agencyAdminEmail);
-  await agency.fill("#password", "password123");
   await agency.click("button[type=submit]");
+  await agency.waitForTimeout(400);
+  await agency.goto(extractMagicLinkFromLog());
   await agency.waitForURL("http://localhost:3000/register/company");
   await agency.fill("#name", agencyCompanyName);
   await agency.click("button[type=submit]");
@@ -64,8 +66,9 @@ try {
   await client.goto("http://localhost:3000/register");
   await client.fill("#name", "本アカ連携確認依頼主管理者");
   await client.fill("#email", clientAdminEmail);
-  await client.fill("#password", "password123");
   await client.click("button[type=submit]");
+  await client.waitForTimeout(400);
+  await client.goto(extractMagicLinkFromLog());
   await client.waitForURL("http://localhost:3000/register/company");
   await client.fill("#name", clientCompanyName);
   await client.click("button[type=submit]");
@@ -93,8 +96,9 @@ try {
   const staffAdminEmail = `puf-staffadmin-${Date.now()}@example.com`;
   await staff.fill("#name", "本アカ連携確認スタッフ管理者");
   await staff.fill("#email", staffAdminEmail);
-  await staff.fill("#password", "password123");
   await staff.click("button[type=submit]");
+  await staff.waitForTimeout(400);
+  await staff.goto(extractMagicLinkFromLog());
   await staff.waitForURL("http://localhost:3000/register/company");
   const staffTestCompanyName = `本アカ連携確認スタッフ会社${Date.now()}`;
   await staff.fill("#name", staffTestCompanyName);
@@ -141,8 +145,9 @@ try {
   await upgradePage.click("text=アカウントを作成して参加する");
   await upgradePage.fill("#name", "本アカ連携確認スタッフ本人");
   await upgradePage.fill("#email", realStaffEmail);
-  await upgradePage.fill("#password", "password123");
   await upgradePage.click("button[type=submit]");
+  await upgradePage.waitForTimeout(400);
+  await upgradePage.goto(extractMagicLinkFromLog());
   await upgradePage.waitForURL(new RegExp("/invite/"));
   await upgradePage.click("text=参加する");
   await upgradePage.waitForURL("http://localhost:3000/staff");

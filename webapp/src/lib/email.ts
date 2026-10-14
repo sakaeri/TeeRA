@@ -9,12 +9,31 @@ import { Resend } from "resend";
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const FROM = process.env.EMAIL_FROM || "TeeRA <onboarding@resend.dev>";
 
+// HTMLからおおまかなプレーンテキスト版を自動生成する。複数の迷惑メール
+// フィルタはHTML単体より両方揃っているメールを信頼しやすいため、全メール
+// 共通で付与する（個別テンプレート側で書き分ける必要はない）。
+function htmlToPlainText(html: string) {
+  return html
+    .replace(/<a[^>]*href="([^"]*)"[^>]*>.*?<\/a>/gi, "$1")
+    .replace(/<\/(p|div|h[1-6])>/gi, "\n\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 async function sendMail(to: string, subject: string, html: string) {
+  const text = htmlToPlainText(html);
   if (!resend) {
     console.log(`[email:fallback] RESEND_API_KEY未設定のため送信をスキップしました。宛先=${to} 件名=${subject}\n${html}`);
     return;
   }
-  const result = await resend.emails.send({ from: FROM, to, subject, html });
+  const result = await resend.emails.send({ from: FROM, to, subject, html, text });
   if (result.error) {
     console.error(`[email:resend-error] 宛先=${to} 件名=${subject}`, result.error);
   } else {
@@ -87,6 +106,47 @@ export async function sendEmailChangeConfirmation(to: string, name: string, conf
        <p style="margin:0;font-size:14px;line-height:1.6;">このメールアドレスへの変更が申請されました。以下のボタンを押すと変更が確定します（1時間有効）。</p>
        ${button(confirmUrl, "変更を確定する")}
        ${note("心当たりがない場合はこのメールを破棄してください。")}`,
+    ),
+  );
+}
+
+export async function sendRegistrationConfirmEmail(to: string, name: string, confirmUrl: string) {
+  await sendMail(
+    to,
+    "【TeeRA】登録を完了してください",
+    emailLayout(
+      "登録を完了してください",
+      `${greeting(name)}
+       <p style="margin:0;font-size:14px;line-height:1.6;">TeeRAへのご登録ありがとうございます。以下のボタンから登録を完了してください（24時間有効）。</p>
+       ${button(confirmUrl, "登録を完了する")}
+       ${note("心当たりがない場合はこのメールを破棄してください。届かない場合は迷惑メールフォルダもご確認ください。")}`,
+    ),
+  );
+}
+
+export async function sendLoginMagicLinkEmail(to: string, name: string, loginUrl: string) {
+  await sendMail(
+    to,
+    "【TeeRA】ログイン用リンク",
+    emailLayout(
+      "ログイン用リンク",
+      `${greeting(name)}
+       <p style="margin:0;font-size:14px;line-height:1.6;">以下のボタンからログインできます（24時間有効）。</p>
+       ${button(loginUrl, "ログインする")}
+       ${note("心当たりがない場合はこのメールを破棄してください。届かない場合は迷惑メールフォルダもご確認ください。")}`,
+    ),
+  );
+}
+
+export async function sendPasswordRequiredNoticeEmail(to: string, name: string) {
+  await sendMail(
+    to,
+    "【TeeRA】ログインにはパスワードが必要です",
+    emailLayout(
+      "ログインにはパスワードが必要です",
+      `${greeting(name)}
+       <p style="margin:0;font-size:14px;line-height:1.6;">このアカウントはパスワードが設定されているため、ログイン画面でメールアドレスとパスワードを入力してログインしてください。</p>
+       ${note("パスワードをお忘れの場合は、ログイン画面の「パスワードをお忘れですか？」からリセットできます。")}`,
     ),
   );
 }

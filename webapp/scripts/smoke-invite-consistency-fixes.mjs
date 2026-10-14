@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
+import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -35,8 +36,9 @@ try {
   await admin.goto("http://localhost:3000/register");
   await admin.fill("#name", "招待整合性確認管理者");
   await admin.fill("#email", adminEmail);
-  await admin.fill("#password", "password123");
   await admin.click("button[type=submit]");
+  await admin.waitForTimeout(400);
+  await admin.goto(extractMagicLinkFromLog());
   await admin.waitForURL("http://localhost:3000/register/company");
   await admin.fill("#name", companyName);
   await admin.click("button[type=submit]");
@@ -54,8 +56,9 @@ try {
   await staff.click("text=アカウントを作成して参加する");
   await staff.fill("#name", "招待整合性確認スタッフ");
   await staff.fill("#email", staffEmail);
-  await staff.fill("#password", "password123");
   await staff.click("button[type=submit]");
+  await staff.waitForTimeout(400);
+  await staff.goto(extractMagicLinkFromLog());
   await staff.waitForURL(/\/invite\//, { timeout: 10000 });
   await staff.click("text=参加する");
   await staff.waitForURL("http://localhost:3000/staff", { timeout: 10000 });
@@ -122,8 +125,9 @@ try {
   await counterpart.click("text=アカウントを作成して参加する");
   await counterpart.fill("#name", "重複確認依頼主担当者");
   await counterpart.fill("#email", counterpartEmail);
-  await counterpart.fill("#password", "password123");
   await counterpart.click("button[type=submit]");
+  await counterpart.waitForTimeout(400);
+  await counterpart.goto(extractMagicLinkFromLog());
   await counterpart.waitForURL(/\/register\/company\?invite=/);
   await counterpart.fill("#name", "重複確認依頼主株式会社");
   await counterpart.click("button[type=submit]");
@@ -163,8 +167,9 @@ try {
   await hijacker.goto("http://localhost:3000/register");
   await hijacker.fill("#name", "横取り確認担当者");
   await hijacker.fill("#email", hijackerEmail);
-  await hijacker.fill("#password", "password123");
   await hijacker.click("button[type=submit]");
+  await hijacker.waitForTimeout(400);
+  await hijacker.goto(extractMagicLinkFromLog());
   await hijacker.waitForURL("http://localhost:3000/register/company");
   await hijacker.fill("#name", "横取り確認株式会社");
   await hijacker.click("button[type=submit]");

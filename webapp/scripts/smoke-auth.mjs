@@ -1,4 +1,5 @@
 import { chromium } from "playwright-core";
+import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 const browser = await chromium.launch({
   executablePath: "/opt/pw-browsers/chromium",
@@ -19,8 +20,9 @@ try {
   await page.waitForURL("http://localhost:3000/register");
   await page.fill("#name", "スモークテスト太郎");
   await page.fill("#email", email);
-  await page.fill("#password", "password123");
   await page.click("button[type=submit]");
+  await page.waitForTimeout(400);
+  await page.goto(extractMagicLinkFromLog());
   await page.waitForURL("http://localhost:3000/register/company", {
     timeout: 10000,
   });
@@ -35,6 +37,14 @@ try {
   console.log("company page contains company name:", bodyText.includes("スモークテスト株式会社"));
   await shot("company-page");
 
+  // マジックリンク登録のみではパスワード未設定のため、再ログイン確認の
+  // 前にアカウント設定からパスワードを設定しておく。
+  await page.goto("http://localhost:3000/account");
+  await page.fill("#newPassword", "password123");
+  await page.getByRole("button", { name: "パスワードを設定する" }).click();
+  await page.getByText("パスワードを設定しました。").waitFor({ timeout: 5000 });
+
+  await page.goto("http://localhost:3000/company");
   await page.click('button[aria-label="プロフィールメニュー"]');
   await page.click("text=ログアウト");
   await page.waitForURL("http://localhost:3000/login", { timeout: 10000 });

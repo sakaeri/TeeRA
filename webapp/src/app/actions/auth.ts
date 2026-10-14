@@ -1,6 +1,5 @@
 "use server";
 
-import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
@@ -12,10 +11,18 @@ import {
   CreateCompanySchema,
   ForgotPasswordSchema,
   ResetPasswordSchema,
+  RequestMagicLinkSchema,
 } from "@/lib/validation/auth";
 import { verifySession, getActiveMembership, ACTIVE_COMPANY_COOKIE } from "@/lib/auth/session";
 import { redeemInvite, lookupInvite, redeemCompanyRelationshipInvite } from "@/lib/domain/invites";
-import { requestPasswordReset, resetPassword } from "@/lib/domain/accountSecurity";
+import {
+  requestPasswordReset,
+  resetPassword,
+  registerPendingUser,
+  sendRegistrationMagicLink,
+  sendLoginMagicLink,
+  peekMagicLinkToken,
+} from "@/lib/domain/accountSecurity";
 
 export type FormState =
   | { errors?: Record<string, string[]>; message?: string }
@@ -28,35 +35,51 @@ export async function registerAction(
   const parsed = RegisterSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
-    password: formData.get("password"),
   });
   if (!parsed.success) {
     return { errors: z_flatten(parsed) };
   }
 
-  const { name, email, password } = parsed.data;
-  const normalizedEmail = email.toLowerCase();
+  const inviteTokenRaw = formData.get("inviteToken");
+  const inviteToken = typeof inviteTokenRaw === "string" && inviteTokenRaw.length > 0 ? inviteTokenRaw : undefined;
 
-  const existing = await prisma.user.findUnique({
-    where: { email: normalizedEmail },
-  });
-  if (existing) {
-    return { errors: { email: ["このメールアドレスは既に登録されています。"] } };
+  let user;
+  try {
+    user = await registerPendingUser(parsed.data);
+  } catch (error) {
+    if (error instanceof Error && error.message === "email_already_registered") {
+      return { errors: { email: ["このメールアドレスは既に登録されています。"] } };
+    }
+    throw error;
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
-  await prisma.user.create({
-    data: { name, email: normalizedEmail, passwordHash },
-  });
+  await sendRegistrationMagicLink(user.id, inviteToken);
+  return { message: "sent" };
+}
 
-  await signIn("credentials", {
-    email: normalizedEmail,
-    password,
-    redirect: false,
-  });
+// マジックリンク確認ページから呼ばれる（新規登録の確認・パスワードレス
+// ログインの両方で共通）。トークンを検証してログイン状態にした上で、
+// 招待経由の登録だった場合は元の招待フローへ、それ以外は本人の所属状況
+// から行き先を判断する（会社未所属＝新規登録なら会社作成画面、既に
+// 所属済み＝ただのログインなら/homeへ、という形で用途を区別する）。
+export async function confirmMagicLinkAction(token: string) {
+  const peeked = await peekMagicLinkToken(token);
+  if (!peeked) {
+    redirect("/login?magicLink=error");
+  }
+  const { userId, inviteToken, redirectTo } = peeked;
 
-  const inviteToken = formData.get("inviteToken");
-  if (typeof inviteToken === "string" && inviteToken.length > 0) {
+  try {
+    await signIn("magic-link", { token, redirect: false });
+  } catch {
+    redirect("/login?magicLink=error");
+  }
+
+  if (redirectTo) {
+    redirect(redirectTo);
+  }
+
+  if (inviteToken) {
     // CLIENT_UPGRADE/AGENCY_UPGRADE招待は会社同士を結びつけるものなので、
     // 受け取る側にも自社が必要 — 先に会社登録へ回し、完了後にこの招待へ戻す。
     const lookup = await lookupInvite(inviteToken);
@@ -69,7 +92,25 @@ export async function registerAction(
     redirect(`/invite/${inviteToken}`);
   }
 
-  redirect("/register/company");
+  const existingMembership = await prisma.companyMembership.findFirst({ where: { userId } });
+  redirect(existingMembership ? "/home" : "/register/company");
+}
+
+// ログイン画面の「メールでログインリンクを受け取る」用。メールアドレスの
+// 存在有無・パスワード設定有無を外に漏らさないため、常に同じ成功表示を
+// 返す（中でパスワード設定済みなら実際にはリンクを送らない）。
+export async function requestLoginMagicLinkAction(
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const parsed = RequestMagicLinkSchema.safeParse({ email: formData.get("email") });
+  if (!parsed.success) {
+    return { errors: z_flatten(parsed) };
+  }
+
+  const from = formData.get("from");
+  await sendLoginMagicLink(parsed.data.email, typeof from === "string" && from.length > 0 ? from : undefined);
+  return { message: "sent" };
 }
 
 export async function loginAction(

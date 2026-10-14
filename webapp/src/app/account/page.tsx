@@ -21,7 +21,12 @@ export default async function AccountPage({
       <Link href={backHref} className="mb-6 inline-block text-sm text-primary underline">
         ← 戻る
       </Link>
-      <AccountView userName={user.name} userEmail={user.email} emailChangeNotice={emailChangeNotice} />
+      <AccountView
+        userName={user.name}
+        userEmail={user.email}
+        hasPassword={user.passwordHash !== null}
+        emailChangeNotice={emailChangeNotice}
+      />
     </main>
   );
 }

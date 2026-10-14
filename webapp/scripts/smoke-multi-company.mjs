@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
+import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -47,8 +48,9 @@ try {
   await adminA.goto("http://localhost:3000/register");
   await adminA.fill("#name", "複数社確認管理者A");
   await adminA.fill("#email", adminAEmail);
-  await adminA.fill("#password", "password123");
   await adminA.click("button[type=submit]");
+  await adminA.waitForTimeout(400);
+  await adminA.goto(extractMagicLinkFromLog());
   await adminA.waitForURL("http://localhost:3000/register/company");
   await adminA.fill("#name", companyAName);
   await adminA.click("button[type=submit]");
@@ -57,8 +59,9 @@ try {
   await adminB.goto("http://localhost:3000/register");
   await adminB.fill("#name", "複数社確認管理者B");
   await adminB.fill("#email", adminBEmail);
-  await adminB.fill("#password", "password123");
   await adminB.click("button[type=submit]");
+  await adminB.waitForTimeout(400);
+  await adminB.goto(extractMagicLinkFromLog());
   await adminB.waitForURL("http://localhost:3000/register/company");
   await adminB.fill("#name", companyBName);
   await adminB.click("button[type=submit]");
@@ -76,8 +79,9 @@ try {
   await staff.click("text=アカウントを作成して参加する");
   await staff.fill("#name", "複数社確認スタッフ");
   await staff.fill("#email", staffEmail);
-  await staff.fill("#password", "password123");
   await staff.click("button[type=submit]");
+  await staff.waitForTimeout(400);
+  await staff.goto(extractMagicLinkFromLog());
   await staff.waitForURL(/\/invite\//, { timeout: 10000 });
   await staff.click("text=参加する");
   await staff.waitForURL("http://localhost:3000/staff", { timeout: 10000 });

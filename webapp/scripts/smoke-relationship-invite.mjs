@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
+import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -28,8 +29,9 @@ try {
   await owner.goto("http://localhost:3000/register");
   await owner.fill("#name", "招待元管理者");
   await owner.fill("#email", ownerEmail);
-  await owner.fill("#password", "password123");
   await owner.click("button[type=submit]");
+  await owner.waitForTimeout(400);
+  await owner.goto(extractMagicLinkFromLog());
   await owner.waitForURL("http://localhost:3000/register/company");
   await owner.fill("#name", "招待元株式会社");
   await owner.click("button[type=submit]");
@@ -120,8 +122,9 @@ try {
   await counterpart.click("text=アカウントを作成して参加する");
   await counterpart.fill("#name", "招待先担当者");
   await counterpart.fill("#email", counterpartEmail);
-  await counterpart.fill("#password", "password123");
   await counterpart.click("button[type=submit]");
+  await counterpart.waitForTimeout(400);
+  await counterpart.goto(extractMagicLinkFromLog());
   await counterpart.waitForURL(/\/register\/company\?invite=/);
   bodyText = await counterpart.textContent("body");
   log("registering with a CLIENT_UPGRADE invite routes to company creation first", bodyText.includes("事業所がありません"));
@@ -180,8 +183,9 @@ try {
   await staffPage.click("text=アカウントを作成して参加する");
   await staffPage.fill("#name", "招待元スタッフ");
   await staffPage.fill("#email", staffOwnerEmail);
-  await staffPage.fill("#password", "password123");
   await staffPage.click("button[type=submit]");
+  await staffPage.waitForTimeout(400);
+  await staffPage.goto(extractMagicLinkFromLog());
   await staffPage.waitForURL(/\/invite\//);
   await staffPage.click("text=参加する");
   await staffPage.waitForURL("http://localhost:3000/staff");

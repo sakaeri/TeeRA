@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
+import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -36,8 +37,9 @@ try {
   await adminA.goto("http://localhost:3000/register");
   await adminA.fill("#name", "募集A管理者");
   await adminA.fill("#email", adminAEmail);
-  await adminA.fill("#password", "password123");
   await adminA.click("button[type=submit]");
+  await adminA.waitForTimeout(400);
+  await adminA.goto(extractMagicLinkFromLog());
   await adminA.waitForURL("http://localhost:3000/register/company");
   await adminA.fill("#name", "Tee返金テストA社");
   await adminA.click("button[type=submit]");
@@ -62,8 +64,9 @@ try {
   await staffX.click("text=アカウントを作成して参加する");
   await staffX.fill("#name", "登録済みスタッフX");
   await staffX.fill("#email", staffXEmail);
-  await staffX.fill("#password", "password123");
   await staffX.click("button[type=submit]");
+  await staffX.waitForTimeout(400);
+  await staffX.goto(extractMagicLinkFromLog());
   await staffX.waitForURL(new RegExp("/invite/"));
   await staffX.click("text=参加する");
   await staffX.waitForURL("http://localhost:3000/staff");
@@ -82,8 +85,9 @@ try {
   await staffX2.click("text=アカウントを作成して参加する");
   await staffX2.fill("#name", "登録済みスタッフX2");
   await staffX2.fill("#email", staffX2Email);
-  await staffX2.fill("#password", "password123");
   await staffX2.click("button[type=submit]");
+  await staffX2.waitForTimeout(400);
+  await staffX2.goto(extractMagicLinkFromLog());
   await staffX2.waitForURL(new RegExp("/invite/"));
   await staffX2.click("text=参加する");
   await staffX2.waitForURL("http://localhost:3000/staff");
@@ -92,8 +96,9 @@ try {
   await adminB.goto("http://localhost:3000/register");
   await adminB.fill("#name", "無関係B管理者");
   await adminB.fill("#email", adminBEmail);
-  await adminB.fill("#password", "password123");
   await adminB.click("button[type=submit]");
+  await adminB.waitForTimeout(400);
+  await adminB.goto(extractMagicLinkFromLog());
   await adminB.waitForURL("http://localhost:3000/register/company");
   await adminB.fill("#name", "Tee返金テストB社（無関係）");
   await adminB.click("button[type=submit]");
@@ -110,8 +115,9 @@ try {
   await staffZ.click("text=アカウントを作成して参加する");
   await staffZ.fill("#name", "無関係スタッフZ");
   await staffZ.fill("#email", staffZEmail);
-  await staffZ.fill("#password", "password123");
   await staffZ.click("button[type=submit]");
+  await staffZ.waitForTimeout(400);
+  await staffZ.goto(extractMagicLinkFromLog());
   await staffZ.waitForURL(new RegExp("/invite/"));
   await staffZ.click("text=参加する");
   await staffZ.waitForURL("http://localhost:3000/staff");

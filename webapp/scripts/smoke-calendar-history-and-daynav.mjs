@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
+import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 // 2つの不具合を検証する：
 // ①日別詳細の「変更履歴」が、同じ会社・同じ業務内容の枠変更/キャンセル
@@ -46,8 +47,9 @@ try {
   await page.goto("http://localhost:3000/register");
   await page.fill("#name", "変更履歴確認管理者");
   await page.fill("#email", adminEmail);
-  await page.fill("#password", "password123");
   await page.click("button[type=submit]");
+  await page.waitForTimeout(400);
+  await page.goto(extractMagicLinkFromLog());
   await page.waitForURL("http://localhost:3000/register/company");
   await page.fill("#name", companyName);
   await page.click("button[type=submit]");

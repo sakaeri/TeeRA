@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
+import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -28,8 +29,9 @@ try {
   await agency.goto("http://localhost:3000/register");
   await agency.fill("#name", "両方向確認派遣元担当者");
   await agency.fill("#email", agencyEmail);
-  await agency.fill("#password", "password123");
   await agency.click("button[type=submit]");
+  await agency.waitForTimeout(400);
+  await agency.goto(extractMagicLinkFromLog());
   await agency.waitForURL("http://localhost:3000/register/company");
   await agency.fill("#name", agencyCompanyName);
   await agency.click("button[type=submit]");
@@ -59,8 +61,9 @@ try {
   await client.click("text=アカウントを作成して参加する");
   await client.fill("#name", "両方向確認依頼主担当者");
   await client.fill("#email", clientEmail);
-  await client.fill("#password", "password123");
   await client.click("button[type=submit]");
+  await client.waitForTimeout(400);
+  await client.goto(extractMagicLinkFromLog());
   await client.waitForURL(/\/register\/company\?invite=/);
   await client.fill("#name", clientCompanyName);
   await client.click("button[type=submit]");

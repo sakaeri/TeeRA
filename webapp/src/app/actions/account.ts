@@ -2,8 +2,19 @@
 
 import { redirect } from "next/navigation";
 import { verifySession } from "@/lib/auth/session";
-import { ChangePasswordSchema, ChangeEmailSchema } from "@/lib/validation/auth";
-import { changePassword, requestEmailChange, confirmEmailChange } from "@/lib/domain/accountSecurity";
+import {
+  ChangePasswordSchema,
+  ChangeEmailSchema,
+  SetInitialPasswordSchema,
+  RemovePasswordSchema,
+} from "@/lib/validation/auth";
+import {
+  changePassword,
+  requestEmailChange,
+  confirmEmailChange,
+  setInitialPassword,
+  removePassword,
+} from "@/lib/domain/accountSecurity";
 import type { FormState } from "@/app/actions/auth";
 
 function z_flatten(
@@ -59,10 +70,55 @@ export async function requestEmailChangeAction(
     if (error instanceof Error && error.message === "email_already_in_use") {
       return { errors: { newEmail: ["このメールアドレスは既に使用されています。"] } };
     }
+    if (error instanceof Error && error.message === "no_password_set") {
+      return { message: "メールアドレスを変更するには、先にパスワードを設定してください。" };
+    }
     return { message: "現在のパスワードが正しくありません。" };
   }
 
   return { message: "確認メールを送信しました。新しいアドレス宛のメール内のリンクをクリックすると変更が確定します。" };
+}
+
+export async function setInitialPasswordAction(
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const { userId } = await verifySession();
+  const parsed = SetInitialPasswordSchema.safeParse({
+    newPassword: formData.get("newPassword"),
+  });
+  if (!parsed.success) {
+    return { errors: z_flatten(parsed) };
+  }
+
+  try {
+    await setInitialPassword(userId, parsed.data.newPassword);
+  } catch {
+    return { message: "パスワードを設定できませんでした。ページを再読み込みしてお試しください。" };
+  }
+
+  return { message: "パスワードを設定しました。" };
+}
+
+export async function removePasswordAction(
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const { userId } = await verifySession();
+  const parsed = RemovePasswordSchema.safeParse({
+    currentPassword: formData.get("currentPassword"),
+  });
+  if (!parsed.success) {
+    return { errors: z_flatten(parsed) };
+  }
+
+  try {
+    await removePassword(userId, parsed.data.currentPassword);
+  } catch {
+    return { message: "現在のパスワードが正しくありません。" };
+  }
+
+  return { message: "パスワードを削除しました。次回からはメールのログイン用リンクでログインできます。" };
 }
 
 export async function confirmEmailChangeAction(token: string) {

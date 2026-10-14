@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
+import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -34,8 +35,9 @@ try {
   await agency.goto("http://localhost:3000/register");
   await agency.fill("#name", "配属確認派遣元");
   await agency.fill("#email", agencyEmail);
-  await agency.fill("#password", "password123");
   await agency.click("button[type=submit]");
+  await agency.waitForTimeout(400);
+  await agency.goto(extractMagicLinkFromLog());
   await agency.waitForURL("http://localhost:3000/register/company");
   await agency.fill("#name", "配属確認派遣元株式会社");
   await agency.click("button[type=submit]");
@@ -53,8 +55,9 @@ try {
   await staff.click("text=アカウントを作成して参加する");
   await staff.fill("#name", "配属確認スタッフ");
   await staff.fill("#email", staffEmail);
-  await staff.fill("#password", "password123");
   await staff.click("button[type=submit]");
+  await staff.waitForTimeout(400);
+  await staff.goto(extractMagicLinkFromLog());
   await staff.waitForURL(new RegExp("/invite/"));
   await staff.click("text=参加する");
   await staff.waitForURL("http://localhost:3000/staff");
@@ -123,8 +126,9 @@ try {
   await client.goto("http://localhost:3000/register");
   await client.fill("#name", "配属確認オーダー元担当者");
   await client.fill("#email", clientEmail);
-  await client.fill("#password", "password123");
   await client.click("button[type=submit]");
+  await client.waitForTimeout(400);
+  await client.goto(extractMagicLinkFromLog());
   await client.waitForURL("http://localhost:3000/register/company");
   await client.fill("#name", "配属確認オーダー元株式会社");
   await client.click("button[type=submit]");
@@ -180,8 +184,9 @@ try {
   await publicClient.goto("http://localhost:3000/register");
   await publicClient.fill("#name", "配属確認公開募集元担当者");
   await publicClient.fill("#email", publicClientEmail);
-  await publicClient.fill("#password", "password123");
   await publicClient.click("button[type=submit]");
+  await publicClient.waitForTimeout(400);
+  await publicClient.goto(extractMagicLinkFromLog());
   await publicClient.waitForURL("http://localhost:3000/register/company");
   await publicClient.fill("#name", "配属確認公開募集元株式会社");
   await publicClient.click("button[type=submit]");

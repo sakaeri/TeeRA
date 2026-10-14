@@ -20,7 +20,8 @@ datasource db {
 model User {
   id                    String   @id @default(cuid())
   email                 String   @unique
-  passwordHash          String
+  passwordHash          String? // マジックリンク登録のみの人はnull — パスワードはアカウント設定から任意で設定/削除できる
+  emailVerified         Boolean  @default(false) // 登録確認のマジックリンクを踏んだかどうか（パスワード有無とは独立）
   name                  String
   isProxy               Boolean  @default(false) // 仮アカウント — placeholder person with no real login yet
   address               String? // shipping address, entered at first promo redemption and reused after
@@ -562,6 +563,7 @@ enum AccountActionTokenKind {
   PASSWORD_RESET
   EMAIL_CHANGE
   APPROVE_WORK_REPORT
+  MAGIC_LINK
 }
 
 // パスワードリセット・メールアドレス変更確認用の使い捨てトークン。
@@ -578,6 +580,8 @@ model AccountActionToken {
   userId       String?
   newEmail     String? // EMAIL_CHANGE用 — 確定するまでUser.emailは変更しない
   workReportId String? // APPROVE_WORK_REPORT用
+  inviteToken  String? // MAGIC_LINK用（登録確認） — 招待経由の登録で、確認後にどの招待へ進むか
+  redirectTo   String? // MAGIC_LINK用（ログイン） — パスワードログインのfromと同じ、ログイン後に戻る先
   expiresAt    DateTime
   usedAt       DateTime?
   createdAt    DateTime               @default(now())

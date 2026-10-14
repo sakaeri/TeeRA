@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
+import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -32,8 +33,9 @@ try {
   await admin.goto("http://localhost:3000/register");
   await admin.fill("#name", "ログイン導線確認管理者");
   await admin.fill("#email", adminEmail);
-  await admin.fill("#password", "password123");
   await admin.click("button[type=submit]");
+  await admin.waitForTimeout(400);
+  await admin.goto(extractMagicLinkFromLog());
   await admin.waitForURL("http://localhost:3000/register/company");
   await admin.fill("#name", companyName);
   await admin.click("button[type=submit]");
@@ -44,8 +46,9 @@ try {
   await staff.goto("http://localhost:3000/register");
   await staff.fill("#name", "ログイン導線確認スタッフ");
   await staff.fill("#email", staffEmail);
-  await staff.fill("#password", "password123");
   await staff.click("button[type=submit]");
+  await staff.waitForTimeout(400);
+  await staff.goto(extractMagicLinkFromLog());
   await staff.waitForURL("http://localhost:3000/register/company");
   // ログアウトして「未ログイン状態で招待URLを開く」を再現する
   await staff.context().clearCookies();
@@ -72,9 +75,13 @@ try {
   bodyText = await staff.textContent("body");
   log("ログイン画面に遷移する", bodyText.includes("ログイン"));
 
-  await staff.fill("#email", staffEmail);
-  await staff.fill("#password", "password123");
-  await staff.getByRole("button", { name: "ログイン", exact: true }).click();
+  // このスタッフはマジックリンク登録のみでパスワード未設定なので、
+  // 「パスワードをお持ちでない方はこちら」からメールでログインする。
+  await staff.click("text=パスワードをお持ちでない方はこちら（メールでログイン）");
+  await staff.fill("#magicLinkEmail", staffEmail);
+  await staff.getByRole("button", { name: "ログイン用リンクを送信する" }).click();
+  await staff.waitForTimeout(400);
+  await staff.goto(extractMagicLinkFromLog());
   await staff.waitForURL(`http://localhost:3000/invite/${token}`, { timeout: 10000 });
   log("ログイン後、招待画面に自動で戻ってくる", staff.url().endsWith(`/invite/${token}`));
 

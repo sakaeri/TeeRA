@@ -10,6 +10,22 @@ export function RegisterForm({ inviteToken }: { inviteToken?: string }) {
     undefined,
   );
 
+  if (state?.message === "sent") {
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-foreground/80">
+          ご入力いただいたメールアドレス宛に、登録を完了するための確認メールを送信しました。メール内のリンクをクリックして登録を完了してください（リンクは24時間有効です）。
+        </p>
+        <p className="text-xs text-muted">
+          メールが届かない場合は、迷惑メールフォルダもご確認ください。
+        </p>
+        <Link href="/login" className="text-center text-sm text-primary underline">
+          ログイン画面に戻る
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <form action={action} className="flex flex-col gap-4">
       {inviteToken ? (
@@ -44,26 +60,9 @@ export function RegisterForm({ inviteToken }: { inviteToken?: string }) {
           autoComplete="email"
           className="rounded-lg border border-border bg-white px-3.5 py-2.5 text-sm outline-none focus:border-primary"
         />
+        <p className="text-xs text-muted">このメールアドレス宛に確認メールを送信します。</p>
         {state?.errors?.email ? (
           <p className="text-xs text-red-600">{state.errors.email[0]}</p>
-        ) : null}
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label htmlFor="password" className="text-sm text-foreground/80">
-          パスワード
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          required
-          autoComplete="new-password"
-          className="rounded-lg border border-border bg-white px-3.5 py-2.5 text-sm outline-none focus:border-primary"
-        />
-        <p className="text-xs text-muted">8文字以上、英字と数字を含めてください。</p>
-        {state?.errors?.password ? (
-          <p className="text-xs text-red-600">{state.errors.password[0]}</p>
         ) : null}
       </div>
 
@@ -76,7 +75,7 @@ export function RegisterForm({ inviteToken }: { inviteToken?: string }) {
         disabled={pending}
         className="mt-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
       >
-        {pending ? "登録中…" : "アカウントを作成"}
+        {pending ? "送信中…" : "確認メールを送信する"}
       </button>
 
       <p className="mt-2 text-center text-sm text-muted">

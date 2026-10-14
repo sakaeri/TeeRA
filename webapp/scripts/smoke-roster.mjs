@@ -1,4 +1,5 @@
 import { chromium } from "playwright-core";
+import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 const browser = await chromium.launch({
   executablePath: "/opt/pw-browsers/chromium",
@@ -16,8 +17,9 @@ try {
   await page.goto("http://localhost:3000/register");
   await page.fill("#name", "ロスター太郎");
   await page.fill("#email", email);
-  await page.fill("#password", "password123");
   await page.click("button[type=submit]");
+  await page.waitForTimeout(400);
+  await page.goto(extractMagicLinkFromLog());
   await page.waitForURL("http://localhost:3000/register/company");
   await page.fill("#name", "ロスターテスト株式会社");
   await page.click("button[type=submit]");
