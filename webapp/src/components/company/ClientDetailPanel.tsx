@@ -311,7 +311,7 @@ export function ClientDetailPanel({
   return (
     <div className="fixed inset-0 z-30 flex justify-end bg-black/30" onClick={onClose}>
       <div
-        className="flex h-full w-full max-w-md flex-col overflow-y-auto bg-white p-6 shadow-lg"
+        className="flex h-full w-full max-w-md flex-col overflow-y-auto bg-white px-6 pb-6 pt-[calc(1.5rem+env(safe-area-inset-top))] shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <button type="button" onClick={onClose} className="mb-2 self-start text-sm text-muted">
