@@ -145,9 +145,19 @@ export async function submitShiftRequestAction(input: {
   });
   if (!membership) throw new Error("forbidden");
 
+  // チーム宛の通知（シフト希望ダイジェスト）を正しく届けるため、その会社内で
+  // 所属しているチームをteamIdとして記録する。複数チームに同時所属している
+  // 場合は最初に見つかったチームを使う（稀なケースのため、選択UIまでは
+  // 設けていない）。
+  const teamMembership = await prisma.teamMembership.findFirst({
+    where: { userId, team: { companyId: input.companyId } },
+    select: { teamId: true },
+  });
+
   await submitShiftRequest({
     staffUserId: userId,
     companyId: input.companyId,
+    teamId: teamMembership?.teamId,
     desire: input.desire,
     dates: input.dates.map((d) => new Date(`${d}T00:00:00.000Z`)),
     note: input.note,
