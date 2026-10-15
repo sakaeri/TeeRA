@@ -795,6 +795,7 @@ export function ClientDetailPanel({
                   </div>
                 ) : null}
 
+                {kind === "agency" ? (
                 <div>
                   <div className="mb-2 rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
                     {editingAddressPhone ? (
@@ -851,6 +852,10 @@ export function ClientDetailPanel({
                       </div>
                     )}
                   </div>
+                </div>
+                ) : null}
+
+                <div>
                   <div className="mb-2 flex items-center justify-end">
                     <button
                       type="button"

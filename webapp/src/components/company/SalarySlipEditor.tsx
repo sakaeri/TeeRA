@@ -7,6 +7,8 @@ import {
   deleteLineAction,
   updateDeductionsAction,
   updatePaidLeaveAction,
+  setSalarySlipPaymentDayAction,
+  setSalarySlipNoteAction,
   issueSalarySlipAction,
   reopenSalarySlipAction,
   renameUnresolvedTaskNamesAction,
@@ -35,6 +37,8 @@ export function SalarySlipEditor({
     status: string;
     lines: Line[];
     deductions: Deduction[];
+    paymentDay: string | null;
+    note: string | null;
     paidLeaveDaysUsed: number;
     paidLeaveDailyRate: number;
     paidLeaveBalance: number;
@@ -168,6 +172,7 @@ export function SalarySlipEditor({
 
       <PaidLeaveSection slip={slip} isEditable={isEditable} pending={pending} startTransition={startTransition} />
       <DeductionsSection slip={slip} gross={slip.totals.gross} isEditable={isEditable} startTransition={startTransition} />
+      <PaymentInfoSection slip={slip} isEditable={isEditable} startTransition={startTransition} />
 
       <section className="rounded-2xl border-2 border-primary bg-white/60 p-6">
         <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
@@ -658,6 +663,53 @@ function DeductionsSection({
           }}
         />
       ) : null}
+    </section>
+  );
+}
+
+function PaymentInfoSection({
+  slip,
+  isEditable,
+  startTransition,
+}: {
+  slip: { id: string; paymentDay: string | null; note: string | null };
+  isEditable: boolean;
+  startTransition: (fn: () => void | Promise<void>) => void;
+}) {
+  const [paymentDay, setPaymentDay] = useState(slip.paymentDay ?? "");
+  const [note, setNote] = useState(slip.note ?? "");
+
+  return (
+    <section className="rounded-2xl border border-border bg-white/60 p-6">
+      <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">支払日・備考</h2>
+      <div className="flex flex-col gap-3">
+        <label className="flex flex-col gap-1 text-xs">
+          支払日（例：翌月25日）
+          <input
+            type="text"
+            value={paymentDay}
+            disabled={!isEditable}
+            onChange={(e) => setPaymentDay(e.target.value)}
+            onBlur={() => {
+              if (isEditable) startTransition(() => setSalarySlipPaymentDayAction(slip.id, paymentDay));
+            }}
+            className="rounded-lg border border-border px-2 py-1.5 text-sm"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          備考
+          <textarea
+            value={note}
+            disabled={!isEditable}
+            onChange={(e) => setNote(e.target.value)}
+            onBlur={() => {
+              if (isEditable) startTransition(() => setSalarySlipNoteAction(slip.id, note));
+            }}
+            rows={2}
+            className="rounded-lg border border-border px-2 py-1.5 text-sm"
+          />
+        </label>
+      </div>
     </section>
   );
 }

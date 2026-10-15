@@ -186,7 +186,9 @@ try {
     Boolean(wageBox && jobDescBox && Math.abs(wageBox.y - jobDescBox.y) > 10),
   );
 
-  // --- client side pinned block ---
+  // 依頼主側の社内メモには「住所・電話番号」の特別枠は表示されない —
+  // 「勤務地・緊急連絡先」と重複して紛らわしいため、依頼主側だけ廃止した
+  // （派遣会社側は引き続き表示される。ClientDetailPanel.tsx参照）。
   await admin.goto("http://localhost:3000/company/roster");
   await admin.click("text=依頼主一覧");
   await admin.waitForTimeout(300);
@@ -204,33 +206,9 @@ try {
   const clientPanel = admin.locator("div.fixed.inset-0.z-30, div.fixed.inset-0.z-20").last();
   await clientPanel.getByRole("button", { name: "社内メモ" }).click();
   await admin.waitForTimeout(200);
-  const clientPinnedBlock1 = clientPanel.locator("div.border-primary\\/40");
-  await clientPinnedBlock1.getByRole("button", { name: "編集" }).click();
-  await admin.waitForTimeout(200);
-  await clientPanel.locator('label:has-text("住所") input').fill("愛知県名古屋市3-3-3");
-  await clientPanel.locator('label:has-text("電話番号") input').fill("052-5555-6666");
-  await clientPanel.getByRole("button", { name: "保存する" }).click();
-  await admin.waitForTimeout(600);
-
-  const clientRelId = psql(`select id from "CompanyRelationship" where "proxyName"='ピン留めゴルフ場' order by "createdAt" desc limit 1;`);
-  const clientRow = psql(`select coalesce("clientAddress",'') || '|' || coalesce("clientPhoneNumber",'') from "CompanyRelationship" where id='${clientRelId}';`);
-  log("❷ 依頼主側も特別枠（住所・電話番号）が保存される", clientRow === "愛知県名古屋市3-3-3|052-5555-6666");
-
-  // edit again -> old value demoted to RelationshipNote history
-  const clientPinnedBlock2 = clientPanel.locator("div.border-primary\\/40");
-  await clientPinnedBlock2.getByRole("button", { name: "編集" }).click();
-  await admin.waitForTimeout(200);
-  await clientPanel.locator('label:has-text("住所") input').fill("福岡県福岡市4-4-4");
-  await clientPanel.locator('label:has-text("電話番号") input').fill("092-7777-8888");
-  await clientPanel.getByRole("button", { name: "保存する" }).click();
-  await admin.waitForTimeout(600);
-
-  const clientNote = psql(
-    `select content from "RelationshipNote" where "companyRelationshipId"='${clientRelId}' order by "createdAt" desc limit 1;`,
-  );
   log(
-    "❷ 依頼主側も手修正で変更前の値が履歴メモに積まれる",
-    clientNote.includes("愛知県名古屋市3-3-3") && clientNote.includes("052-5555-6666"),
+    "❷ 依頼主側には住所・電話番号の特別枠が表示されない（勤務地・緊急連絡先と重複するため廃止）",
+    (await clientPanel.locator("div.border-primary\\/40").count()) === 0,
   );
 
   console.log(process.exitCode ? "ADDRESS/PHONE PINNED NOTE SMOKE TEST HAD FAILURES" : "ADDRESS/PHONE PINNED NOTE SMOKE TEST PASSED");

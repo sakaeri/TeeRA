@@ -4,6 +4,7 @@ import { postLedgerEntry } from "@/lib/domain/wallet";
 import { resolveRateVersion, resolveContractWageVersion, pickStaffTaskRate } from "@/lib/domain/contracts";
 import { recordPaidLeaveUsageDelta } from "@/lib/domain/paidLeave";
 import { hasRemainingPdfQuota } from "@/lib/domain/plans";
+import type { EmploymentType } from "@/generated/prisma/enums";
 
 const FIXED_DEDUCTION_LABELS = ["社会保険料", "厚生年金", "雇用保険料", "所得税", "市県民税"];
 
@@ -38,15 +39,20 @@ async function contractsWithWageVersions(companyId: string, staffUserId: string)
 
 type ContractWithWageVersions = Awaited<ReturnType<typeof contractsWithWageVersions>>[number];
 
-// 給与明細PDFの「支払日」表示用 — 契約テンプレートの支払日欄（自由入力、
-// 例：「翌月25日」）をそのまま流用する。対象月の末日時点で有効だった契約を
-// 選ぶ（pickContractForDateと同じ考え方）。該当する契約が無ければnull。
-export async function getPaymentTerms(companyId: string, staffUserId: string, targetMonth: string) {
+// 給与明細PDFのタイトルを「給与明細書」→「支払明細書」に切り替えるかの
+// 判定用 — 対象月の末日時点で有効だった契約の雇用形態を返す（該当する契約が
+// 無ければnull）。支払日・件名と違い、雇用形態は契約の属性のまま扱う
+// （手入力に切り離した支払日・備考とは別物）。
+export async function getEmploymentType(
+  companyId: string,
+  staffUserId: string,
+  targetMonth: string,
+): Promise<EmploymentType | null> {
   const contracts = await contractsWithWageVersions(companyId, staffUserId);
   const { end } = monthRange(targetMonth);
   const lastDayOfMonth = new Date(end.getTime() - 24 * 60 * 60 * 1000);
   const contract = pickContractForDate(contracts, lastDayOfMonth);
-  return { paymentDay: contract?.template.paymentDay ?? null };
+  return contract?.template.employmentType ?? null;
 }
 
 // SHIFT行のdescriptionはregenerateShiftLinesが常にこの形式で自動生成する
@@ -335,11 +341,10 @@ function previousTargetMonth(targetMonth: string) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-// 前月に手入力したカスタム項目（kind: CUSTOM）を、数量0で新しい月に
-// コピーしておく。毎月同じ項目を入れ直す手間を省くための引き継ぎで、
-// 不要なら翌月側で消せばよい（前月の行自体は変更しない）。
-async function carryOverCustomLines(params: { salarySlipId: string; companyId: string; staffUserId: string; targetMonth: string }) {
-  const prevSlip = await prisma.salarySlip.findUnique({
+// 前月分の明細（下書き/発行済み問わず）を取得 — カスタム項目/控除/支払日/
+// 備考の引き継ぎで共通して使う。
+async function findPreviousSalarySlip(params: { companyId: string; staffUserId: string; targetMonth: string }) {
+  return prisma.salarySlip.findUnique({
     where: {
       companyId_staffUserId_targetMonth: {
         companyId: params.companyId,
@@ -349,11 +354,17 @@ async function carryOverCustomLines(params: { salarySlipId: string; companyId: s
     },
     include: { lines: { where: { kind: "CUSTOM" }, orderBy: { sortOrder: "asc" } } },
   });
+}
+
+// 前月に手入力したカスタム項目（kind: CUSTOM）を、数量0で新しい月に
+// コピーしておく。毎月同じ項目を入れ直す手間を省くための引き継ぎで、
+// 不要なら翌月側で消せばよい（前月の行自体は変更しない）。
+async function carryOverCustomLines(salarySlipId: string, prevSlip: Awaited<ReturnType<typeof findPreviousSalarySlip>>) {
   if (!prevSlip || prevSlip.lines.length === 0) return;
 
   await prisma.salarySlipLine.createMany({
     data: prevSlip.lines.map((l) => ({
-      salarySlipId: params.salarySlipId,
+      salarySlipId,
       kind: "CUSTOM" as const,
       description: l.description,
       hours: 0,
@@ -379,25 +390,23 @@ export async function getOrCreateSalarySlip(params: {
   });
 
   if (!slip) {
-    const deductions: DeductionItem[] = FIXED_DEDUCTION_LABELS.map((label, i) => ({
-      id: `fixed-${i}`,
-      label,
-      amount: 0,
-    }));
+    const prevSlip = await findPreviousSalarySlip(params);
+    // 控除は前月の内容（固定項目の金額・率指定・カスタム控除）をそのまま
+    // 全額引き継ぐ。前月の明細が無い場合だけ、金額0の固定項目で初期化する。
+    const deductions: DeductionItem[] = prevSlip
+      ? (prevSlip.deductions as DeductionItem[])
+      : FIXED_DEDUCTION_LABELS.map((label, i) => ({ id: `fixed-${i}`, label, amount: 0 }));
     slip = await prisma.salarySlip.create({
       data: {
         companyId: params.companyId,
         staffUserId: params.staffUserId,
         targetMonth: params.targetMonth,
         deductions,
+        paymentDay: prevSlip?.paymentDay ?? null,
+        note: prevSlip?.note ?? null,
       },
     });
-    await carryOverCustomLines({
-      salarySlipId: slip.id,
-      companyId: params.companyId,
-      staffUserId: params.staffUserId,
-      targetMonth: params.targetMonth,
-    });
+    await carryOverCustomLines(slip.id, prevSlip);
   }
 
   const { unresolved } = await regenerateShiftLines(params);
@@ -460,6 +469,14 @@ export async function updateDeductions(salarySlipId: string, deductions: Deducti
   return prisma.salarySlip.update({ where: { id: salarySlipId }, data: { deductions } });
 }
 
+export async function setSalarySlipPaymentDay(salarySlipId: string, paymentDay: string) {
+  return prisma.salarySlip.update({ where: { id: salarySlipId }, data: { paymentDay: paymentDay || null } });
+}
+
+export async function setSalarySlipNote(salarySlipId: string, note: string) {
+  return prisma.salarySlip.update({ where: { id: salarySlipId }, data: { note: note || null } });
+}
+
 // 使用日数(paidLeaveDaysUsed)を変更した分は、スタッフの有給休暇残日数
 // （CompanyMembership.paidLeaveBalance）からも増減させる — 月をまたいでも
 // 繰り越されるようにするため（従来はSalarySlipごとの独立フィールドで、
@@ -517,6 +534,13 @@ export async function issueSalarySlip(params: { salarySlipId: string; issuedByUs
 
   const alreadyIssuedThisMonth = slip.issues.length > 0;
   const totals = computeTotals(slip);
+  // 有給休暇を設定済み（付与管理を開始済み）かどうかはPDFの有給行の表示要否に
+  // 使う — 発行時点の状態をスナップショットに固定する。
+  const membership = await prisma.companyMembership.findFirst({
+    where: { companyId: slip.companyId, userId: slip.staffUserId },
+    select: { nextPaidLeaveGrantDate: true },
+  });
+  const paidLeaveConfigured = membership?.nextPaidLeaveGrantDate != null;
 
   return prisma.$transaction(async (tx) => {
     let countsAgainstQuota = false;
@@ -546,10 +570,13 @@ export async function issueSalarySlip(params: { salarySlipId: string; issuedByUs
         snapshot: {
           staffName: slip.staff.name,
           targetMonth: slip.targetMonth,
+          paymentDay: slip.paymentDay,
+          note: slip.note,
           lines: slip.lines,
           deductions: slip.deductions,
           paidLeaveDaysUsed: slip.paidLeaveDaysUsed,
           paidLeaveDailyRate: slip.paidLeaveDailyRate,
+          paidLeaveConfigured,
           ...totals,
           issuedAt: new Date().toISOString(),
         },

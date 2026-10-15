@@ -1,10 +1,15 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { currentJstMonthRangeUtc } from "@/lib/date";
+import { todayJstParts } from "@/lib/date";
 import type { Prisma } from "@/generated/prisma/client";
 import type { PlanTier } from "@/generated/prisma/enums";
 
 type Tx = Prisma.TransactionClient;
+
+function currentJstTargetMonth(): string {
+  const { year, month } = todayJstParts();
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
 
 // 製品定数（recruitment.tsのPER_ENTRY_TEE_COSTと同じ扱い — envには出さない）。
 export const PLAN_YEN: Record<"STANDARD" | "BUSINESS", number> = {
@@ -18,17 +23,20 @@ export const PLAN_PDF_QUOTA: Record<"FREE" | "STANDARD" | "BUSINESS", number> = 
   BUSINESS: 100,
 };
 
-// 給与明細＋請求書の合算で、当月（JST暦月）にcountsAgainstQuota=trueで
-// 発行された件数。issueSalarySlip/issueInvoiceでの新規判定にも、UI表示用の
-// pdfQuotaRemainingにも使う共通クエリ。
+// 給与明細＋請求書の合算で、当月（JST暦月）が対象月（稼働月）の発行として
+// countsAgainstQuota=trueでカウントされた件数。発行した操作日ではなく、
+// 明細・請求書自体の対象月（targetMonth/periodLabel）で数える — 10月に
+// なってから9月分を発行しても、9月分の枠は消費しない。issueSalarySlip/
+// issueInvoiceでの新規判定にも、UI表示用のpdfQuotaRemainingにも使う共通
+// クエリ。
 async function countPdfQuotaUsedThisMonth(tx: Tx | typeof prisma, companyId: string): Promise<number> {
-  const { start, end } = currentJstMonthRangeUtc();
+  const targetMonth = currentJstTargetMonth();
   const [slipCount, invoiceCount] = await Promise.all([
     tx.salarySlipIssue.count({
-      where: { countsAgainstQuota: true, issuedAt: { gte: start, lt: end }, salarySlip: { companyId } },
+      where: { countsAgainstQuota: true, salarySlip: { companyId, targetMonth } },
     }),
     tx.invoiceIssue.count({
-      where: { countsAgainstQuota: true, issuedAt: { gte: start, lt: end }, invoice: { issuingCompanyId: companyId } },
+      where: { countsAgainstQuota: true, invoice: { issuingCompanyId: companyId, periodLabel: targetMonth } },
     }),
   ]);
   return slipCount + invoiceCount;

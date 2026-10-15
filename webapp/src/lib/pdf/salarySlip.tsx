@@ -9,7 +9,7 @@ Font.register({
       fontWeight: 400,
     },
     {
-      src: "https://fonts.gstatic.com/s/notosansjp/v53/-F6jfjtqLzI2JPCgQBnw7HFyzSD-AsregP8VFBEj75s.ttf",
+      src: "https://fonts.gstatic.com/s/notosansjp/v53/-F6jfjtqLzI2JPCgQBnw7HFyzSD-AsregP8VFPYk75s.ttf",
       fontWeight: 700,
     },
   ],
@@ -86,6 +86,8 @@ const styles = StyleSheet.create({
   summaryLabelFinal: { fontSize: 10, fontWeight: 700, color: "#0b3d2e" },
   summaryValue: { fontSize: 9 },
   summaryValueFinal: { fontSize: 12, fontWeight: 700, color: "#0b3d2e" },
+  noteBodyCell: { paddingVertical: 8, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: "#e6e1d3" },
+  noteText: { fontSize: 9 },
 });
 
 export type SalarySlipPdfData = {
@@ -96,10 +98,13 @@ export type SalarySlipPdfData = {
   targetMonth: string;
   issuedAt: string;
   paymentDay: string | null;
+  note: string | null;
+  isContractor: boolean;
   lines: { description: string; hours: number; rate: number; amount: number }[];
   deductions: DeductionItem[];
   paidLeaveDaysUsed: number;
   paidLeaveDailyRate: number;
+  paidLeaveConfigured: boolean;
   grossFromShifts: number;
   paidLeaveAmount: number;
   gross: number;
@@ -122,12 +127,14 @@ export function SalarySlipDocument({ data }: { data: SalarySlipPdfData }) {
           </View>
         ) : null}
 
-        <Text style={styles.title}>給与明細書</Text>
+        <Text style={styles.title}>{data.isContractor ? "支払明細書" : "給与明細書"}</Text>
 
         <View style={styles.headerRow}>
           <View style={styles.recipientBlock}>
             <Text style={styles.recipientName}>{data.staffName} 様</Text>
-            <Text style={styles.subjectLine}>件名：{data.targetMonth}分 給与</Text>
+            <Text style={styles.subjectLine}>
+              件名：{data.targetMonth}分 {data.isContractor ? "業務委託料" : "給与"}
+            </Text>
           </View>
           <View style={styles.issuerBlock}>
             <Text style={styles.issuerName}>{data.companyName}</Text>
@@ -157,7 +164,7 @@ export function SalarySlipDocument({ data }: { data: SalarySlipPdfData }) {
               <Text style={styles.tableColAmount}>{l.amount}円</Text>
             </View>
           ))}
-          {data.paidLeaveDaysUsed > 0 ? (
+          {data.paidLeaveDaysUsed > 0 || data.paidLeaveConfigured ? (
             <View style={styles.tableRow}>
               <Text style={styles.tableColDescription}>有給休暇 {data.paidLeaveDaysUsed}日</Text>
               <Text style={styles.tableColQty}>—</Text>
@@ -191,6 +198,17 @@ export function SalarySlipDocument({ data }: { data: SalarySlipPdfData }) {
             <Text style={styles.summaryValueFinal}>{data.net.toLocaleString()}円</Text>
           </View>
         </View>
+
+        {data.note ? (
+          <View style={styles.section}>
+            <View style={styles.tableHeaderRow}>
+              <Text style={styles.tableHeaderText}>備考</Text>
+            </View>
+            <View style={styles.noteBodyCell}>
+              <Text style={styles.noteText}>{data.note}</Text>
+            </View>
+          </View>
+        ) : null}
       </Page>
     </Document>
   );

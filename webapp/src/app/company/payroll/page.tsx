@@ -57,6 +57,8 @@ export default async function PayrollPage({
     status: string;
     lines: { id: string; kind: string; description: string; hours: number; rate: number; amount: number }[];
     deductions: { id: string; label: string; amount: number }[];
+    paymentDay: string | null;
+    note: string | null;
     paidLeaveDaysUsed: number;
     paidLeaveDailyRate: number;
     paidLeaveBalance: number;
@@ -100,6 +102,8 @@ export default async function PayrollPage({
         amount: l.amount,
       })),
       deductions: slip.deductions as { id: string; label: string; amount: number }[],
+      paymentDay: slip.paymentDay,
+      note: slip.note,
       paidLeaveDaysUsed: slip.paidLeaveDaysUsed,
       paidLeaveDailyRate: slip.paidLeaveDailyRate,
       paidLeaveBalance: staffMembership.paidLeaveBalance,

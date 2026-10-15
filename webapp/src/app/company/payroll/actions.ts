@@ -11,6 +11,8 @@ import {
   deleteLine,
   updateDeductions,
   updatePaidLeave,
+  setSalarySlipPaymentDay,
+  setSalarySlipNote,
   issueSalarySlip,
   reopenSalarySlip,
   renameUnresolvedTaskNames,
@@ -50,6 +52,18 @@ export async function deleteLineAction(lineId: string) {
 export async function updateDeductionsAction(salarySlipId: string, deductions: DeductionItem[]) {
   await assertAccess(salarySlipId);
   await updateDeductions(salarySlipId, deductions);
+  revalidatePath("/company/payroll");
+}
+
+export async function setSalarySlipPaymentDayAction(salarySlipId: string, paymentDay: string) {
+  await assertAccess(salarySlipId);
+  await setSalarySlipPaymentDay(salarySlipId, paymentDay);
+  revalidatePath("/company/payroll");
+}
+
+export async function setSalarySlipNoteAction(salarySlipId: string, note: string) {
+  await assertAccess(salarySlipId);
+  await setSalarySlipNote(salarySlipId, note);
   revalidatePath("/company/payroll");
 }
 

@@ -1,7 +1,7 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 import { verifySession, getActiveMembership } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { getTotals, getPaymentTerms, buildSalarySlipPdfLines, resolveWorkplaceNamesByShiftId } from "@/lib/domain/payroll";
+import { getTotals, getEmploymentType, buildSalarySlipPdfLines, resolveWorkplaceNamesByShiftId } from "@/lib/domain/payroll";
 import { todayJst } from "@/lib/date";
 import { SalarySlipDocument, type SalarySlipPdfData } from "@/lib/pdf/salarySlip";
 
@@ -29,7 +29,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/salar
     const issue = await prisma.salarySlipIssue.findUnique({ where: { id: issueId } });
     if (!issue || issue.salarySlipId !== slip.id) return new Response("not found", { status: 404 });
     const snap = issue.snapshot as unknown as Record<string, unknown>;
-    const { paymentDay } = await getPaymentTerms(slip.companyId, slip.staffUserId, snap.targetMonth as string);
+    const employmentType = await getEmploymentType(slip.companyId, slip.staffUserId, snap.targetMonth as string);
     const snapLines = snap.lines as { kind?: string; shiftId?: string | null; description: string; hours: number; rate: number; amount: number }[];
     const snapWorkplaceMap = await resolveWorkplaceNamesByShiftId(
       snapLines.map((l) => l.shiftId).filter((id): id is string => Boolean(id)),
@@ -41,11 +41,14 @@ export async function GET(request: Request, { params }: RouteContext<"/api/salar
       staffName: snap.staffName as string,
       targetMonth: snap.targetMonth as string,
       issuedAt: (snap.issuedAt as string).slice(0, 10),
-      paymentDay,
+      paymentDay: (snap.paymentDay as string | null) ?? null,
+      note: (snap.note as string | null) ?? null,
+      isContractor: employmentType === "CONTRACTOR",
       lines: buildSalarySlipPdfLines(snapLines, snapWorkplaceMap),
       deductions: snap.deductions as SalarySlipPdfData["deductions"],
       paidLeaveDaysUsed: snap.paidLeaveDaysUsed as number,
       paidLeaveDailyRate: snap.paidLeaveDailyRate as number,
+      paidLeaveConfigured: Boolean(snap.paidLeaveConfigured),
       grossFromShifts: snap.grossFromShifts as number,
       paidLeaveAmount: snap.paidLeaveAmount as number,
       gross: snap.gross as number,
@@ -55,7 +58,11 @@ export async function GET(request: Request, { params }: RouteContext<"/api/salar
     };
   } else {
     const totals = getTotals(slip);
-    const { paymentDay } = await getPaymentTerms(slip.companyId, slip.staffUserId, slip.targetMonth);
+    const employmentType = await getEmploymentType(slip.companyId, slip.staffUserId, slip.targetMonth);
+    const membership = await prisma.companyMembership.findFirst({
+      where: { companyId: slip.companyId, userId: slip.staffUserId },
+      select: { nextPaidLeaveGrantDate: true },
+    });
     const liveWorkplaceMap = await resolveWorkplaceNamesByShiftId(
       slip.lines.map((l) => l.shiftId).filter((id): id is string => Boolean(id)),
     );
@@ -66,11 +73,14 @@ export async function GET(request: Request, { params }: RouteContext<"/api/salar
       staffName: slip.staff.name,
       targetMonth: slip.targetMonth,
       issuedAt: todayJst(),
-      paymentDay,
+      paymentDay: slip.paymentDay,
+      note: slip.note,
+      isContractor: employmentType === "CONTRACTOR",
       lines: buildSalarySlipPdfLines(slip.lines, liveWorkplaceMap),
       deductions: slip.deductions as SalarySlipPdfData["deductions"],
       paidLeaveDaysUsed: slip.paidLeaveDaysUsed,
       paidLeaveDailyRate: slip.paidLeaveDailyRate,
+      paidLeaveConfigured: membership?.nextPaidLeaveGrantDate != null,
       ...totals,
       watermarked: true,
     };
