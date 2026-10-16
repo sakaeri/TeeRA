@@ -215,6 +215,19 @@ function StepGuide({
   );
 }
 
+const HOWTO_SECTIONS: { id: string; label: string }[] = [
+  { id: "howto-staff", label: "①スタッフ追加" },
+  { id: "howto-contract", label: "②契約書を生成" },
+  { id: "howto-shift", label: "③シフト作成" },
+  { id: "howto-timecard", label: "④タイムカード" },
+  { id: "howto-approve", label: "⑤業務報告承認" },
+  { id: "howto-payroll", label: "⑥給与明細" },
+  { id: "howto-invoice", label: "⑦請求書" },
+  { id: "howto-client", label: "⑧依頼主を管理" },
+  { id: "howto-team", label: "⑨チーム作成" },
+  { id: "howto-wallet", label: "⑩Teeウォレット" },
+];
+
 function HowToSection() {
   return (
     <div className="flex flex-col gap-10">
@@ -222,16 +235,29 @@ function HowToSection() {
         <p className="mb-3 text-sm text-muted">
           このページをブラウザの印刷機能で印刷すると、ナビゲーションなどの操作用UIを除いた状態でPDFとして保存できます（印刷ダイアログの「送信先」で「PDFに保存」を選んでください）。
         </p>
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="print-hide rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-        >
-          🖨 このページを印刷する
-        </button>
+        <div className="print-hide flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+          >
+            🖨 このページを印刷する
+          </button>
+        </div>
+        <nav className="print-hide mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
+          {HOWTO_SECTIONS.map((s) => (
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              className="rounded-full border border-border bg-white px-3 py-1.5 text-xs font-medium text-primary hover:border-primary"
+            >
+              {s.label}
+            </a>
+          ))}
+        </nav>
       </SectionCard>
 
-      <SectionCard title="①スタッフを追加する">
+      <SectionCard id="howto-staff" title="①スタッフを追加する">
         <StepGuide
           image="/howto/roster-staff-list.png"
           alt="スタッフ名簿の画面"
@@ -245,7 +271,7 @@ function HowToSection() {
         />
       </SectionCard>
 
-      <SectionCard title="②契約書を用意する">
+      <SectionCard id="howto-contract" title="②契約書を用意する">
         <StepGuide
           image="/howto/contracts-template-list.png"
           alt="契約書テンプレート一覧の画面"
@@ -259,7 +285,7 @@ function HowToSection() {
         />
       </SectionCard>
 
-      <SectionCard title="③シフトを作成する">
+      <SectionCard id="howto-shift" title="③シフトを作成する">
         <StepGuide
           image="/howto/shift-create-modal.png"
           alt="シフト作成モーダルの画面"
@@ -281,7 +307,7 @@ function HowToSection() {
         </div>
       </SectionCard>
 
-      <SectionCard title="④タイムカード・業務報告（スタッフ側の画面）">
+      <SectionCard id="howto-timecard" title="④タイムカード・業務報告（スタッフ側の画面）">
         <StepGuide
           image="/howto/staff-timecard.png"
           alt="スタッフのタイムカード画面"
@@ -294,7 +320,7 @@ function HowToSection() {
         />
       </SectionCard>
 
-      <SectionCard title="⑤業務報告を確認・承認する">
+      <SectionCard id="howto-approve" title="⑤業務報告を確認・承認する">
         <StepGuide
           image="/howto/workreports-approval.png"
           alt="業務報告の承認画面"
@@ -307,7 +333,7 @@ function HowToSection() {
         />
       </SectionCard>
 
-      <SectionCard title="⑥給与明細を作る">
+      <SectionCard id="howto-payroll" title="⑥給与明細を作る">
         <StepGuide
           image="/howto/payroll-editor.png"
           alt="給与計算画面"
@@ -319,9 +345,12 @@ function HowToSection() {
           ]}
           note="控除・支払日・備考は翌月にも自動で引き継がれるので、毎月入力し直す必要はありません。"
         />
+        <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted">
+          発行した後に金額や内容を間違えていたことに気づいた場合は、明細の「内容を修正する」ボタンで一旦下書きに戻して編集できます。同じ対象月の明細であれば、修正後の再発行に追加費用はかかりません（Teeは最初の発行時にしか消費されません）。
+        </p>
       </SectionCard>
 
-      <SectionCard title="⑦請求書を作る">
+      <SectionCard id="howto-invoice" title="⑦請求書を作る">
         <StepGuide
           image="/howto/invoice-editor.png"
           alt="請求書作成画面"
@@ -331,9 +360,25 @@ function HowToSection() {
             "明細・消費税区分・振込先などを確認し「PDFで請求書を発行する」",
           ]}
         />
+        <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted">
+          請求書も給与明細と同じく、発行後に「内容を修正する」で下書きに戻して直せます。同じ対象月の請求書であれば、修正しての再発行は何度でも無料です。
+        </p>
       </SectionCard>
 
-      <SectionCard title="⑧チームを作る（複数店舗・複数拠点がある場合）">
+      <SectionCard id="howto-client" title="⑧依頼主を管理する（勤務地・社内メモ）">
+        <StepGuide
+          image="/howto/client-detail-notes.png"
+          alt="依頼主詳細パネルの社内メモ画面"
+          steps={[
+            "「スタッフ名簿」→「依頼主一覧」から依頼主を開く",
+            "「勤務地」「緊急連絡先」を登録しておくと、その依頼主の現場に入るスタッフ全員のシフト画面にも表示される（スタッフに現場情報を個別に伝える手間が省けます）",
+            "「社内メモ」タブで「＋メモ作成」。休業日や現場のルールなど、本部・チーム内だけで共有したい内容を書き留められる",
+          ]}
+          note="メモは作成時に「スタッフにも共有する」にチェックを入れない限り、本部・管理者側だけに見える内部メモとして保存されます（チェックした分だけ、その依頼主の現場に入るスタッフにも表示されます）。この共有機能は依頼主向けのメモのみで、派遣会社向けのメモには表示されません。"
+        />
+      </SectionCard>
+
+      <SectionCard id="howto-team" title="⑨チームを作る（複数店舗・複数拠点がある場合）">
         <StepGuide
           image="/howto/settings-basic-team.png"
           alt="チーム管理画面"
@@ -346,7 +391,7 @@ function HowToSection() {
         />
       </SectionCard>
 
-      <SectionCard title="⑨Teeウォレット（課金の仕組み）">
+      <SectionCard id="howto-wallet" title="⑩Teeウォレット（課金の仕組み）">
         <StepGuide
           image="/howto/wallet.png"
           alt="Teeウォレット画面"
@@ -434,16 +479,18 @@ function HowToSection() {
 }
 
 function SectionCard({
+  id,
   title,
   headerAction,
   children,
 }: {
+  id?: string;
   title: React.ReactNode;
   headerAction?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-border bg-white/60 p-6">
+    <section id={id} className="rounded-2xl border border-border bg-white/60 p-6 scroll-mt-20 print:break-inside-avoid">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="font-serif-jp text-lg font-bold text-primary">{title}</h2>
         {headerAction}
