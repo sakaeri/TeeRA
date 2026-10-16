@@ -139,7 +139,7 @@ export function SettingsView({
   return (
     <div>
       <h1 className="mb-6 font-serif-jp text-2xl font-bold">設定</h1>
-      <div className="mb-8 flex gap-1 overflow-x-auto border-b border-border">
+      <div className="print-hide mb-8 flex gap-1 overflow-x-auto border-b border-border">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -184,9 +184,180 @@ export function SettingsView({
   );
 }
 
+function StepGuide({
+  image,
+  alt,
+  steps,
+  note,
+}: {
+  image: string;
+  alt: string;
+  steps: React.ReactNode[];
+  note?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-4 sm:flex-row">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={image}
+        alt={alt}
+        className="w-full rounded-xl border border-border sm:w-1/2"
+      />
+      <div className="flex-1">
+        <ol className="list-decimal space-y-2 pl-5 text-sm">
+          {steps.map((s, i) => (
+            <li key={i}>{s}</li>
+          ))}
+        </ol>
+        {note ? <p className="mt-3 text-xs text-muted">{note}</p> : null}
+      </div>
+    </div>
+  );
+}
+
 function HowToSection() {
   return (
     <div className="flex flex-col gap-10">
+      <SectionCard title="このページを印刷する">
+        <p className="mb-3 text-sm text-muted">
+          このページをブラウザの印刷機能で印刷すると、ナビゲーションなどの操作用UIを除いた状態でPDFとして保存できます（印刷ダイアログの「送信先」で「PDFに保存」を選んでください）。
+        </p>
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="print-hide rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+        >
+          🖨 このページを印刷する
+        </button>
+      </SectionCard>
+
+      <SectionCard title="①スタッフを追加する">
+        <StepGuide
+          image="/howto/roster-staff-list.png"
+          alt="スタッフ名簿の画面"
+          steps={[
+            "左メニューの「スタッフ名簿」を開く",
+            "右上の「＋スタッフを追加」をタップ",
+            "「本アカウントを招待」を選ぶと、招待URLが発行される。これをスタッフ本人に送る（LINEやメールなどで構いません）",
+            "まだ本人にアカウントを作らせたくない場合は「仮アカウントを作成」で名前だけ登録しておき、後から本招待に切り替えることもできます",
+          ]}
+          note="スタッフが招待URLから自分で登録すると、名簿に自動で追加されます。"
+        />
+      </SectionCard>
+
+      <SectionCard title="②契約書を用意する">
+        <StepGuide
+          image="/howto/contracts-template-list.png"
+          alt="契約書テンプレート一覧の画面"
+          steps={[
+            "「設定」→「契約関連」タブを開く",
+            "「＋テンプレートを作成」から、雇用形態・業務内容・時給（または月給）などを入力してテンプレートを作る",
+            "スタッフ名簿からそのスタッフを開き「契約書管理」→「＋契約書を追加」で、作成したテンプレートを使って契約書を発行する",
+            "スタッフ本人がアプリ上で内容を確認し「同意する」と、契約成立。これで給与計算にそのスタッフの単価が反映されるようになります",
+          ]}
+          note="契約書を発行しないと、給与計算の自動計算（勤務内訳の自動反映）が行われません。最初にここを済ませておくのがおすすめです。"
+        />
+      </SectionCard>
+
+      <SectionCard title="③シフトを作成する">
+        <StepGuide
+          image="/howto/shift-create-modal.png"
+          alt="シフト作成モーダルの画面"
+          steps={[
+            "左メニューの「シフトカレンダー」を開く",
+            "右下の「＋」ボタン→「シフトを作成」をタップ",
+            "「社内」か「依頼主・派遣会社向け」かを選び、業務内容を選ぶ（無ければその場で追加できる）",
+            "シフトに入れるスタッフを選び、日付・時間を指定して作成する",
+          ]}
+        />
+        <div className="mt-6">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/howto/calendar-overview.png"
+            alt="作成したシフトがカレンダーに表示された画面"
+            className="w-full rounded-xl border border-border"
+          />
+          <p className="mt-2 text-xs text-muted">作成するとカレンダーにスタッフ名が表示されます。</p>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="④タイムカード・業務報告（スタッフ側の画面）">
+        <StepGuide
+          image="/howto/staff-timecard.png"
+          alt="スタッフのタイムカード画面"
+          steps={[
+            "スタッフはシフト当日、自分のスマホで「タイムカード」を開く",
+            "「勤務開始」→終業時に「勤務終了」をタップ",
+            "休憩時間や業務内容を確認し「業務報告を提出する」で提出完了",
+          ]}
+          note="これはスタッフ側の画面です。本部・管理者は次の「業務報告を確認・承認する」で内容を確認します。"
+        />
+      </SectionCard>
+
+      <SectionCard title="⑤業務報告を確認・承認する">
+        <StepGuide
+          image="/howto/workreports-approval.png"
+          alt="業務報告の承認画面"
+          steps={[
+            "「設定」→「業務報告」タブを開く",
+            "スタッフから提出された実働時間・業務内容を確認する",
+            "問題なければ「承認する」。内容を直したい場合は「修正して差し戻す」で管理者側から修正できる",
+          ]}
+          note="承認された業務報告だけが、給与計算の勤務内訳に反映されます。"
+        />
+      </SectionCard>
+
+      <SectionCard title="⑥給与明細を作る">
+        <StepGuide
+          image="/howto/payroll-editor.png"
+          alt="給与計算画面"
+          steps={[
+            "左メニューの「給料明細/請求書」を開く（「給料明細」タブ）",
+            "対象のスタッフ・対象月を選ぶと、承認済みの勤務実績が自動で勤務内訳に反映される",
+            "必要なら控除（社会保険料など）や有給休暇の使用日数、支払日・備考を入力する",
+            "内容を確認して「PDFで明細を発行する」",
+          ]}
+          note="控除・支払日・備考は翌月にも自動で引き継がれるので、毎月入力し直す必要はありません。"
+        />
+      </SectionCard>
+
+      <SectionCard title="⑦請求書を作る">
+        <StepGuide
+          image="/howto/invoice-editor.png"
+          alt="請求書作成画面"
+          steps={[
+            "「給料明細/請求書」の「請求書」タブを開く",
+            "「＋新しく作成」から請求先の依頼主を選ぶ（依頼主が未登録ならスタッフ名簿の「依頼主一覧」から先に追加する）",
+            "明細・消費税区分・振込先などを確認し「PDFで請求書を発行する」",
+          ]}
+        />
+      </SectionCard>
+
+      <SectionCard title="⑧チームを作る（複数店舗・複数拠点がある場合）">
+        <StepGuide
+          image="/howto/settings-basic-team.png"
+          alt="チーム管理画面"
+          steps={[
+            "「設定」→「基本情報」タブの「チーム管理」で「＋チームを作成」",
+            "チームごとにマネージャー／リーダーを招待すると、そのチーム内のシフト作成・給与計算などを任せられる",
+            "チームの通知先メールアドレスを設定すると、そのチーム宛の業務報告・シフト希望の通知がそちらに届く（未設定なら本部宛に届きます）",
+          ]}
+          note="1つ目のチームは無料。2つ目以降はチーム作成時にTeeを消費します（画面上に消費量が表示されます）。"
+        />
+      </SectionCard>
+
+      <SectionCard title="⑨Teeウォレット（課金の仕組み）">
+        <StepGuide
+          image="/howto/wallet.png"
+          alt="Teeウォレット画面"
+          steps={[
+            "左メニューの「設定」から行けない場合は、ヘッダー右上の「Tee」表示をタップすると開けます",
+            "「Tee」はこのアプリ内で使うポイントで、チャージして使います",
+            "給与明細・請求書の発行は、無料プランの発行枠を超えると1件につき1Tee消費します",
+          ]}
+        />
+      </SectionCard>
+
       <SectionCard title="権限ごとに使える機能">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] border-collapse text-sm">

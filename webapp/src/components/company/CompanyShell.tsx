@@ -65,7 +65,7 @@ export function CompanyShell({
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-accent bg-primary px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] text-primary-foreground sm:gap-6 sm:px-6 sm:pt-3">
+      <header className="print-hide flex flex-wrap items-center justify-between gap-3 border-b-2 border-accent bg-primary px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] text-primary-foreground sm:gap-6 sm:px-6 sm:pt-3">
         <div className="flex items-center gap-2 sm:gap-4">
           <div className="font-serif-jp text-lg font-bold tracking-wide">TeeRA</div>
           <span className="hidden text-xs opacity-70 sm:inline">{todayLabel()}</span>
@@ -161,7 +161,7 @@ export function CompanyShell({
         バー側になり、既存テストの挙動を変えずに済む。
       */}
       <div className="order-2 flex flex-1 flex-col sm:flex-row">
-        <nav className="hidden w-52 shrink-0 bg-primary py-6 text-primary-foreground sm:block">
+        <nav className="print-hide hidden w-52 shrink-0 bg-primary py-6 text-primary-foreground sm:block">
           {nav.map((item) => {
             const active = isNavItemActive(item, pathname);
             return (
@@ -181,7 +181,7 @@ export function CompanyShell({
         <div className="flex flex-1 flex-col bg-background">{children}</div>
       </div>
 
-      <nav className="order-1 flex items-stretch justify-around border-b border-accent/60 bg-primary text-primary-foreground sm:hidden">
+      <nav className="print-hide order-1 flex items-stretch justify-around border-b border-accent/60 bg-primary text-primary-foreground sm:hidden">
         {nav.map((item) => {
           const active = isNavItemActive(item, pathname);
           return (

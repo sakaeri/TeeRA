@@ -74,3 +74,13 @@ body {
     transform: scale(0.97);
   }
 }
+
+/* 使い方マニュアル（設定＞使い方）をブラウザの印刷機能でPDF保存できる
+   ように、ナビゲーション等の操作用UIだけ印刷時に隠す。個別ページの
+   header/navをタグ名で一律に消すと他ページに影響するため、このクラスを
+   付けた要素だけを対象にする。 */
+@media print {
+  .print-hide {
+    display: none !important;
+  }
+}

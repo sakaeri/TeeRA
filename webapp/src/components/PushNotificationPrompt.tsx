@@ -64,7 +64,7 @@ export function PushNotificationPrompt() {
   // 通常のドキュメントフローで差し込み、表示中は下のコンテンツを押し下げる
   // 形にしている（どのページでも絶対に何とも重ならない）。
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-accent bg-primary px-4 py-3 text-primary-foreground sm:px-6">
+    <div className="print-hide flex flex-wrap items-center justify-between gap-3 border-b-2 border-accent bg-primary px-4 py-3 text-primary-foreground sm:px-6">
       <p className="text-sm">
         業務報告の提出やシフト開始前など、タイミングが重要なお知らせをプッシュ通知で受け取りますか？
       </p>
