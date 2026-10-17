@@ -84,3 +84,25 @@ body {
     display: none !important;
   }
 }
+
+/* 使い方マニュアルを1ページ3項目で印刷するための改ページ指定。iOSの
+   Safari/Chromeは新しいbreak-*だけだと効かないことがあるため、旧来の
+   page-break-*も併記する。 */
+@page {
+  size: A4;
+  margin: 10mm;
+}
+@media print {
+  html,
+  body {
+    background: #fff !important;
+  }
+  .print-page-break {
+    break-before: page;
+    page-break-before: always;
+  }
+  .print-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

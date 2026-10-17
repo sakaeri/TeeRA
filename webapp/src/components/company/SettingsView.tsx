@@ -138,7 +138,7 @@ export function SettingsView({
 
   return (
     <div>
-      <h1 className="mb-6 font-serif-jp text-2xl font-bold">設定</h1>
+      <h1 className="print-hide mb-6 font-serif-jp text-2xl font-bold">設定</h1>
       <div className="print-hide mb-8 flex gap-1 overflow-x-auto border-b border-border">
         {TABS.map((t) => (
           <button
@@ -196,20 +196,23 @@ function StepGuide({
   note?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-4 sm:flex-row">
+    // 印刷時は端末の画面幅に関係なく「左に画像・右に文字」で並べ、画像は
+    // 縦横比をそろえて上端だけ見せる（縦長の画像で1項目が伸び、1ページ
+    // 3項目に収まらなくなるのを防ぐ）。
+    <div className="flex flex-col gap-4 sm:flex-row print:flex-row print:gap-3">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={image}
         alt={alt}
-        className="w-full rounded-xl border border-border sm:w-1/2"
+        className="w-full rounded-xl border border-border sm:w-1/2 print:aspect-[64/45] print:w-[40%] print:shrink-0 print:rounded-md print:object-cover print:object-top"
       />
       <div className="flex-1">
-        <ol className="list-decimal space-y-2 pl-5 text-sm">
+        <ol className="list-decimal space-y-2 pl-5 text-sm print:space-y-0.5 print:pl-4 print:text-[11.5px] print:leading-snug">
           {steps.map((s, i) => (
             <li key={i}>{s}</li>
           ))}
         </ol>
-        {note ? <p className="mt-3 text-xs text-muted">{note}</p> : null}
+        {note ? <p className="mt-3 text-xs text-muted print:mt-1 print:text-[10px] print:leading-snug">{note}</p> : null}
       </div>
     </div>
   );
@@ -235,8 +238,9 @@ const HOWTO_SECTIONS: { id: string; label: string }[] = [
 
 function HowToSection() {
   return (
-    <div className="flex flex-col gap-10">
-      <SectionCard title="このページを印刷する">
+    <div className="flex flex-col gap-10 print:block">
+      <h1 className="hidden font-serif-jp text-lg font-bold text-primary print:mb-2 print:block">TeeRA 使い方マニュアル</h1>
+      <SectionCard title="このページを印刷する" className="print-hide">
         <p className="mb-3 text-sm text-muted">
           このページをブラウザの印刷機能で印刷すると、ナビゲーションなどの操作用UIを除いた状態でPDFとして保存できます（印刷ダイアログの「送信先」で「PDFに保存」を選んでください）。
         </p>
@@ -301,7 +305,7 @@ function HowToSection() {
             "シフトに入れるスタッフを選び、日付・時間を指定して作成する",
           ]}
         />
-        <div className="mt-6">
+        <div className="mt-6 print:hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/howto/calendar-overview.png"
@@ -312,7 +316,7 @@ function HowToSection() {
         </div>
       </SectionCard>
 
-      <SectionCard id="howto-timecard" title="④タイムカード・業務報告（スタッフ側の画面）">
+      <SectionCard id="howto-timecard" printPageBreak title="④タイムカード・業務報告（スタッフ側の画面）">
         <StepGuide
           image="/howto/staff-timecard.png"
           alt="スタッフのタイムカード画面"
@@ -336,7 +340,7 @@ function HowToSection() {
           ]}
           note="承認された業務報告だけが、給与計算の勤務内訳に反映されます。"
         />
-        <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted">
+        <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted print:mt-1.5 print:px-2 print:py-1 print:text-[10px] print:leading-snug">
           「設定」→「基本情報」の会社情報で通知メールアドレスを登録しておくと、業務報告が提出されるたびにメールが届きます。メール内の「承認する」ボタンからは、アプリを開かずにそのまま承認できます（リンクの有効期限は7日間です。内容を直したい場合はアプリから操作してください）。
         </p>
       </SectionCard>
@@ -353,12 +357,12 @@ function HowToSection() {
           ]}
           note="控除・支払日・備考は翌月にも自動で引き継がれるので、毎月入力し直す必要はありません。"
         />
-        <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted">
+        <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted print:mt-1.5 print:px-2 print:py-1 print:text-[10px] print:leading-snug">
           発行した後に金額や内容を間違えていたことに気づいた場合は、明細の「内容を修正する」ボタンで一旦下書きに戻して編集できます。同じ対象月の明細であれば、修正後の再発行に追加費用はかかりません（Teeは最初の発行時にしか消費されません）。
         </p>
       </SectionCard>
 
-      <SectionCard id="howto-invoice" title="⑦請求書を作る">
+      <SectionCard id="howto-invoice" printPageBreak title="⑦請求書を作る">
         <StepGuide
           image="/howto/invoice-editor.png"
           alt="請求書作成画面"
@@ -368,7 +372,7 @@ function HowToSection() {
             "明細・消費税区分・振込先などを確認し「PDFで請求書を発行する」",
           ]}
         />
-        <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted">
+        <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted print:mt-1.5 print:px-2 print:py-1 print:text-[10px] print:leading-snug">
           請求書も給与明細と同じく、発行後に「内容を修正する」で下書きに戻して直せます。同じ対象月の請求書であれば、修正しての再発行は何度でも無料です。
         </p>
       </SectionCard>
@@ -399,7 +403,7 @@ function HowToSection() {
         />
       </SectionCard>
 
-      <SectionCard id="howto-wallet" title="⑩Teeウォレット（課金の仕組み）">
+      <SectionCard id="howto-wallet" printPageBreak title="⑩Teeウォレット（課金の仕組み）">
         <StepGuide
           image="/howto/wallet.png"
           alt="Teeウォレット画面"
@@ -437,28 +441,28 @@ function HowToSection() {
           ]}
           note="ここまでの通常の募集は無料です。"
         />
-        <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-start">
+        <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-start print:mt-1.5 print:block">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/howto/recruitment-public.png"
             alt="公開募集の設定画面"
-            className="w-full rounded-xl border border-border sm:w-1/2"
+            className="w-full rounded-xl border border-border sm:w-1/2 print:hidden"
           />
-          <div className="flex-1 text-sm">
-            <p className="mb-2 font-semibold text-primary">自社スタッフだけで足りない場合（公開募集）</p>
-            <ol className="list-decimal space-y-2 pl-5">
+          <div className="flex-1 text-sm print:text-[10px] print:leading-snug">
+            <p className="mb-2 font-semibold text-primary print:mb-0.5">自社スタッフだけで足りない場合（公開募集）</p>
+            <ol className="list-decimal space-y-2 pl-5 print:space-y-0 print:pl-4">
               <li>募集の「編集」から「公開募集に切り替える」を選ぶ</li>
               <li>時給／日給と「勤務地」を入力する（所属していない人にも分かるよう、勤務地は必須です）。必要なら服装・持ち物・集合場所なども追加する</li>
               <li>公開前の確認事項にすべてチェックを入れて「公開募集を開始する」</li>
             </ol>
-            <p className="mt-3 text-xs text-muted">
+            <p className="mt-3 text-xs text-muted print:mt-0.5 print:text-[10px]">
               公開募集は1名につき10Teeがかかり、開始時に残り枠の分がまとめて確保（ロック）されます。自社スタッフ・配属済みスタッフで枠が埋まった分や、人数を減らした分・削除した募集・日付が過ぎても埋まらなかった枠のTeeは自動で返金されます。実際に消費されるのは、所属のない人で枠が埋まった分だけです。
             </p>
           </div>
         </div>
       </SectionCard>
 
-      <SectionCard id="howto-paidleave" title="⑬有給休暇を管理する">
+      <SectionCard id="howto-paidleave" printPageBreak title="⑬有給休暇を管理する">
         <StepGuide
           image="/howto/paid-leave.png"
           alt="有給休暇の付与画面"
@@ -500,9 +504,9 @@ function HowToSection() {
         />
       </SectionCard>
 
-      <SectionCard title="権限ごとに使える機能">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
+      <SectionCard title="権限ごとに使える機能" printPageBreak>
+        <div className="overflow-x-auto print:overflow-visible">
+          <table className="w-full min-w-[640px] border-collapse text-sm print:min-w-0 print:text-[10px]">
             <thead>
               <tr className="border-b border-border text-left text-muted">
                 <th className="py-2 pr-4 font-semibold">役職</th>
@@ -544,14 +548,14 @@ function HowToSection() {
             </tbody>
           </table>
         </div>
-        <ul className="mt-4 list-disc pl-5 text-sm text-muted">
+        <ul className="mt-4 list-disc pl-5 text-sm text-muted print:mt-2 print:text-[10px]">
           <li>本部管理者を全員外す操作（最後の1人の降格・削除など）はできません。</li>
           <li>取引先・派遣会社の新規作成は本部管理者のみ行えます。仮アカウントを作成する際にチームを指定すれば、作成後すぐにそのチームに紐付けられます。</li>
         </ul>
       </SectionCard>
 
       <SectionCard title="スマートフォンのホーム画面に追加する">
-        <div className="flex flex-col gap-4 text-sm">
+        <div className="flex flex-col gap-4 text-sm print:gap-2 print:text-[10.5px]">
           <div>
             <p className="mb-1 font-semibold text-primary">iPhone（Safari）</p>
             <ol className="list-decimal pl-5 text-muted">
@@ -575,21 +579,30 @@ function HowToSection() {
   );
 }
 
+// printPageBreak: 使い方マニュアルを印刷した時、この項目から新しいページに
+// する（1ページ3項目に固定するため、④⑦⑩⑬と権限表の前で改ページ）。
 function SectionCard({
   id,
   title,
   headerAction,
+  printPageBreak,
+  className,
   children,
 }: {
   id?: string;
   title: React.ReactNode;
   headerAction?: React.ReactNode;
+  printPageBreak?: boolean;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className="rounded-2xl border border-border bg-white/60 p-6 scroll-mt-20 print:break-inside-avoid">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-serif-jp text-lg font-bold text-primary">{title}</h2>
+    <section
+      id={id}
+      className={`print-avoid-break rounded-2xl border border-border bg-white/60 p-6 scroll-mt-20 print:mb-3 print:rounded-lg print:p-3 ${printPageBreak ? "print-page-break" : ""} ${className ?? ""}`}
+    >
+      <div className="mb-4 flex items-center justify-between print:mb-1.5">
+        <h2 className="font-serif-jp text-lg font-bold text-primary print:text-base">{title}</h2>
         {headerAction}
       </div>
       {children}

@@ -178,7 +178,7 @@ export function CompanyShell({
             );
           })}
         </nav>
-        <div className="flex flex-1 flex-col bg-background">{children}</div>
+        <div className="flex flex-1 flex-col bg-background print:bg-white">{children}</div>
       </div>
 
       <nav className="print-hide order-1 flex items-stretch justify-around border-b border-accent/60 bg-primary text-primary-foreground sm:hidden">
