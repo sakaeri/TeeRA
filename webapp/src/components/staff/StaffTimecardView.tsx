@@ -6,10 +6,12 @@ import {
   clockOutAction,
   submitWorkReportAction,
   confirmCorrectedWorkReportAction,
+  disputeCorrectedWorkReportAction,
 } from "@/app/staff/actions";
 import { isDone, type ShiftRow } from "@/lib/staffShiftStatus";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { todayJst } from "@/lib/date";
+import { UnscheduledReportButton, type UnscheduledCompanyOption } from "@/components/staff/UnscheduledReportForm";
 
 export type { ShiftRow };
 export { isDone };
@@ -40,9 +42,11 @@ const BREAK_MINUTE_PRESETS = [0, 30, 45, 60, 90];
 export function StaffTimecardView({
   shifts,
   knownTaskNamesByCompany,
+  unscheduledCompanies,
 }: {
   shifts: ShiftRow[];
   knownTaskNamesByCompany: Record<string, string[]>;
+  unscheduledCompanies: UnscheduledCompanyOption[];
 }) {
   const actionable = shifts.filter((s) => !isDone(s));
   const done = shifts.filter(isDone);
@@ -60,6 +64,8 @@ export function StaffTimecardView({
           <p className="text-sm text-muted">対応が必要な報告はありません。</p>
         ) : null}
       </ul>
+
+      <UnscheduledReportButton companies={unscheduledCompanies} knownTaskNamesByCompany={knownTaskNamesByCompany} />
 
       {done.length > 0 ? (
         <details className="rounded-2xl bg-white/70 p-4 shadow-sm ring-1 ring-black/5">
@@ -199,17 +205,31 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
             {shift.clockInTime ?? "--:--"}〜{shift.clockOutTime ?? "--:--"}（休憩{shift.breakMinutes}分／実働{" "}
             {(shift.computedMinutes / 60).toFixed(1)} 時間）
           </p>
-          <button
-            type="button"
-            disabled={pending || !shift.workReportId}
-            onClick={() => {
-              if (!shift.workReportId) return;
-              startTransition(() => confirmCorrectedWorkReportAction(shift.workReportId!));
-            }}
-            className="self-start rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-          >
-            これで合っています
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={pending || !shift.workReportId}
+              onClick={() => {
+                if (!shift.workReportId) return;
+                startTransition(() => confirmCorrectedWorkReportAction(shift.workReportId!));
+              }}
+              className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              これで合っています
+            </button>
+            {/* 修正内容に納得できない場合は差し戻し状態に戻し、自分で直して再提出する */}
+            <button
+              type="button"
+              disabled={pending || !shift.workReportId}
+              onClick={() => {
+                if (!shift.workReportId) return;
+                startTransition(() => disputeCorrectedWorkReportAction(shift.workReportId!));
+              }}
+              className="rounded-lg border border-border px-4 py-1.5 text-sm text-foreground/70 disabled:opacity-60"
+            >
+              内容が違う
+            </button>
+          </div>
         </div>
       ) : finalized ? (
         <p className="text-sm text-muted">

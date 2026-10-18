@@ -18,6 +18,8 @@ import {
   openRecruitmentToPublic,
   saveRecruitmentPublicDraft,
 } from "@/lib/domain/recruitment";
+import { listRecruitmentCancelImpacts, previewShiftCancellation } from "@/lib/domain/cancellation";
+import { notifyAgencyOfClientCancellation, notifyStaffShiftReleased } from "@/lib/domain/emailNotifications";
 import type { WageType } from "@/generated/prisma/enums";
 
 export async function createAssignedShiftAction(input: {
@@ -153,6 +155,8 @@ export async function openRecruitmentToPublicAction(input: {
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: input.recruitmentId } });
+  // 募集IDだけで他社の募集を操作できないよう、自社の募集であることを必ず確認する。
+  if (recruitment.companyId !== membership.companyId) throw new Error("forbidden");
   if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
 
   try {
@@ -190,6 +194,7 @@ export async function saveRecruitmentPublicDraftAction(input: {
 }) {
   const { membership } = await requireCompanyAdminOrEditor();
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: input.recruitmentId } });
+  if (recruitment.companyId !== membership.companyId) throw new Error("forbidden");
   if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
 
   await saveRecruitmentPublicDraft(input);
@@ -201,6 +206,7 @@ export async function updateMaxEntriesAction(recruitmentId: string, newMaxEntrie
   // オーダー(visibility=ORDER)は無課金なのでTee残高の上限チェックは不要
   // （公開募集化済みのものだけ、上限を上げる分のTeeが払えるか確認する）。
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: recruitmentId } });
+  if (recruitment.companyId !== membership.companyId) throw new Error("forbidden");
   if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
 
   try {
@@ -221,13 +227,52 @@ export async function updateMaxEntriesAction(recruitmentId: string, newMaxEntrie
   return { error: null };
 }
 
-export async function deleteRecruitmentAction(recruitmentId: string) {
-  const { userId, membership } = await requireCompanyAdminOrEditor();
+// 削除（取り消し）する前に、派遣元のスタッフ分がキャンセル規定でどう扱われる
+// かを見せるための確認用。取り消せない分・キャンセル料がかかる分を返す。
+export async function previewRecruitmentCancellationAction(recruitmentId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: recruitmentId } });
+  if (recruitment.companyId !== membership.companyId) throw new Error("forbidden");
   if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
 
-  await deleteRecruitment({ recruitmentId, updatedByUserId: userId });
+  const impacts = await listRecruitmentCancelImpacts(prisma, recruitmentId);
+  return impacts.map((i) => ({
+    staffName: i.staffName,
+    agencyName: i.agencyName,
+    kind: i.evaluation.kind,
+    feeAmount: i.evaluation.kind === "fee" ? i.evaluation.amount : 0,
+  }));
+}
+
+const DELETE_RECRUITMENT_ERROR_LABEL: Record<string, string> = {
+  cancel_not_allowed: "派遣会社とのキャンセル規定により、取り消せないスタッフが含まれています。",
+  cancel_fee_not_accepted: "キャンセル料がかかります。内容を確認してから取り消してください。",
+  recruitment_in_past: "日付が過ぎた募集は削除できません。",
+  forbidden: "権限がありません。",
+};
+
+export async function deleteRecruitmentAction(recruitmentId: string, acceptFees = false) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: recruitmentId } });
+  if (recruitment.companyId !== membership.companyId) throw new Error("forbidden");
+  if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
+
+  try {
+    const result = await deleteRecruitment({ recruitmentId, updatedByUserId: userId, acceptFees });
+    if (result.cancelledAgencyShifts.length > 0) {
+      const company = await prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } });
+      await notifyAgencyOfClientCancellation({ clientName: company.name, impacts: result.cancelledAgencyShifts }).catch(
+        (err) => console.error("[notify] client cancellation failed", err),
+      );
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      return { status: "error" as const, reason: DELETE_RECRUITMENT_ERROR_LABEL[error.message] ?? "削除できませんでした。" };
+    }
+    throw error;
+  }
   revalidatePath("/company/calendar");
+  return { status: "ok" as const };
 }
 
 // 起こりうる失敗理由を日本語に変換する — Next.jsは本番ビルドでServer
@@ -281,13 +326,68 @@ export async function assignStaffToRecruitmentAction(input: {
   }
 }
 
-export async function cancelShiftAction(shiftId: string) {
+// 解除の確認画面用。依頼主の現場のシフトなら、キャンセル規定から計算した
+// キャンセル料の目安と、取り消し時のスタッフの扱いの既定値を返す。
+export async function previewShiftCancellationAction(shiftId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
-  const shift = await prisma.shift.findUniqueOrThrow({ where: { id: shiftId } });
+  const preview = await previewShiftCancellation(shiftId);
+  if (preview.shift.companyId !== membership.companyId) throw new Error("forbidden");
+  if (!canManageShifts(membership, preview.shift.teamId)) throw new Error("forbidden");
+  return {
+    status: preview.shift.status,
+    isClientShift: preview.isClientShift,
+    clientName: preview.clientName,
+    ruleLabel: preview.ruleLabel,
+    evaluationKind: preview.evaluation.kind,
+    suggestedFee: preview.evaluation.kind === "fee" ? preview.evaluation.amount : 0,
+    defaultStaffHandling: preview.defaultStaffHandling,
+  };
+}
+
+const CANCEL_SHIFT_ERROR_LABEL: Record<string, string> = {
+  forbidden: "権限がありません。",
+  shift_not_active: "このシフトは既に解除されています。",
+  shift_in_past: "日付が過ぎたシフトは解除できません。",
+  not_client_shift: "依頼主の現場のシフトではありません。",
+};
+
+// reason: "CLIENT"＝依頼主都合（電話等で受けた取り消し。キャンセル料を記録し、
+// 請求書に載せる）、"OWN"＝自社都合。調整中のシフトを休みにする時は不要。
+export async function cancelShiftAction(
+  shiftId: string,
+  options: { reason?: "CLIENT" | "OWN"; feeAmount?: number; hold?: boolean; notifyStaff?: boolean } = {},
+) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  const shift = await prisma.shift.findUniqueOrThrow({
+    where: { id: shiftId },
+    include: { companyRelationship: { include: { clientCompany: true } } },
+  });
   if (!canManageShifts(membership, shift.teamId)) throw new Error("forbidden");
 
-  await cancelShift({ shiftId, actorCompanyId: membership.companyId });
+  try {
+    const updated = await cancelShift({
+      shiftId,
+      actorCompanyId: membership.companyId,
+      actorUserId: userId,
+      clientCancellationFee: options.reason === "CLIENT" ? (options.feeAmount ?? 0) : undefined,
+      holdForReassignment: options.hold ?? false,
+    });
+    if (updated.status === "CANCELLED" && options.notifyStaff) {
+      await notifyStaffShiftReleased({
+        staffUserId: shift.staffUserId,
+        date: shift.date,
+        workplaceName: shift.companyRelationship?.clientCompany?.name ?? shift.companyRelationship?.proxyName ?? null,
+      }).catch((err) => console.error("[notify] shift released failed", err));
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      return { status: "error" as const, reason: CANCEL_SHIFT_ERROR_LABEL[error.message] ?? "解除できませんでした。" };
+    }
+    throw error;
+  }
   revalidatePath("/company/calendar");
+  revalidatePath("/company");
+  return { status: "ok" as const };
 }
 
 export async function dismissShiftRequestAction(requestId: string, date: string) {

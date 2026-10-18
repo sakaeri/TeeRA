@@ -62,6 +62,7 @@ export async function loadDashboardData(companyId: string) {
     pendingContractStaff,
     expiringContractStaff,
     duePaidLeaveGrants,
+    heldShifts,
   ] = await Promise.all([
       // 日付が過ぎた募集はもう応募のしようがないので、埋まらないまま残って
       // いても欠員件数・やることリストからは対象外にする（過去日は消えて
@@ -76,6 +77,12 @@ export async function loadDashboardData(companyId: string) {
       listPendingContractStaff(companyId),
       listExpiringContractStaff(companyId),
       listDuePaidLeaveGrants(companyId),
+      // 依頼主の取り消しで調整中になったシフト（振り替えるか休みにするかを決める）
+      prisma.shift.findMany({
+        where: { companyId, status: "ON_HOLD", date: { gte: today } },
+        include: { staff: true, companyRelationship: { include: { clientCompany: true } } },
+        orderBy: { date: "asc" },
+      }),
     ]);
 
   // 希望日が複数（datesは配列）あり得るため、1件でも今日以降の希望日が
@@ -84,7 +91,15 @@ export async function loadDashboardData(companyId: string) {
   // 判定する。
   const shiftRequests = allShiftRequests.filter((sr) => sr.dates.some((d) => d >= today));
 
-  return { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff, duePaidLeaveGrants };
+  return {
+    shortageRecruitments,
+    shiftRequests,
+    pendingReports,
+    pendingContractStaff,
+    expiringContractStaff,
+    duePaidLeaveGrants,
+    heldShifts,
+  };
 }
 
 export type DashboardData = Awaited<ReturnType<typeof loadDashboardData>>;
@@ -170,12 +185,13 @@ export function computePendingReportEntries(data: DashboardData) {
     computedHours: (r.computedMinutes / 60).toFixed(1),
     comment: r.comment,
     taskName: r.taskName ?? r.shift.taskName,
+    isUnscheduled: r.shift.createdVia === "STAFF_REPORT",
   }));
 }
 
 export type AutoTodoItem = {
   id: string;
-  kind: "業務報告" | "欠員" | "シフト" | "契約書" | "契約満了" | "有給付与" | "販促品";
+  kind: "業務報告" | "欠員" | "シフト" | "調整中" | "契約書" | "契約満了" | "有給付与" | "販促品";
   text: string;
   actionLabel: string;
   actionHref: string;
@@ -228,6 +244,18 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
     });
   }
 
+  for (const shift of data.heldShifts) {
+    const dateStr = shift.date.toISOString().slice(0, 10);
+    const clientName = shift.companyRelationship?.clientCompany?.name ?? shift.companyRelationship?.proxyName ?? "依頼主";
+    items.push({
+      id: `held-${shift.id}`,
+      kind: "調整中",
+      text: `${shift.staff.name}さんの${dateStr}のシフトが${clientName}の取り消しで調整中です（振り替えるか休みにしてください）`,
+      actionLabel: "カレンダーで確認",
+      actionHref: `/company/calendar?date=${dateStr}`,
+    });
+  }
+
   for (const report of pendingReports) {
     const teamName = report.shift.team?.name ?? "自社";
     const dateStr = report.shift.date.toISOString().slice(0, 10);
@@ -236,7 +264,7 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
     items.push({
       id: `report-${report.id}`,
       kind: "業務報告",
-      text: `${report.staff.name}さんの業務（${teamName}）（${dateStr}${timeRange}）業務報告が未承認です`,
+      text: `${report.staff.name}さんの業務（${teamName}）（${dateStr}${timeRange}）${report.shift.createdVia === "STAFF_REPORT" ? "シフト外の" : ""}業務報告が未承認です`,
       actionLabel: "確認する",
       actionHref: `/company?open=reports&reportId=${report.id}`,
     });

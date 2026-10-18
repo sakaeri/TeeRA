@@ -16,6 +16,8 @@ import {
   markRedemptionShippedAction,
 } from "@/app/company/promo/actions";
 import { approveWorkReportAction, rejectWorkReportAction } from "@/app/company/workreports/actions";
+import { WorkReportCorrectionForm } from "@/components/company/WorkReportCorrectionForm";
+import { UnscheduledBadge } from "@/components/company/WorkReportsQueue";
 import { skipStaffPaidLeaveGrantAction } from "@/app/company/actions";
 import {
   TemplateModal,
@@ -106,6 +108,7 @@ type PendingReportEntry = {
   computedHours: string;
   comment: string | null;
   taskName: string | null;
+  isUnscheduled: boolean;
 };
 
 type PendingContractStaff = { userId: string; name: string };
@@ -168,6 +171,7 @@ const TAG_STYLE: Record<string, string> = {
   業務報告: "bg-violet-100 text-violet-800",
   欠員: "bg-rose-100 text-rose-800",
   シフト: "bg-pink-100 text-pink-800",
+  調整中: "bg-red-100 text-red-800",
   契約書: "bg-gray-200 text-gray-700",
   契約満了: "bg-orange-100 text-orange-800",
   有給付与: "bg-sky-100 text-sky-800",
@@ -805,7 +809,9 @@ function PendingReportsPopup({
 
 function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; onClose: () => void }) {
   const [pending, startTransition] = useTransition();
-  const [rejecting, setRejecting] = useState(false);
+  // 設定＞業務報告タブと同じ3つの操作（承認／スタッフに直してもらう／
+  // 時間を直して確認してもらう）をここからも行えるようにする。
+  const [mode, setMode] = useState<"choose" | "reject" | "correct">("choose");
   const [rejectionReason, setRejectionReason] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -822,6 +828,7 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
           </button>
         </div>
         <p className="mb-4 text-xs text-muted">
+          {entry.isUnscheduled ? <UnscheduledBadge /> : null}
           {entry.staffName}・{entry.teamName ?? "自社"}・{formatDateJa(entry.date)}
           {entry.taskName ? `・${entry.taskName}` : ""}
         </p>
@@ -859,10 +866,27 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
 
         {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
 
-        {rejecting ? (
+        {mode === "correct" ? (
+          <div className="mt-4">
+            <WorkReportCorrectionForm
+              workReportId={entry.id}
+              initialClockIn={entry.clockIn}
+              initialClockOut={entry.clockOut}
+              initialBreakMinutes={entry.breakMinutes}
+              onDone={onClose}
+            />
+            <button
+              type="button"
+              onClick={() => setMode("choose")}
+              className="mt-2 w-full rounded-lg border border-border px-4 py-2 text-sm text-foreground/70"
+            >
+              戻る
+            </button>
+          </div>
+        ) : mode === "reject" ? (
           <div className="mt-4">
             <label className="flex flex-col gap-0.5 text-xs">
-              <span className="text-muted">差し戻す理由（スタッフに表示されます）</span>
+              <span className="text-muted">直してほしい内容（スタッフに表示されます。スタッフが自分で直して再提出します）</span>
               <textarea
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
@@ -874,10 +898,10 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
             <div className="mt-2 flex gap-2">
               <button
                 type="button"
-                onClick={() => setRejecting(false)}
+                onClick={() => setMode("choose")}
                 className="flex-1 rounded-lg border border-border px-4 py-2 text-sm text-foreground/70"
               >
-                キャンセル
+                戻る
               </button>
               <button
                 type="button"
@@ -894,12 +918,12 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
                 }
                 className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
               >
-                差し戻す
+                スタッフに戻す
               </button>
             </div>
           </div>
         ) : (
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
               disabled={pending}
@@ -920,11 +944,21 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
             <button
               type="button"
               disabled={pending}
-              onClick={() => setRejecting(true)}
+              onClick={() => setMode("reject")}
               className="flex-1 rounded-lg border border-border px-4 py-2 text-sm text-foreground/70 disabled:opacity-60"
             >
-              差し戻す
+              スタッフに直してもらう
             </button>
+            {entry.outcome === "出勤した" ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => setMode("correct")}
+                className="w-full rounded-lg border border-border px-4 py-2 text-sm text-foreground/70 disabled:opacity-60"
+              >
+                時間を直して確認してもらう
+              </button>
+            ) : null}
           </div>
         )}
       </div>

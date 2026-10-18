@@ -1,7 +1,9 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { listRecruitmentCancelImpacts } from "@/lib/domain/cancellation";
 import { postLedgerEntry } from "@/lib/domain/wallet";
 import {
+  releaseHeldShiftsOnReassign,
   autoResolveMatchingWorkRequest,
   findConflictingShifts,
   findPendingOffRequest,
@@ -238,13 +240,44 @@ export async function settlePastRecruitments(companyId: string) {
 // 枠が無効になるので、現在ロック中のTee(recruitment.lockedTee)は全額返金
 // する(「未使用分だけ」ではない — 確定していた枠も削除で無効になるため)。
 // オーダーはそもそもロックが無いので返金も発生しない。
-export async function deleteRecruitment(params: { recruitmentId: string; updatedByUserId: string }) {
+// 派遣元（別会社）のスタッフが入っている場合は、派遣元が依頼主×業務内容ごとに
+// 設定したキャンセル規定に従う — 取り消せない分があれば削除自体を止め、
+// キャンセル料がかかる分は依頼主が了承した（acceptFees）時だけ取り消して
+// ShiftCancellationに記録する（その月の請求書に明細として載る）。
+export async function deleteRecruitment(params: {
+  recruitmentId: string;
+  updatedByUserId: string;
+  acceptFees?: boolean;
+}) {
   return prisma.$transaction(async (tx) => {
     const recruitment = await tx.publicRecruitment.findUniqueOrThrow({
       where: { id: params.recruitmentId },
     });
     if (isPastDate(recruitment.date)) {
       throw new Error("recruitment_in_past");
+    }
+
+    const impacts = await listRecruitmentCancelImpacts(tx, recruitment.id);
+    if (impacts.some((i) => i.evaluation.kind === "blocked")) {
+      throw new Error("cancel_not_allowed");
+    }
+    if (impacts.some((i) => i.evaluation.kind === "fee") && !params.acceptFees) {
+      throw new Error("cancel_fee_not_accepted");
+    }
+    for (const impact of impacts) {
+      await tx.shiftCancellation.create({
+        data: {
+          shiftId: impact.shiftId,
+          cancelledByCompanyId: recruitment.companyId,
+          cancelledByUserId: params.updatedByUserId,
+          feeAmount: impact.evaluation.kind === "fee" ? impact.evaluation.amount : 0,
+        },
+      });
+      // 「調整中」の扱いのシフトは取り消さずに保留し、派遣元が振り替えるか
+      // 休みにするかを決める（下の取り消し処理はCONFIRMEDだけが対象なので触れない）
+      if (impact.staffHandling === "HOLD") {
+        await tx.shift.update({ where: { id: impact.shiftId }, data: { status: "ON_HOLD" } });
+      }
     }
 
     const activeEntries = await tx.recruitmentEntry.findMany({
@@ -261,10 +294,11 @@ export async function deleteRecruitment(params: { recruitmentId: string; updated
     }
 
     if (recruitment.visibility === "ORDER") {
-      return tx.publicRecruitment.update({
+      await tx.publicRecruitment.update({
         where: { id: recruitment.id },
         data: { status: "DELETED" },
       });
+      return { recruitment, cancelledAgencyShifts: impacts };
     }
 
     if (recruitment.lockedTee > 0) {
@@ -277,10 +311,11 @@ export async function deleteRecruitment(params: { recruitmentId: string; updated
       });
     }
 
-    return tx.publicRecruitment.update({
+    await tx.publicRecruitment.update({
       where: { id: recruitment.id },
       data: { status: "DELETED", lockedTee: 0 },
     });
+    return { recruitment, cancelledAgencyShifts: impacts };
   });
 }
 
@@ -581,6 +616,7 @@ export async function assignStaffToRecruitment(params: {
         publicRecruitmentId: recruitment.id,
       },
     });
+    await releaseHeldShiftsOnReassign(tx, params.staffUserId, recruitment.date);
 
     await tx.recruitmentEntry.update({
       where: { id: entry.id },
@@ -702,6 +738,7 @@ export async function applyToRecruitment(params: { recruitmentId: string; staffU
         publicRecruitmentId: recruitment.id,
       },
     });
+    await releaseHeldShiftsOnReassign(tx, params.staffUserId, recruitment.date);
 
     await tx.recruitmentEntry.update({
       where: { id: entry.id },

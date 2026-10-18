@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { approveWorkReportAction, rejectWorkReportAction, correctWorkReportAction } from "@/app/company/workreports/actions";
+import { approveWorkReportAction, rejectWorkReportAction } from "@/app/company/workreports/actions";
+import { WorkReportCorrectionForm } from "@/components/company/WorkReportCorrectionForm";
 
 type Row = {
   id: string;
@@ -14,24 +15,15 @@ type Row = {
   clockInTime: string | null;
   clockOutTime: string | null;
   breakMinutes: number;
+  isUnscheduled: boolean;
 };
 
 export function WorkReportsQueue({ reports }: { reports: Row[] }) {
   const [pending, startTransition] = useTransition();
   const [correctingId, setCorrectingId] = useState<string | null>(null);
-  const [clockIn, setClockIn] = useState("");
-  const [clockOut, setClockOut] = useState("");
-  const [breakMinutes, setBreakMinutes] = useState("0");
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  function startCorrect(r: Row) {
-    setCorrectingId(r.id);
-    setClockIn(r.clockInTime ?? "");
-    setClockOut(r.clockOutTime ?? "");
-    setBreakMinutes(String(r.breakMinutes));
-  }
 
   function approve(reportId: string) {
     setErrors((prev) => ({ ...prev, [reportId]: "" }));
@@ -56,25 +48,6 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
     });
   }
 
-  function submitCorrect() {
-    if (!correctingId || !clockIn || !clockOut) return;
-    const reportId = correctingId;
-    setErrors((prev) => ({ ...prev, [reportId]: "" }));
-    startTransition(async () => {
-      const result = await correctWorkReportAction({
-        workReportId: reportId,
-        clockIn,
-        clockOut,
-        breakMinutes: Number(breakMinutes) || 0,
-      });
-      if (result.status === "error") {
-        setErrors((prev) => ({ ...prev, [reportId]: result.reason }));
-        return;
-      }
-      setCorrectingId(null);
-    });
-  }
-
   const correctingReport = reports.find((r) => r.id === correctingId) ?? null;
   const rejectingReport = reports.find((r) => r.id === rejectingId) ?? null;
 
@@ -88,6 +61,7 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
             <li key={r.id} className="rounded-xl border border-border/60 p-4">
               <div className="mb-1 flex items-center justify-between gap-2">
                 <span className="min-w-0 font-medium">
+                  {r.isUnscheduled ? <UnscheduledBadge /> : null}
                   {r.staffName} — {r.date}
                   {r.taskName ? <span className="ml-1.5 font-normal text-muted">（{r.taskName}）</span> : null}
                 </span>
@@ -118,16 +92,16 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
                   }}
                   className="rounded-lg border border-border px-4 py-1.5 text-sm text-foreground/70 disabled:opacity-60"
                 >
-                  差し戻す
+                  スタッフに直してもらう
                 </button>
                 {r.outcome === "出勤した" ? (
                   <button
                     type="button"
                     disabled={pending}
-                    onClick={() => startCorrect(r)}
+                    onClick={() => setCorrectingId(r.id)}
                     className="rounded-lg border border-border px-4 py-1.5 text-sm text-foreground/70 disabled:opacity-60"
                   >
-                    修正して差し戻す
+                    時間を直して確認してもらう
                   </button>
                 ) : null}
               </div>
@@ -141,56 +115,19 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">
-                打刻を修正して差し戻す（{correctingReport.staffName} — {correctingReport.date}）
+                時間を直して確認してもらう（{correctingReport.staffName} — {correctingReport.date}）
               </h4>
               <button type="button" onClick={() => setCorrectingId(null)} aria-label="閉じる" className="text-muted hover:text-primary">
                 ✕
               </button>
             </div>
-            <p className="mb-3 text-xs text-muted">
-              修正するとスタッフに「これで合っています」の確認を求める通知が届きます。スタッフが確認するまでは承認済みになりません。
-            </p>
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="flex flex-col gap-0.5 text-xs">
-                <span className="text-muted">出勤時刻</span>
-                <input
-                  type="time"
-                  value={clockIn}
-                  onChange={(e) => setClockIn(e.target.value)}
-                  className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
-                />
-              </label>
-              <label className="flex flex-col gap-0.5 text-xs">
-                <span className="text-muted">退勤時刻</span>
-                <input
-                  type="time"
-                  value={clockOut}
-                  onChange={(e) => setClockOut(e.target.value)}
-                  className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
-                />
-              </label>
-              <label className="flex flex-col gap-0.5 text-xs">
-                <span className="text-muted">休憩（分）</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={breakMinutes}
-                  onChange={(e) => setBreakMinutes(e.target.value)}
-                  className="w-20 rounded-lg border border-border px-2 py-2 text-sm text-foreground"
-                />
-              </label>
-            </div>
-            {correctingReport && errors[correctingReport.id] ? (
-              <p className="mt-2 text-xs text-red-600">{errors[correctingReport.id]}</p>
-            ) : null}
-            <button
-              type="button"
-              disabled={pending || !clockIn || !clockOut}
-              onClick={submitCorrect}
-              className="mt-3 self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              保存
-            </button>
+            <WorkReportCorrectionForm
+              workReportId={correctingReport.id}
+              initialClockIn={correctingReport.clockInTime}
+              initialClockOut={correctingReport.clockOutTime}
+              initialBreakMinutes={correctingReport.breakMinutes}
+              onDone={() => setCorrectingId(null)}
+            />
           </div>
         </div>
       ) : null}
@@ -200,14 +137,14 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">
-                差し戻す（{rejectingReport.staffName} — {rejectingReport.date}）
+                スタッフに直してもらう（{rejectingReport.staffName} — {rejectingReport.date}）
               </h4>
               <button type="button" onClick={() => setRejectingId(null)} aria-label="閉じる" className="text-muted hover:text-primary">
                 ✕
               </button>
             </div>
             <label className="flex flex-col gap-0.5 text-xs">
-              <span className="text-muted">差し戻す理由（スタッフに表示されます）</span>
+              <span className="text-muted">直してほしい内容（スタッフに表示されます。スタッフが自分で直して再提出します）</span>
               <textarea
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
@@ -225,11 +162,21 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
               onClick={submitReject}
               className="mt-3 self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
-              差し戻す
+              スタッフに戻す
             </button>
           </div>
         </div>
       ) : null}
     </div>
+  );
+}
+
+// シフトが無いままスタッフが報告した勤務（緊急の出勤など）であることを示す印。
+// 会社側が事前に把握していない勤務なので、承認前に気付けるようにする。
+export function UnscheduledBadge() {
+  return (
+    <span className="mr-1.5 inline-block rounded-md bg-amber-100 px-1.5 py-0.5 align-middle text-[11px] font-semibold text-amber-900">
+      シフト外
+    </span>
   );
 }

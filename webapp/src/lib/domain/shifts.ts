@@ -90,6 +90,13 @@ function timeRangesOverlapWithBuffer(
   return aStart < bEnd && bStart < aEnd;
 }
 
+// 依頼主の取り消しで「調整中」になっているシフトは、同じ日に別のシフトへ
+// 入れた（＝振り替えた）時点で役目を終えるので、取り消し扱いにする。
+// キャンセル料の記録（ShiftCancellation）は残るので請求には影響しない。
+export async function releaseHeldShiftsOnReassign(client: Tx | typeof prisma, staffUserId: string, date: Date) {
+  await client.shift.updateMany({ where: { staffUserId, date, status: "ON_HOLD" }, data: { status: "CANCELLED" } });
+}
+
 export async function findConflictingShifts(
   client: Tx | typeof prisma,
   params: {
@@ -248,6 +255,7 @@ export async function createAssignedShift(params: {
         createdVia: "ASSIGN",
       },
     });
+    await releaseHeldShiftsOnReassign(tx, params.staffUserId, params.date);
 
     if (params.companyRelationshipId) {
       await tx.staffPlacement.upsert({
@@ -484,21 +492,52 @@ export async function dismissShiftRequest(params: { requestId: string; companyId
 // drops so the slot can be refilled) or a matched ShiftRequest (goes back to
 // PENDING so it can be rematched). No Tee refund logic here; only
 // stopOrDeleteRecruitment/updateMaxEntries touch locked Tee.
-export async function cancelShift(params: { shiftId: string; actorCompanyId: string }) {
+export async function cancelShift(params: {
+  shiftId: string;
+  actorCompanyId: string;
+  actorUserId?: string;
+  // 依頼主都合（電話等で受けた取り消し）として記録する場合のキャンセル料。
+  // 未指定なら自社都合の解除で、キャンセル料の記録は作らない。
+  clientCancellationFee?: number;
+  // trueなら休みにせず「調整中」にして、振り替えるかどうかを後で決める
+  holdForReassignment?: boolean;
+}) {
   return prisma.$transaction(async (tx) => {
     const shift = await tx.shift.findUniqueOrThrow({ where: { id: params.shiftId } });
 
     if (shift.companyId !== params.actorCompanyId) {
       throw new Error("forbidden");
     }
-    if (shift.status !== "CONFIRMED") {
+    if (shift.status !== "CONFIRMED" && shift.status !== "ON_HOLD") {
       throw new Error("shift_not_active");
     }
     if (isPastDate(shift.date)) {
       throw new Error("shift_in_past");
     }
 
-    await tx.shift.update({ where: { id: shift.id }, data: { status: "CANCELLED" } });
+    // 調整中のシフトを「休みにする」— 依頼主の取り消し時点で枠の解放やキャンセル
+    // 料の記録は済んでいるので、状態を変えるだけ。
+    if (shift.status === "ON_HOLD") {
+      return tx.shift.update({ where: { id: shift.id }, data: { status: "CANCELLED" } });
+    }
+
+    if (params.clientCancellationFee !== undefined) {
+      if (shift.source !== "CLIENT") throw new Error("not_client_shift");
+      await tx.shiftCancellation.create({
+        data: {
+          shiftId: shift.id,
+          cancelledByCompanyId: params.actorCompanyId,
+          cancelledByUserId: params.actorUserId,
+          source: "CLIENT_REPORTED",
+          feeAmount: Math.max(0, Math.round(params.clientCancellationFee)),
+        },
+      });
+    }
+
+    const updated = await tx.shift.update({
+      where: { id: shift.id },
+      data: { status: params.holdForReassignment ? "ON_HOLD" : "CANCELLED" },
+    });
 
     if (shift.publicRecruitmentId) {
       const entry = await tx.recruitmentEntry.findFirst({ where: { resultingShiftId: shift.id } });
@@ -515,6 +554,6 @@ export async function cancelShift(params: { shiftId: string; actorCompanyId: str
       });
     }
 
-    return shift;
+    return updated;
   });
 }

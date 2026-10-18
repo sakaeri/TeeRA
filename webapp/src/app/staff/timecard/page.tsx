@@ -2,6 +2,7 @@ import { requireCompanyStaffRole, listMyMemberships } from "@/lib/auth/session";
 import { listOwnShiftsNeedingReport } from "@/lib/domain/workReports";
 import { listKnownTaskNames } from "@/lib/domain/contracts";
 import { StaffTimecardView } from "@/components/staff/StaffTimecardView";
+import { prisma } from "@/lib/prisma";
 
 function formatJstTime(date: Date) {
   return new Intl.DateTimeFormat("ja-JP", {
@@ -17,9 +18,18 @@ export default async function StaffTimecardPage() {
   const myMemberships = await listMyMemberships(userId);
   const companyIds = myMemberships.map((m) => m.companyId);
 
-  const [shifts, knownTaskNamesByCompany] = await Promise.all([
+  const [shifts, knownTaskNamesByCompany, placements] = await Promise.all([
     listOwnShiftsNeedingReport(userId, companyIds),
     Promise.all(companyIds.map((id) => listKnownTaskNames(id))),
+    // シフト外の勤務の報告で選べる勤務先（本人が配属されている依頼主）
+    prisma.staffPlacement.findMany({
+      where: {
+        staffUserId: userId,
+        active: true,
+        companyRelationship: { agencyCompanyId: { in: companyIds }, status: "ACTIVE" },
+      },
+      include: { companyRelationship: { include: { clientCompany: true } } },
+    }),
   ]);
   const knownTaskNames = Object.fromEntries(companyIds.map((id, i) => [id, knownTaskNamesByCompany[i]]));
 
@@ -28,6 +38,16 @@ export default async function StaffTimecardPage() {
       <h1 className="mb-6 font-serif-jp text-2xl font-bold">タイムカード・業務報告</h1>
       <StaffTimecardView
         knownTaskNamesByCompany={knownTaskNames}
+        unscheduledCompanies={myMemberships.map((m) => ({
+          companyId: m.companyId,
+          companyName: m.companyName,
+          workplaces: placements
+            .filter((p) => p.companyRelationship.agencyCompanyId === m.companyId)
+            .map((p) => ({
+              companyRelationshipId: p.companyRelationshipId,
+              name: p.companyRelationship.clientCompany?.name ?? p.companyRelationship.proxyName ?? "依頼主",
+            })),
+        }))}
         shifts={shifts.map((s) => ({
           id: s.id,
           workReportId: s.workReport?.id ?? null,

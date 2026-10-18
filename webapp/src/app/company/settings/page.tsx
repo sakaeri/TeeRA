@@ -138,6 +138,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
             clockInTime: r.clockIn ? formatJstTime(r.clockIn) : null,
             clockOutTime: r.clockOut ? formatJstTime(r.clockOut) : null,
             breakMinutes: r.breakMinutes,
+            isUnscheduled: r.shift.createdVia === "STAFF_REPORT",
           };
         })}
       />

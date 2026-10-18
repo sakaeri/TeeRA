@@ -133,6 +133,45 @@ export async function deletePlacementTaskNameAction(placementRateId: string) {
   revalidatePath("/company/calendar");
 }
 
+// 依頼主×業務内容ごとのキャンセル規定（依頼主がオーダーを取り消した時の扱い）。
+export async function setPlacementCancelRuleAction(input: {
+  placementRateId: string;
+  cancelPolicy: "FREE" | "FEE_AFTER_DEADLINE" | "DENY_AFTER_DEADLINE" | "NOT_ALLOWED";
+  cancelDeadlineDaysBefore: number | null;
+  cancelDeadlineTime: string | null;
+  cancelFeeAmount: number | null;
+  cancelStaffHandling: "HOLD" | "RELEASE";
+}) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const rate = await prisma.companyPlacementRate.findFirstOrThrow({
+    where: { id: input.placementRateId, companyId: membership.companyId },
+  });
+  const clientTeamIds = rate.companyRelationshipId ? await getClientTeamIds(rate.companyRelationshipId) : [];
+  if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
+
+  const needsDeadline = input.cancelPolicy === "FEE_AFTER_DEADLINE" || input.cancelPolicy === "DENY_AFTER_DEADLINE";
+  if (needsDeadline) {
+    if (input.cancelDeadlineDaysBefore == null || input.cancelDeadlineDaysBefore < 0 || !/^\d{2}:\d{2}$/.test(input.cancelDeadlineTime ?? "")) {
+      throw new Error("invalid_deadline");
+    }
+  }
+  if (input.cancelPolicy === "FEE_AFTER_DEADLINE" && !(input.cancelFeeAmount && input.cancelFeeAmount > 0)) {
+    throw new Error("invalid_fee");
+  }
+
+  await prisma.companyPlacementRate.update({
+    where: { id: rate.id },
+    data: {
+      cancelPolicy: input.cancelPolicy,
+      cancelDeadlineDaysBefore: needsDeadline ? input.cancelDeadlineDaysBefore : null,
+      cancelDeadlineTime: needsDeadline ? input.cancelDeadlineTime : null,
+      cancelFeeAmount: input.cancelPolicy === "FEE_AFTER_DEADLINE" ? input.cancelFeeAmount : null,
+      cancelStaffHandling: input.cancelStaffHandling,
+    },
+  });
+  revalidatePath("/company/roster");
+}
+
 export async function addStaffTaskRateVersionAction(input: {
   staffUserId: string;
   taskName: string;

@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { resolveRateVersion, excludeBaselineVersion } from "@/lib/domain/contracts";
 import { computeInvoiceTotals } from "@/lib/domain/invoicing";
+import { describeCancelRule } from "@/lib/domain/cancellation";
 
 // 依頼主一覧 (from this company's perspective as the sending/agency side):
 // companies this company sends staff to. ownerCompanyIdでは絞らない —
@@ -479,6 +480,12 @@ export async function getClientMonthDetail(params: {
         id: r.id,
         taskName: r.taskName,
         currentLabel: current ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円` : "単価未設定",
+        cancelPolicy: r.cancelPolicy,
+        cancelDeadlineDaysBefore: r.cancelDeadlineDaysBefore,
+        cancelDeadlineTime: r.cancelDeadlineTime,
+        cancelFeeAmount: r.cancelFeeAmount,
+        cancelStaffHandling: r.cancelStaffHandling,
+        cancelLabel: describeCancelRule(r),
         versions: excludeBaselineVersion(r.versions).map((v) => ({
           id: v.id,
           label: v.wageType && v.amount != null ? `${WAGE_TYPE_LABEL[v.wageType]}${v.amount}円` : "単価未設定（終了）",

@@ -54,9 +54,10 @@ async function regenerateLines(invoiceId: string) {
         companyRelationshipId: invoice.companyRelationshipId,
         source: "CLIENT",
         date: { gte: start, lt: end },
-        status: { notIn: ["SUPERSEDED", "CANCELLED"] },
+        // 取り消されたシフトも、依頼主の取り消しでキャンセル料がかかった分は明細に載せる
+        status: { not: "SUPERSEDED" },
       },
-      include: { staff: true, workReport: true },
+      include: { staff: true, workReport: true, cancellation: true },
     }),
     prisma.companyPlacementRate.findMany({
       where: { companyId: invoice.issuingCompanyId, companyRelationshipId: invoice.companyRelationshipId },
@@ -84,6 +85,32 @@ async function regenerateLines(invoiceId: string) {
 
     for (const s of shifts) {
       if (excluded.has(s.id) || manuallyExcludedShiftIds.has(s.id)) continue;
+
+      // 依頼主に取り消されたシフト（取り消し済み・調整中とも）は、キャンセル料
+      // がかかった分だけ明細にする。勤務の明細にはならない。
+      if (s.cancellation || s.status === "CANCELLED" || s.status === "ON_HOLD") {
+        const fee = s.cancellation?.feeAmount ?? 0;
+        if (fee <= 0) continue;
+        validShiftIds.add(s.id);
+        if (manuallyEditedShiftIds.has(s.id)) continue;
+        if (autoShiftIds.has(s.id)) {
+          await tx.invoiceLine.deleteMany({ where: { invoiceId: invoice.id, shiftId: s.id } });
+        }
+        await tx.invoiceLine.create({
+          data: {
+            invoiceId: invoice.id,
+            shiftId: s.id,
+            staffName: s.staff.name,
+            description: `${s.date.toISOString().slice(0, 10)} キャンセル料${s.taskName ? `（${s.taskName}）` : ""}`,
+            hours: 1,
+            rate: fee,
+            amount: fee,
+            taxRatePercent: 10,
+          },
+        });
+        continue;
+      }
+
       const report = s.workReport;
       if (!report || report.outcome !== "WORKED" || report.approvalStatus !== "APPROVED") continue;
       const workedHours = Math.round((report.computedMinutes / 60) * 100) / 100;

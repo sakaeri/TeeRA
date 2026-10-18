@@ -444,6 +444,15 @@ model CompanyPlacementRate {
   companyRelationshipId String? // null = 自社（本社/支社）
   taskName              String
   createdAt             DateTime @default(now())
+  // 依頼主がオーダーを取り消した時のキャンセル規定（依頼主×業務内容ごと）。
+  // 締切は「勤務日のN日前のHH:MM（JST）」で表す（0日前＝勤務日当日）。
+  cancelPolicy             CancelPolicy @default(FREE)
+  cancelDeadlineDaysBefore Int?
+  cancelDeadlineTime       String?
+  cancelFeeAmount          Int? // 1人あたりのキャンセル料（円）
+  // 依頼主に取り消された時のスタッフの扱い。HOLD＝調整中にして自社で振り替えを
+  // 判断する（請負向け）、RELEASE＝そのまま休みにしてスタッフに知らせる（派遣向け）。
+  cancelStaffHandling      CancelStaffHandling @default(HOLD)
 
   company             Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyRelationship CompanyRelationship?          @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
@@ -451,6 +460,38 @@ model CompanyPlacementRate {
 
   @@unique([companyId, companyRelationshipId, taskName])
   @@index([companyId])
+}
+
+enum CancelStaffHandling {
+  HOLD
+  RELEASE
+}
+
+// アプリ上で依頼主が取り消したか、電話等で受けて自社が記録したか
+enum CancellationSource {
+  CLIENT_APP
+  CLIENT_REPORTED
+}
+
+enum CancelPolicy {
+  FREE // いつでも無料で取り消せる（既定）
+  FEE_AFTER_DEADLINE // 締切までは無料、締切後はキャンセル料がかかる
+  DENY_AFTER_DEADLINE // 締切後は取り消せない
+  NOT_ALLOWED // 取り消せない
+}
+
+// 依頼主がオーダーを取り消したことで取り消された（派遣元側の）シフトの記録。
+// キャンセル料がかかった場合はfeeAmountに入り、その月の請求書に明細として載る。
+model ShiftCancellation {
+  id                   String   @id @default(cuid())
+  shiftId              String   @unique
+  cancelledByCompanyId String
+  cancelledByUserId    String?
+  source               CancellationSource @default(CLIENT_APP)
+  feeAmount            Int      @default(0)
+  createdAt            DateTime @default(now())
+
+  shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
 }
 
 // wageType/amountがnull＝「この日付から単価未設定（終了）」を表す履歴行。
@@ -606,10 +647,15 @@ enum ShiftCreatedVia {
   ASSIGN // company created & assigned directly (シフトを作成)
   STAFF_APPLICATION // matched from a staff ShiftRequest (希望を出す)
   PUBLIC_RECRUIT_ENTRY // matched from a confirmed PublicRecruitment entry
+  STAFF_REPORT // シフトが無いまま勤務したスタッフが、業務報告と同時に作成（シフト外の勤務）
 }
 
 enum ShiftStatus {
   CONFIRMED
+  // 依頼主が取り消したが、派遣元が振り替えるか休みにするかを決めるまで保留
+  // しているシフト（調整中）。スタッフには「調整中」と表示し、勤務・報告の
+  // 対象からは外す。別のシフトに入れると自動でCANCELLEDになる。
+  ON_HOLD
   CANCELLED
   SUPERSEDED // overridden by a conflict-override; kept read-only, excluded from counts
 }
@@ -645,6 +691,7 @@ model Shift {
   publicRecruitment   PublicRecruitment?   @relation(fields: [publicRecruitmentId], references: [id], onDelete: SetNull)
 
   workReport      WorkReport?
+  cancellation    ShiftCancellation?
   supersededBy    ConflictOverride?  @relation("OverriddenShift")
   supersedes      ConflictOverride[] @relation("NewShift")
   salarySlipLines SalarySlipLine[]

@@ -290,3 +290,22 @@ export async function sendContractConsentReminderEmail(to: string, name: string,
     ),
   );
 }
+
+// 依頼主がオーダーを取り消し、派遣元のスタッフのシフトが取り消された時の連絡。
+export async function sendClientCancellationEmail(
+  to: string,
+  params: { companyName: string; clientName: string; lines: string[]; totalFee: number; reviewUrl: string },
+) {
+  await sendMail(
+    to,
+    "【TeeRA】依頼主がシフトを取り消しました",
+    emailLayout(
+      "依頼主がシフトを取り消しました",
+      `${companyGreeting(params.companyName)}
+       ${infoRow("依頼主", params.clientName)}
+       ${params.lines.map((l) => infoRow("取り消し", l)).join("")}
+       ${params.totalFee > 0 ? infoRow("キャンセル料", `合計${params.totalFee.toLocaleString()}円（その月の請求書に自動で記載されます）`) : ""}
+       ${button(params.reviewUrl, "カレンダーで確認する")}`,
+    ),
+  );
+}
