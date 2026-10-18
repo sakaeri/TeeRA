@@ -10,6 +10,7 @@ import {
   createPublicRecruitmentAction,
   updateMaxEntriesAction,
   deleteRecruitmentAction,
+  previewRecruitmentCancellationAction,
   openRecruitmentToPublicAction,
   saveRecruitmentPublicDraftAction,
   assignStaffToRecruitmentAction,
@@ -1028,6 +1029,11 @@ function OrderEditModal({
   const [error, setError] = useState<string | null>(null);
   const [showPublicForm, setShowPublicForm] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // 派遣会社のスタッフが入っている場合の、キャンセル規定による扱い（削除確認時に取得）
+  const [cancelImpacts, setCancelImpacts] = useState<
+    { staffName: string; agencyName: string; kind: "free" | "fee" | "blocked"; feeAmount: number }[] | null
+  >(null);
+  const [acceptFees, setAcceptFees] = useState(false);
   const [wageAmount, setWageAmount] = useState(recruitment.hourlyWage ? String(recruitment.hourlyWage) : "");
   const [wageType, setWageType] = useState<"HOURLY" | "DAILY">((recruitment.wageType as "HOURLY" | "DAILY") || "HOURLY");
   const [extraItems, setExtraItems] = useState<{ label: string; value: string }[]>(recruitment.extraItems);
@@ -1072,17 +1078,39 @@ function OrderEditModal({
     });
   }
 
+  function startDelete() {
+    setError(null);
+    setAcceptFees(false);
+    setCancelImpacts(null);
+    setConfirmingDelete(true);
+    startTransition(async () => {
+      try {
+        setCancelImpacts(await previewRecruitmentCancellationAction(recruitment.id));
+      } catch {
+        setCancelImpacts([]);
+      }
+    });
+  }
+
   function remove() {
     setError(null);
     startTransition(async () => {
       try {
-        await deleteRecruitmentAction(recruitment.id);
+        const result = await deleteRecruitmentAction(recruitment.id, acceptFees);
+        if (result.status === "error") {
+          setError(result.reason);
+          return;
+        }
         onClose();
       } catch {
         setError("削除できませんでした。");
       }
     });
   }
+
+  const blockedImpacts = cancelImpacts?.filter((i) => i.kind === "blocked") ?? [];
+  const feeImpacts = cancelImpacts?.filter((i) => i.kind === "fee") ?? [];
+  const totalFee = feeImpacts.reduce((sum, i) => sum + i.feeAmount, 0);
 
   function switchToPublic() {
     setError(null);
@@ -1466,7 +1494,7 @@ function OrderEditModal({
             <button
               type="button"
               disabled={pending}
-              onClick={() => setConfirmingDelete(true)}
+              onClick={startDelete}
               className="text-center text-sm text-red-600 hover:text-red-700 disabled:opacity-50"
             >
               この募集を削除する
@@ -1482,6 +1510,35 @@ function OrderEditModal({
               ? `${recruitment.filled}名エントリーしています。削除するとエントリーもすべて取り消しになります。`
               : "この操作は元に戻せません。"}
           </p>
+          {blockedImpacts.length > 0 ? (
+            <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+              <p className="mb-1 font-semibold">派遣会社とのキャンセル規定により取り消せません</p>
+              <ul className="list-disc pl-5 text-xs">
+                {blockedImpacts.map((i, idx) => (
+                  <li key={idx}>
+                    {i.staffName}さん（{i.agencyName}）
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-xs">取り消しが必要な場合は、派遣会社に直接ご連絡ください。</p>
+            </div>
+          ) : null}
+          {blockedImpacts.length === 0 && feeImpacts.length > 0 ? (
+            <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <p className="mb-1 font-semibold">キャンセル料 合計{totalFee.toLocaleString()}円がかかります</p>
+              <ul className="list-disc pl-5 text-xs">
+                {feeImpacts.map((i, idx) => (
+                  <li key={idx}>
+                    {i.staffName}さん（{i.agencyName}）：{i.feeAmount.toLocaleString()}円
+                  </li>
+                ))}
+              </ul>
+              <label className="mt-2 flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={acceptFees} onChange={(e) => setAcceptFees(e.target.checked)} />
+                キャンセル料がかかることを了承して取り消す
+              </label>
+            </div>
+          ) : null}
           {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
           <div className="flex justify-end gap-2">
             <button
@@ -1493,7 +1550,9 @@ function OrderEditModal({
             </button>
             <button
               type="button"
-              disabled={pending}
+              disabled={
+                pending || cancelImpacts === null || blockedImpacts.length > 0 || (feeImpacts.length > 0 && !acceptFees)
+              }
               onClick={remove}
               className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >

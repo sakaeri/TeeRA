@@ -18,6 +18,8 @@ import {
   openRecruitmentToPublic,
   saveRecruitmentPublicDraft,
 } from "@/lib/domain/recruitment";
+import { listRecruitmentCancelImpacts } from "@/lib/domain/cancellation";
+import { notifyAgencyOfClientCancellation } from "@/lib/domain/emailNotifications";
 import type { WageType } from "@/generated/prisma/enums";
 
 export async function createAssignedShiftAction(input: {
@@ -225,14 +227,52 @@ export async function updateMaxEntriesAction(recruitmentId: string, newMaxEntrie
   return { error: null };
 }
 
-export async function deleteRecruitmentAction(recruitmentId: string) {
+// 削除（取り消し）する前に、派遣元のスタッフ分がキャンセル規定でどう扱われる
+// かを見せるための確認用。取り消せない分・キャンセル料がかかる分を返す。
+export async function previewRecruitmentCancellationAction(recruitmentId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: recruitmentId } });
+  if (recruitment.companyId !== membership.companyId) throw new Error("forbidden");
+  if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
+
+  const impacts = await listRecruitmentCancelImpacts(prisma, recruitmentId);
+  return impacts.map((i) => ({
+    staffName: i.staffName,
+    agencyName: i.agencyName,
+    kind: i.evaluation.kind,
+    feeAmount: i.evaluation.kind === "fee" ? i.evaluation.amount : 0,
+  }));
+}
+
+const DELETE_RECRUITMENT_ERROR_LABEL: Record<string, string> = {
+  cancel_not_allowed: "派遣会社とのキャンセル規定により、取り消せないスタッフが含まれています。",
+  cancel_fee_not_accepted: "キャンセル料がかかります。内容を確認してから取り消してください。",
+  recruitment_in_past: "日付が過ぎた募集は削除できません。",
+  forbidden: "権限がありません。",
+};
+
+export async function deleteRecruitmentAction(recruitmentId: string, acceptFees = false) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: recruitmentId } });
   if (recruitment.companyId !== membership.companyId) throw new Error("forbidden");
   if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
 
-  await deleteRecruitment({ recruitmentId, updatedByUserId: userId });
+  try {
+    const result = await deleteRecruitment({ recruitmentId, updatedByUserId: userId, acceptFees });
+    if (result.cancelledAgencyShifts.length > 0) {
+      const company = await prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } });
+      await notifyAgencyOfClientCancellation({ clientName: company.name, impacts: result.cancelledAgencyShifts }).catch(
+        (err) => console.error("[notify] client cancellation failed", err),
+      );
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      return { status: "error" as const, reason: DELETE_RECRUITMENT_ERROR_LABEL[error.message] ?? "削除できませんでした。" };
+    }
+    throw error;
+  }
   revalidatePath("/company/calendar");
+  return { status: "ok" as const };
 }
 
 // 起こりうる失敗理由を日本語に変換する — Next.jsは本番ビルドでServer

@@ -19,16 +19,27 @@ import {
   setRelationshipStatusAction,
   updateProxyNameAction,
 } from "@/app/company/actions";
-import { addPlacementRateVersionAction, deletePlacementTaskNameAction } from "@/app/company/contracts/actions";
+import {
+  addPlacementRateVersionAction,
+  deletePlacementTaskNameAction,
+  setPlacementCancelRuleAction,
+} from "@/app/company/contracts/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
 import { CopyUrlField } from "@/components/CopyUrlField";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+
+type CancelPolicy = "FREE" | "FEE_AFTER_DEADLINE" | "DENY_AFTER_DEADLINE" | "NOT_ALLOWED";
 
 type PlacementRate = {
   id: string;
   taskName: string;
   currentLabel: string;
   versions: { id: string; label: string; effectiveFrom: string }[];
+  cancelPolicy: CancelPolicy;
+  cancelDeadlineDaysBefore: number | null;
+  cancelDeadlineTime: string | null;
+  cancelFeeAmount: number | null;
+  cancelLabel: string;
 };
 
 type RelationshipNote = {
@@ -1101,6 +1112,7 @@ function PlacementRatesTab({
   const [amendAmount, setAmendAmount] = useState("");
   const [amendEffectiveFrom, setAmendEffectiveFrom] = useState(todayJst());
   const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null);
+  const [cancelRuleRate, setCancelRuleRate] = useState<PlacementRate | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
   const [newTaskNameMode, setNewTaskNameMode] = useState<"pick" | "custom">("custom");
   const [newTaskName, setNewTaskName] = useState("");
@@ -1203,6 +1215,9 @@ function PlacementRatesTab({
                 <button type="button" onClick={() => startAmend(r)} className="text-primary hover:underline">
                   単価を変更
                 </button>
+                <button type="button" onClick={() => setCancelRuleRate(r)} className="text-primary hover:underline">
+                  キャンセル規定
+                </button>
                 <button
                   type="button"
                   disabled={pending}
@@ -1213,6 +1228,7 @@ function PlacementRatesTab({
                 </button>
               </div>
 
+              <p className="mt-1 text-xs text-muted">キャンセル規定：{r.cancelLabel}</p>
               {deleteError?.id === r.id ? <p className="mt-1 text-xs text-red-600">{deleteError.message}</p> : null}
 
               {expandedId === r.id ? (
@@ -1231,6 +1247,17 @@ function PlacementRatesTab({
         })}
         {rates.length === 0 ? <p className="py-6 text-center text-sm text-muted">業務内容が登録されていません。</p> : null}
       </ul>
+
+      {cancelRuleRate ? (
+        <CancelRuleModal
+          rate={cancelRuleRate}
+          onClose={() => setCancelRuleRate(null)}
+          onSaved={async () => {
+            setCancelRuleRate(null);
+            await onChanged();
+          }}
+        />
+      ) : null}
 
       {amendingRate ? (
         <div
@@ -1396,6 +1423,135 @@ function PlacementRatesTab({
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+const CANCEL_POLICY_OPTIONS: { value: CancelPolicy; label: string }[] = [
+  { value: "FREE", label: "いつでもキャンセルできる" },
+  { value: "FEE_AFTER_DEADLINE", label: "締切を過ぎたらキャンセル料がかかる" },
+  { value: "DENY_AFTER_DEADLINE", label: "締切を過ぎたらキャンセルできない" },
+  { value: "NOT_ALLOWED", label: "キャンセルできない" },
+];
+
+// 依頼主がオーダーを取り消した時の扱い（この依頼主×業務内容ごと）。締切は
+// 「勤務日のN日前のHH:MM」で指定する（0日前＝勤務日当日）。
+function CancelRuleModal({
+  rate,
+  onClose,
+  onSaved,
+}: {
+  rate: PlacementRate;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [policy, setPolicy] = useState<CancelPolicy>(rate.cancelPolicy);
+  const [daysBefore, setDaysBefore] = useState(String(rate.cancelDeadlineDaysBefore ?? 1));
+  const [time, setTime] = useState(rate.cancelDeadlineTime ?? "18:00");
+  const [fee, setFee] = useState(rate.cancelFeeAmount ? String(rate.cancelFeeAmount) : "");
+  const [error, setError] = useState<string | null>(null);
+
+  const needsDeadline = policy === "FEE_AFTER_DEADLINE" || policy === "DENY_AFTER_DEADLINE";
+  const invalid =
+    (needsDeadline && (daysBefore === "" || Number(daysBefore) < 0 || !time)) ||
+    (policy === "FEE_AFTER_DEADLINE" && !(Number(fee) > 0));
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await setPlacementCancelRuleAction({
+          placementRateId: rate.id,
+          cancelPolicy: policy,
+          cancelDeadlineDaysBefore: needsDeadline ? Number(daysBefore) : null,
+          cancelDeadlineTime: needsDeadline ? time : null,
+          cancelFeeAmount: policy === "FEE_AFTER_DEADLINE" ? Number(fee) : null,
+        });
+        await onSaved();
+      } catch {
+        setError("保存できませんでした。入力内容を確認してください。");
+      }
+    });
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
+    >
+      <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <h4 className="font-serif-jp text-base font-bold text-primary">キャンセル規定（{rate.taskName}）</h4>
+          <button type="button" onClick={onClose} aria-label="閉じる" className="text-muted hover:text-primary">
+            ✕
+          </button>
+        </div>
+        <p className="mb-3 text-xs text-muted">
+          依頼主がアプリ上でオーダーを取り消した時、この業務内容に入っている自社スタッフの扱いを決めます。キャンセル料はその月の請求書に自動で記載されます。
+        </p>
+        <div className="flex flex-col gap-3 text-sm">
+          <select
+            value={policy}
+            onChange={(e) => setPolicy(e.target.value as CancelPolicy)}
+            className="rounded-lg border border-border px-3 py-2"
+          >
+            {CANCEL_POLICY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {needsDeadline ? (
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="flex flex-col gap-0.5 text-xs">
+                <span className="text-muted">締切（勤務日の◯日前）</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={daysBefore}
+                  onChange={(e) => setDaysBefore(e.target.value)}
+                  className="w-20 rounded-lg border border-border px-2 py-2 text-sm"
+                />
+              </label>
+              <label className="flex flex-col gap-0.5 text-xs">
+                <span className="text-muted">時刻</span>
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="rounded-lg border border-border px-2 py-2 text-sm"
+                />
+              </label>
+              <span className="pb-2 text-xs text-muted">まで（0日前＝勤務日当日）</span>
+            </div>
+          ) : null}
+          {policy === "FEE_AFTER_DEADLINE" ? (
+            <label className="flex flex-col gap-0.5 text-xs">
+              <span className="text-muted">キャンセル料（1人あたり・円）</span>
+              <input
+                type="number"
+                min="1"
+                value={fee}
+                onChange={(e) => setFee(e.target.value)}
+                className="w-32 rounded-lg border border-border px-2 py-2 text-sm"
+              />
+            </label>
+          ) : null}
+        </div>
+        {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
+        <button
+          type="button"
+          disabled={pending || invalid}
+          onClick={save}
+          className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        >
+          保存
+        </button>
+      </div>
     </div>
   );
 }

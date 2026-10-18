@@ -9,7 +9,9 @@ import {
   sendShiftReminderEmail,
   sendUnsubmittedWorkReportReminderEmail,
   sendContractConsentReminderEmail,
+  sendClientCancellationEmail,
 } from "@/lib/email";
+import type { RecruitmentCancelImpact } from "@/lib/domain/cancellation";
 import { sendPushToUser, sendPushToUsers } from "@/lib/push";
 
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
@@ -415,5 +417,52 @@ export async function runContractConsentReminders() {
 
   for (const { email, name, companyNames } of byStaff.values()) {
     await sendContractConsentReminderEmail(email, name, Array.from(companyNames), absoluteUrl("/staff/contracts"));
+  }
+}
+
+// 依頼主がオーダーを取り消して派遣元のスタッフのシフトが取り消された時、
+// 派遣元（本部・通知先メール）とスタッフ本人に知らせる。黙って消えると、
+// 当日になってスタッフが現場に向かってしまう恐れがあるため。
+export async function notifyAgencyOfClientCancellation(params: {
+  clientName: string;
+  impacts: RecruitmentCancelImpact[];
+}) {
+  const byAgency = new Map<string, RecruitmentCancelImpact[]>();
+  for (const impact of params.impacts) {
+    const list = byAgency.get(impact.agencyCompanyId) ?? [];
+    list.push(impact);
+    byAgency.set(impact.agencyCompanyId, list);
+  }
+
+  for (const [agencyCompanyId, impacts] of byAgency) {
+    const company = await prisma.company.findUnique({ where: { id: agencyCompanyId } });
+    if (!company) continue;
+    const lines = impacts.map((i) => {
+      const fee = i.evaluation.kind === "fee" ? `（キャンセル料${i.evaluation.amount.toLocaleString()}円）` : "";
+      return `${i.date.toISOString().slice(0, 10)} ${i.staffName}さん${i.taskName ? `・${i.taskName}` : ""}${fee}`;
+    });
+    const totalFee = impacts.reduce((sum, i) => sum + (i.evaluation.kind === "fee" ? i.evaluation.amount : 0), 0);
+    if (company.notificationEmail) {
+      await sendClientCancellationEmail(company.notificationEmail, {
+        companyName: company.name,
+        clientName: params.clientName,
+        lines,
+        totalFee,
+        reviewUrl: absoluteUrl("/company/calendar"),
+      });
+    }
+    await sendPushToUsers(await companyAdminUserIds(agencyCompanyId), {
+      title: "依頼主がシフトを取り消しました",
+      body: `${params.clientName}：${lines.join("、")}`,
+      url: "/company/calendar",
+    });
+  }
+
+  for (const impact of params.impacts) {
+    await sendPushToUser(impact.staffUserId, {
+      title: "シフトが取り消されました",
+      body: `${impact.date.toISOString().slice(0, 10)}の${params.clientName}でのシフトは、依頼主の都合で取り消されました。`,
+      url: "/staff",
+    });
   }
 }
