@@ -61,8 +61,8 @@ try {
       `values ('${shiftId}', '${companyId}', '${staffUserId}', 'INHOUSE', '${workReportDate}', '09:00', '13:00', 'ASSIGN', now());`,
   );
   psql(
-    `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "clockIn", "clockOut", "breakMinutes", "computedMinutes", comment, "approvalStatus", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${shiftId}', '${staffUserId}', 'WORKED', '${workReportDate}T00:00:00Z', '${workReportDate}T04:00:00Z', 0, 240, 'テストコメント', 'PENDING', now());`,
+    `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "clockIn", "clockOut", "breakMinutes", "computedMinutes", comment, "approvalStatus", "submittedAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${shiftId}', '${staffUserId}', 'WORKED', '${workReportDate}T00:00:00Z', '${workReportDate}T04:00:00Z', 0, 240, 'テストコメント', 'PENDING', now(), now());`,
   );
   const reportId = psql(`select id from "WorkReport" where "shiftId"='${shiftId}';`);
 

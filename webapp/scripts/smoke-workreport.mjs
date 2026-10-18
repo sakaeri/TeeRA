@@ -82,6 +82,17 @@ try {
   staffBody = await staff.textContent("body");
   log("shows 勤務終了 button after clock-in", staffBody.includes("勤務終了"));
 
+  // 出勤を押しただけ（未提出）の打刻は、本部の未承認一覧・ダッシュボードの
+  // 「業務報告未承認」に出てはいけない（打刻時点でPENDINGの行が作られるため）。
+  await admin.goto("http://localhost:3000/company/settings?tab=workreports");
+  // textContentだとページに埋め込まれたデータ（スタッフ一覧など）まで拾う
+  // ため、画面に表示されている文字だけを見る。
+  let adminBodyBeforeSubmit = await admin.innerText("body");
+  log("clock-in only is not listed as a pending report", !adminBodyBeforeSubmit.includes("業務報告スタッフ"));
+  await admin.goto("http://localhost:3000/company");
+  adminBodyBeforeSubmit = await admin.innerText("body");
+  log("dashboard has no work report todo before submit", !adminBodyBeforeSubmit.includes("業務報告が未承認です"));
+
   // 出勤・退勤がほぼ同時（同じ分内）だと、分単位に丸められる打刻修正の
   // 仕組み上「実働0分」＝無効な時間帯として提出できなくなる（他セッション
   // の変更で提出ボタンが無効化されるようになった）ため、出勤時刻を確実に

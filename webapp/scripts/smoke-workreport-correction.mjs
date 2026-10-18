@@ -61,8 +61,8 @@ try {
       `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'INHOUSE', '通常業務', current_date, '09:00', '17:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
   );
   const reportId = psql(
-    `with ins as (insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "clockIn", "clockOut", "breakMinutes", "computedMinutes", "createdAt", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${shiftId}', '${staffUserId}', 'WORKED', 'PENDING', current_date + interval '0 hour', current_date + interval '8 hour', 0, 480, now(), now()) returning id) select id from ins;`,
+    `with ins as (insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "clockIn", "clockOut", "breakMinutes", "computedMinutes", "submittedAt", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${shiftId}', '${staffUserId}', 'WORKED', 'PENDING', current_date + interval '0 hour', current_date + interval '8 hour', 0, 480, now(), now(), now()) returning id) select id from ins;`,
   );
 
   // admin: correct (add the 60-minute break the staff forgot) and return
@@ -121,8 +121,8 @@ try {
       `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'INHOUSE', '通常業務', current_date, '18:00', '21:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
   );
   psql(
-    `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "clockIn", "clockOut", "breakMinutes", "computedMinutes", "createdAt", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${shift2Id}', '${staffUserId}', 'WORKED', 'PENDING', current_date + interval '9 hour', current_date + interval '12 hour', 0, 180, now(), now());`,
+    `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "clockIn", "clockOut", "breakMinutes", "computedMinutes", "submittedAt", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${shift2Id}', '${staffUserId}', 'WORKED', 'PENDING', current_date + interval '9 hour', current_date + interval '12 hour', 0, 180, now(), now(), now());`,
   );
 
   await admin.goto("http://localhost:3000/company/roster");
