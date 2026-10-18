@@ -171,6 +171,7 @@ const TAG_STYLE: Record<string, string> = {
   業務報告: "bg-violet-100 text-violet-800",
   欠員: "bg-rose-100 text-rose-800",
   シフト: "bg-pink-100 text-pink-800",
+  調整中: "bg-red-100 text-red-800",
   契約書: "bg-gray-200 text-gray-700",
   契約満了: "bg-orange-100 text-orange-800",
   有給付与: "bg-sky-100 text-sky-800",

@@ -140,6 +140,7 @@ export async function setPlacementCancelRuleAction(input: {
   cancelDeadlineDaysBefore: number | null;
   cancelDeadlineTime: string | null;
   cancelFeeAmount: number | null;
+  cancelStaffHandling: "HOLD" | "RELEASE";
 }) {
   const { membership } = await requireCompanyAdminOrEditor();
   const rate = await prisma.companyPlacementRate.findFirstOrThrow({
@@ -165,6 +166,7 @@ export async function setPlacementCancelRuleAction(input: {
       cancelDeadlineDaysBefore: needsDeadline ? input.cancelDeadlineDaysBefore : null,
       cancelDeadlineTime: needsDeadline ? input.cancelDeadlineTime : null,
       cancelFeeAmount: input.cancelPolicy === "FEE_AFTER_DEADLINE" ? input.cancelFeeAmount : null,
+      cancelStaffHandling: input.cancelStaffHandling,
     },
   });
   revalidatePath("/company/roster");

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { listRecruitmentCancelImpacts } from "@/lib/domain/cancellation";
 import { postLedgerEntry } from "@/lib/domain/wallet";
 import {
+  releaseHeldShiftsOnReassign,
   autoResolveMatchingWorkRequest,
   findConflictingShifts,
   findPendingOffRequest,
@@ -272,6 +273,11 @@ export async function deleteRecruitment(params: {
           feeAmount: impact.evaluation.kind === "fee" ? impact.evaluation.amount : 0,
         },
       });
+      // 「調整中」の扱いのシフトは取り消さずに保留し、派遣元が振り替えるか
+      // 休みにするかを決める（下の取り消し処理はCONFIRMEDだけが対象なので触れない）
+      if (impact.staffHandling === "HOLD") {
+        await tx.shift.update({ where: { id: impact.shiftId }, data: { status: "ON_HOLD" } });
+      }
     }
 
     const activeEntries = await tx.recruitmentEntry.findMany({
@@ -610,6 +616,7 @@ export async function assignStaffToRecruitment(params: {
         publicRecruitmentId: recruitment.id,
       },
     });
+    await releaseHeldShiftsOnReassign(tx, params.staffUserId, recruitment.date);
 
     await tx.recruitmentEntry.update({
       where: { id: entry.id },
@@ -731,6 +738,7 @@ export async function applyToRecruitment(params: { recruitmentId: string; staffU
         publicRecruitmentId: recruitment.id,
       },
     });
+    await releaseHeldShiftsOnReassign(tx, params.staffUserId, recruitment.date);
 
     await tx.recruitmentEntry.update({
       where: { id: entry.id },

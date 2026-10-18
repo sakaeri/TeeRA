@@ -110,6 +110,7 @@ export default async function StaffHomePage({
           isUndecided: s.isUndecided,
           approvalStatus: s.workReport?.approvalStatus ?? null,
           taskName: s.taskName ?? s.workReport?.taskName ?? null,
+          status: s.status,
         }))}
         pendingRequests={requestRows}
       />

@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import type { CancelPolicy, Prisma } from "@/generated/prisma/client";
+import type { CancelPolicy, CancelStaffHandling, Prisma } from "@/generated/prisma/client";
 
 type Tx = Prisma.TransactionClient;
 
@@ -11,6 +11,7 @@ export type CancelRule = {
   cancelDeadlineDaysBefore: number | null;
   cancelDeadlineTime: string | null;
   cancelFeeAmount: number | null;
+  cancelStaffHandling: CancelStaffHandling;
 };
 
 // 締切 =「勤務日のN日前のHH:MM（JST）」。0日前は勤務日当日。
@@ -22,6 +23,11 @@ export function cancelDeadline(shiftDate: Date, rule: CancelRule): Date | null {
 }
 
 export function describeCancelRule(rule: CancelRule): string {
+  const handling = rule.cancelStaffHandling === "HOLD" ? "取消時は調整中" : "取消時は休み";
+  return `${describeCancelPolicy(rule)}（${handling}）`;
+}
+
+function describeCancelPolicy(rule: CancelRule): string {
   const deadline =
     rule.cancelDeadlineDaysBefore != null && rule.cancelDeadlineTime
       ? `${rule.cancelDeadlineDaysBefore === 0 ? "当日" : `${rule.cancelDeadlineDaysBefore}日前`}${rule.cancelDeadlineTime}`
@@ -65,6 +71,8 @@ export type RecruitmentCancelImpact = {
   date: Date;
   taskName: string | null;
   evaluation: CancelEvaluation;
+  // 規定が無い依頼主・業務内容は、自社で振り替えを判断できるよう調整中にする
+  staffHandling: CancelStaffHandling;
 };
 
 // 依頼主が自分のオーダーを取り消した時に、派遣元（別会社）のスタッフの
@@ -103,7 +111,32 @@ export async function listRecruitmentCancelImpacts(
       date: s.date,
       taskName: s.taskName,
       evaluation: evaluateCancellation(s.date, rule, now),
+      staffHandling: rule?.cancelStaffHandling ?? "HOLD",
     });
   }
   return impacts;
+}
+
+// 自社の管理者が依頼主の現場のシフトを解除する時（電話で取り消しを受けた等）
+// の確認用。規定から計算したキャンセル料の目安と、既定のスタッフの扱いを返す。
+export async function previewShiftCancellation(shiftId: string, now = new Date()) {
+  const shift = await prisma.shift.findUniqueOrThrow({
+    where: { id: shiftId },
+    include: { cancellation: true, companyRelationship: { include: { clientCompany: true } } },
+  });
+  const rule =
+    shift.source === "CLIENT" && shift.companyRelationshipId && shift.taskName
+      ? await prisma.companyPlacementRate.findFirst({
+          where: { companyId: shift.companyId, companyRelationshipId: shift.companyRelationshipId, taskName: shift.taskName },
+        })
+      : null;
+  const evaluation = evaluateCancellation(shift.date, rule, now);
+  return {
+    shift,
+    isClientShift: shift.source === "CLIENT",
+    clientName: shift.companyRelationship?.clientCompany?.name ?? shift.companyRelationship?.proxyName ?? null,
+    ruleLabel: rule ? describeCancelRule(rule) : null,
+    evaluation,
+    defaultStaffHandling: rule?.cancelStaffHandling ?? ("HOLD" as CancelStaffHandling),
+  };
 }

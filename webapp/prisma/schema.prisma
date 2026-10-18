@@ -450,6 +450,9 @@ model CompanyPlacementRate {
   cancelDeadlineDaysBefore Int?
   cancelDeadlineTime       String?
   cancelFeeAmount          Int? // 1人あたりのキャンセル料（円）
+  // 依頼主に取り消された時のスタッフの扱い。HOLD＝調整中にして自社で振り替えを
+  // 判断する（請負向け）、RELEASE＝そのまま休みにしてスタッフに知らせる（派遣向け）。
+  cancelStaffHandling      CancelStaffHandling @default(HOLD)
 
   company             Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyRelationship CompanyRelationship?          @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
@@ -457,6 +460,17 @@ model CompanyPlacementRate {
 
   @@unique([companyId, companyRelationshipId, taskName])
   @@index([companyId])
+}
+
+enum CancelStaffHandling {
+  HOLD
+  RELEASE
+}
+
+// アプリ上で依頼主が取り消したか、電話等で受けて自社が記録したか
+enum CancellationSource {
+  CLIENT_APP
+  CLIENT_REPORTED
 }
 
 enum CancelPolicy {
@@ -473,6 +487,7 @@ model ShiftCancellation {
   shiftId              String   @unique
   cancelledByCompanyId String
   cancelledByUserId    String?
+  source               CancellationSource @default(CLIENT_APP)
   feeAmount            Int      @default(0)
   createdAt            DateTime @default(now())
 
@@ -637,6 +652,10 @@ enum ShiftCreatedVia {
 
 enum ShiftStatus {
   CONFIRMED
+  // 依頼主が取り消したが、派遣元が振り替えるか休みにするかを決めるまで保留
+  // しているシフト（調整中）。スタッフには「調整中」と表示し、勤務・報告の
+  // 対象からは外す。別のシフトに入れると自動でCANCELLEDになる。
+  ON_HOLD
   CANCELLED
   SUPERSEDED // overridden by a conflict-override; kept read-only, excluded from counts
 }

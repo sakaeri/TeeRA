@@ -39,6 +39,7 @@ type PlacementRate = {
   cancelDeadlineDaysBefore: number | null;
   cancelDeadlineTime: string | null;
   cancelFeeAmount: number | null;
+  cancelStaffHandling: "HOLD" | "RELEASE";
   cancelLabel: string;
 };
 
@@ -1450,6 +1451,7 @@ function CancelRuleModal({
   const [daysBefore, setDaysBefore] = useState(String(rate.cancelDeadlineDaysBefore ?? 1));
   const [time, setTime] = useState(rate.cancelDeadlineTime ?? "18:00");
   const [fee, setFee] = useState(rate.cancelFeeAmount ? String(rate.cancelFeeAmount) : "");
+  const [staffHandling, setStaffHandling] = useState<"HOLD" | "RELEASE">(rate.cancelStaffHandling);
   const [error, setError] = useState<string | null>(null);
 
   const needsDeadline = policy === "FEE_AFTER_DEADLINE" || policy === "DENY_AFTER_DEADLINE";
@@ -1467,6 +1469,7 @@ function CancelRuleModal({
           cancelDeadlineDaysBefore: needsDeadline ? Number(daysBefore) : null,
           cancelDeadlineTime: needsDeadline ? time : null,
           cancelFeeAmount: policy === "FEE_AFTER_DEADLINE" ? Number(fee) : null,
+          cancelStaffHandling: staffHandling,
         });
         await onSaved();
       } catch {
@@ -1528,6 +1531,19 @@ function CancelRuleModal({
               </label>
               <span className="pb-2 text-xs text-muted">まで（0日前＝勤務日当日）</span>
             </div>
+          ) : null}
+          {policy !== "NOT_ALLOWED" ? (
+            <label className="flex flex-col gap-0.5 text-xs">
+              <span className="text-muted">取り消された時のスタッフの扱い</span>
+              <select
+                value={staffHandling}
+                onChange={(e) => setStaffHandling(e.target.value as "HOLD" | "RELEASE")}
+                className="rounded-lg border border-border px-3 py-2 text-sm"
+              >
+                <option value="HOLD">調整中にする（自社で振り替えるか休みにするかを決める）</option>
+                <option value="RELEASE">そのまま休みにする（スタッフに通知する）</option>
+              </select>
+            </label>
           ) : null}
           {policy === "FEE_AFTER_DEADLINE" ? (
             <label className="flex flex-col gap-0.5 text-xs">

@@ -15,6 +15,7 @@ import {
   saveRecruitmentPublicDraftAction,
   assignStaffToRecruitmentAction,
   cancelShiftAction,
+  previewShiftCancellationAction,
   dismissShiftRequestAction,
 } from "@/app/company/calendar/actions";
 import { registerPlacementTaskNameAction } from "@/app/company/contracts/actions";
@@ -37,6 +38,7 @@ type ShiftRow = {
   originLabel?: string; // source=INHOUSEのみ意味を持つ: 自社／配属：◯◯／公開募集
   approvalStatus: string | null;
   taskName?: string | null;
+  status?: string; // "CONFIRMED" | "ON_HOLD"（依頼主の取り消しで調整中）
 };
 
 type ShiftHistoryRow = {
@@ -516,8 +518,8 @@ export function CalendarView({
             ...visibleConfirmed.map((s) => ({
               kind: "solid" as const,
               id: s.id,
-              label: s.staffName,
-              className: "bg-emerald-100 text-emerald-900",
+              label: s.status === "ON_HOLD" ? `${s.staffName}（調整中）` : s.staffName,
+              className: s.status === "ON_HOLD" ? "bg-red-100 text-red-800" : "bg-emerald-100 text-emerald-900",
             })),
             ...(recruitTag ? [recruitTag] : []),
             ...(orderTag ? [orderTag] : []),
@@ -937,7 +939,11 @@ function DayDetailModal({
                         {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
                       </span>
                       <div className="flex shrink-0 items-center gap-2 sm:contents">
-                      {s.approvalStatus ? (
+                      {s.status === "ON_HOLD" ? (
+                        <span className="w-fit rounded-md bg-red-100 px-2 py-1 text-xs font-semibold text-red-800">
+                          依頼主取消・調整中
+                        </span>
+                      ) : s.approvalStatus ? (
                         <span className={`w-fit rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
                           {APPROVAL_LABEL[s.approvalStatus] ?? s.approvalStatus}
                         </span>
@@ -2148,20 +2154,62 @@ function RecruitmentAssignControls({
   );
 }
 
+type ShiftCancelPreview = Awaited<ReturnType<typeof previewShiftCancellationAction>>;
+
+// 解除の確認。依頼主の現場のシフトは理由（依頼主都合／自社都合）を毎回選ばせ、
+// 依頼主都合ならキャンセル規定からキャンセル料を計算して記録する（電話で取り
+// 消しを受けた場合もキャンセル料の計算と請求のために残す）。調整中のシフトは
+// 「休みにする」だけ。
 function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName: string }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<ShiftCancelPreview | null>(null);
+  const [reason, setReason] = useState<"CLIENT" | "OWN" | null>(null);
+  const [fee, setFee] = useState("0");
+  const [handling, setHandling] = useState<"HOLD" | "RELEASE">("HOLD");
+  const [notifyStaff, setNotifyStaff] = useState(true);
+
+  function start() {
+    setOpen(true);
+    setError(null);
+    setReason(null);
+    setPreview(null);
+    startTransition(async () => {
+      try {
+        const p = await previewShiftCancellationAction(shiftId);
+        setPreview(p);
+        setFee(String(p.suggestedFee));
+        setHandling(p.defaultStaffHandling);
+      } catch {
+        setError("シフトの情報を取得できませんでした。");
+      }
+    });
+  }
+
+  const isHeld = preview?.status === "ON_HOLD";
+  const needsReason = Boolean(preview?.isClientShift) && !isHeld;
+  const releasing = isHeld || (needsReason ? reason === "OWN" || handling === "RELEASE" : true);
 
   function confirm() {
     setError(null);
     startTransition(async () => {
-      try {
-        await cancelShiftAction(shiftId);
-        setOpen(false);
-      } catch {
-        setError("解除に失敗しました。");
+      const result = await cancelShiftAction(
+        shiftId,
+        isHeld
+          ? { notifyStaff }
+          : {
+              reason: needsReason ? (reason ?? undefined) : "OWN",
+              feeAmount: reason === "CLIENT" ? Number(fee) || 0 : undefined,
+              hold: reason === "CLIENT" && handling === "HOLD",
+              notifyStaff: releasing && notifyStaff,
+            },
+      );
+      if (result.status === "error") {
+        setError(result.reason);
+        return;
       }
+      setOpen(false);
     });
   }
 
@@ -2169,7 +2217,7 @@ function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName:
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={start}
         aria-label="シフトを解除"
         title="シフトを解除"
         className="flex h-6 w-6 items-center justify-center rounded-full text-muted hover:bg-red-50 hover:text-red-600"
@@ -2177,10 +2225,72 @@ function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName:
         ✕
       </button>
       {open ? (
-        <Modal title="シフトを解除しますか？" onClose={() => setOpen(false)}>
-          <p className="mb-4 text-sm text-muted">
-            {staffName}さんのこのシフトを解除します。この操作は元に戻せません。
-          </p>
+        <Modal title={isHeld ? "このシフトを休みにしますか？" : "シフトを解除しますか？"} onClose={() => setOpen(false)}>
+          {!preview && !error ? <p className="mb-4 text-sm text-muted">読み込み中…</p> : null}
+          {preview ? (
+            <div className="mb-4 flex flex-col gap-3 text-sm">
+              <p className="text-muted">
+                {isHeld
+                  ? `${staffName}さんのこのシフトは、依頼主の取り消しで調整中です。振り替え先が無ければ休みにします。`
+                  : `${staffName}さんのこのシフトを解除します。この操作は元に戻せません。`}
+              </p>
+
+              {needsReason ? (
+                <fieldset className="flex flex-col gap-1">
+                  <legend className="mb-1 text-xs font-semibold text-muted">解除の理由（選んでください）</legend>
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name={`reason-${shiftId}`} checked={reason === "CLIENT"} onChange={() => setReason("CLIENT")} />
+                    依頼主都合（電話などで取り消しを受けた）
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name={`reason-${shiftId}`} checked={reason === "OWN"} onChange={() => setReason("OWN")} />
+                    自社都合
+                  </label>
+                </fieldset>
+              ) : null}
+
+              {needsReason && reason === "CLIENT" ? (
+                <div className="flex flex-col gap-2 rounded-lg bg-background p-3">
+                  <p className="text-xs text-muted">
+                    {preview.clientName}のキャンセル規定：{preview.ruleLabel ?? "未設定（いつでもキャンセル可）"}
+                  </p>
+                  {preview.evaluationKind === "blocked" ? (
+                    <p className="text-xs text-amber-800">
+                      規定上はキャンセルできない依頼主です。取り消しを受けた場合は、キャンセル料を入力して記録してください。
+                    </p>
+                  ) : null}
+                  <label className="flex flex-col gap-0.5 text-xs">
+                    <span className="text-muted">キャンセル料（円・請求書に載ります。免除する場合は0）</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={fee}
+                      onChange={(e) => setFee(e.target.value)}
+                      className="w-32 rounded-lg border border-border px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                  <fieldset className="flex flex-col gap-1 text-xs">
+                    <legend className="mb-1 font-semibold text-muted">スタッフの扱い</legend>
+                    <label className="flex items-center gap-2">
+                      <input type="radio" name={`handling-${shiftId}`} checked={handling === "HOLD"} onChange={() => setHandling("HOLD")} />
+                      調整中にしておく（あとで振り替えるか休みにするかを決める）
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="radio" name={`handling-${shiftId}`} checked={handling === "RELEASE"} onChange={() => setHandling("RELEASE")} />
+                      休みにする
+                    </label>
+                  </fieldset>
+                </div>
+              ) : null}
+
+              {releasing && (!needsReason || reason !== null) ? (
+                <label className="flex items-center gap-2 text-xs">
+                  <input type="checkbox" checked={notifyStaff} onChange={(e) => setNotifyStaff(e.target.checked)} />
+                  スタッフに「シフトがなくなった（休み）」と通知する
+                </label>
+              ) : null}
+            </div>
+          ) : null}
           {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-border px-4 py-2 text-sm">
@@ -2188,11 +2298,11 @@ function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName:
             </button>
             <button
               type="button"
-              disabled={pending}
+              disabled={pending || !preview || (needsReason && reason === null)}
               onClick={confirm}
               className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
-              解除する
+              {isHeld ? "休みにする" : needsReason && reason === "CLIENT" && handling === "HOLD" ? "調整中にする" : "解除する"}
             </button>
           </div>
         </Modal>

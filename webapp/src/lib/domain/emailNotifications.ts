@@ -421,8 +421,7 @@ export async function runContractConsentReminders() {
 }
 
 // 依頼主がオーダーを取り消して派遣元のスタッフのシフトが取り消された時、
-// 派遣元（本部・通知先メール）とスタッフ本人に知らせる。黙って消えると、
-// 当日になってスタッフが現場に向かってしまう恐れがあるため。
+// 派遣元（本部・通知先メール）に知らせる。
 export async function notifyAgencyOfClientCancellation(params: {
   clientName: string;
   impacts: RecruitmentCancelImpact[];
@@ -439,7 +438,8 @@ export async function notifyAgencyOfClientCancellation(params: {
     if (!company) continue;
     const lines = impacts.map((i) => {
       const fee = i.evaluation.kind === "fee" ? `（キャンセル料${i.evaluation.amount.toLocaleString()}円）` : "";
-      return `${i.date.toISOString().slice(0, 10)} ${i.staffName}さん${i.taskName ? `・${i.taskName}` : ""}${fee}`;
+      const handling = i.staffHandling === "HOLD" ? "（調整中：振り替えるか休みにするかを決めてください）" : "（休み）";
+      return `${i.date.toISOString().slice(0, 10)} ${i.staffName}さん${i.taskName ? `・${i.taskName}` : ""}${fee}${handling}`;
     });
     const totalFee = impacts.reduce((sum, i) => sum + (i.evaluation.kind === "fee" ? i.evaluation.amount : 0), 0);
     if (company.notificationEmail) {
@@ -458,11 +458,19 @@ export async function notifyAgencyOfClientCancellation(params: {
     });
   }
 
+  // スタッフには「休みにする」扱いの分だけ知らせる。「調整中」の分は派遣元が
+  // 振り替え先を決めるまで知らせない（通知が来た時点で休みと勘違いさせないため）。
   for (const impact of params.impacts) {
-    await sendPushToUser(impact.staffUserId, {
-      title: "シフトが取り消されました",
-      body: `${impact.date.toISOString().slice(0, 10)}の${params.clientName}でのシフトは、依頼主の都合で取り消されました。`,
-      url: "/staff",
-    });
+    if (impact.staffHandling !== "RELEASE") continue;
+    await notifyStaffShiftReleased({ staffUserId: impact.staffUserId, date: impact.date, workplaceName: params.clientName });
   }
+}
+
+// シフトが無くなって休みになったことをスタッフ本人に知らせる。
+export async function notifyStaffShiftReleased(params: { staffUserId: string; date: Date; workplaceName: string | null }) {
+  await sendPushToUser(params.staffUserId, {
+    title: "シフトがなくなりました",
+    body: `${params.date.toISOString().slice(0, 10)}${params.workplaceName ? `の${params.workplaceName}` : ""}のシフトはなくなりました（休み）。`,
+    url: "/staff",
+  });
 }

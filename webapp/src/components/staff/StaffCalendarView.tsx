@@ -18,6 +18,8 @@ type ShiftRow = {
   isUndecided: boolean;
   approvalStatus: string | null;
   taskName: string | null;
+  // ON_HOLD＝依頼主の都合で予定が変わり、会社が振り替え先を調整している最中
+  status: string;
 };
 
 type PendingRequestRow = {
@@ -77,6 +79,7 @@ function shortCompanyName(name: string) {
 // 未来日やまだ終了時刻前の当日シフトを「未報告」扱いにすると、単なる
 // ノイズになる（会社画面のCalendarView.tsxと同じ考え方）。
 function isReportOverdue(s: ShiftRow) {
+  if (s.status === "ON_HOLD") return false;
   if (s.approvalStatus) return false;
   const todayStr = todayJst();
   if (s.date > todayStr) return false;
@@ -276,12 +279,15 @@ export function StaffCalendarView({
                 {visibleShifts.map((s) => (
                   <span
                     key={s.id}
-                    className="block w-full overflow-hidden text-clip whitespace-nowrap rounded bg-emerald-100 px-0 py-px text-center text-[8px] font-medium leading-tight tracking-tighter text-emerald-900"
+                    className={`block w-full overflow-hidden text-clip whitespace-nowrap rounded px-0 py-px text-center text-[8px] font-medium leading-tight tracking-tighter ${
+                      s.status === "ON_HOLD" ? "bg-gray-200 text-gray-700" : "bg-emerald-100 text-emerald-900"
+                    }`}
                   >
-                    {isReportOverdue(s) ? (
+                    {s.status === "ON_HOLD" ? "調整中" : null}
+                    {s.status === "ON_HOLD" ? null : isReportOverdue(s) ? (
                       <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" aria-label="未報告" />
                     ) : null}
-                    {shortCompanyName(s.workplaceName ?? s.companyName)}
+                    {s.status === "ON_HOLD" ? null : shortCompanyName(s.workplaceName ?? s.companyName)}
                   </span>
                 ))}
                 {visibleRequests.map((r) =>
@@ -425,10 +431,15 @@ function DayDetailPanel({
             {shifts.map((s) => (
               <DetailAccordionItem
                 key={s.id}
-                dotClassName={isReportOverdue(s) ? "bg-red-500" : "bg-emerald-500"}
-                primary={s.workplaceName ?? s.companyName}
+                dotClassName={s.status === "ON_HOLD" ? "bg-gray-400" : isReportOverdue(s) ? "bg-red-500" : "bg-emerald-500"}
+                primary={s.status === "ON_HOLD" ? "調整中" : (s.workplaceName ?? s.companyName)}
                 secondary={s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
               >
+                {s.status === "ON_HOLD" ? (
+                  <p className="font-medium text-foreground">
+                    予定が変更になり、会社が調整しています。会社から連絡がありますので、休みと判断せずにお待ちください。
+                  </p>
+                ) : null}
                 <p>所属会社：{s.companyName}</p>
                 {s.taskName ? <p>業務内容：{s.taskName}</p> : null}
                 {isReportOverdue(s) ? <p className="font-medium text-red-600">業務報告が未提出です。</p> : null}

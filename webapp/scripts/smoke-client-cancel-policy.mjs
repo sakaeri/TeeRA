@@ -126,7 +126,7 @@ try {
   await clientPanel.getByRole("button", { name: "単価", exact: true }).click();
   await clientPanel.getByRole("button", { name: "キャンセル規定" }).click();
   const ruleModal = agency.locator("div.fixed.inset-0.z-40").last();
-  await ruleModal.locator("select").selectOption("NOT_ALLOWED");
+  await ruleModal.locator("select").first().selectOption("NOT_ALLOWED");
   await ruleModal.getByRole("button", { name: "保存" }).click();
   await agency.waitForTimeout(600);
   log(
@@ -166,11 +166,75 @@ try {
   await client.waitForTimeout(1000);
 
   log("オーダーが削除される", psql(`select status from "PublicRecruitment" where id='${recruitmentId}';`) === "DELETED");
-  log("派遣スタッフのシフトが取り消される", psql(`select status from "Shift" where id='${shiftId}';`) === "CANCELLED");
+  log("派遣スタッフのシフトは休みにせず「調整中」になる（既定の扱い）", psql(`select status from "Shift" where id='${shiftId}';`) === "ON_HOLD");
   log("キャンセル料5000円が記録される", psql(`select "feeAmount" from "ShiftCancellation" where "shiftId"='${shiftId}';`) === "5000");
 
   const notifyLog = execSync("tail -c 400000 /tmp/nextdev.log").toString();
   log("派遣元の通知先へ取り消しのメールが送られる", notifyLog.includes("依頼主がシフトを取り消しました"));
+  log("メールに調整中である旨が書かれる", notifyLog.includes("調整中：振り替えるか休みにするかを決めてください"));
+
+  const heldDate = psql(`select to_char(date, 'YYYY-MM-DD') from "Shift" where id='${shiftId}';`);
+  await staff.goto("http://localhost:3000/staff");
+  await staff.waitForTimeout(800);
+  log("スタッフのカレンダーに「調整中」と表示される", (await staff.innerText("body")).includes("調整中"));
+
+  await agency.goto("http://localhost:3000/company");
+  await agency.waitForTimeout(800);
+  log("派遣元のダッシュボードの「やること」に調整中が出る", (await agency.innerText("body")).includes("取り消しで調整中です"));
+
+  // --- 派遣元が同じ日に別のシフトへ入れる（振り替え）と、調整中のシフトは自動で外れる ---
+  // 社内シフト作成の画面から、調整中と同じ日（今日）に入れる
+  await agency.goto("http://localhost:3000/company/calendar");
+  await agency.locator("button", { hasText: "＋" }).last().click();
+  await agency.getByText("シフトを作成").click();
+  const assignModal = agency.locator("div.fixed.inset-0.z-20").last();
+  await assignModal.getByRole("button", { name: "社内（自社スタッフとして勤務）" }).click();
+  await assignModal.getByRole("button", { name: "＋ 新しい業務内容を追加する" }).click();
+  await assignModal.locator('input[placeholder*="業務内容"]').fill("振替業務");
+  await assignModal.getByRole("button", { name: "この業務内容を追加して次へ" }).click();
+  await agency.waitForTimeout(300);
+  await assignModal.getByRole("button", { name: "派遣スタッフ" }).click();
+  await assignModal.getByRole("button", { name: "次へ" }).click();
+  await agency.waitForTimeout(300);
+  await assignModal.getByRole("button", { name: /件のシフトを作成/ }).click();
+  await agency.waitForTimeout(800);
+  const reassignedDate = psql(`select to_char(date, 'YYYY-MM-DD') from "Shift" where "staffUserId"='${staffUserId}' and source='INHOUSE' order by "createdAt" desc limit 1;`);
+  log("振り替え先のシフトが調整中と同じ日に作られる", reassignedDate === heldDate);
+  log("同じ日に別のシフトへ入れると、調整中のシフトは取り消しになる", psql(`select status from "Shift" where id='${shiftId}';`) === "CANCELLED");
+  log("振り替え後もキャンセル料の記録は残る", psql(`select "feeAmount" from "ShiftCancellation" where "shiftId"='${shiftId}';`) === "5000");
+
+  // --- 電話で取り消しを受けた場合：自社の管理者が「依頼主都合」で解除して記録する ---
+  const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  const tomorrow = new Date(Date.now() + JST_OFFSET_MS + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const phoneShiftId = psql(
+    `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${agencyCompanyId}', '${staffUserId}', 'CLIENT', '${relId}', '取消テスト業務', '${tomorrow}', '08:00', '16:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
+  );
+  await agency.goto(`http://localhost:3000/company/calendar?date=${tomorrow}`);
+  await agency.waitForTimeout(800);
+  await agency.getByRole("button", { name: "シフトを解除" }).first().click();
+  await agency.waitForTimeout(800);
+  let cancelModal = agency.locator("div.fixed.inset-0").last();
+  const confirmBtn = cancelModal.getByRole("button", { name: /解除する|調整中にする/ });
+  log("依頼主の現場のシフトは、理由を選ぶまで解除できない", await confirmBtn.isDisabled());
+  await cancelModal.getByLabel("依頼主都合（電話などで取り消しを受けた）").check();
+  log("規定からキャンセル料が自動で入る", (await cancelModal.locator('input[type="number"]').inputValue()) === "5000");
+  await cancelModal.getByRole("button", { name: "調整中にする" }).click();
+  await agency.waitForTimeout(800);
+  log(
+    "電話の取り消しもキャンセル料5000円として記録される",
+    psql(`select source || '|' || "feeAmount" from "ShiftCancellation" where "shiftId"='${phoneShiftId}';`) === "CLIENT_REPORTED|5000",
+  );
+  log("「調整中にする」を選ぶと調整中になる", psql(`select status from "Shift" where id='${phoneShiftId}';`) === "ON_HOLD");
+
+  // --- 調整中のシフトを「休みにする」 ---
+  await agency.goto(`http://localhost:3000/company/calendar?date=${tomorrow}`);
+  await agency.waitForTimeout(800);
+  await agency.getByRole("button", { name: "シフトを解除" }).first().click();
+  await agency.waitForTimeout(800);
+  cancelModal = agency.locator("div.fixed.inset-0").last();
+  await cancelModal.getByRole("button", { name: "休みにする" }).click();
+  await agency.waitForTimeout(800);
+  log("調整中のシフトを休みにできる", psql(`select status from "Shift" where id='${phoneShiftId}';`) === "CANCELLED");
 
   // --- agency invoice for that month contains the キャンセル料 line ---
   const month = psql(`select to_char(date, 'YYYY-MM') from "Shift" where id='${shiftId}';`);
@@ -180,6 +244,13 @@ try {
     `select il.amount || '|' || il.description from "InvoiceLine" il join "Invoice" i on i.id=il."invoiceId" where i."companyRelationshipId"='${relId}' and il."shiftId"='${shiftId}';`,
   );
   log("その月の請求書にキャンセル料の明細(5000円)が載る", feeLine.startsWith("5000|") && feeLine.includes("キャンセル料"));
+  const phoneMonth = psql(`select to_char(date, 'YYYY-MM') from "Shift" where id='${phoneShiftId}';`);
+  await agency.goto(`http://localhost:3000/company/invoices?month=${phoneMonth}&client=${relId}`);
+  await agency.waitForTimeout(800);
+  log(
+    "電話で受けた取り消しのキャンセル料も請求書に載る",
+    psql(`select il.amount from "InvoiceLine" il join "Invoice" i on i.id=il."invoiceId" where i."companyRelationshipId"='${relId}' and il."shiftId"='${phoneShiftId}';`) === "5000",
+  );
 
   console.log(process.exitCode ? "CLIENT CANCEL POLICY SMOKE TEST HAD FAILURES" : "CLIENT CANCEL POLICY SMOKE TEST PASSED");
 } catch (err) {

@@ -18,8 +18,8 @@ import {
   openRecruitmentToPublic,
   saveRecruitmentPublicDraft,
 } from "@/lib/domain/recruitment";
-import { listRecruitmentCancelImpacts } from "@/lib/domain/cancellation";
-import { notifyAgencyOfClientCancellation } from "@/lib/domain/emailNotifications";
+import { listRecruitmentCancelImpacts, previewShiftCancellation } from "@/lib/domain/cancellation";
+import { notifyAgencyOfClientCancellation, notifyStaffShiftReleased } from "@/lib/domain/emailNotifications";
 import type { WageType } from "@/generated/prisma/enums";
 
 export async function createAssignedShiftAction(input: {
@@ -326,13 +326,68 @@ export async function assignStaffToRecruitmentAction(input: {
   }
 }
 
-export async function cancelShiftAction(shiftId: string) {
+// 解除の確認画面用。依頼主の現場のシフトなら、キャンセル規定から計算した
+// キャンセル料の目安と、取り消し時のスタッフの扱いの既定値を返す。
+export async function previewShiftCancellationAction(shiftId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
-  const shift = await prisma.shift.findUniqueOrThrow({ where: { id: shiftId } });
+  const preview = await previewShiftCancellation(shiftId);
+  if (preview.shift.companyId !== membership.companyId) throw new Error("forbidden");
+  if (!canManageShifts(membership, preview.shift.teamId)) throw new Error("forbidden");
+  return {
+    status: preview.shift.status,
+    isClientShift: preview.isClientShift,
+    clientName: preview.clientName,
+    ruleLabel: preview.ruleLabel,
+    evaluationKind: preview.evaluation.kind,
+    suggestedFee: preview.evaluation.kind === "fee" ? preview.evaluation.amount : 0,
+    defaultStaffHandling: preview.defaultStaffHandling,
+  };
+}
+
+const CANCEL_SHIFT_ERROR_LABEL: Record<string, string> = {
+  forbidden: "権限がありません。",
+  shift_not_active: "このシフトは既に解除されています。",
+  shift_in_past: "日付が過ぎたシフトは解除できません。",
+  not_client_shift: "依頼主の現場のシフトではありません。",
+};
+
+// reason: "CLIENT"＝依頼主都合（電話等で受けた取り消し。キャンセル料を記録し、
+// 請求書に載せる）、"OWN"＝自社都合。調整中のシフトを休みにする時は不要。
+export async function cancelShiftAction(
+  shiftId: string,
+  options: { reason?: "CLIENT" | "OWN"; feeAmount?: number; hold?: boolean; notifyStaff?: boolean } = {},
+) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  const shift = await prisma.shift.findUniqueOrThrow({
+    where: { id: shiftId },
+    include: { companyRelationship: { include: { clientCompany: true } } },
+  });
   if (!canManageShifts(membership, shift.teamId)) throw new Error("forbidden");
 
-  await cancelShift({ shiftId, actorCompanyId: membership.companyId });
+  try {
+    const updated = await cancelShift({
+      shiftId,
+      actorCompanyId: membership.companyId,
+      actorUserId: userId,
+      clientCancellationFee: options.reason === "CLIENT" ? (options.feeAmount ?? 0) : undefined,
+      holdForReassignment: options.hold ?? false,
+    });
+    if (updated.status === "CANCELLED" && options.notifyStaff) {
+      await notifyStaffShiftReleased({
+        staffUserId: shift.staffUserId,
+        date: shift.date,
+        workplaceName: shift.companyRelationship?.clientCompany?.name ?? shift.companyRelationship?.proxyName ?? null,
+      }).catch((err) => console.error("[notify] shift released failed", err));
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      return { status: "error" as const, reason: CANCEL_SHIFT_ERROR_LABEL[error.message] ?? "解除できませんでした。" };
+    }
+    throw error;
+  }
   revalidatePath("/company/calendar");
+  revalidatePath("/company");
+  return { status: "ok" as const };
 }
 
 export async function dismissShiftRequestAction(requestId: string, date: string) {

@@ -86,7 +86,9 @@ async function regenerateLines(invoiceId: string) {
     for (const s of shifts) {
       if (excluded.has(s.id) || manuallyExcludedShiftIds.has(s.id)) continue;
 
-      if (s.status === "CANCELLED") {
+      // 依頼主に取り消されたシフト（取り消し済み・調整中とも）は、キャンセル料
+      // がかかった分だけ明細にする。勤務の明細にはならない。
+      if (s.cancellation || s.status === "CANCELLED" || s.status === "ON_HOLD") {
         const fee = s.cancellation?.feeAmount ?? 0;
         if (fee <= 0) continue;
         validShiftIds.add(s.id);

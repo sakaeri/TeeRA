@@ -484,6 +484,7 @@ export async function getClientMonthDetail(params: {
         cancelDeadlineDaysBefore: r.cancelDeadlineDaysBefore,
         cancelDeadlineTime: r.cancelDeadlineTime,
         cancelFeeAmount: r.cancelFeeAmount,
+        cancelStaffHandling: r.cancelStaffHandling,
         cancelLabel: describeCancelRule(r),
         versions: excludeBaselineVersion(r.versions).map((v) => ({
           id: v.id,

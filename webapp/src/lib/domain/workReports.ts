@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { registerStaffTaskName, registerPlacementTaskName, isCoveredByBaseContract } from "@/lib/domain/contracts";
 import { todayJst } from "@/lib/date";
-import { timeRangesOverlap } from "@/lib/domain/shifts";
+import { timeRangesOverlap, releaseHeldShiftsOnReassign } from "@/lib/domain/shifts";
 import type { Prisma } from "@/generated/prisma/client";
 
 type Tx = Prisma.TransactionClient;
@@ -441,7 +441,7 @@ export async function submitUnscheduledWorkReport(params: {
     // 同じ時間帯に既にシフトがあるなら、そちらの業務報告として出してもらう
     if (overlapping.length > 0) throw new Error("shift_exists");
 
-    return tx.shift.create({
+    const created = await tx.shift.create({
       data: {
         companyId: params.companyId,
         teamId: params.teamId,
@@ -455,6 +455,8 @@ export async function submitUnscheduledWorkReport(params: {
         createdVia: "STAFF_REPORT",
       },
     });
+    await releaseHeldShiftsOnReassign(tx, params.staffUserId, date);
+    return created;
   });
 
   try {
