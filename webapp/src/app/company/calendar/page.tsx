@@ -122,12 +122,13 @@ export default async function CompanyCalendarPage({
           staffName: s.staff.name,
           publicRecruitmentId: s.publicRecruitmentId,
           status: s.status,
-          // 変更前のシフト自体の時間・業務内容は、会社／募集が同じ（＝
-          // originLabelが無い）場合でも必ず表示する — 同じ会社・同じ業務の
-          // 枠変更だと「別の枠に変更」としか出ず、何がどう変わったのか
-          // まったく分からなかったため。
-          detailLabel: `${s.isUndecided ? "未定" : s.isAllDay ? "終日" : `${s.startTime}〜${s.endTime}`}${s.taskName ? `・${s.taskName}` : ""}`,
-          originLabel: s.publicRecruitment ? `${s.publicRecruitment.company.name}／${s.publicRecruitment.title}` : null,
+          workplaceLabel: historyWorkplaceLabel(s, membership.companyId),
+          taskName: s.taskName,
+          // 時間は「別の枠に変更」の時だけ出す — 何が変わったかを見るのに要る。
+          // 取り消しでは勤務先・理由の方が大事で、時間は行を長くするだけ。
+          timeLabel:
+            s.status === "SUPERSEDED" ? (s.isUndecided ? "未定" : s.isAllDay ? "終日" : `${s.startTime}〜${s.endTime}`) : null,
+          reasonLabel: historyReasonLabel(s.cancellation),
         }))}
         staffOptions={staff.map((s) => ({ id: s.userId, name: s.name, viaAgencyRelationshipName: s.viaAgencyRelationshipName }))}
         teams={teams
@@ -191,4 +192,26 @@ export default async function CompanyCalendarPage({
       />
     </main>
   );
+}
+
+// 変更履歴の勤務先。依頼主の現場は依頼主名、他社の募集に入った枠はその会社名、
+// それ以外は自社。
+function historyWorkplaceLabel(
+  s: {
+    companyRelationship: { clientCompany: { name: string } | null; proxyName: string | null } | null;
+    publicRecruitment: { companyId: string; company: { name: string } } | null;
+  },
+  myCompanyId: string,
+) {
+  if (s.companyRelationship) return s.companyRelationship.clientCompany?.name ?? s.companyRelationship.proxyName ?? "依頼主";
+  if (s.publicRecruitment && s.publicRecruitment.companyId !== myCompanyId) return s.publicRecruitment.company.name;
+  return "自社";
+}
+
+// 取り消しの理由とキャンセル料。記録の無い（この機能より前の）取り消しは空。
+function historyReasonLabel(c: { source: string; feeAmount: number } | null) {
+  if (!c) return null;
+  const reason =
+    c.source === "CLIENT_APP" ? "依頼主取消（アプリ）" : c.source === "CLIENT_REPORTED" ? "依頼主取消（電話等）" : "自社都合";
+  return c.feeAmount > 0 ? `${reason}・キャンセル料 ${c.feeAmount.toLocaleString()}円` : reason;
 }

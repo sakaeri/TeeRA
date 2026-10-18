@@ -361,13 +361,18 @@ export async function listShiftHistoryForMonth(params: {
       companyId: params.companyId,
       teamId: params.teamId ?? (params.restrictToTeamIds ? { in: params.restrictToTeamIds } : undefined),
       date: { gte: start, lt: end },
-      status: { in: ["SUPERSEDED", "CANCELLED"] },
+      // 調整中（依頼主の取り消し後、振り替えるか未定）も、取り消された
+      // 事実が分かるよう履歴に出す
+      status: { in: ["SUPERSEDED", "CANCELLED", "ON_HOLD"] },
     },
     include: {
       staff: true,
       // 移動元の会社／募集名を「変更履歴」に出すため辿る（移動先は既に
       // その枠のカードに正式に表示されるので不要 — 出すのは変更前の情報のみ）。
       publicRecruitment: { include: { company: true } },
+      // 勤務先（依頼主名）と、取り消しの理由・キャンセル料
+      companyRelationship: { include: { clientCompany: true } },
+      cancellation: true,
     },
     orderBy: [{ date: "asc" }, { updatedAt: "asc" }],
   });
@@ -521,18 +526,19 @@ export async function cancelShift(params: {
       return tx.shift.update({ where: { id: shift.id }, data: { status: "CANCELLED" } });
     }
 
-    if (params.clientCancellationFee !== undefined) {
-      if (shift.source !== "CLIENT") throw new Error("not_client_shift");
-      await tx.shiftCancellation.create({
-        data: {
-          shiftId: shift.id,
-          cancelledByCompanyId: params.actorCompanyId,
-          cancelledByUserId: params.actorUserId,
-          source: "CLIENT_REPORTED",
-          feeAmount: Math.max(0, Math.round(params.clientCancellationFee)),
-        },
-      });
+    if (params.clientCancellationFee !== undefined && shift.source !== "CLIENT") {
+      throw new Error("not_client_shift");
     }
+    // 自社都合の解除も（キャンセル料0で）記録し、変更履歴に理由を出せるようにする
+    await tx.shiftCancellation.create({
+      data: {
+        shiftId: shift.id,
+        cancelledByCompanyId: params.actorCompanyId,
+        cancelledByUserId: params.actorUserId,
+        source: params.clientCancellationFee !== undefined ? "CLIENT_REPORTED" : "AGENCY_OWN",
+        feeAmount: Math.max(0, Math.round(params.clientCancellationFee ?? 0)),
+      },
+    });
 
     const updated = await tx.shift.update({
       where: { id: shift.id },

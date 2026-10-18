@@ -471,6 +471,7 @@ enum CancelStaffHandling {
 enum CancellationSource {
   CLIENT_APP
   CLIENT_REPORTED
+  AGENCY_OWN
 }
 
 enum CancelPolicy {

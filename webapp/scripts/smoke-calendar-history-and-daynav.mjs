@@ -90,8 +90,8 @@ try {
   await page.waitForTimeout(200);
   const historyText = await dayModal.locator("ul").last().innerText();
   log(
-    "同じ会社・同じ業務でも、変更前の時間・業務内容が変更履歴に表示される",
-    historyText.includes("09:00〜18:00") && historyText.includes("通常業務"),
+    "キャンセルの変更履歴に勤務先・業務内容と理由が表示される（時間は出さない）",
+    historyText.includes("自社・通常業務") && historyText.includes("自社都合") && !historyText.includes("09:00〜18:00"),
   );
   log("変更履歴にキャンセル済みも表示される", historyText.includes("キャンセル済み"));
   await dayModal.getByRole("button", { name: "✕", exact: true }).click();
