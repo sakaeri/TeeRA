@@ -15,6 +15,7 @@ type Row = {
   clockInTime: string | null;
   clockOutTime: string | null;
   breakMinutes: number;
+  isUnscheduled: boolean;
 };
 
 export function WorkReportsQueue({ reports }: { reports: Row[] }) {
@@ -60,6 +61,7 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
             <li key={r.id} className="rounded-xl border border-border/60 p-4">
               <div className="mb-1 flex items-center justify-between gap-2">
                 <span className="min-w-0 font-medium">
+                  {r.isUnscheduled ? <UnscheduledBadge /> : null}
                   {r.staffName} — {r.date}
                   {r.taskName ? <span className="ml-1.5 font-normal text-muted">（{r.taskName}）</span> : null}
                 </span>
@@ -166,5 +168,15 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+// シフトが無いままスタッフが報告した勤務（緊急の出勤など）であることを示す印。
+// 会社側が事前に把握していない勤務なので、承認前に気付けるようにする。
+export function UnscheduledBadge() {
+  return (
+    <span className="mr-1.5 inline-block rounded-md bg-amber-100 px-1.5 py-0.5 align-middle text-[11px] font-semibold text-amber-900">
+      シフト外
+    </span>
   );
 }

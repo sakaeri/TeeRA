@@ -606,6 +606,7 @@ enum ShiftCreatedVia {
   ASSIGN // company created & assigned directly (シフトを作成)
   STAFF_APPLICATION // matched from a staff ShiftRequest (希望を出す)
   PUBLIC_RECRUIT_ENTRY // matched from a confirmed PublicRecruitment entry
+  STAFF_REPORT // シフトが無いまま勤務したスタッフが、業務報告と同時に作成（シフト外の勤務）
 }
 
 enum ShiftStatus {

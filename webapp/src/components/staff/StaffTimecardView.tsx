@@ -11,6 +11,7 @@ import {
 import { isDone, type ShiftRow } from "@/lib/staffShiftStatus";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { todayJst } from "@/lib/date";
+import { UnscheduledReportButton, type UnscheduledCompanyOption } from "@/components/staff/UnscheduledReportForm";
 
 export type { ShiftRow };
 export { isDone };
@@ -41,9 +42,11 @@ const BREAK_MINUTE_PRESETS = [0, 30, 45, 60, 90];
 export function StaffTimecardView({
   shifts,
   knownTaskNamesByCompany,
+  unscheduledCompanies,
 }: {
   shifts: ShiftRow[];
   knownTaskNamesByCompany: Record<string, string[]>;
+  unscheduledCompanies: UnscheduledCompanyOption[];
 }) {
   const actionable = shifts.filter((s) => !isDone(s));
   const done = shifts.filter(isDone);
@@ -61,6 +64,8 @@ export function StaffTimecardView({
           <p className="text-sm text-muted">対応が必要な報告はありません。</p>
         ) : null}
       </ul>
+
+      <UnscheduledReportButton companies={unscheduledCompanies} knownTaskNamesByCompany={knownTaskNamesByCompany} />
 
       {done.length > 0 ? (
         <details className="rounded-2xl bg-white/70 p-4 shadow-sm ring-1 ring-black/5">

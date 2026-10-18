@@ -170,6 +170,7 @@ export function computePendingReportEntries(data: DashboardData) {
     computedHours: (r.computedMinutes / 60).toFixed(1),
     comment: r.comment,
     taskName: r.taskName ?? r.shift.taskName,
+    isUnscheduled: r.shift.createdVia === "STAFF_REPORT",
   }));
 }
 
@@ -236,7 +237,7 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
     items.push({
       id: `report-${report.id}`,
       kind: "業務報告",
-      text: `${report.staff.name}さんの業務（${teamName}）（${dateStr}${timeRange}）業務報告が未承認です`,
+      text: `${report.staff.name}さんの業務（${teamName}）（${dateStr}${timeRange}）${report.shift.createdVia === "STAFF_REPORT" ? "シフト外の" : ""}業務報告が未承認です`,
       actionLabel: "確認する",
       actionHref: `/company?open=reports&reportId=${report.id}`,
     });

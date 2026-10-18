@@ -4,7 +4,14 @@ import { revalidatePath } from "next/cache";
 import { requireCompanyStaffRole } from "@/lib/auth/session";
 import { submitShiftRequest } from "@/lib/domain/shifts";
 import { applyToRecruitment } from "@/lib/domain/recruitment";
-import { clockIn, clockOut, submitWorkReport, confirmCorrectedWorkReport, disputeCorrectedWorkReport } from "@/lib/domain/workReports";
+import {
+  clockIn,
+  clockOut,
+  submitWorkReport,
+  submitUnscheduledWorkReport,
+  confirmCorrectedWorkReport,
+  disputeCorrectedWorkReport,
+} from "@/lib/domain/workReports";
 import { notifyCompanyOfWorkReportSubmission } from "@/lib/domain/emailNotifications";
 import { markStaffNoticeRead } from "@/lib/domain/notices";
 import { updateMembershipIdDocument, updateMembershipBankInfo, updateStaffAddressPhone } from "@/lib/domain/roster";
@@ -170,6 +177,64 @@ export async function submitShiftRequestAction(input: {
     note: input.note,
   });
   revalidatePath("/staff");
+}
+
+// シフト外の勤務の業務報告（緊急で出勤した日など）。所属会社は本人のものか
+// をサーバー側で必ず検証し、チームはシフト希望と同じく所属チームを記録する。
+const UNSCHEDULED_REPORT_ERROR_LABEL: Record<string, string> = {
+  forbidden: "この勤務先では報告できません",
+  future_date: "未来の日付では報告できません",
+  invalid_time_range: "出勤・退勤の時刻を確認してください",
+  shift_exists: "この時間帯には既にシフトがあります。そのシフトのカードから業務報告を提出してください",
+  clock_in_out_required: "出勤・退勤の時刻を入力してください",
+};
+
+export async function submitUnscheduledWorkReportAction(input: {
+  companyId: string;
+  companyRelationshipId?: string;
+  date: string;
+  clockInTime: string;
+  clockOutTime: string;
+  breakMinutes: number;
+  taskName?: string;
+  comment?: string;
+}) {
+  const { userId } = await requireCompanyStaffRole();
+  const membership = await prisma.companyMembership.findUnique({
+    where: { userId_companyId: { userId, companyId: input.companyId } },
+  });
+  if (!membership) return { status: "error" as const, reason: UNSCHEDULED_REPORT_ERROR_LABEL.forbidden };
+
+  const teamMembership = await prisma.teamMembership.findFirst({
+    where: { userId, team: { companyId: input.companyId } },
+    select: { teamId: true },
+  });
+
+  try {
+    const report = await submitUnscheduledWorkReport({
+      staffUserId: userId,
+      companyId: input.companyId,
+      teamId: teamMembership?.teamId,
+      companyRelationshipId: input.companyRelationshipId || undefined,
+      date: input.date,
+      clockInTime: input.clockInTime,
+      clockOutTime: input.clockOutTime,
+      breakMinutes: input.breakMinutes,
+      taskName: input.taskName || undefined,
+      comment: input.comment || undefined,
+    });
+    await notifyCompanyOfWorkReportSubmission(report.id).catch((err) =>
+      console.error("[email] unscheduled work report notify failed", err),
+    );
+  } catch (error) {
+    if (error instanceof Error) {
+      return { status: "error" as const, reason: UNSCHEDULED_REPORT_ERROR_LABEL[error.message] ?? "提出できませんでした" };
+    }
+    throw error;
+  }
+  revalidatePath("/staff/timecard");
+  revalidatePath("/staff");
+  return { status: "ok" as const };
 }
 
 export async function applyToRecruitmentAction(recruitmentId: string) {

@@ -17,6 +17,7 @@ import {
 } from "@/app/company/promo/actions";
 import { approveWorkReportAction, rejectWorkReportAction } from "@/app/company/workreports/actions";
 import { WorkReportCorrectionForm } from "@/components/company/WorkReportCorrectionForm";
+import { UnscheduledBadge } from "@/components/company/WorkReportsQueue";
 import { skipStaffPaidLeaveGrantAction } from "@/app/company/actions";
 import {
   TemplateModal,
@@ -107,6 +108,7 @@ type PendingReportEntry = {
   computedHours: string;
   comment: string | null;
   taskName: string | null;
+  isUnscheduled: boolean;
 };
 
 type PendingContractStaff = { userId: string; name: string };
@@ -825,6 +827,7 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
           </button>
         </div>
         <p className="mb-4 text-xs text-muted">
+          {entry.isUnscheduled ? <UnscheduledBadge /> : null}
           {entry.staffName}・{entry.teamName ?? "自社"}・{formatDateJa(entry.date)}
           {entry.taskName ? `・${entry.taskName}` : ""}
         </p>

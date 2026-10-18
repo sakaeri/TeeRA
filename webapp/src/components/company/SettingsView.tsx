@@ -84,6 +84,7 @@ type WorkReportRow = {
   clockInTime: string | null;
   clockOutTime: string | null;
   breakMinutes: number;
+  isUnscheduled: boolean;
 };
 
 const TABS = [

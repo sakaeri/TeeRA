@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { registerStaffTaskName, registerPlacementTaskName, isCoveredByBaseContract } from "@/lib/domain/contracts";
 import { todayJst } from "@/lib/date";
+import { timeRangesOverlap } from "@/lib/domain/shifts";
 import type { Prisma } from "@/generated/prisma/client";
 
 type Tx = Prisma.TransactionClient;
@@ -388,4 +389,89 @@ export async function disputeCorrectedWorkReport(params: { workReportId: string;
     data: { approvalStatus: "REJECTED", rejectionReason: DISPUTED_CORRECTION_REASON },
   });
   if (result.count === 0) throw new Error("not_pending_confirmation");
+}
+
+// シフト外の勤務（緊急で出勤した等、シフトが作られていないまま働いた日）の
+// 業務報告。報告と同時にシフト（createdVia=STAFF_REPORT）を作り、以降は通常の
+// シフトの業務報告と全く同じ流れ（承認先の判定・給与/請求への反映）に乗せる。
+// 勤務先は自社か、スタッフが配属されている依頼主のどちらか。
+export async function submitUnscheduledWorkReport(params: {
+  staffUserId: string;
+  companyId: string;
+  teamId?: string;
+  companyRelationshipId?: string;
+  date: string; // YYYY-MM-DD (JST)
+  clockInTime: string; // HH:MM
+  clockOutTime: string; // HH:MM
+  breakMinutes: number;
+  taskName?: string;
+  comment?: string;
+}) {
+  if (params.date > todayJst()) throw new Error("future_date");
+  if (!params.clockInTime || !params.clockOutTime || params.clockInTime === params.clockOutTime) {
+    throw new Error("invalid_time_range");
+  }
+
+  if (params.companyRelationshipId) {
+    const placement = await prisma.staffPlacement.findFirst({
+      where: {
+        staffUserId: params.staffUserId,
+        active: true,
+        companyRelationship: { id: params.companyRelationshipId, agencyCompanyId: params.companyId, status: "ACTIVE" },
+      },
+    });
+    if (!placement) throw new Error("forbidden");
+  }
+
+  const date = new Date(`${params.date}T00:00:00.000Z`);
+  // 深夜をまたぐ勤務（退勤が出勤より前の時刻）は、重複判定では当日の終わりまでとみなす
+  const overlapEnd = params.clockOutTime > params.clockInTime ? params.clockOutTime : "23:59";
+
+  const shift = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${params.staffUserId} || ':' || ${date.toISOString()}))`;
+    const sameDay = await tx.shift.findMany({
+      where: { staffUserId: params.staffUserId, date, status: "CONFIRMED" },
+    });
+    const overlapping = sameDay.filter((s) =>
+      timeRangesOverlap(
+        { startTime: params.clockInTime, endTime: overlapEnd, isAllDay: false, isUndecided: false },
+        s,
+      ),
+    );
+    // 同じ時間帯に既にシフトがあるなら、そちらの業務報告として出してもらう
+    if (overlapping.length > 0) throw new Error("shift_exists");
+
+    return tx.shift.create({
+      data: {
+        companyId: params.companyId,
+        teamId: params.teamId,
+        staffUserId: params.staffUserId,
+        source: params.companyRelationshipId ? "CLIENT" : "INHOUSE",
+        companyRelationshipId: params.companyRelationshipId,
+        taskName: params.taskName,
+        date,
+        startTime: params.clockInTime,
+        endTime: params.clockOutTime,
+        createdVia: "STAFF_REPORT",
+      },
+    });
+  });
+
+  try {
+    return await submitWorkReport({
+      shiftId: shift.id,
+      staffUserId: params.staffUserId,
+      outcome: "WORKED",
+      comment: params.comment,
+      taskName: params.taskName,
+      breakMinutes: params.breakMinutes,
+      clockInTime: params.clockInTime,
+      clockOutTime: params.clockOutTime,
+    });
+  } catch (error) {
+    // 報告の作成に失敗した場合、報告の無いシフトだけが残らないよう取り消す
+    await prisma.workReport.deleteMany({ where: { shiftId: shift.id } });
+    await prisma.shift.delete({ where: { id: shift.id } });
+    throw error;
+  }
 }
