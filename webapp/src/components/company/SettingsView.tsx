@@ -600,7 +600,7 @@ function SectionCard({
   return (
     <section
       id={id}
-      className={`print-avoid-break rounded-2xl border border-border bg-white/60 p-6 scroll-mt-20 print:mb-3 print:rounded-lg print:p-3 ${printPageBreak ? "print-page-break" : ""} ${className ?? ""}`}
+      className={`print-avoid-break rounded-2xl border border-border bg-white/60 p-6 scroll-mt-20 print:mb-3 print:rounded-lg print:p-3 print:last:mb-0 ${printPageBreak ? "print-page-break" : ""} ${className ?? ""}`}
     >
       <div className="mb-4 flex items-center justify-between print:mb-1.5">
         <h2 className="font-serif-jp text-lg font-bold text-primary print:text-base">{title}</h2>

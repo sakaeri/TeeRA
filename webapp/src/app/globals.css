@@ -93,9 +93,13 @@ body {
   margin: 10mm;
 }
 @media print {
+  /* 画面用の「高さ100%」指定が残っていると、iOSの印刷で最後に白紙の
+     ページが追加されることがあるため、印刷時は内容の高さに合わせる。 */
   html,
   body {
     background: #fff !important;
+    height: auto !important;
+    min-height: 0 !important;
   }
   .print-page-break {
     break-before: page;
