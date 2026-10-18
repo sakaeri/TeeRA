@@ -198,13 +198,14 @@ function StepGuide({
   return (
     // 印刷時は端末の画面幅に関係なく「左に画像・右に文字」で並べ、画像は
     // 縦横比をそろえて上端だけ見せる（縦長の画像で1項目が伸び、1ページ
-    // 3項目に収まらなくなるのを防ぐ）。
+    // 3項目に収まらなくなるのを防ぐ）。文字の方が長い項目で画像の枠まで
+    // 縦に引き伸ばされると左右が切れるため、self-startで伸ばさない。
     <div className="flex flex-col gap-4 sm:flex-row print:flex-row print:gap-3">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={image}
         alt={alt}
-        className="w-full rounded-xl border border-border sm:w-1/2 print:aspect-[64/45] print:w-[40%] print:shrink-0 print:rounded-md print:object-cover print:object-top"
+        className="w-full rounded-xl border border-border sm:w-1/2 print:aspect-[64/45] print:w-[40%] print:shrink-0 print:self-start print:rounded-md print:object-cover print:object-top"
       />
       <div className="flex-1">
         <ol className="list-decimal space-y-2 pl-5 text-sm print:space-y-0.5 print:pl-4 print:text-[11.5px] print:leading-snug">
