@@ -1,4 +1,5 @@
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
+import { reportDisplay } from "@/lib/workReportDisplay";
 import { listShiftsForMonth, listShiftRequests, listShiftHistoryForMonth } from "@/lib/domain/shifts";
 import { isCompanyScopeAdmin, myManagedOrLedTeamIds } from "@/lib/auth/permissions";
 import {
@@ -112,16 +113,29 @@ export default async function CompanyCalendarPage({
           createdVia: s.createdVia,
           publicRecruitmentId: s.publicRecruitmentId,
           originLabel: s.source === "CLIENT" ? undefined : originLabel(staffOrigins.get(s.staffUserId)),
-          approvalStatus: s.workReport?.approvalStatus ?? null,
-          taskName: s.taskName ?? s.workReport?.taskName ?? null,
+          // 業務報告が提出されたら、その内容（実績時間・業務内容・欠勤/キャンセル）
+          // をカレンダーに反映する。勤務先はシフトのまま（報告では変えられない）。
+          ...(() => {
+            const report = reportDisplay(s.workReport);
+            return {
+              approvalStatus: report.approvalStatus,
+              outcome: report.outcome,
+              reportedTimeLabel: report.reportedTimeLabel,
+              cancelFeeAmount: s.cancellation?.feeAmount ?? 0,
+              taskName: report.reportedTaskName ?? s.taskName ?? s.workReport?.taskName ?? null,
+            };
+          })(),
           status: s.status,
         }))}
         shiftHistory={shiftHistory.map((s) => ({
           id: s.id,
           date: s.date.toISOString().slice(0, 10),
+          staffUserId: s.staffUserId,
           staffName: s.staff.name,
           publicRecruitmentId: s.publicRecruitmentId,
           status: s.status,
+          // 依頼主に取り消されたもの（月表示・日別詳細に「取消」として残す）
+          clientCancelled: Boolean(s.cancellation && s.cancellation.source !== "AGENCY_OWN"),
           workplaceLabel: historyWorkplaceLabel(s, membership.companyId),
           taskName: s.taskName,
           // 時間は「別の枠に変更」の時だけ出す — 何が変わったかを見るのに要る。
@@ -212,6 +226,12 @@ function historyWorkplaceLabel(
 function historyReasonLabel(c: { source: string; feeAmount: number } | null) {
   if (!c) return null;
   const reason =
-    c.source === "CLIENT_APP" ? "依頼主取消（アプリ）" : c.source === "CLIENT_REPORTED" ? "依頼主取消（電話等）" : "自社都合";
+    c.source === "CLIENT_APP"
+      ? "依頼主取消（アプリ）"
+      : c.source === "CLIENT_REPORTED"
+        ? "依頼主取消（電話等）"
+        : c.source === "STAFF_REPORTED"
+          ? "勤務先キャンセル（スタッフ報告）"
+          : "自社都合";
   return c.feeAmount > 0 ? `${reason}・キャンセル料 ${c.feeAmount.toLocaleString()}円` : reason;
 }

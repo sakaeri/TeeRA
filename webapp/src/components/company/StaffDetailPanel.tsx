@@ -157,6 +157,8 @@ const CONTRACT_STATUS_LABEL: Record<string, string> = {
 };
 
 function actualTimeLabel(d: StaffMonthDetail["days"][number]) {
+  if (d.outcome === "ABSENT") return "欠勤";
+  if (d.outcome === "CANCELLED_BY_EMPLOYER") return "勤務先キャンセル";
   if (!d.actualStartTime && !d.actualEndTime) return "—";
   return `${d.actualStartTime ?? "--:--"}〜${d.actualEndTime ?? "--:--"}`;
 }

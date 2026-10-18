@@ -1,6 +1,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { reportDisplay } from "@/lib/workReportDisplay";
 import { resolveRateVersion, excludeBaselineVersion } from "@/lib/domain/contracts";
 import { computeInvoiceTotals } from "@/lib/domain/invoicing";
 import { describeCancelRule } from "@/lib/domain/cancellation";
@@ -501,8 +502,17 @@ export async function getClientMonthDetail(params: {
       endTime: s.endTime,
       isAllDay: s.isAllDay,
       isUndecided: s.isUndecided,
-      approvalStatus: s.workReport?.approvalStatus ?? null,
-      taskName: s.workReport?.taskName ?? s.taskName,
+      // 提出済みの報告だけを反映（打刻しただけなら未提出）。出勤報告は実績時間、
+      // 欠勤・キャンセルはその旨を時間欄に出す。
+      ...(() => {
+        const report = reportDisplay(s.workReport);
+        return {
+          approvalStatus: report.approvalStatus,
+          outcome: report.outcome,
+          reportedTimeLabel: report.reportedTimeLabel,
+          taskName: report.reportedTaskName ?? s.taskName ?? s.workReport?.taskName ?? null,
+        };
+      })(),
     })),
   };
 }

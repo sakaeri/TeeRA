@@ -472,6 +472,7 @@ enum CancellationSource {
   CLIENT_APP
   CLIENT_REPORTED
   AGENCY_OWN
+  STAFF_REPORTED
 }
 
 enum CancelPolicy {
