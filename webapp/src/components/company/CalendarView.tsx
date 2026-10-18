@@ -46,14 +46,17 @@ type ShiftHistoryRow = {
   date: string;
   staffName: string;
   publicRecruitmentId: string | null;
-  status: string; // "SUPERSEDED" | "CANCELLED"
-  detailLabel: string; // 変更前のシフト自体の時間・業務内容（常に表示）
-  originLabel: string | null; // 元々どの会社／募集の枠だったか（会社名／募集タイトル、別会社からの移動時のみ）
+  status: string; // "SUPERSEDED" | "CANCELLED" | "ON_HOLD"
+  workplaceLabel: string; // 依頼主名 or 自社
+  taskName: string | null;
+  timeLabel: string | null; // 「別の枠に変更」の時だけ（何が変わったか分かるように）
+  reasonLabel: string | null; // 取り消しの理由・キャンセル料
 };
 
 const SHIFT_HISTORY_LABEL: Record<string, string> = {
   SUPERSEDED: "別の枠に変更",
   CANCELLED: "キャンセル済み",
+  ON_HOLD: "調整中",
 };
 
 const APPROVAL_PILL: Record<string, string> = {
@@ -1730,13 +1733,19 @@ function ShiftHistorySection({ history }: { history: ShiftHistoryRow[] }) {
       {expanded ? (
         <ul className="mt-1 flex flex-col gap-0.5">
           {history.map((h) => (
-            <li key={h.id} className="flex items-center justify-between gap-2 text-[11px] text-muted/70">
-              <span>{h.staffName}</span>
-              <span className="text-right">
-                {h.detailLabel}
-                {h.originLabel ? `（${h.originLabel}）` : ""}
-                {" → "}
-                {SHIFT_HISTORY_LABEL[h.status] ?? h.status}
+            <li key={h.id} className="flex justify-between gap-2 text-[11px] text-muted/70">
+              <span className="shrink-0">{h.staffName}</span>
+              <span className="flex flex-col items-end text-right">
+                <span>
+                  {h.workplaceLabel}
+                  {h.taskName ? `・${h.taskName}` : ""}
+                  {h.timeLabel ? ` ${h.timeLabel}` : ""}
+                  {" → "}
+                  <span className={h.status === "ON_HOLD" ? "text-red-600/80" : undefined}>
+                    {SHIFT_HISTORY_LABEL[h.status] ?? h.status}
+                  </span>
+                </span>
+                {h.reasonLabel ? <span>{h.reasonLabel}</span> : null}
               </span>
             </li>
           ))}

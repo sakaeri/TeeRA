@@ -236,6 +236,53 @@ try {
   await agency.waitForTimeout(800);
   log("調整中のシフトを休みにできる", psql(`select status from "Shift" where id='${phoneShiftId}';`) === "CANCELLED");
 
+  // --- 変更履歴に勤務先・取り消しの理由・キャンセル料が出る ---
+  // 自社都合の解除も1件作っておく（社内シフトは理由を選ばずに解除できる）
+  const ownShiftId = psql(
+    `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${agencyCompanyId}', '${staffUserId}', 'INHOUSE', '自社都合テスト', '${tomorrow}', '17:00', '20:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
+  );
+  await agency.goto(`http://localhost:3000/company/calendar?date=${tomorrow}`);
+  await agency.waitForTimeout(800);
+  await agency.getByRole("button", { name: "シフトを解除" }).first().click();
+  await agency.waitForTimeout(800);
+  cancelModal = agency.locator("div.fixed.inset-0").last();
+  await cancelModal.getByRole("button", { name: "解除する" }).click();
+  await agency.waitForTimeout(800);
+  log(
+    "自社都合の解除はキャンセル料0の自社都合として記録される",
+    psql(`select source || '|' || "feeAmount" from "ShiftCancellation" where "shiftId"='${ownShiftId}';`) === "AGENCY_OWN|0",
+  );
+
+  await agency.goto(`http://localhost:3000/company/calendar?date=${tomorrow}`);
+  await agency.waitForTimeout(800);
+  const historyModal = agency.locator("div.fixed.inset-0.z-20").last();
+  await historyModal.getByRole("button", { name: /変更履歴/ }).click();
+  await agency.waitForTimeout(300);
+  const historyText = await historyModal.locator("ul").last().innerText();
+  log(
+    "変更履歴に依頼主名・理由・キャンセル料が出る",
+    historyText.includes("取消依頼主株式会社・取消テスト業務") && historyText.includes("依頼主取消（電話等）・キャンセル料 5,000円"),
+  );
+  log(
+    "変更履歴の自社都合の行は「自社」「自社都合」と出る",
+    historyText.includes("自社・自社都合テスト") && historyText.split("\n").some((l) => l.trim() === "自社都合"),
+  );
+  log("取り消しの行には時間を出さない", !historyText.includes("08:00〜16:00") && !historyText.includes("17:00〜20:00"));
+  await historyModal.getByRole("button", { name: "✕", exact: true }).click().catch(() => {});
+
+  // 調整中も変更履歴に出る
+  const heldShiftId = psql(
+    `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${agencyCompanyId}', '${staffUserId}', 'CLIENT', '${relId}', '調整中テスト', '${tomorrow}', '21:00', '22:00', false, false, 'ON_HOLD', 'ASSIGN', now(), now()) returning id) select id from ins;`,
+  );
+  psql(`insert into "ShiftCancellation" (id, "shiftId", "cancelledByCompanyId", source, "feeAmount") values (gen_random_uuid()::text, '${heldShiftId}', '${clientCompanyId}', 'CLIENT_APP', 0);`);
+  await agency.goto(`http://localhost:3000/company/calendar?date=${tomorrow}`);
+  await agency.waitForTimeout(800);
+  const heldModal = agency.locator("div.fixed.inset-0.z-20").last();
+  await heldModal.getByRole("button", { name: /変更履歴/ }).click();
+  await agency.waitForTimeout(300);
+  const heldHistory = await heldModal.locator("ul").last().innerText();
+  log("調整中のシフトも変更履歴に「調整中」で出る", heldHistory.includes("調整中テスト → 調整中") && heldHistory.includes("依頼主取消（アプリ）"));
+
   // --- agency invoice for that month contains the キャンセル料 line ---
   const month = psql(`select to_char(date, 'YYYY-MM') from "Shift" where id='${shiftId}';`);
   await agency.goto(`http://localhost:3000/company/invoices?month=${month}&client=${relId}`);
