@@ -153,6 +153,8 @@ export async function openRecruitmentToPublicAction(input: {
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: input.recruitmentId } });
+  // 募集IDだけで他社の募集を操作できないよう、自社の募集であることを必ず確認する。
+  if (recruitment.companyId !== membership.companyId) throw new Error("forbidden");
   if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
 
   try {
@@ -190,6 +192,7 @@ export async function saveRecruitmentPublicDraftAction(input: {
 }) {
   const { membership } = await requireCompanyAdminOrEditor();
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: input.recruitmentId } });
+  if (recruitment.companyId !== membership.companyId) throw new Error("forbidden");
   if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
 
   await saveRecruitmentPublicDraft(input);
@@ -201,6 +204,7 @@ export async function updateMaxEntriesAction(recruitmentId: string, newMaxEntrie
   // オーダー(visibility=ORDER)は無課金なのでTee残高の上限チェックは不要
   // （公開募集化済みのものだけ、上限を上げる分のTeeが払えるか確認する）。
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: recruitmentId } });
+  if (recruitment.companyId !== membership.companyId) throw new Error("forbidden");
   if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
 
   try {
@@ -224,6 +228,7 @@ export async function updateMaxEntriesAction(recruitmentId: string, newMaxEntrie
 export async function deleteRecruitmentAction(recruitmentId: string) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: recruitmentId } });
+  if (recruitment.companyId !== membership.companyId) throw new Error("forbidden");
   if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
 
   await deleteRecruitment({ recruitmentId, updatedByUserId: userId });

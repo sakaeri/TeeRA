@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireCompanyStaffRole } from "@/lib/auth/session";
 import { submitShiftRequest } from "@/lib/domain/shifts";
 import { applyToRecruitment } from "@/lib/domain/recruitment";
-import { clockIn, clockOut, submitWorkReport, confirmCorrectedWorkReport } from "@/lib/domain/workReports";
+import { clockIn, clockOut, submitWorkReport, confirmCorrectedWorkReport, disputeCorrectedWorkReport } from "@/lib/domain/workReports";
 import { notifyCompanyOfWorkReportSubmission } from "@/lib/domain/emailNotifications";
 import { markStaffNoticeRead } from "@/lib/domain/notices";
 import { updateMembershipIdDocument, updateMembershipBankInfo, updateStaffAddressPhone } from "@/lib/domain/roster";
@@ -125,6 +125,13 @@ export async function submitWorkReportAction(input: {
 export async function confirmCorrectedWorkReportAction(workReportId: string) {
   const { userId } = await requireCompanyStaffRole();
   await confirmCorrectedWorkReport({ workReportId, staffUserId: userId });
+  revalidatePath("/staff/timecard");
+  revalidatePath("/staff");
+}
+
+export async function disputeCorrectedWorkReportAction(workReportId: string) {
+  const { userId } = await requireCompanyStaffRole();
+  await disputeCorrectedWorkReport({ workReportId, staffUserId: userId });
   revalidatePath("/staff/timecard");
   revalidatePath("/staff");
 }

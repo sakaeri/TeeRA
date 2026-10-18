@@ -335,8 +335,9 @@ export async function correctAndReturnWorkReport(params: {
   const rawMinutes = Math.round((params.clockOut.getTime() - params.clockIn.getTime()) / 60000);
   const computedMinutes = Math.max(rawMinutes - params.breakMinutes, 0);
 
-  return prisma.workReport.update({
-    where: { id: params.workReportId },
+  // 承認・差し戻しと同じく、提出済みで未承認のものだけを修正できる。
+  const result = await prisma.workReport.updateMany({
+    where: { id: params.workReportId, approvalStatus: "PENDING", submittedAt: { not: null } },
     data: {
       clockIn: params.clockIn,
       clockOut: params.clockOut,
@@ -347,6 +348,7 @@ export async function correctAndReturnWorkReport(params: {
       correctedAt: new Date(),
     },
   });
+  if (result.count === 0) throw new Error("not_pending");
 }
 
 // スタッフが企業側の修正内容に「これで合っています」と確認する —
@@ -372,4 +374,18 @@ export async function confirmCorrectedWorkReport(params: { workReportId: string;
 
     return report;
   });
+}
+
+// 企業側の修正内容にスタッフが同意しない場合 — 差し戻し（REJECTED）に戻し、
+// スタッフ自身が打刻・休憩を直して再提出できるようにする（企業が一方的に
+// 数字を確定できないのと同じ考え方で、スタッフにも拒否する手段を残す）。
+export const DISPUTED_CORRECTION_REASON =
+  "会社の修正内容に同意できないとして差し戻されています。正しい時間に直して再提出してください。";
+
+export async function disputeCorrectedWorkReport(params: { workReportId: string; staffUserId: string }) {
+  const result = await prisma.workReport.updateMany({
+    where: { id: params.workReportId, staffUserId: params.staffUserId, approvalStatus: "NEEDS_CONFIRMATION" },
+    data: { approvalStatus: "REJECTED", rejectionReason: DISPUTED_CORRECTION_REASON },
+  });
+  if (result.count === 0) throw new Error("not_pending_confirmation");
 }

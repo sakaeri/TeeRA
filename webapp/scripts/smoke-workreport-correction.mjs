@@ -70,7 +70,7 @@ try {
   let adminBody = await admin.textContent("body");
   log("管理者に承認待ちの報告が見える", adminBody.includes("修正確認太郎"));
 
-  await admin.getByRole("button", { name: "修正して差し戻す" }).click();
+  await admin.getByRole("button", { name: "時間を直して確認してもらう" }).click();
   await admin.waitForTimeout(200);
   const popup = admin.locator("div.fixed.inset-0.z-40").last();
   const clockInInput = popup.locator("label", { hasText: "出勤時刻" }).locator("input");
@@ -135,6 +135,41 @@ try {
     panelText.includes("7h") && !panelText.includes("10h"),
   );
   log("出勤日数はAPPROVEDの1日のみ", panelText.includes("1日"));
+
+  // (b) ダッシュボードのポップアップからも「時間を直して確認してもらう」ができ、
+  // スタッフが「内容が違う」を選ぶと差し戻し（REJECTED）に戻って再提出できる
+  const shift3Id = psql(
+    `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', '${staffUserId}', 'INHOUSE', '通常業務', current_date - 1, '09:00', '17:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
+  );
+  const report3Id = psql(
+    `with ins as (insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "clockIn", "clockOut", "breakMinutes", "computedMinutes", "submittedAt", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${shift3Id}', '${staffUserId}', 'WORKED', 'PENDING', current_date - 1 + interval '9 hour', current_date - 1 + interval '17 hour', 0, 480, now(), now(), now()) returning id) select id from ins;`,
+  );
+  // 稼働履歴チェック用のPENDING報告（shift2）も一覧に残っているので、対象を確実に選べるよう先に承認しておく
+  psql(`update "WorkReport" set "approvalStatus"='APPROVED' where "shiftId"='${shift2Id}';`);
+  await admin.goto("http://localhost:3000/company");
+  await admin.getByText("業務報告未承認").click();
+  await admin.waitForTimeout(400);
+  await admin.getByRole("button", { name: "確認する" }).click();
+  await admin.waitForTimeout(400);
+  await admin.getByRole("button", { name: "時間を直して確認してもらう" }).click();
+  await admin.waitForTimeout(200);
+  const dashModal = admin.locator("div.fixed.inset-0.z-30").last();
+  await dashModal.locator("label", { hasText: "休憩" }).locator("input").fill("30");
+  await dashModal.getByRole("button", { name: "保存してスタッフに確認してもらう" }).click();
+  await admin.waitForTimeout(600);
+  const report3Status = psql(`select "approvalStatus", "breakMinutes" from "WorkReport" where id='${report3Id}';`);
+  log("ダッシュボードから時間を直すとNEEDS_CONFIRMATION・休憩30分になる", report3Status === "NEEDS_CONFIRMATION|30");
+
+  await staff.goto("http://localhost:3000/staff/timecard");
+  await staff.waitForTimeout(400);
+  await staff.getByRole("button", { name: "内容が違う" }).click();
+  await staff.waitForTimeout(600);
+  const report3After = psql(`select "approvalStatus" from "WorkReport" where id='${report3Id}';`);
+  log("スタッフが「内容が違う」を選ぶとREJECTEDに戻る", report3After === "REJECTED");
+  staffBody = await staff.textContent("body");
+  log("スタッフに差し戻し理由が表示され、再提出できる", staffBody.includes("同意できない") && staffBody.includes("業務報告を提出する"));
 
   console.log(process.exitCode ? "WORK REPORT CORRECTION SMOKE TEST HAD FAILURES" : "WORK REPORT CORRECTION SMOKE TEST PASSED");
 } catch (err) {
