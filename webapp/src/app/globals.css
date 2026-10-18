@@ -101,6 +101,11 @@ body {
     height: auto !important;
     min-height: 0 !important;
   }
+  /* iOSの印刷は、flexレイアウトの中にある改ページ指定を正しく扱えず、
+     最後に白紙のページを足すことがある。印刷時は外枠をブロックにする。 */
+  body {
+    display: block !important;
+  }
   .print-page-break {
     break-before: page;
     page-break-before: always;

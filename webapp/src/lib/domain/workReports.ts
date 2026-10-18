@@ -196,10 +196,14 @@ export async function submitWorkReport(params: {
 // shift-lookup at a time in JS (an unbounded cross-company scan plus an N+1
 // — this used to be the single most expensive part of a dashboard load,
 // worse the more it's called, and it's called from several dashboard views).
+// 出勤を打刻した時点でWorkReport行が既定値PENDINGで作られるため、
+// submittedAtで「実際に提出されたもの」だけに絞る（打刻しただけの行が
+// 未承認の業務報告として本部に並び、承認できてしまうのを防ぐ）。
 export async function listPendingReportsForCompany(companyId: string) {
   return prisma.workReport.findMany({
     where: {
       approvalStatus: "PENDING",
+      submittedAt: { not: null },
       shift: {
         OR: [
           { source: "INHOUSE", companyId },
@@ -289,7 +293,7 @@ export async function approveWorkReport(params: { workReportId: string; approver
     const report = await tx.workReport.findUniqueOrThrow({ where: { id: params.workReportId } });
 
     const result = await tx.workReport.updateMany({
-      where: { id: report.id, approvalStatus: "PENDING" },
+      where: { id: report.id, approvalStatus: "PENDING", submittedAt: { not: null } },
       data: {
         approvalStatus: "APPROVED",
         approverUserId: params.approverUserId,
@@ -306,7 +310,7 @@ export async function approveWorkReport(params: { workReportId: string; approver
 
 export async function rejectWorkReport(params: { workReportId: string; approverUserId: string; reason: string }) {
   const result = await prisma.workReport.updateMany({
-    where: { id: params.workReportId, approvalStatus: "PENDING" },
+    where: { id: params.workReportId, approvalStatus: "PENDING", submittedAt: { not: null } },
     data: {
       approvalStatus: "REJECTED",
       approverUserId: params.approverUserId,

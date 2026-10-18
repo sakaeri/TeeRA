@@ -103,8 +103,8 @@ try {
   const clockInIso = new Date(reportDateMidnightUtc + (8 * 60 - 9 * 60) * 60 * 1000).toISOString();
   const clockOutIso = new Date(reportDateMidnightUtc + (12 * 60 + 3 - 9 * 60) * 60 * 1000).toISOString();
   psql(
-    `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "clockIn", "clockOut", "breakMinutes", "computedMinutes", comment, "approvalStatus", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${shiftId}', '${staffUserId}', 'WORKED', '${clockInIso}', '${clockOutIso}', 0, 243, 'よろしくお願いします', 'PENDING', now());`,
+    `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "clockIn", "clockOut", "breakMinutes", "computedMinutes", comment, "approvalStatus", "submittedAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${shiftId}', '${staffUserId}', 'WORKED', '${clockInIso}', '${clockOutIso}', 0, 243, 'よろしくお願いします', 'PENDING', now(), now());`,
   );
 
   await page.goto("http://localhost:3000/company");
