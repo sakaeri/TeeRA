@@ -232,10 +232,13 @@ const HOWTO_SECTIONS: { id: string; label: string }[] = [
   { id: "howto-recruit", label: "⑨募集を出す" },
   { id: "howto-timecard", label: "⑩タイムカード" },
   { id: "howto-approve", label: "⑪業務報告承認" },
-  { id: "howto-paidleave", label: "⑫有給休暇" },
-  { id: "howto-payroll", label: "⑬給与明細" },
-  { id: "howto-invoice", label: "⑭請求書" },
-  { id: "howto-wallet", label: "⑮Teeウォレット" },
+  { id: "howto-unscheduled", label: "⑫シフト外の勤務" },
+  { id: "howto-paidleave", label: "⑬有給休暇" },
+  { id: "howto-cancelrule", label: "⑭キャンセル規定" },
+  { id: "howto-clientcancel", label: "⑮依頼主の取り消し" },
+  { id: "howto-payroll", label: "⑯給与明細" },
+  { id: "howto-invoice", label: "⑰請求書" },
+  { id: "howto-wallet", label: "⑱Teeウォレット" },
 ];
 
 function HowToSection() {
@@ -448,7 +451,20 @@ function HowToSection() {
         </p>
       </SectionCard>
 
-      <SectionCard id="howto-paidleave" title="⑫有給休暇を管理する">
+      <SectionCard id="howto-unscheduled" title="⑫シフト外の勤務を報告してもらう">
+        <StepGuide
+          image="/howto/unscheduled-report.png"
+          alt="スタッフのシフト外の勤務の報告画面"
+          steps={[
+            "急に呼ばれて出勤した日など、シフトが無いまま働いた日は、スタッフがタイムカード画面の「＋シフト外の勤務を報告する」から報告する",
+            "勤務先（自社、または本人が配属されている依頼主）・勤務日・業務内容・出退勤・休憩を入力して提出する",
+            "提出すると通常の業務報告と同じく承認待ちに届く（一覧とダッシュボードに「シフト外」の印が付く）。承認すれば給与・請求にも反映される",
+          ]}
+          note="同じ時間帯にすでにシフトがある日は、そのシフトのカードから報告するよう案内されます。依頼主の現場の報告は、通常のシフトと同じく依頼主側が承認します（仮アカウントの依頼主は自社が承認）。"
+        />
+      </SectionCard>
+
+      <SectionCard id="howto-paidleave" printPageBreak title="⑬有給休暇を管理する">
         <StepGuide
           image="/howto/paid-leave.png"
           alt="有給休暇の付与画面"
@@ -462,7 +478,33 @@ function HowToSection() {
         />
       </SectionCard>
 
-      <SectionCard id="howto-payroll" printPageBreak title="⑬給与明細を作る">
+      <SectionCard id="howto-cancelrule" title="⑭依頼主ごとのキャンセル規定を決める">
+        <StepGuide
+          image="/howto/cancel-rule.png"
+          alt="キャンセル規定の設定画面"
+          steps={[
+            "「スタッフ名簿」→「依頼主一覧」から依頼主を開き、「単価」タブの業務内容の「キャンセル規定」を押す",
+            "「いつでもキャンセルできる」「締切を過ぎたらキャンセル料がかかる」「締切を過ぎたらキャンセルできない」「キャンセルできない」から選ぶ。締切は「勤務日の◯日前の◯時」で指定する",
+            "「取り消された時のスタッフの扱い」を選ぶ。請負のように自社で振り替える場合は「調整中にする」、派遣のように依頼主が休みにしたらそのまま休みの場合は「そのまま休みにする」",
+          ]}
+          note="依頼主がアプリでオーダーを取り消す時は、この規定に従って取り消せない・キャンセル料の了承が必要などの確認が出ます。キャンセル料はその月の請求書に自動で載ります。何も設定しない場合は「いつでもキャンセルできる・調整中にする」の扱いです。"
+        />
+      </SectionCard>
+
+      <SectionCard id="howto-clientcancel" title="⑮依頼主に取り消された時（調整中・電話で受けた取り消し）">
+        <StepGuide
+          image="/howto/cancel-shift.png"
+          alt="依頼主の現場のシフトを解除する画面"
+          steps={[
+            "依頼主がアプリで取り消すと、規定が「調整中にする」のスタッフは休みにならず「調整中」になる（スタッフには「会社から連絡があります」と表示され、通知は届かない）。カレンダーとダッシュボードの「やること」に出るので、同じ日に別のシフトへ入れて振り替えるか、✕から「休みにする」",
+            "電話などで取り消しを受けた時は、カレンダーでそのシフトの✕を押し、理由で「依頼主都合」を選ぶ。規定からキャンセル料が自動で入る（変更・免除も可）",
+            "スタッフを「調整中にしておく」か「休みにする」かを選んで確定する。キャンセル料はその月の請求書に載る",
+          ]}
+          note="依頼主の現場のシフトを解除する時は、毎回「依頼主都合」か「自社都合」を選ぶまで進めません（キャンセル料の付け忘れを防ぐため）。休みにする時は、スタッフに通知するかどうかを選べます。"
+        />
+      </SectionCard>
+
+      <SectionCard id="howto-payroll" printPageBreak title="⑯給与明細を作る">
         <StepGuide
           image="/howto/payroll-editor.png"
           alt="給与計算画面"
@@ -479,7 +521,7 @@ function HowToSection() {
         </p>
       </SectionCard>
 
-      <SectionCard id="howto-invoice" title="⑭請求書を作る">
+      <SectionCard id="howto-invoice" title="⑰請求書を作る">
         <StepGuide
           image="/howto/invoice-editor.png"
           alt="請求書作成画面"
@@ -494,7 +536,7 @@ function HowToSection() {
         </p>
       </SectionCard>
 
-      <SectionCard id="howto-wallet" title="⑮Teeウォレット（課金の仕組み）">
+      <SectionCard id="howto-wallet" title="⑱Teeウォレット（課金の仕組み）">
         <StepGuide
           image="/howto/wallet.png"
           alt="Teeウォレット画面"
@@ -582,7 +624,7 @@ function HowToSection() {
 }
 
 // printPageBreak: 使い方マニュアルを印刷した時、この項目から新しいページに
-// する（1ページ3項目に固定するため、④⑦⑩⑬と権限表の前で改ページ）。
+// する（1ページ3項目に固定するため、④⑦⑩⑬⑯と権限表の前で改ページ）。
 function SectionCard({
   id,
   title,
