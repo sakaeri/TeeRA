@@ -64,7 +64,7 @@ export function CompanyShell({
   const nav = leaderOnly ? LEADER_ONLY_NAV : NAV;
 
   return (
-    <div className="flex min-h-full flex-1 flex-col">
+    <div className="flex min-h-full flex-1 flex-col print:block">
       <header className="print-hide flex flex-wrap items-center justify-between gap-3 border-b-2 border-accent bg-primary px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] text-primary-foreground sm:gap-6 sm:px-6 sm:pt-3">
         <div className="flex items-center gap-2 sm:gap-4">
           <div className="font-serif-jp text-lg font-bold tracking-wide">TeeRA</div>
@@ -160,7 +160,7 @@ export function CompanyShell({
         一致した要素を対象にするため、先に書かれた方が可視状態のサイド
         バー側になり、既存テストの挙動を変えずに済む。
       */}
-      <div className="order-2 flex flex-1 flex-col sm:flex-row">
+      <div className="order-2 flex flex-1 flex-col sm:flex-row print:block">
         <nav className="print-hide hidden w-52 shrink-0 bg-primary py-6 text-primary-foreground sm:block">
           {nav.map((item) => {
             const active = isNavItemActive(item, pathname);
@@ -178,7 +178,7 @@ export function CompanyShell({
             );
           })}
         </nav>
-        <div className="flex flex-1 flex-col bg-background print:bg-white">{children}</div>
+        <div className="flex flex-1 flex-col bg-background print:block print:bg-white">{children}</div>
       </div>
 
       <nav className="print-hide order-1 flex items-stretch justify-around border-b border-accent/60 bg-primary text-primary-foreground sm:hidden">
