@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { canManage, canManageAny, canManageCompanySettings } from "@/lib/auth/permissions";
+import { canManage, canManageAny, canManageCompanySettings, canManageShifts } from "@/lib/auth/permissions";
+import { getWorkReportDetail } from "@/lib/domain/workReports";
 import { prisma } from "@/lib/prisma";
 import {
   inviteStaff,
@@ -762,4 +763,13 @@ export async function updateClientAddressPhoneAction(
     phoneNumber: input.phoneNumber,
   });
   revalidatePath("/company/roster");
+}
+
+// 稼働履歴・カレンダーから開く業務報告の詳細。シフトを管理できる人なら見られる
+// （給与額などは含まないため、カレンダーと同じcanManageShifts基準）。
+export async function getWorkReportDetailAction(shiftId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const shift = await prisma.shift.findUniqueOrThrow({ where: { id: shiftId }, select: { companyId: true, teamId: true } });
+  if (shift.companyId !== membership.companyId || !canManageShifts(membership, shift.teamId)) throw new Error("forbidden");
+  return getWorkReportDetail(shiftId);
 }
