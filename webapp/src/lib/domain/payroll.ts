@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
 import { resolveRateVersion, resolveContractWageVersion, pickStaffTaskRate } from "@/lib/domain/contracts";
+import { isWeekendOrHoliday } from "@/lib/holidays";
 import { recordPaidLeaveUsageDelta } from "@/lib/domain/paidLeave";
 import { hasRemainingPdfQuota } from "@/lib/domain/plans";
 import type { EmploymentType } from "@/generated/prisma/enums";
@@ -237,7 +238,13 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
       // 有効だった契約・バージョン）にフォールバックする。
       const candidateRows = effectiveTaskName ? taskRateRowsByName.get(effectiveTaskName) : undefined;
       const matchedRow = candidateRows ? pickStaffTaskRate(candidateRows, r.shift.companyRelationshipId) : null;
-      const matchedWage = matchedRow ? resolveRateVersion(matchedRow.versions, r.shift.date) : null;
+      // 土曜・日曜・祝日の勤務は、土日祝の単価が設定されていればそちらを使う
+      // （雇用契約の基本給には土日祝の区別は無い）
+      const matchedWage = matchedRow
+        ? resolveRateVersion(matchedRow.versions, r.shift.date, {
+            weekendOrHoliday: isWeekendOrHoliday(r.shift.date.toISOString().slice(0, 10)),
+          })
+        : null;
       const baseContract = pickContractForDate(contracts, r.shift.date);
       const baseWageVersion = baseContract ? resolveContractWageVersion(baseContract.wageVersions, r.shift.date) : null;
       if (!matchedWage && !baseWageVersion) continue;
@@ -260,6 +267,7 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
       const wage = matchedWage ?? {
         wageType: baseContract!.template.wageType,
         amount: baseWageVersion!.wageAmount,
+        isHolidayRate: false,
       };
       // 月給は日々のシフト単位では自動計上しない（固定給のため、必要なら
       // 手動でカスタム行を追加する）。時給/日給のみ自動生成する。
@@ -275,7 +283,7 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
       const isHourly = wage.wageType === "HOURLY";
       const lineHours = isHourly ? workedHours : 1;
       const rate = wage.amount;
-      const taskLabel = effectiveTaskName ? `（${effectiveTaskName}）` : "";
+      const taskLabel = `${effectiveTaskName ? `（${effectiveTaskName}）` : ""}${wage.isHolidayRate ? "（土日祝）" : ""}`;
       await tx.salarySlipLine.create({
         data: {
           salarySlipId: slip.id,

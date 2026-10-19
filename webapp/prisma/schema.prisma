@@ -502,6 +502,8 @@ model CompanyPlacementRateVersion {
   placementRateId String
   wageType        WageType?
   amount          Int?
+  // 土日祝の単価（null＝平日と同じ）。土曜・日曜・祝日の勤務はこちらで計算する
+  holidayAmount   Int?
   effectiveFrom   DateTime  @db.Date
   createdByUserId String?
   createdAt       DateTime  @default(now())
@@ -541,6 +543,8 @@ model StaffTaskRateVersion {
   staffTaskRateId String
   wageType        WageType?
   amount          Int?
+  // 土日祝の単価（null＝平日と同じ）。土曜・日曜・祝日の勤務はこちらで計算する
+  holidayAmount   Int?
   effectiveFrom   DateTime  @db.Date
   createdByUserId String?
   createdAt       DateTime  @default(now())

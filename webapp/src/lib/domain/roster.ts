@@ -470,10 +470,15 @@ export async function getStaffMonthDetail(params: {
         workplaceLabel: r.companyRelationshipId
           ? (r.companyRelationship?.clientCompany?.name ?? r.companyRelationship?.proxyName ?? "取引先")
           : "勤務先問わず",
-        currentLabel: current ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円` : "単価未設定",
+        currentLabel: current
+          ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円${current.holidayAmount != null ? `／土日祝${current.holidayAmount}円` : ""}`
+          : "単価未設定",
         versions: excludeBaselineVersion(r.versions).map((v) => ({
           id: v.id,
-          label: v.wageType && v.amount != null ? `${WAGE_TYPE_LABEL[v.wageType]}${v.amount}円` : "単価未設定（終了）",
+          label:
+            v.wageType && v.amount != null
+              ? `${WAGE_TYPE_LABEL[v.wageType]}${v.amount}円${v.holidayAmount != null ? `／土日祝${v.holidayAmount}円` : ""}`
+              : "単価未設定（終了）",
           effectiveFrom: v.effectiveFrom.toISOString().slice(0, 10),
         })),
       };

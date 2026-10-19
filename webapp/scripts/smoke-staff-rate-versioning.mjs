@@ -122,7 +122,7 @@ try {
   // amend it to 9000円 effective TODAY
   await panel.getByRole("button", { name: "単価を変更" }).click();
   await panel.locator("select").selectOption("DAILY");
-  await panel.locator('input[type=number]').fill("9000");
+  await panel.locator('input[placeholder="金額"]').fill("9000");
   await panel.locator('input[type=date]').fill(today);
   await panel.getByRole("button", { name: "保存" }).click();
   await admin.waitForTimeout(500);
