@@ -34,6 +34,12 @@ export function canManage(membership: ActiveMembership, teamId?: string | null) 
   return false;
 }
 
+// 設定＞チーム管理で、そのチームのマネージャー/リーダーを招待・変更・解除
+// できるか。本部の管理者/編集者は全チーム、マネージャーは自分のチームだけ。
+export function canManageTeamRoles(membership: ActiveMembership, teamId: string) {
+  return isCompanyScopeAdmin(membership) || isTeamManagerOf(membership, teamId);
+}
+
 // シフト作成・管理専用 — こちらはリーダーも含む（リーダーの権限はシフト
 // 作成のみ、というのが決定事項）。canManageと違いcontracts/payroll/invoices
 // では使わないこと。

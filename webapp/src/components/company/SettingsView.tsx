@@ -97,6 +97,8 @@ type TabKey = (typeof TABS)[number]["key"];
 
 export function SettingsView({
   initialTab,
+  isCompanyAdmin,
+  currentUserId,
   companyName,
   invoiceRegistrationNumber,
   address,
@@ -116,6 +118,9 @@ export function SettingsView({
   workReports,
 }: {
   initialTab: string;
+  // falseならチームマネージャー（会社情報は名称・住所・電話のみ、自チームだけ）
+  isCompanyAdmin: boolean;
+  currentUserId: string;
   companyName: string;
   invoiceRegistrationNumber: string;
   address: string;
@@ -135,13 +140,15 @@ export function SettingsView({
   workReports: WorkReportRow[];
 }) {
   const router = useRouter();
-  const tab: TabKey = TABS.some((t) => t.key === initialTab) ? (initialTab as TabKey) : "basic";
+  // 契約書テンプレートは本部が管理するため、チームマネージャーには出さない
+  const tabs = isCompanyAdmin ? TABS : TABS.filter((t) => t.key !== "contracts");
+  const tab: TabKey = tabs.some((t) => t.key === initialTab) ? (initialTab as TabKey) : "basic";
 
   return (
     <div>
       <h1 className="print-hide mb-6 font-serif-jp text-2xl font-bold">設定</h1>
       <div className="print-hide mb-8 flex gap-1 overflow-x-auto border-b border-border">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.key}
             type="button"
@@ -155,7 +162,14 @@ export function SettingsView({
         ))}
       </div>
 
-      {tab === "basic" ? (
+      {tab === "basic" && !isCompanyAdmin ? (
+        <div className="flex flex-col gap-10">
+          <CompanyInfoReadOnly companyName={companyName} address={address} phoneNumber={phoneNumber} />
+          <TeamsSection teams={teams} staff={staff} teeBalance={teeBalance} managerMode currentUserId={currentUserId} />
+        </div>
+      ) : null}
+
+      {tab === "basic" && isCompanyAdmin ? (
         <div className="flex flex-col gap-10">
           <CompanyInfoSection
             companyName={companyName}
@@ -170,7 +184,7 @@ export function SettingsView({
             accountHolderName={accountHolderName}
           />
           <AdminsSection admins={admins} />
-          <TeamsSection teams={teams} staff={staff} teeBalance={teeBalance} />
+          <TeamsSection teams={teams} staff={staff} teeBalance={teeBalance} currentUserId={currentUserId} />
         </div>
       ) : null}
 
@@ -651,6 +665,30 @@ function SectionCard({
       </div>
       {children}
     </section>
+  );
+}
+
+// チームマネージャー向け：会社名・住所・電話番号だけを表示する（編集不可）
+function CompanyInfoReadOnly({
+  companyName,
+  address,
+  phoneNumber,
+}: {
+  companyName: string;
+  address: string;
+  phoneNumber: string;
+}) {
+  return (
+    <SectionCard title="会社情報">
+      <dl className="grid grid-cols-[90px_1fr] gap-y-2 text-sm">
+        <dt className="text-muted">会社名</dt>
+        <dd>{companyName}</dd>
+        <dt className="text-muted">住所</dt>
+        <dd>{address || "—"}</dd>
+        <dt className="text-muted">電話番号</dt>
+        <dd>{phoneNumber || "—"}</dd>
+      </dl>
+    </SectionCard>
   );
 }
 
@@ -1141,14 +1179,21 @@ function TeamHeaderEditor({
   );
 }
 
+// managerMode＝チームマネージャーが見る自チームだけの画面。チームの作成・
+// 名前/通知先の変更はできず、マネージャー/リーダーの招待・変更・解除だけできる
+// （自分自身の役職は変えられない）。
 function TeamsSection({
   teams,
   staff,
   teeBalance,
+  managerMode = false,
+  currentUserId,
 }: {
   teams: Team[];
   staff: StaffOption[];
   teeBalance: number;
+  managerMode?: boolean;
+  currentUserId: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [inviteFormTeamId, setInviteFormTeamId] = useState<string | null>(null);
@@ -1186,14 +1231,16 @@ function TeamsSection({
         </span>
       }
       headerAction={
-        <button
-          type="button"
-          disabled={!canAffordNextTeam}
-          onClick={() => setShowCreateModal(true)}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-        >
-          ＋チームを作成
-        </button>
+        managerMode ? undefined : (
+          <button
+            type="button"
+            disabled={!canAffordNextTeam}
+            onClick={() => setShowCreateModal(true)}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            ＋チームを作成
+          </button>
+        )
       }
     >
       <div className="flex flex-col gap-6">
@@ -1201,7 +1248,11 @@ function TeamsSection({
           const managers = team.members.filter((m) => m.role === "TEAM_MANAGER" || m.role === "TEAM_LEADER");
           return (
           <div key={team.id} className="rounded-xl border border-border p-4">
-            <TeamHeaderEditor teamId={team.id} name={team.name} notificationEmail={team.notificationEmail} />
+            {managerMode ? (
+              <h3 className="mb-3 font-semibold">{team.name}</h3>
+            ) : (
+              <TeamHeaderEditor teamId={team.id} name={team.name} notificationEmail={team.notificationEmail} />
+            )}
 
             {managers.length > 0 ? (
               <>
@@ -1223,7 +1274,7 @@ function TeamsSection({
                       <td className="py-2">
                         <select
                           defaultValue={m.role}
-                          disabled={pending}
+                          disabled={pending || (managerMode && m.userId === currentUserId)}
                           onChange={(e) =>
                             startTransition(() =>
                               setTeamMemberRoleAction(
@@ -1242,7 +1293,7 @@ function TeamsSection({
                       <td className="py-2">
                         <button
                           type="button"
-                          disabled={pending}
+                          disabled={pending || (managerMode && m.userId === currentUserId)}
                           onClick={() => setRemoveConfirmTarget({ teamId: team.id, userId: m.userId, name: m.name })}
                           className="text-xs text-muted hover:text-red-600 disabled:opacity-60"
                         >
@@ -1263,7 +1314,7 @@ function TeamsSection({
                     <div className="mt-2 flex items-center justify-between gap-2">
                       <select
                         defaultValue={m.role}
-                        disabled={pending}
+                        disabled={pending || (managerMode && m.userId === currentUserId)}
                         onChange={(e) =>
                           startTransition(() =>
                             setTeamMemberRoleAction(
@@ -1280,7 +1331,7 @@ function TeamsSection({
                       </select>
                       <button
                         type="button"
-                        disabled={pending}
+                        disabled={pending || (managerMode && m.userId === currentUserId)}
                         onClick={() => setRemoveConfirmTarget({ teamId: team.id, userId: m.userId, name: m.name })}
                         className="text-xs text-muted hover:text-red-600 disabled:opacity-60"
                       >
@@ -1304,7 +1355,11 @@ function TeamsSection({
                   // マネージャー/リーダーの人だけ除外する）。以前は所属済みなら
                   // 誰でも一律除外していたため、一般メンバーを直接昇格させる
                   // 方法がUI上に存在しなかった。
-                  staffOptions={staff.filter((s) => {
+                  // マネージャーは自チームに所属している人の中からだけ選べる
+                  staffOptions={(managerMode
+                    ? team.members.map((m) => ({ userId: m.userId, name: m.name }))
+                    : staff
+                  ).filter((s) => {
                     const existingRole = team.members.find((m) => m.userId === s.userId)?.role;
                     return existingRole !== "TEAM_MANAGER" && existingRole !== "TEAM_LEADER";
                   })}
