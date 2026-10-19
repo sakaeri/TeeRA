@@ -86,15 +86,25 @@ const OUTCOME_LABEL: Record<string, string> = {
 
 const CANCELLED_TAG_CLASS = "bg-gray-100 text-gray-500 line-through";
 
-// 月表示のスタッフ名タグ。色だけに頼らないよう、状態は名前の後ろの文字でも示す。
-function shiftTag(s: ShiftRow, todayStr: string): { label: string; className: string } {
-  if (s.status === "ON_HOLD") return { label: `${s.staffName}（調整中）`, className: "bg-red-100 text-red-800" };
-  if (s.outcome === "ABSENT") return { label: `${s.staffName}（欠勤）`, className: "bg-orange-100 text-orange-800" };
-  if (s.outcome === "CANCELLED_BY_EMPLOYER") return { label: `${s.staffName}（取消）`, className: CANCELLED_TAG_CLASS };
-  if (s.outcome === "WORKED") return { label: `${s.staffName}✓`, className: "bg-emerald-600 text-white" };
+// スマホの月表示ではマスが狭いので、スタッフ名を空白を除いて5文字で切る
+function shortStaffName(name: string) {
+  return name.replace(/\s+/g, "").slice(0, 5);
+}
+
+// 月表示のスタッフ名タグ。状態は色で示し、欠勤・取消・調整中は名前の後ろにも書く。
+function shiftTag(s: ShiftRow, todayStr: string): { label: string; mobileLabel: string; className: string } {
+  const tag = (suffix: string, className: string) => ({
+    label: `${s.staffName}${suffix}`,
+    mobileLabel: `${shortStaffName(s.staffName)}${suffix}`,
+    className,
+  });
+  if (s.status === "ON_HOLD") return tag("（調整中）", "bg-red-100 text-red-800");
+  if (s.outcome === "ABSENT") return tag("（欠勤）", "bg-orange-100 text-orange-800");
+  if (s.outcome === "CANCELLED_BY_EMPLOYER") return tag("（取消）", CANCELLED_TAG_CLASS);
+  if (s.outcome === "WORKED") return tag("", "bg-emerald-600 text-white");
   // 過去日なのに業務報告が出ていない（報告漏れ）
-  if (s.date < todayStr) return { label: s.staffName, className: "bg-emerald-100 text-emerald-900 ring-1 ring-inset ring-red-400" };
-  return { label: s.staffName, className: "bg-emerald-100 text-emerald-900" };
+  if (s.date < todayStr) return tag("", "bg-emerald-100 text-emerald-900 ring-1 ring-inset ring-red-400");
+  return tag("", "bg-emerald-100 text-emerald-900");
 }
 
 // 依頼主に取り消され、振り替えられずに休みになったシフト（同じ日に同じ
@@ -146,7 +156,8 @@ type ClientRecruitmentRow = {
   filled: number;
 };
 
-type TagEntry = { kind: "solid"; id: string; label: string; className: string };
+// mobileLabelはスマホ幅でだけ使う短い表示（スタッフ名を5文字で切ったもの）
+type TagEntry = { kind: "solid"; id: string; label: string; mobileLabel?: string; className: string };
 
 // シフト作成モーダルの業務内容ステップで使う、依頼主ごとの業務名の登録
 // リスト。単価はここでは扱わない（単価は依頼主詳細で別途手動設定し、給与/
@@ -558,6 +569,7 @@ export function CalendarView({
               kind: "solid" as const,
               id: h.id,
               label: `${h.staffName}（取消）`,
+              mobileLabel: `${shortStaffName(h.staffName)}（取消）`,
               className: CANCELLED_TAG_CLASS,
             })),
           ];
@@ -596,7 +608,14 @@ export function CalendarView({
                     key={tag.id}
                     className={`block w-full overflow-hidden text-clip whitespace-nowrap rounded px-0 py-px text-center text-[8px] font-medium leading-tight tracking-tighter ${tag.className}`}
                   >
-                    {tag.label}
+                    {tag.mobileLabel ? (
+                      <>
+                        <span className="sm:hidden">{tag.mobileLabel}</span>
+                        <span className="hidden sm:inline">{tag.label}</span>
+                      </>
+                    ) : (
+                      tag.label
+                    )}
                   </span>
                 ))}
               </div>

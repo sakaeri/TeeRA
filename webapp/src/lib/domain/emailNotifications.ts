@@ -212,14 +212,28 @@ export async function getApproveWorkReportTokenInfo(token: string) {
 }
 
 // 実際の承認はこちらでのみ行う（確認画面のボタンからのみ呼ばれる）。
-export async function consumeApproveWorkReportToken(token: string) {
-  const record = await prisma.accountActionToken.findUnique({ where: { tokenHash: hashToken(token) } });
+// viewerUserIdは確認画面を開いている人（ログイン中なら）。承認する会社の
+// メンバーであれば承認者として記録する（未ログインならリンクからの承認として
+// 承認者は空のまま）。
+export async function consumeApproveWorkReportToken(token: string, viewerUserId?: string) {
+  const record = await prisma.accountActionToken.findUnique({
+    where: { tokenHash: hashToken(token) },
+    include: { workReport: true },
+  });
   if (!record || record.kind !== "APPROVE_WORK_REPORT" || record.usedAt || record.expiresAt < new Date() || !record.workReportId) {
     throw new Error("invalid_or_expired_token");
   }
 
-  const { approveWorkReport } = await import("@/lib/domain/workReports");
-  await approveWorkReport({ workReportId: record.workReportId });
+  const { approveWorkReport, resolveApproverCompanyId } = await import("@/lib/domain/workReports");
+  let approverUserId: string | undefined;
+  if (viewerUserId && record.workReport) {
+    const approverCompanyId = await resolveApproverCompanyId(record.workReport.shiftId);
+    const membership = await prisma.companyMembership.findFirst({
+      where: { userId: viewerUserId, companyId: approverCompanyId },
+    });
+    if (membership) approverUserId = viewerUserId;
+  }
+  await approveWorkReport({ workReportId: record.workReportId, approverUserId });
   await prisma.accountActionToken.update({ where: { id: record.id }, data: { usedAt: new Date() } });
 }
 

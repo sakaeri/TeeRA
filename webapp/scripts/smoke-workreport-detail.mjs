@@ -89,6 +89,22 @@ try {
   log("「内容が違う」による差戻しはその旨が出る", calText.includes("スタッフが修正内容に同意しませんでした"));
   log("時間を修正した経緯も出る", calText.includes("時間を修正"));
 
+  await dialog.getByRole("button", { name: "閉じる" }).click();
+  await page.waitForTimeout(300);
+
+  // --- 承認者の表示（ログインせずに通知メールのリンクから承認したものは承認者が空） ---
+  psql(`update "WorkReport" set "approvalStatus"='APPROVED', "approverUserId"='${adminId}', "approvedAt"=now(), "rejectionReason"=null, "correctedAt"=null where "shiftId"='${shiftId}';`);
+  await dayModal.getByRole("button", { name: /詳細確認スタッフ/ }).first().click();
+  await dialog.waitFor();
+  await page.waitForTimeout(500);
+  log("承認した人の名前が出る", (await dialog.innerText()).includes("報告詳細管理者"));
+  await dialog.getByRole("button", { name: "閉じる" }).click();
+  psql(`update "WorkReport" set "approverUserId"=null where "shiftId"='${shiftId}';`);
+  await dayModal.getByRole("button", { name: /詳細確認スタッフ/ }).first().click();
+  await dialog.waitFor();
+  await page.waitForTimeout(500);
+  log("承認者が記録されていない承認は「通知メールのリンクから承認」と出る", (await dialog.innerText()).includes("通知メールのリンクから承認"));
+
   console.log(process.exitCode ? "WORKREPORT DETAIL SMOKE TEST HAD FAILURES" : "WORKREPORT DETAIL SMOKE TEST PASSED");
 } finally {
   await browser.close();
