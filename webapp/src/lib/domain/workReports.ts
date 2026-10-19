@@ -508,3 +508,86 @@ export async function submitUnscheduledWorkReport(params: {
     throw error;
   }
 }
+
+function formatJstDateTime(date: Date) {
+  const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  return `${jst.getUTCMonth() + 1}/${jst.getUTCDate()} ${jst.toISOString().slice(11, 16)}`;
+}
+
+function formatJstClock(date: Date) {
+  return new Date(date.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(11, 16);
+}
+
+// スタッフ詳細の稼働履歴・カレンダーの日別詳細から開く、業務報告の詳細。
+// 差し戻した後は承認待ち一覧から消えてしまい、理由を確認する場所が
+// 無かったため、経緯（提出・時間修正・承認/差し戻し）とあわせて返す。
+// 理由・修正の記録は最新の1回分しか保存していない。
+export async function getWorkReportDetail(shiftId: string) {
+  const shift = await prisma.shift.findUniqueOrThrow({
+    where: { id: shiftId },
+    include: {
+      staff: true,
+      companyRelationship: { include: { clientCompany: true } },
+      workReport: { include: { approver: true, corrector: true } },
+    },
+  });
+  const r = shift.workReport;
+  const submitted = Boolean(r && (r.submittedAt || r.approvalStatus !== "PENDING"));
+
+  const timeline: { label: string; at: string | null; by: string | null; note?: string }[] = [];
+  if (r && submitted) {
+    if (r.submittedAt) timeline.push({ label: "提出", at: formatJstDateTime(r.submittedAt), by: shift.staff.name });
+    if (r.correctedAt) {
+      timeline.push({ label: "時間を修正", at: formatJstDateTime(r.correctedAt), by: r.corrector?.name ?? null });
+    }
+    if (r.approvalStatus === "APPROVED" && r.approvedAt) {
+      timeline.push({ label: "承認", at: formatJstDateTime(r.approvedAt), by: r.approver?.name ?? null });
+    }
+    if (r.approvalStatus === "REJECTED") {
+      const disputed = r.rejectionReason === DISPUTED_CORRECTION_REASON;
+      timeline.push(
+        disputed
+          ? {
+              label: "差戻し",
+              at: formatJstDateTime(r.updatedAt),
+              by: shift.staff.name,
+              note: "スタッフが修正内容に同意しませんでした（内容が違う）",
+            }
+          : {
+              label: "差戻し",
+              at: r.approvedAt ? formatJstDateTime(r.approvedAt) : null,
+              by: r.approver?.name ?? null,
+              note: r.rejectionReason ?? undefined,
+            },
+      );
+    }
+  }
+
+  return {
+    date: shift.date.toISOString().slice(0, 10),
+    staffName: shift.staff.name,
+    workplaceLabel:
+      shift.source === "INHOUSE"
+        ? "自社"
+        : (shift.companyRelationship?.clientCompany?.name ?? shift.companyRelationship?.proxyName ?? "依頼主"),
+    taskName: r?.taskName ?? shift.taskName,
+    submitted,
+    outcome: submitted ? r!.outcome : null,
+    approvalStatus: submitted ? r!.approvalStatus : null,
+    clockIn: r?.clockIn ? formatJstClock(r.clockIn) : null,
+    clockOut: r?.clockOut ? formatJstClock(r.clockOut) : null,
+    breakMinutes: r?.breakMinutes ?? 0,
+    computedMinutes: r?.computedMinutes ?? 0,
+    comment: r?.comment ?? null,
+    timeline,
+    // 再提出されて承認待ちに戻った場合も、前回の差し戻し理由は参考に出す
+    previousRejectionReason:
+      submitted && r!.approvalStatus !== "REJECTED" && r!.rejectionReason
+        ? r!.rejectionReason === DISPUTED_CORRECTION_REASON
+          ? "スタッフが修正内容に同意しませんでした（内容が違う）"
+          : r!.rejectionReason
+        : null,
+  };
+}
+
+export type WorkReportDetail = Awaited<ReturnType<typeof getWorkReportDetail>>;

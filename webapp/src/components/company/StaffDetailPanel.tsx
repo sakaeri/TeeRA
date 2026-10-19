@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { WorkReportDetailModal } from "@/components/company/WorkReportDetailModal";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -207,6 +208,7 @@ export function StaffDetailPanel({
   const [month, setMonth] = useState(initToday.month);
   const [tab, setTab] = useState<"history" | "contracts" | "rates" | "note">(initialTab ?? "history");
   const [data, setData] = useState<StaffMonthDetail | null>(null);
+  const [reportDetailShiftId, setReportDetailShiftId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState("");
@@ -754,9 +756,12 @@ export function StaffDetailPanel({
 
                 <ul className="flex flex-col gap-1">
                   {data.days.map((d) => (
-                    <li
-                      key={d.shiftId}
-                      className="grid grid-cols-[62px_1fr_82px_68px] items-center gap-2 border-b border-border/50 py-2 text-xs"
+                    <li key={d.shiftId} className="border-b border-border/50">
+                    {/* タップで業務報告の詳細（差戻し理由・経緯など）を開く */}
+                    <button
+                      type="button"
+                      onClick={() => setReportDetailShiftId(d.shiftId)}
+                      className="grid w-full grid-cols-[62px_1fr_82px_68px] items-center gap-2 py-2 text-left text-xs hover:bg-background"
                     >
                       <span>{d.date.slice(5)}</span>
                       <span className="truncate text-muted" title={`${d.workplaceLabel}${d.taskName ? `（${d.taskName}）` : ""}`}>
@@ -778,6 +783,7 @@ export function StaffDetailPanel({
                       {d.comment ? (
                         <p className="col-span-4 -mt-0.5 break-words text-[11px] text-muted">💬 {d.comment}</p>
                       ) : null}
+                    </button>
                     </li>
                   ))}
                   {data.days.length === 0 ? <p className="py-6 text-center text-sm text-muted">この月のシフトはありません。</p> : null}
@@ -1720,6 +1726,9 @@ export function StaffDetailPanel({
             </button>
           </div>
         </div>
+      ) : null}
+      {reportDetailShiftId ? (
+        <WorkReportDetailModal shiftId={reportDetailShiftId} onClose={() => setReportDetailShiftId(null)} />
       ) : null}
     </div>
   );

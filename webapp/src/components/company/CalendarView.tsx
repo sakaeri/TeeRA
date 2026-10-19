@@ -19,6 +19,7 @@ import {
   dismissShiftRequestAction,
 } from "@/app/company/calendar/actions";
 import { registerPlacementTaskNameAction } from "@/app/company/contracts/actions";
+import { WorkReportDetailModal } from "@/components/company/WorkReportDetailModal";
 
 type ShiftRow = {
   id: string;
@@ -826,6 +827,7 @@ function DayDetailModal({
   const [editingRecruitmentId, setEditingRecruitmentId] = useState<string | null>(null);
   const isPastDay = dateStr < todayJst();
   const leftOffShifts = clientCancelledLeftOff(history, shifts);
+  const [reportDetailShiftId, setReportDetailShiftId] = useState<string | null>(null);
   const remaining = recruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
 
   const date = new Date(dateStr + "T00:00:00Z");
@@ -961,8 +963,15 @@ function DayDetailModal({
                     key={s.id}
                     className="flex flex-col gap-1.5 border-b border-border/50 py-2.5 last:border-b-0 sm:grid sm:grid-cols-[1fr_120px_80px_auto] sm:items-center sm:gap-2"
                   >
-                    <span className="min-w-0">
-                      <span className="block truncate font-semibold">{s.staffName}</span>
+                    {/* タップで業務報告の詳細（差戻し理由・経緯など）を開く */}
+                    <button
+                      type="button"
+                      onClick={() => setReportDetailShiftId(s.id)}
+                      className="min-w-0 rounded-md text-left hover:bg-background"
+                    >
+                      <span className="block truncate font-semibold underline decoration-border underline-offset-2">
+                        {s.staffName}
+                      </span>
                       <span className="flex items-center gap-1.5 text-xs text-muted">
                         <span
                           title={workplaceLabel}
@@ -978,7 +987,7 @@ function DayDetailModal({
                           <span className="shrink-0 font-semibold text-orange-700">キャンセル料 {s.cancelFeeAmount.toLocaleString()}円</span>
                         ) : null}
                       </span>
-                    </span>
+                    </button>
                     <div className="flex items-center justify-between gap-2 sm:contents">
                       <span className={s.outcome && s.outcome !== "WORKED" ? "font-semibold text-orange-700" : "text-muted"}>
                         {/* 報告が出たら報告の内容（実績時間・欠勤・キャンセル）を出す */}
@@ -1035,6 +1044,9 @@ function DayDetailModal({
             </ul>
           )}
           <ShiftHistorySection history={history} />
+          {reportDetailShiftId ? (
+            <WorkReportDetailModal shiftId={reportDetailShiftId} onClose={() => setReportDetailShiftId(null)} />
+          ) : null}
           </>
         ) : tab === "client" ? (
           clientOrders.length === 0 ? (
