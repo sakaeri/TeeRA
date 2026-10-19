@@ -102,7 +102,7 @@ try {
   const logStart = readFileSync(DEV_LOG_PATH, "utf8").length;
   await staff.getByRole("button", { name: "欠勤", exact: true }).click();
   await staff.waitForTimeout(300);
-  await staff.getByRole("button", { name: "報告する" }).click();
+  await staff.getByRole("button", { name: "報告する", exact: true }).click();
   await staff.waitForTimeout(800);
   staffBody = await staff.textContent("body");
   log("確定後、スタッフ側には「欠勤として報告済みです」と表示される", staffBody.includes("欠勤として報告済みです"));
@@ -149,7 +149,7 @@ try {
   await staff.waitForTimeout(300);
   staffBody = await staff.textContent("body");
   log("「勤務先からのキャンセル」タップでも確認ダイアログが出る", staffBody.includes("勤務先からのキャンセルとして報告します"));
-  await staff.getByRole("button", { name: "報告する" }).click();
+  await staff.getByRole("button", { name: "報告する", exact: true }).click();
   await staff.waitForTimeout(800);
 
   const emailLog2 = readServerLogSince(logStart2);

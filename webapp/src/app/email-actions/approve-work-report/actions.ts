@@ -1,10 +1,13 @@
 "use server";
 
 import { consumeApproveWorkReportToken } from "@/lib/domain/emailNotifications";
+import { getCurrentUser } from "@/lib/auth/session";
 
 export async function approveWorkReportByTokenAction(token: string) {
   try {
-    await consumeApproveWorkReportToken(token);
+    // ログイン中なら承認者として記録する（メールのリンクはログイン不要）
+    const viewer = await getCurrentUser();
+    await consumeApproveWorkReportToken(token, viewer?.id);
     return { status: "ok" as const };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";

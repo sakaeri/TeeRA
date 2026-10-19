@@ -3,7 +3,8 @@ import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 // 業務報告の内容がカレンダー・スタッフ名簿に反映されるかを検証する：
-// ・出勤報告 → 月表示「名前✓」、日別詳細は報告した実績時間
+// ・出勤報告 → 月表示は濃い緑（✓は付けない）、日別詳細は報告した実績時間
+// ・スマホ幅では月表示のスタッフ名を5文字で切る
 // ・欠勤報告 → 月表示「（欠勤）」、時間欄は「欠勤」（残った打刻時刻は出さない）
 // ・打刻しただけ（未提出） → 「未承認」ではなく「未提出」
 // ・依頼主取消で休み → 月表示「（取消）」、日別詳細に理由つきで残る
@@ -90,12 +91,24 @@ try {
   await page.waitForTimeout(800);
   const cell = page.locator(`button:has(> span:text-is("${d}"))`).first();
   const cellText = await cell.innerText();
-  log("出勤報告は「名前✓」", cellText.includes("出勤スタッフ✓"));
+  const workedTagClass = await cell.locator("span.rounded", { hasText: "出勤スタッフ" }).first().getAttribute("class");
+  log("出勤報告は濃い緑で、✓は付けない", (workedTagClass ?? "").includes("bg-emerald-600") && !cellText.includes("✓"));
   log("欠勤報告は「（欠勤）」", cellText.includes("欠勤スタッフ（欠勤）"));
   log("当日の勤務先キャンセル報告は「（取消）」", cellText.includes("当日取消スタッフ（取消）"));
   log("依頼主取消で休みになったものも「（取消）」で残る", cellText.includes("取消休みスタッフ（取消）"));
-  const clockedTagClass = await cell.locator("span", { hasText: /^打刻のみスタッフ$/ }).getAttribute("class");
+  const clockedTagClass = await cell.locator("span.rounded", { hasText: "打刻のみスタッフ" }).first().getAttribute("class");
   log("過去日で報告漏れのものは赤枠", (clockedTagClass ?? "").includes("ring-red-400"));
+
+  // --- スマホ幅ではスタッフ名を5文字で切る（状態の文字は残す） ---
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(400);
+  const mobileText = await cell.innerText();
+  log(
+    "スマホ幅では名前を5文字で切る",
+    mobileText.includes("出勤スタッ") && !mobileText.includes("出勤スタッフ") && mobileText.includes("欠勤スタッ（欠勤）"),
+  );
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.waitForTimeout(400);
 
   // --- 日別詳細 ---
   await cell.click();

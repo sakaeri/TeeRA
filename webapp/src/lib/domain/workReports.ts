@@ -541,7 +541,12 @@ export async function getWorkReportDetail(shiftId: string) {
       timeline.push({ label: "時間を修正", at: formatJstDateTime(r.correctedAt), by: r.corrector?.name ?? null });
     }
     if (r.approvalStatus === "APPROVED" && r.approvedAt) {
-      timeline.push({ label: "承認", at: formatJstDateTime(r.approvedAt), by: r.approver?.name ?? null });
+      timeline.push({
+        label: "承認",
+        at: formatJstDateTime(r.approvedAt),
+        // 承認者が記録されていないのは、ログインせずに通知メールのリンクから承認したもの
+        by: r.approver?.name ?? "通知メールのリンクから承認",
+      });
     }
     if (r.approvalStatus === "REJECTED") {
       const disputed = r.rejectionReason === DISPUTED_CORRECTION_REASON;
