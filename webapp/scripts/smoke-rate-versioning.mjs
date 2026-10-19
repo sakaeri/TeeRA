@@ -98,7 +98,7 @@ try {
   // now amend it to 1500円/h, effective from TODAY — should NOT rewrite the
   // old version, just add a new one on top.
   await panel.getByRole("button", { name: "単価を変更" }).click();
-  await panel.locator('input[type=number]').fill("1500");
+  await panel.locator('input[placeholder="金額"]').fill("1500");
   await panel.locator('input[type=date]').fill(today);
   await panel.getByRole("button", { name: "保存" }).click();
   await admin.waitForTimeout(500);

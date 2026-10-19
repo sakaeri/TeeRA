@@ -99,6 +99,7 @@ export async function addPlacementRateVersionAction(input: {
   taskName: string;
   wageType: "HOURLY" | "DAILY" | "MONTHLY";
   amount: number;
+  holidayAmount?: number | null; // 土日祝の単価（null＝平日と同じ）
   effectiveFrom: string; // YYYY-MM-DD
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
@@ -178,6 +179,7 @@ export async function addStaffTaskRateVersionAction(input: {
   companyRelationshipId?: string;
   wageType: "HOURLY" | "DAILY" | "MONTHLY";
   amount: number;
+  holidayAmount?: number | null; // 土日祝の単価（null＝平日と同じ）
   effectiveFrom: string; // YYYY-MM-DD
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
@@ -203,7 +205,9 @@ export async function addStaffTaskRateVersionAction(input: {
   await createStaffNotice({
     companyId: membership.companyId,
     staffUserId: input.staffUserId,
-    message: `「${input.taskName}」（${workplaceLabel}）の単価が${WAGE_TYPE_LABEL[input.wageType]}${input.amount}円に変更されました（${input.effectiveFrom}から）`,
+    message: `「${input.taskName}」（${workplaceLabel}）の単価が${WAGE_TYPE_LABEL[input.wageType]}${input.amount}円${
+      input.holidayAmount ? `（土日祝${input.holidayAmount}円）` : ""
+    }に変更されました（${input.effectiveFrom}から）`,
   });
 
   revalidatePath("/company/settings");

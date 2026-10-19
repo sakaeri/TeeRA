@@ -480,16 +480,27 @@ export async function getClientMonthDetail(params: {
       return {
         id: r.id,
         taskName: r.taskName,
-        currentLabel: current ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円` : "単価未設定",
+        currentLabel: current
+          ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円${current.holidayAmount != null ? `／土日祝${current.holidayAmount}円` : ""}`
+          : "単価未設定",
         cancelPolicy: r.cancelPolicy,
         cancelDeadlineDaysBefore: r.cancelDeadlineDaysBefore,
         cancelDeadlineTime: r.cancelDeadlineTime,
         cancelFeeAmount: r.cancelFeeAmount,
         cancelStaffHandling: r.cancelStaffHandling,
+        // 規定をまだ一度も設定していない（既定値のまま）なら未設定として出す
+        cancelRuleUnset:
+          r.cancelPolicy === "FREE" &&
+          r.cancelDeadlineDaysBefore == null &&
+          r.cancelFeeAmount == null &&
+          r.cancelStaffHandling === "HOLD",
         cancelLabel: describeCancelRule(r),
         versions: excludeBaselineVersion(r.versions).map((v) => ({
           id: v.id,
-          label: v.wageType && v.amount != null ? `${WAGE_TYPE_LABEL[v.wageType]}${v.amount}円` : "単価未設定（終了）",
+          label:
+            v.wageType && v.amount != null
+              ? `${WAGE_TYPE_LABEL[v.wageType]}${v.amount}円${v.holidayAmount != null ? `／土日祝${v.holidayAmount}円` : ""}`
+              : "単価未設定（終了）",
           effectiveFrom: v.effectiveFrom.toISOString().slice(0, 10),
         })),
       };

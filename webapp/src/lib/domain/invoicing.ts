@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
 import { resolveRateVersion } from "@/lib/domain/contracts";
+import { isWeekendOrHoliday } from "@/lib/holidays";
 import { hasRemainingPdfQuota } from "@/lib/domain/plans";
 
 function monthRange(periodLabel: string) {
@@ -123,7 +124,10 @@ async function regenerateLines(invoiceId: string) {
       // （単価は上書きせず履歴で積まれるため、後日単価を直しても過去の
       // 確定済みシフトの計算結果は変わらない）。
       const versions = effectiveTaskName ? ratesByTask.get(effectiveTaskName) : undefined;
-      const taskRate = versions ? resolveRateVersion(versions, s.date) : null;
+      // 土曜・日曜・祝日の勤務は、土日祝の単価が設定されていればそちらを使う
+      const taskRate = versions
+        ? resolveRateVersion(versions, s.date, { weekendOrHoliday: isWeekendOrHoliday(s.date.toISOString().slice(0, 10)) })
+        : null;
       if (!taskRate || taskRate.wageType === "MONTHLY") {
         unresolved.push({ shiftId: s.id, date: s.date.toISOString().slice(0, 10), staffName: s.staff.name, taskName: effectiveTaskName });
         continue;
@@ -131,7 +135,7 @@ async function regenerateLines(invoiceId: string) {
       const isHourly = taskRate.wageType === "HOURLY";
       const lineHours = isHourly ? workedHours : 1;
       const rate = taskRate.amount;
-      const taskLabel = effectiveTaskName ? `（${effectiveTaskName}）` : "";
+      const taskLabel = `${effectiveTaskName ? `（${effectiveTaskName}）` : ""}${taskRate.isHolidayRate ? "（土日祝）" : ""}`;
 
       validShiftIds.add(s.id);
       if (manuallyEditedShiftIds.has(s.id)) continue;

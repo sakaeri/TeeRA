@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { submitShiftRequestAction } from "@/app/staff/actions";
 import { todayJst, nowJstHHMM } from "@/lib/date";
+import { holidayName } from "@/lib/holidays";
 
 type ShiftRow = {
   id: string;
@@ -35,8 +36,9 @@ type Company = { id: string; name: string };
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
-function weekdayColor(dow: number) {
-  if (dow === 0) return "text-red-600";
+// dateStrを渡すと祝日も日曜と同じ赤にする
+function weekdayColor(dow: number, dateStr?: string) {
+  if (dow === 0 || (dateStr && holidayName(dateStr))) return "text-red-600";
   if (dow === 6) return "text-blue-600";
   return "text-foreground";
 }
@@ -268,7 +270,12 @@ export function StaffCalendarView({
                 isToday ? "bg-accent/25" : "bg-white/40"
               }`}
             >
-              <span className={`block text-center text-[11px] font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
+              <span
+                title={holidayName(dateStr) ?? undefined}
+                className={`block text-center text-[11px] font-semibold ${weekdayColor(dow, dateStr)}`}
+              >
+                {c.day}
+              </span>
               {hasOverflow ? (
                 <span
                   title={`他${totalCount - CONFIRMED_SLOT_BUDGET}件`}
@@ -361,7 +368,8 @@ export function StaffCalendarView({
 function formatDateJa(dateStr: string) {
   const [, m, d] = dateStr.split("-").map(Number);
   const dow = new Date(`${dateStr}T00:00:00Z`).getUTCDay();
-  return `${m}月${d}日（${WEEKDAYS[dow]}）`;
+  const holiday = holidayName(dateStr);
+  return `${m}月${d}日（${WEEKDAYS[dow]}${holiday ? `・${holiday}` : ""}）`;
 }
 
 // 日付をタップすると、予定の有無に関わらず詳細パネルが開く。予定が無い
@@ -678,7 +686,7 @@ function RequestWizard({
                     className={`rounded-lg py-1.5 text-xs ${
                       selected
                         ? "bg-primary font-semibold text-primary-foreground"
-                        : `hover:bg-background ${weekdayColor(dow)}`
+                        : `hover:bg-background ${weekdayColor(dow, dateStr)}`
                     }`}
                   >
                     {c.day}

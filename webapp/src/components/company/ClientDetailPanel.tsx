@@ -34,6 +34,7 @@ type PlacementRate = {
   id: string;
   taskName: string;
   currentLabel: string;
+  cancelRuleUnset: boolean;
   versions: { id: string; label: string; effectiveFrom: string }[];
   cancelPolicy: CancelPolicy;
   cancelDeadlineDaysBefore: number | null;
@@ -1116,6 +1117,7 @@ function PlacementRatesTab({
   const [amendingId, setAmendingId] = useState<string | null>(null);
   const [amendWageType, setAmendWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
   const [amendAmount, setAmendAmount] = useState("");
+  const [amendHolidayAmount, setAmendHolidayAmount] = useState("");
   const [amendEffectiveFrom, setAmendEffectiveFrom] = useState(todayJst());
   const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null);
   const [cancelRuleRate, setCancelRuleRate] = useState<PlacementRate | null>(null);
@@ -1124,6 +1126,7 @@ function PlacementRatesTab({
   const [newTaskName, setNewTaskName] = useState("");
   const [newWageType, setNewWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
   const [newAmount, setNewAmount] = useState("");
+  const [newHolidayAmount, setNewHolidayAmount] = useState("");
   const [newEffectiveFrom, setNewEffectiveFrom] = useState(todayJst());
 
   function openNewForm() {
@@ -1138,6 +1141,7 @@ function PlacementRatesTab({
     setAmendingId(r.id);
     setAmendWageType("HOURLY");
     setAmendAmount("");
+    setAmendHolidayAmount("");
     setAmendEffectiveFrom(todayJst());
   }
 
@@ -1149,6 +1153,7 @@ function PlacementRatesTab({
         taskName: r.taskName,
         wageType: amendWageType,
         amount: Number(amendAmount),
+        holidayAmount: Number(amendHolidayAmount) > 0 ? Number(amendHolidayAmount) : null,
         effectiveFrom: amendEffectiveFrom,
       });
       setAmendingId(null);
@@ -1176,11 +1181,13 @@ function PlacementRatesTab({
         taskName: newTaskName.trim(),
         wageType: newWageType,
         amount: Number(newAmount),
+        holidayAmount: Number(newHolidayAmount) > 0 ? Number(newHolidayAmount) : null,
         effectiveFrom: newEffectiveFrom,
       });
       setShowNewForm(false);
       setNewTaskName("");
       setNewAmount("");
+      setNewHolidayAmount("");
       setNewEffectiveFrom(todayJst());
       await onChanged();
     });
@@ -1218,10 +1225,10 @@ function PlacementRatesTab({
                     {expandedId === r.id ? "▲ 履歴を閉じる" : `▼ 履歴（${r.versions.length}件）`}
                   </button>
                 ) : null}
-                <button type="button" onClick={() => startAmend(r)} className="text-primary hover:underline">
+                <button type="button" onClick={() => startAmend(r)} className="rounded-md border border-primary/40 px-2.5 py-1 font-semibold text-primary hover:bg-primary/5">
                   単価を変更
                 </button>
-                <button type="button" onClick={() => setCancelRuleRate(r)} className="text-primary hover:underline">
+                <button type="button" onClick={() => setCancelRuleRate(r)} className="rounded-md border border-primary/40 px-2.5 py-1 font-semibold text-primary hover:bg-primary/5">
                   キャンセル規定
                 </button>
                 <button
@@ -1234,7 +1241,11 @@ function PlacementRatesTab({
                 </button>
               </div>
 
-              <p className="mt-1 text-xs text-muted">キャンセル規定：{r.cancelLabel}</p>
+              {r.cancelRuleUnset ? (
+                <p className="mt-1 text-xs font-semibold text-amber-700">キャンセル規定：未設定（キャンセル自由として扱います）</p>
+              ) : (
+                <p className="mt-1 text-xs text-muted">キャンセル規定：{r.cancelLabel}</p>
+              )}
               {deleteError?.id === r.id ? <p className="mt-1 text-xs text-red-600">{deleteError.message}</p> : null}
 
               {expandedId === r.id ? (
@@ -1299,6 +1310,16 @@ function PlacementRatesTab({
                 onChange={(e) => setAmendAmount(e.target.value)}
                 placeholder="金額"
                 className="w-24 rounded-lg border border-border px-2 py-2 text-sm"
+              />
+              {/* 土日祝は別の金額にできる（空欄なら平日と同じ） */}
+              <input
+                type="number"
+                min="1"
+                value={amendHolidayAmount}
+                onChange={(e) => setAmendHolidayAmount(e.target.value)}
+                placeholder="土日祝（任意）"
+                aria-label="土日祝の金額"
+                className="w-28 rounded-lg border border-border px-2 py-2 text-sm"
               />
               <label className="flex flex-col gap-0.5 text-xs">
                 <span className="text-muted">開始日</span>
@@ -1406,6 +1427,16 @@ function PlacementRatesTab({
                   onChange={(e) => setNewAmount(e.target.value)}
                   placeholder="金額"
                   className="w-24 rounded-lg border border-border px-2 py-2 text-sm"
+                />
+                {/* 土日祝は別の金額にできる（空欄なら平日と同じ） */}
+                <input
+                  type="number"
+                  min="1"
+                  value={newHolidayAmount}
+                  onChange={(e) => setNewHolidayAmount(e.target.value)}
+                  placeholder="土日祝（任意）"
+                  aria-label="土日祝の金額"
+                  className="w-28 rounded-lg border border-border px-2 py-2 text-sm"
                 />
                 <label className="flex flex-col gap-0.5 text-xs">
                   <span className="text-muted">開始日</span>

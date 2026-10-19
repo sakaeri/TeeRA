@@ -4,6 +4,7 @@ import { useMemo, useRef, useState, useTransition, type TouchEvent } from "react
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { todayJst } from "@/lib/date";
+import { holidayName } from "@/lib/holidays";
 import { useClickOutside } from "@/lib/useClickOutside";
 import {
   createAssignedShiftAction,
@@ -158,8 +159,9 @@ type TaskNameRow = {
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
-function weekdayColor(dow: number) {
-  if (dow === 0) return "text-red-600";
+// dateStrを渡すと祝日も日曜と同じ赤にする
+function weekdayColor(dow: number, dateStr?: string) {
+  if (dow === 0 || (dateStr && holidayName(dateStr))) return "text-red-600";
   if (dow === 6) return "text-blue-600";
   return "text-foreground";
 }
@@ -576,7 +578,12 @@ export function CalendarView({
                 isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "hover:bg-background"
               }`}
             >
-              <span className={`block text-center text-[11px] font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
+              <span
+                title={holidayName(c.dateStr) ?? undefined}
+                className={`block text-center text-[11px] font-semibold ${weekdayColor(dow, c.dateStr)}`}
+              >
+                {c.day}
+              </span>
               {hasOverflow ? (
                 <span
                   title={`他${staffTags.length - confirmedSlotBudget}件`}
@@ -832,7 +839,8 @@ function DayDetailModal({
 
   const date = new Date(dateStr + "T00:00:00Z");
   const weekdayLabel = WEEKDAYS[date.getUTCDay()];
-  const dateLabel = `${date.getUTCMonth() + 1}月${date.getUTCDate()}日（${weekdayLabel}）`;
+  const holiday = holidayName(dateStr);
+  const dateLabel = `${date.getUTCMonth() + 1}月${date.getUTCDate()}日（${weekdayLabel}${holiday ? `・${holiday}` : ""}）`;
 
   function shift(days: number) {
     const d = new Date(dateStr + "T00:00:00Z");

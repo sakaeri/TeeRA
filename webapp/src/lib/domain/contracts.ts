@@ -409,10 +409,15 @@ export async function listStaffContracts(staffUserId: string, companyId: string)
 // （編集＝新バージョン追加、終了＝wageType/amountがnullのバージョン追加）。
 // この関数はversions配列（effectiveFrom昇順）から、指定日時点で有効な
 // バージョンを1つ選ぶ純粋関数 — invoicing.ts / payroll.ts の単価解決で使う。
-export function resolveRateVersion<T extends { wageType: WageType | null; amount: number | null; effectiveFrom: Date }>(
+// weekendOrHolidayを渡すと、土日祝の単価（holidayAmount）が設定されていれば
+// そちらを返す（isHolidayRateで土日祝単価を使ったかどうかが分かる）。
+export function resolveRateVersion<
+  T extends { wageType: WageType | null; amount: number | null; holidayAmount?: number | null; effectiveFrom: Date },
+>(
   versions: T[],
   asOf: Date,
-): { wageType: WageType; amount: number } | null {
+  opts: { weekendOrHoliday?: boolean } = {},
+): { wageType: WageType; amount: number; holidayAmount: number | null; isHolidayRate: boolean } | null {
   let active: T | null = null;
   for (const v of versions) {
     if (v.effectiveFrom <= asOf && (!active || v.effectiveFrom >= active.effectiveFrom)) {
@@ -420,7 +425,14 @@ export function resolveRateVersion<T extends { wageType: WageType | null; amount
     }
   }
   if (!active || active.wageType === null || active.amount === null) return null;
-  return { wageType: active.wageType, amount: active.amount };
+  const holidayAmount = active.holidayAmount ?? null;
+  const isHolidayRate = Boolean(opts.weekendOrHoliday && holidayAmount != null);
+  return {
+    wageType: active.wageType,
+    amount: isHolidayRate ? holidayAmount! : active.amount,
+    holidayAmount,
+    isHolidayRate,
+  };
 }
 
 // 賃金単価/請求単価テーブル — keyed by 配属先（自社=null または取引先）＋業務内容。
@@ -497,10 +509,12 @@ export async function addPlacementRateVersion(params: {
   taskName: string;
   wageType: WageType;
   amount: number;
+  holidayAmount?: number | null;
   effectiveFrom: Date;
   createdByUserId: string;
 }) {
   assertPositiveAmount(params.amount);
+  if (params.holidayAmount != null) assertPositiveAmount(params.holidayAmount);
   const rate = await registerPlacementTaskName({
     companyId: params.companyId,
     companyRelationshipId: params.companyRelationshipId,
@@ -511,6 +525,7 @@ export async function addPlacementRateVersion(params: {
       placementRateId: rate.id,
       wageType: params.wageType,
       amount: params.amount,
+      holidayAmount: params.holidayAmount ?? null,
       effectiveFrom: params.effectiveFrom,
       createdByUserId: params.createdByUserId,
     },
@@ -636,10 +651,12 @@ export async function addStaffTaskRateVersion(params: {
   companyRelationshipId?: string;
   wageType: WageType;
   amount: number;
+  holidayAmount?: number | null;
   effectiveFrom: Date;
   createdByUserId: string;
 }) {
   assertPositiveAmount(params.amount);
+  if (params.holidayAmount != null) assertPositiveAmount(params.holidayAmount);
   const rate = await registerStaffTaskName({
     companyId: params.companyId,
     staffUserId: params.staffUserId,
@@ -651,6 +668,7 @@ export async function addStaffTaskRateVersion(params: {
       staffTaskRateId: rate.id,
       wageType: params.wageType,
       amount: params.amount,
+      holidayAmount: params.holidayAmount ?? null,
       effectiveFrom: params.effectiveFrom,
       createdByUserId: params.createdByUserId,
     },
