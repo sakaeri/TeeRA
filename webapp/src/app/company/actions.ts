@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { canManage, canManageAny, canManageCompanySettings, canManageShifts } from "@/lib/auth/permissions";
+import { canManage, canManageAny, canManageCompanySettings, canManageShifts, canManageTeamRoles } from "@/lib/auth/permissions";
 import { getWorkReportDetail } from "@/lib/domain/workReports";
 import { prisma } from "@/lib/prisma";
 import {
@@ -271,9 +271,8 @@ export async function setTeamMemberRoleAction(
   userId: string,
   role: "TEAM_MANAGER" | "TEAM_LEADER" | "TEAM_MEMBER",
 ) {
-  const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
-  await assertTeamOwnedByCompany(teamId, membership.companyId);
+  const { userId: actorUserId, membership } = await requireCompanyAdminOrEditor();
+  await assertCanManageTeamRoles(membership, teamId, actorUserId, userId);
 
   await setTeamMemberRole({ teamId, userId, role });
   revalidatePath("/company/settings");
@@ -283,7 +282,7 @@ export async function setTeamMemberRoleAction(
 // 指定した役職（マネージャー/リーダー）を持つ招待URLを発行する。
 export async function inviteTeamManagerAction(teamId: string, teamRole: "TEAM_MANAGER" | "TEAM_LEADER") {
   const { userId, membership } = await requireCompanyAdminOrEditor();
-  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  if (!canManageTeamRoles(membership, teamId)) throw new Error("forbidden");
   await assertTeamOwnedByCompany(teamId, membership.companyId);
 
   const invite = await inviteTeamManager({
@@ -304,9 +303,8 @@ export async function promoteExistingStaffToTeamRoleAction(
   targetUserId: string,
   teamRole: "TEAM_MANAGER" | "TEAM_LEADER",
 ) {
-  const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
-  await assertTeamOwnedByCompany(teamId, membership.companyId);
+  const { userId: actorUserId, membership } = await requireCompanyAdminOrEditor();
+  await assertCanManageTeamRoles(membership, teamId, actorUserId, targetUserId);
 
   await setTeamMemberRole({ teamId, userId: targetUserId, role: teamRole });
   revalidatePath("/company/settings");
@@ -547,6 +545,24 @@ async function assertMembershipOwnedByCompany(membershipId: string, companyId: s
 async function assertTeamOwnedByCompany(teamId: string, companyId: string) {
   const team = await prisma.team.findFirstOrThrow({ where: { id: teamId, companyId } });
   return team;
+}
+
+// チームのマネージャー/リーダーの変更。本部は全チーム・誰でも。マネージャーは
+// 自分のチームの、既にそのチームに所属している人だけ（他チームの人を引き込め
+// ないように）。自分自身の役職は変えられない（自分で権限を外して戻せなくなる
+// のを防ぐ）。
+async function assertCanManageTeamRoles(
+  membership: Awaited<ReturnType<typeof requireCompanyAdminOrEditor>>["membership"],
+  teamId: string,
+  actorUserId: string,
+  targetUserId: string,
+) {
+  if (!canManageTeamRoles(membership, teamId)) throw new Error("forbidden");
+  await assertTeamOwnedByCompany(teamId, membership.companyId);
+  if (canManageCompanySettings(membership)) return;
+  if (targetUserId === actorUserId) throw new Error("forbidden");
+  const targetInTeam = await prisma.teamMembership.findFirst({ where: { teamId, userId: targetUserId } });
+  if (!targetInTeam) throw new Error("forbidden");
 }
 
 export async function addStaffNoteAction(membershipId: string, content: string) {
