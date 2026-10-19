@@ -336,6 +336,7 @@ export async function listShiftsForMonth(params: {
       staff: true,
       workReport: true,
       companyRelationship: { include: { clientCompany: true } },
+      cancellation: true,
     },
     orderBy: [{ date: "asc" }, { startTime: "asc" }],
   });

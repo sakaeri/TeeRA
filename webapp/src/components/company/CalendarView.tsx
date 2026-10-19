@@ -36,7 +36,10 @@ type ShiftRow = {
   createdVia?: string;
   publicRecruitmentId?: string | null;
   originLabel?: string; // source=INHOUSEのみ意味を持つ: 自社／配属：◯◯／公開募集
-  approvalStatus: string | null;
+  approvalStatus: string | null; // 業務報告を提出済みの時だけ（未提出はnull）
+  outcome?: string | null; // 提出済みの報告の種類: WORKED / ABSENT / CANCELLED_BY_EMPLOYER
+  reportedTimeLabel?: string | null; // 出勤報告の実績時間（あれば予定時間の代わりに出す）
+  cancelFeeAmount?: number; // 依頼主の取り消し（調整中・勤務先キャンセル）で記録したキャンセル料
   taskName?: string | null;
   status?: string; // "CONFIRMED" | "ON_HOLD"（依頼主の取り消しで調整中）
 };
@@ -44,9 +47,11 @@ type ShiftRow = {
 type ShiftHistoryRow = {
   id: string;
   date: string;
+  staffUserId: string;
   staffName: string;
   publicRecruitmentId: string | null;
   status: string; // "SUPERSEDED" | "CANCELLED" | "ON_HOLD"
+  clientCancelled: boolean; // 依頼主の取り消し（アプリ・電話等）によるもの
   workplaceLabel: string; // 依頼主名 or 自社
   taskName: string | null;
   timeLabel: string | null; // 「別の枠に変更」の時だけ（何が変わったか分かるように）
@@ -71,6 +76,31 @@ const APPROVAL_LABEL: Record<string, string> = {
   REJECTED: "差戻し",
   NEEDS_CONFIRMATION: "要確認",
 };
+
+const OUTCOME_LABEL: Record<string, string> = {
+  ABSENT: "欠勤",
+  CANCELLED_BY_EMPLOYER: "勤務先キャンセル",
+};
+
+const CANCELLED_TAG_CLASS = "bg-gray-100 text-gray-500 line-through";
+
+// 月表示のスタッフ名タグ。色だけに頼らないよう、状態は名前の後ろの文字でも示す。
+function shiftTag(s: ShiftRow, todayStr: string): { label: string; className: string } {
+  if (s.status === "ON_HOLD") return { label: `${s.staffName}（調整中）`, className: "bg-red-100 text-red-800" };
+  if (s.outcome === "ABSENT") return { label: `${s.staffName}（欠勤）`, className: "bg-orange-100 text-orange-800" };
+  if (s.outcome === "CANCELLED_BY_EMPLOYER") return { label: `${s.staffName}（取消）`, className: CANCELLED_TAG_CLASS };
+  if (s.outcome === "WORKED") return { label: `${s.staffName}✓`, className: "bg-emerald-600 text-white" };
+  // 過去日なのに業務報告が出ていない（報告漏れ）
+  if (s.date < todayStr) return { label: s.staffName, className: "bg-emerald-100 text-emerald-900 ring-1 ring-inset ring-red-400" };
+  return { label: s.staffName, className: "bg-emerald-100 text-emerald-900" };
+}
+
+// 依頼主に取り消され、振り替えられずに休みになったシフト（同じ日に同じ
+// スタッフの別のシフトがあれば振り替え済みなので出さない）。
+function clientCancelledLeftOff(history: ShiftHistoryRow[], activeShifts: ShiftRow[]) {
+  const activeStaff = new Set(activeShifts.map((s) => s.staffUserId));
+  return history.filter((h) => h.status === "CANCELLED" && h.clientCancelled && !activeStaff.has(h.staffUserId));
+}
 
 type StaffOption = { id: string; name: string; viaAgencyRelationshipName?: string | null };
 type AgencyStaffOption = { staffUserId: string; staffName: string; companyRelationshipId: string; agencyName: string };
@@ -489,6 +519,10 @@ export function CalendarView({
           // という点で同じなので、緑のスタッフ名タグとして同じ枠内に表示する
           // （依頼主で絞り込みたい時はカレンダー上部の絞り込みを使う）。
           const confirmedShifts = dayShifts.filter((s) => s.source === "INHOUSE" || s.source === "CLIENT");
+          const leftOffShifts = clientCancelledLeftOff(
+            shiftHistory.filter((h) => h.date === c.dateStr),
+            dayShifts,
+          );
           const dayRecruitments = recruitments.filter((r) => r.date === c.dateStr && r.status === "PUBLISHED");
           const recruitingCount = dayRecruitments.filter((r) => r.filled < r.maxEntries).length;
           // オーダー＝依頼主が出した募集（本アカウントで繋がっている依頼主が
@@ -514,16 +548,20 @@ export function CalendarView({
           // だけに出す。
           const reservedRows = (recruitTag ? 1 : 0) + (orderTag ? 1 : 0);
           const confirmedSlotBudget = 5 - reservedRows;
-          const visibleConfirmed = confirmedShifts.slice(0, confirmedSlotBudget);
-          const hasOverflow = confirmedShifts.length > confirmedSlotBudget;
+          const staffTags: TagEntry[] = [
+            ...confirmedShifts.map((s) => ({ kind: "solid" as const, id: s.id, ...shiftTag(s, todayStr) })),
+            // 依頼主取消で休みになったものは、稼働中のシフトの後ろに並べる
+            ...leftOffShifts.map((h) => ({
+              kind: "solid" as const,
+              id: h.id,
+              label: `${h.staffName}（取消）`,
+              className: CANCELLED_TAG_CLASS,
+            })),
+          ];
+          const hasOverflow = staffTags.length > confirmedSlotBudget;
 
           const tagEntries: TagEntry[] = [
-            ...visibleConfirmed.map((s) => ({
-              kind: "solid" as const,
-              id: s.id,
-              label: s.status === "ON_HOLD" ? `${s.staffName}（調整中）` : s.staffName,
-              className: s.status === "ON_HOLD" ? "bg-red-100 text-red-800" : "bg-emerald-100 text-emerald-900",
-            })),
+            ...staffTags.slice(0, confirmedSlotBudget),
             ...(recruitTag ? [recruitTag] : []),
             ...(orderTag ? [orderTag] : []),
           ];
@@ -540,7 +578,7 @@ export function CalendarView({
               <span className={`block text-center text-[11px] font-semibold ${weekdayColor(dow)}`}>{c.day}</span>
               {hasOverflow ? (
                 <span
-                  title={`他${confirmedShifts.length - confirmedSlotBudget}件`}
+                  title={`他${staffTags.length - confirmedSlotBudget}件`}
                   className="absolute right-0 top-0 h-0 w-0 border-r-[14px] border-b-[14px] border-r-accent border-b-transparent"
                 />
               ) : null}
@@ -787,6 +825,7 @@ function DayDetailModal({
   const [tab, setTab] = useState<"shifts" | "client" | "recruit">("shifts");
   const [editingRecruitmentId, setEditingRecruitmentId] = useState<string | null>(null);
   const isPastDay = dateStr < todayJst();
+  const leftOffShifts = clientCancelledLeftOff(history, shifts);
   const remaining = recruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
 
   const date = new Date(dateStr + "T00:00:00Z");
@@ -911,7 +950,7 @@ function DayDetailModal({
               ))}
             </ul>
           ) : null}
-          {shifts.length === 0 ? (
+          {shifts.length === 0 && leftOffShifts.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted">この日のシフトはありません。</p>
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
@@ -935,11 +974,23 @@ function DayDetailModal({
                         </span>
                         {s.taskName ? <span className="truncate">{s.taskName}</span> : null}
                         {s.note ? <span className="truncate">（{s.note}）</span> : null}
+                        {s.cancelFeeAmount ? (
+                          <span className="shrink-0 font-semibold text-orange-700">キャンセル料 {s.cancelFeeAmount.toLocaleString()}円</span>
+                        ) : null}
                       </span>
                     </span>
                     <div className="flex items-center justify-between gap-2 sm:contents">
-                      <span className="text-muted">
-                        {s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
+                      <span className={s.outcome && s.outcome !== "WORKED" ? "font-semibold text-orange-700" : "text-muted"}>
+                        {/* 報告が出たら報告の内容（実績時間・欠勤・キャンセル）を出す */}
+                        {s.outcome && s.outcome !== "WORKED"
+                          ? OUTCOME_LABEL[s.outcome]
+                          : s.reportedTimeLabel
+                            ? s.reportedTimeLabel
+                            : s.isAllDay
+                              ? "終日"
+                              : s.isUndecided
+                                ? "未定"
+                                : `${s.startTime}〜${s.endTime}`}
                       </span>
                       <div className="flex shrink-0 items-center gap-2 sm:contents">
                       {s.status === "ON_HOLD" ? (
@@ -950,6 +1001,8 @@ function DayDetailModal({
                         <span className={`w-fit rounded-md px-2 py-1 text-xs font-semibold ${APPROVAL_PILL[s.approvalStatus] ?? "bg-gray-100 text-gray-700"}`}>
                           {APPROVAL_LABEL[s.approvalStatus] ?? s.approvalStatus}
                         </span>
+                      ) : isPastDay ? (
+                        <span className="w-fit rounded-md bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">未提出</span>
                       ) : (
                         <span className="w-fit rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
                       )}
@@ -959,6 +1012,26 @@ function DayDetailModal({
                   </li>
                 );
               })}
+              {/* 依頼主に取り消され、振り替えられずに休みになったシフト */}
+              {leftOffShifts.map((h) => (
+                <li
+                  key={h.id}
+                  className="flex flex-col gap-1.5 border-b border-border/50 py-2.5 text-gray-500 last:border-b-0 sm:grid sm:grid-cols-[1fr_auto] sm:items-center sm:gap-2"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold line-through">{h.staffName}</span>
+                    <span className="flex items-center gap-1.5 text-xs">
+                      <span className="max-w-[220px] truncate rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium">
+                        {h.workplaceLabel}
+                      </span>
+                      {h.taskName ? <span className="truncate">{h.taskName}</span> : null}
+                    </span>
+                  </span>
+                  <span className="w-fit rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">
+                    {h.reasonLabel ? `${h.reasonLabel}（休み）` : "依頼主取消（休み）"}
+                  </span>
+                </li>
+              ))}
             </ul>
           )}
           <ShiftHistorySection history={history} />

@@ -88,6 +88,8 @@ type ClientMonthDetail = {
     isAllDay: boolean;
     isUndecided: boolean;
     approvalStatus: string | null;
+    outcome: string | null;
+    reportedTimeLabel: string | null;
     taskName: string | null;
   }[];
 };
@@ -106,6 +108,9 @@ const APPROVAL_LABEL: Record<string, string> = {
 };
 
 function timeLabel(d: ClientMonthDetail["days"][number]) {
+  if (d.outcome === "ABSENT") return "欠勤";
+  if (d.outcome === "CANCELLED_BY_EMPLOYER") return "勤務先キャンセル";
+  if (d.reportedTimeLabel) return d.reportedTimeLabel;
   if (!d.approvalStatus) return "未提出";
   if (d.isUndecided) return "未定";
   if (d.isAllDay) return "終日";

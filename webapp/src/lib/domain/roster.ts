@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { reportDisplay, isReportSubmitted } from "@/lib/workReportDisplay";
 import { createInvite } from "@/lib/domain/invites";
 import { todayJst, todayJstParts } from "@/lib/date";
 import { resolveRateVersion, resolveContractWageVersion, excludeBaselineVersion } from "@/lib/domain/contracts";
@@ -52,6 +53,10 @@ export async function listStaff(companyId: string, restrictToTeamIds?: string[])
       .filter((tm) => tm.userId === m.userId)
       .map((tm) => ({ teamId: tm.teamId, teamName: tm.team.name, role: tm.role })),
   }));
+}
+
+function isNonWorkedReport(report: Parameters<typeof isReportSubmitted>[0]) {
+  return isReportSubmitted(report) && report.outcome !== "WORKED";
 }
 
 function formatJstTime(date: Date) {
@@ -480,10 +485,14 @@ export async function getStaffMonthDetail(params: {
       endTime: s.endTime,
       isAllDay: s.isAllDay,
       isUndecided: s.isUndecided,
-      approvalStatus: s.workReport?.approvalStatus ?? null,
-      outcome: s.workReport?.outcome ?? null,
-      actualStartTime: s.workReport?.clockIn ? formatJstTime(s.workReport.clockIn) : null,
-      actualEndTime: s.workReport?.clockOut ? formatJstTime(s.workReport.clockOut) : null,
+      // 打刻しただけで未提出のものは「未承認」ではなく未提出（null）として出す。
+      // 欠勤・キャンセルで報告されたものは、残っている打刻時刻を出さない。
+      approvalStatus: reportDisplay(s.workReport).approvalStatus,
+      outcome: reportDisplay(s.workReport).outcome,
+      actualStartTime:
+        s.workReport?.clockIn && !isNonWorkedReport(s.workReport) ? formatJstTime(s.workReport.clockIn) : null,
+      actualEndTime:
+        s.workReport?.clockOut && !isNonWorkedReport(s.workReport) ? formatJstTime(s.workReport.clockOut) : null,
       comment: s.workReport?.comment ?? null,
       taskName: s.workReport?.taskName ?? s.taskName,
       workplaceLabel:

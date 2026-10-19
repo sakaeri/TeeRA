@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { registerStaffTaskName, registerPlacementTaskName, isCoveredByBaseContract } from "@/lib/domain/contracts";
 import { todayJst } from "@/lib/date";
 import { timeRangesOverlap, releaseHeldShiftsOnReassign } from "@/lib/domain/shifts";
+import { evaluateCancellation } from "@/lib/domain/cancellation";
 import type { Prisma } from "@/generated/prisma/client";
 
 type Tx = Prisma.TransactionClient;
@@ -289,6 +290,35 @@ async function awardApprovalPoints(tx: Tx, report: { id: string; staffUserId: st
 // 待ち）やREJECTED・APPROVEDから企業が直接動かせてしまうと、古い画面から
 // の操作（レース条件）でスタッフの確認ステップを飛び越えて承認できてしまう
 // （correctAndReturnWorkReportのコメント参照）。
+// スタッフが「勤務先からのキャンセル」で報告した依頼主の現場のシフトは、
+// 承認した時点で、その依頼主×業務内容のキャンセル規定からキャンセル料を
+// 記録する（電話で受けた取り消しと同じく請求書に載る）。判定はスタッフが
+// 報告した時点で行う。キャンセル不可の規定でも実際に取り消された以上、
+// 料金の決めようがないので0円で記録だけ残す。
+async function recordStaffReportedClientCancellation(
+  tx: Tx,
+  report: { shiftId: string; outcome: string; submittedAt: Date | null },
+) {
+  if (report.outcome !== "CANCELLED_BY_EMPLOYER") return;
+  const shift = await tx.shift.findUniqueOrThrow({ where: { id: report.shiftId }, include: { cancellation: true } });
+  if (shift.source !== "CLIENT" || shift.cancellation) return;
+  const rule =
+    shift.companyRelationshipId && shift.taskName
+      ? await tx.companyPlacementRate.findFirst({
+          where: { companyId: shift.companyId, companyRelationshipId: shift.companyRelationshipId, taskName: shift.taskName },
+        })
+      : null;
+  const evaluation = evaluateCancellation(shift.date, rule, report.submittedAt ?? new Date());
+  await tx.shiftCancellation.create({
+    data: {
+      shiftId: shift.id,
+      cancelledByCompanyId: shift.companyId,
+      source: "STAFF_REPORTED",
+      feeAmount: evaluation.kind === "fee" ? evaluation.amount : 0,
+    },
+  });
+}
+
 export async function approveWorkReport(params: { workReportId: string; approverUserId?: string }) {
   return prisma.$transaction(async (tx) => {
     const report = await tx.workReport.findUniqueOrThrow({ where: { id: params.workReportId } });
@@ -304,6 +334,7 @@ export async function approveWorkReport(params: { workReportId: string; approver
     if (result.count === 0) throw new Error("not_pending");
 
     await awardApprovalPoints(tx, report);
+    await recordStaffReportedClientCancellation(tx, report);
 
     return report;
   });
