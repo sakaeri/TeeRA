@@ -14,6 +14,7 @@ import {
   setMemberCanWorkShiftsAction,
   removeCompanyMemberRoleAction,
   inviteCompanyAdminAction,
+  promoteStaffToCompanyAdminAction,
   createTeamAction,
   updateTeamNameAction,
   updateTeamNotificationEmailAction,
@@ -190,7 +191,7 @@ export function SettingsView({
             accountHolderName={accountHolderName}
           />
           <SealSection companyName={companyName} sealImageDataUrl={sealImageDataUrl} sealOpacity={sealOpacity} />
-          <AdminsSection admins={admins} />
+          <AdminsSection admins={admins} staff={staff} />
           <TeamsSection teams={teams} staff={staff} teeBalance={teeBalance} currentUserId={currentUserId} />
         </div>
       ) : null}
@@ -1141,9 +1142,14 @@ function CompanyInfoSection({
   );
 }
 
-function AdminsSection({ admins }: { admins: Admin[] }) {
+function AdminsSection({ admins, staff }: { admins: Admin[]; staff: StaffOption[] }) {
   const [pending, startTransition] = useTransition();
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  // ＋招待：新しく招待する（URL発行）か、既に所属しているスタッフから選ぶ
+  const [inviteMode, setInviteMode] = useState<"closed" | "choose" | "existing">("closed");
+  const [promoteUserId, setPromoteUserId] = useState("");
+  const adminIds = new Set(admins.map((a) => a.userId));
+  const promotableStaff = staff.filter((s) => !adminIds.has(s.userId));
   const [error, setError] = useState<string | null>(null);
   const [removeConfirmTarget, setRemoveConfirmTarget] = useState<{ userId: string; name: string } | null>(null);
   const [detailTarget, setDetailTarget] = useState<Admin | null>(null);
@@ -1271,26 +1277,96 @@ function AdminsSection({ admins }: { admins: Admin[] }) {
         />
       ) : null}
 
-      <div className="flex items-center gap-3">
+      {inviteMode === "closed" ? (
         <button
           type="button"
-          disabled={pending}
-          onClick={() =>
-            startTransition(async () => {
-              const url = await inviteCompanyAdminAction("COMPANY_ADMIN");
-              setInviteUrl(url);
-            })
-          }
-          className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60"
+          onClick={() => setInviteMode("choose")}
+          className="rounded-lg border border-primary px-4 py-2 text-sm text-primary"
         >
           ＋招待
         </button>
-      </div>
-      {inviteUrl ? (
-        <div className="mt-3">
-          <CopyUrlField url={inviteUrl} />
+      ) : (
+        <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  setInviteMode("choose");
+                  const url = await inviteCompanyAdminAction("COMPANY_ADMIN");
+                  setInviteUrl(url);
+                })
+              }
+              className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary disabled:opacity-60"
+            >
+              新しく招待する（URLを発行）
+            </button>
+            <button
+              type="button"
+              disabled={pending || promotableStaff.length === 0}
+              onClick={() => {
+                setInviteUrl(null);
+                setInviteMode("existing");
+              }}
+              className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary disabled:opacity-60"
+            >
+              既存スタッフから選ぶ
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setInviteMode("closed");
+                setInviteUrl(null);
+                setPromoteUserId("");
+              }}
+              className="text-xs text-muted hover:text-primary"
+            >
+              閉じる
+            </button>
+          </div>
+          {inviteUrl ? <CopyUrlField url={inviteUrl} /> : null}
+          {inviteMode === "existing" ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                aria-label="本部管理者にするスタッフ"
+                value={promoteUserId}
+                onChange={(e) => setPromoteUserId(e.target.value)}
+                className="rounded-lg border border-border px-2 py-1.5 text-sm"
+              >
+                <option value="">スタッフを選択</option>
+                {promotableStaff.map((s) => (
+                  <option key={s.userId} value={s.userId}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={pending || !promoteUserId}
+                onClick={() =>
+                  startTransition(async () => {
+                    setError(null);
+                    try {
+                      await promoteStaffToCompanyAdminAction(promoteUserId);
+                      setPromoteUserId("");
+                      setInviteMode("closed");
+                    } catch {
+                      setError("本部管理者にできませんでした。");
+                    }
+                  })
+                }
+                className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                本部管理者にする
+              </button>
+              <p className="w-full text-xs text-muted">
+                シフトにはこれまで通り入れます（「このメンバーはシフトにも入れる」がオンになります）。チームでの役職もそのままです。
+              </p>
+            </div>
+          ) : null}
         </div>
-      ) : null}
+      )}
     </SectionCard>
   );
 }

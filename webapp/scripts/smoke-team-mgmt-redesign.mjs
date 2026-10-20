@@ -120,6 +120,8 @@ try {
 
   // --- 本部メンバーに「権限を外す」があり、編集者は降格できる ---
   await admin.getByRole("button", { name: "＋招待" }).first().click();
+  // ＋招待のあと「新しく招待する」を選ぶとURLが発行される
+  await admin.getByRole("button", { name: "新しく招待する（URLを発行）" }).click();
   await admin.waitForTimeout(400);
   const editorInviteUrl = await admin.locator('section:has-text("本部メンバー権限") input[readonly]').inputValue();
 
