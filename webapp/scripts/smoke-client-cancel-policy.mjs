@@ -116,7 +116,7 @@ try {
   const shiftId = psql(`select id from "Shift" where "staffUserId"='${staffUserId}' order by "createdAt" desc limit 1;`);
   log("派遣元のスタッフが依頼主のオーダーに入る", Boolean(shiftId));
 
-  // --- agency: set キャンセル不可 from 依頼主詳細＞単価＞キャンセル規定 ---
+  // --- agency: 依頼主詳細＞単価＞キャンセル規定で、共通の規定を「キャンセル不可」に ---
   await agency.goto("http://localhost:3000/company/roster");
   await agency.click("text=依頼主一覧");
   await agency.waitForTimeout(200);
@@ -124,16 +124,19 @@ try {
   await agency.waitForTimeout(300);
   const clientPanel = agency.locator("div.fixed.inset-0.z-30").last();
   await clientPanel.getByRole("button", { name: "単価", exact: true }).click();
-  await clientPanel.getByRole("button", { name: "キャンセル規定" }).click();
-  const ruleModal = agency.locator("div.fixed.inset-0.z-40").last();
+  await agency.waitForTimeout(300);
+  log("未設定の注意はキャンセル規定の欄に1回だけ出る", ((await clientPanel.innerText()).match(/未設定（キャンセル自由として扱います）/g) ?? []).length === 1);
+  log("業務内容ごとの「キャンセル規定」ボタンは無い", (await clientPanel.getByRole("button", { name: "キャンセル規定", exact: true }).count()) === 0);
+  await clientPanel.getByRole("button", { name: "共通の規定を設定" }).click();
+  let ruleModal = agency.locator("div.fixed.inset-0.z-40").last();
   await ruleModal.locator("select").first().selectOption("NOT_ALLOWED");
   await ruleModal.getByRole("button", { name: "保存" }).click();
   await agency.waitForTimeout(600);
   log(
-    "単価タブからキャンセル規定（キャンセル不可）を保存できる",
-    psql(`select "cancelPolicy" from "CompanyPlacementRate" where "companyRelationshipId"='${relId}' and "taskName"='取消テスト業務';`) === "NOT_ALLOWED",
+    "単価タブから依頼主共通のキャンセル規定（キャンセル不可）を保存できる",
+    psql(`select "cancelPolicy" from "ClientCancelRule" where "companyRelationshipId"='${relId}';`) === "NOT_ALLOWED",
   );
-  log("単価タブにキャンセル規定が表示される", (await clientPanel.textContent()).includes("キャンセル規定：キャンセル不可"));
+  log("単価タブに共通のキャンセル規定が表示される", (await clientPanel.textContent()).includes("全業務共通：キャンセル不可"));
 
   // --- client: try to delete the order -> blocked ---
   async function openDeleteConfirm() {
@@ -152,10 +155,34 @@ try {
   log("キャンセル不可の場合、取り消せない旨と対象スタッフが表示される", confirmText.includes("取り消せません") && confirmText.includes("派遣スタッフ"));
   log("キャンセル不可の場合、削除ボタンが押せない", await confirm.getByRole("button", { name: "削除する" }).isDisabled());
 
-  // --- agency switches to「締切後はキャンセル料」(締切は30日前＝もう過ぎている) ---
-  psql(
-    `update "CompanyPlacementRate" set "cancelPolicy"='FEE_AFTER_DEADLINE', "cancelDeadlineDaysBefore"=30, "cancelDeadlineTime"='00:00', "cancelFeeAmount"=5000 where "companyRelationshipId"='${relId}' and "taskName"='取消テスト業務';`,
+  // --- agency: この業務内容だけ「締切後はキャンセル料」の例外にする(締切は30日前＝もう過ぎている) ---
+  await agency.goto("http://localhost:3000/company/roster");
+  await agency.click("text=依頼主一覧");
+  await agency.waitForTimeout(200);
+  await agency.click("text=取消依頼主株式会社");
+  await agency.waitForTimeout(300);
+  await clientPanel.getByRole("button", { name: "単価", exact: true }).click();
+  await agency.waitForTimeout(300);
+  await clientPanel.getByLabel("業務内容ごとに変える").selectOption({ label: "取消テスト業務" });
+  ruleModal = agency.locator("div.fixed.inset-0.z-40").last();
+  log("例外の画面は共通の規定を初期値にして開く", (await ruleModal.locator("select").first().inputValue()) === "NOT_ALLOWED");
+  await ruleModal.locator("select").first().selectOption("FEE_AFTER_DEADLINE");
+  await ruleModal.locator('input[type="number"]').first().fill("30");
+  await ruleModal.locator('input[type="time"]').fill("00:00");
+  await ruleModal.locator('input[type="number"]').last().fill("5000");
+  if (process.env.HOWTO_SCREENSHOT) {
+    await agency.setViewportSize({ width: 1280, height: 900 });
+    await agency.waitForTimeout(300);
+    await agency.screenshot({ path: process.env.HOWTO_SCREENSHOT });
+  }
+  await ruleModal.getByRole("button", { name: "保存" }).click();
+  await agency.waitForTimeout(600);
+  log(
+    "業務内容ごとの例外として保存される",
+    psql(`select "cancelRuleOverride" || '|' || "cancelPolicy" || '|' || "cancelFeeAmount" from "CompanyPlacementRate" where "companyRelationshipId"='${relId}' and "taskName"='取消テスト業務';`) ===
+      "true|FEE_AFTER_DEADLINE|5000",
   );
+  log("例外がキャンセル規定の欄に業務内容名つきで出る", (await clientPanel.textContent()).includes("取消テスト業務：30日前00:00以降はキャンセル料5000円/人"));
   confirm = await openDeleteConfirm();
   confirmText = await confirm.textContent();
   log("締切後はキャンセル料の合計が表示される", confirmText.includes("キャンセル料 合計5,000円"));
@@ -297,6 +324,21 @@ try {
   log(
     "電話で受けた取り消しのキャンセル料も請求書に載る",
     psql(`select il.amount from "InvoiceLine" il join "Invoice" i on i.id=il."invoiceId" where i."companyRelationshipId"='${relId}' and il."shiftId"='${phoneShiftId}';`) === "5000",
+  );
+
+  // --- 例外を「共通に戻す」 ---
+  await agency.goto("http://localhost:3000/company/roster");
+  await agency.click("text=依頼主一覧");
+  await agency.waitForTimeout(200);
+  await agency.click("text=取消依頼主株式会社");
+  await agency.waitForTimeout(300);
+  await clientPanel.getByRole("button", { name: "単価", exact: true }).click();
+  await agency.waitForTimeout(300);
+  await clientPanel.getByRole("button", { name: "共通に戻す" }).click();
+  await agency.waitForTimeout(600);
+  log(
+    "「共通に戻す」で例外が外れる",
+    psql(`select "cancelRuleOverride" from "CompanyPlacementRate" where "companyRelationshipId"='${relId}' and "taskName"='取消テスト業務';`) === "f",
   );
 
   console.log(process.exitCode ? "CLIENT CANCEL POLICY SMOKE TEST HAD FAILURES" : "CLIENT CANCEL POLICY SMOKE TEST PASSED");
