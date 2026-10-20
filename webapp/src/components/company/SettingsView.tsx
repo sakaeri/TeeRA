@@ -9,6 +9,7 @@ import {
   updateCompanyPhoneNumberAction,
   updateCompanyNotificationEmailAction,
   updateCompanyBankInfoAction,
+  updateCompanySealAction,
   setMemberCanWorkShiftsAction,
   removeCompanyMemberRoleAction,
   inviteCompanyAdminAction,
@@ -109,6 +110,7 @@ export function SettingsView({
   accountType,
   accountNumber,
   accountHolderName,
+  sealImageDataUrl,
   admins,
   teams,
   staff,
@@ -131,6 +133,7 @@ export function SettingsView({
   accountType: string;
   accountNumber: string;
   accountHolderName: string;
+  sealImageDataUrl: string | null;
   admins: Admin[];
   teams: Team[];
   staff: StaffOption[];
@@ -183,6 +186,7 @@ export function SettingsView({
             accountNumber={accountNumber}
             accountHolderName={accountHolderName}
           />
+          <SealSection companyName={companyName} sealImageDataUrl={sealImageDataUrl} />
           <AdminsSection admins={admins} />
           <TeamsSection teams={teams} staff={staff} teeBalance={teeBalance} currentUserId={currentUserId} />
         </div>
@@ -665,6 +669,146 @@ function SectionCard({
       </div>
       {children}
     </section>
+  );
+}
+
+// 印鑑の画像を、白っぽい背景を透過・余白を切り詰め・縮小したPNG（data URL）に
+// する。紙に押した印をスマホで撮った画像でも、請求書に重ねたとき白い四角が
+// 残らないようにするため。
+const SEAL_MAX_PX = 300;
+async function processSealImage(file: File): Promise<string> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("load_failed"));
+      el.src = url;
+    });
+    const scale = Math.min(1, (SEAL_MAX_PX * 2) / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(img, 0, 0, w, h);
+    const image = ctx.getImageData(0, 0, w, h);
+    const px = image.data;
+    let minX = w, minY = h, maxX = -1, maxY = -1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4;
+        // 一番暗い色成分で「どれだけ白に近いか」を見る。220以上は背景として
+        // 透明に、170〜220は境目をなめらかにするため段階的に透過する。
+        const lightness = Math.min(px[i], px[i + 1], px[i + 2]);
+        const alpha = lightness >= 220 ? 0 : lightness > 170 ? Math.round(((220 - lightness) / 50) * 255) : 255;
+        px[i + 3] = Math.min(px[i + 3], alpha);
+        if (px[i + 3] > 20) {
+          if (x < minX) minX = x;
+          if (y < minY) minY = y;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX < 0) throw new Error("empty_image");
+    ctx.putImageData(image, 0, 0);
+    // 印の部分だけを切り出し、長辺SEAL_MAX_PXに縮める
+    const cw = maxX - minX + 1;
+    const ch = maxY - minY + 1;
+    const outScale = Math.min(1, SEAL_MAX_PX / Math.max(cw, ch));
+    const out = document.createElement("canvas");
+    out.width = Math.max(1, Math.round(cw * outScale));
+    out.height = Math.max(1, Math.round(ch * outScale));
+    out.getContext("2d")!.drawImage(canvas, minX, minY, cw, ch, 0, 0, out.width, out.height);
+    return out.toDataURL("image/png");
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+// 請求書の発行元に押す電子印（社印）。本部の管理者/編集者だけに表示する。
+function SealSection({ companyName, sealImageDataUrl }: { companyName: string; sealImageDataUrl: string | null }) {
+  const [pending, startTransition] = useTransition();
+  const [preview, setPreview] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const shown = preview ?? sealImageDataUrl;
+
+  async function onFile(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    try {
+      setPreview(await processSealImage(file));
+    } catch {
+      setError("画像を読み込めませんでした。印鑑がはっきり写った画像を選んでください。");
+    }
+  }
+
+  function save(value: string | null) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await updateCompanySealAction(value);
+        setPreview(null);
+      } catch {
+        setError("保存できませんでした。画像を小さくして試してください。");
+      }
+    });
+  }
+
+  return (
+    <SectionCard title="電子印（請求書）">
+      <p className="mb-3 text-xs text-muted">
+        印鑑の画像をアップロードすると、請求書の発行元に押した形で表示されます。白い背景は自動で透明になります。発行済みの請求書は、発行したときの印のままです。
+      </p>
+      <div className="flex flex-wrap items-center gap-4">
+        {/* 請求書での見え方のプレビュー（会社名の右端に重なる） */}
+        <div className="relative rounded-lg border border-border bg-white px-6 py-5 pr-12 text-right">
+          <p className="text-sm font-bold text-primary">{companyName}</p>
+          <p className="text-[10px] text-muted">請求書での表示イメージ</p>
+          {shown ? (
+            // eslint-disable-next-line @next/next/no-img-element -- data URLのプレビュー
+            <img src={shown} alt="電子印" className="absolute -right-1 -top-3 h-14 w-14 object-contain opacity-90" />
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-2">
+          <label className="cursor-pointer rounded-lg border border-primary px-3 py-1.5 text-center text-xs font-semibold text-primary">
+            {sealImageDataUrl || preview ? "画像を選び直す" : "印鑑の画像を選ぶ"}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                void onFile(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {preview ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => save(preview)}
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              この印で保存する
+            </button>
+          ) : null}
+          {sealImageDataUrl && !preview ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => save(null)}
+              className="text-xs text-muted hover:text-red-600 disabled:opacity-60"
+            >
+              電子印を削除
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
+    </SectionCard>
   );
 }
 
