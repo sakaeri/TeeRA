@@ -76,6 +76,7 @@ export function StaffShell({
   hasMultipleCompanies,
   showCompanyScreenLink,
   openRecruitmentCount,
+  unsubmittedReportCount,
   contractSettingsBadgeCount,
   hasPendingContracts,
   children,
@@ -86,6 +87,7 @@ export function StaffShell({
   hasMultipleCompanies: boolean;
   showCompanyScreenLink: boolean;
   openRecruitmentCount: number;
+  unsubmittedReportCount: number;
   contractSettingsBadgeCount: number;
   // 確認待ち（PENDING_CONSENT）の契約書が1件以上ある間は、「見てません」
   // 問題を防ぐため契約書ページ以外への遷移を禁止する。
@@ -195,9 +197,11 @@ export function StaffShell({
           const badgeCount =
             item.href === "/staff/recruitments"
               ? openRecruitmentCount
-              : item.href === "/staff/contracts"
-                ? contractSettingsBadgeCount
-                : 0;
+              : item.href === "/staff/timecard"
+                ? unsubmittedReportCount
+                : item.href === "/staff/contracts"
+                  ? contractSettingsBadgeCount
+                  : 0;
           // 確認待ちの契約書がある間は、契約書ページ以外のナビをタップしても
           // 遷移しない（useEffectの強制リダイレクトと二重の防止策）。
           const blocked = hasPendingContracts && item.href !== "/staff/contracts";

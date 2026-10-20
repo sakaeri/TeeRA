@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { ShiftCard, type ShiftRow } from "@/components/staff/StaffTimecardView";
 
 // 携帯は勤務中いじらない前提 — カレンダー画面の隅にカードを置くだけだと
@@ -9,11 +10,15 @@ import { ShiftCard, type ShiftRow } from "@/components/staff/StaffTimecardView";
 // 未対応の間はページを開き直すたびにまた出る（打刻/報告の押し忘れに
 // 気づいてもらうのが狙い）。対応済みになった（shiftsが空になった）
 // 場合は自動で閉じる。
+// 今日のシフトに加え、前日以前の未提出も（数件まで）出す。それ以上ある
+// 場合はmoreUnsubmittedCountでタイムカードへ案内する。
 export function TodayShiftPopup({
   shifts,
+  moreUnsubmittedCount = 0,
   knownTaskNamesByCompany,
 }: {
   shifts: ShiftRow[];
+  moreUnsubmittedCount?: number;
   knownTaskNamesByCompany: Record<string, string[]>;
 }) {
   const [open, setOpen] = useState(shifts.length > 0);
@@ -38,6 +43,11 @@ export function TodayShiftPopup({
             <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} />
           ))}
         </ul>
+        {moreUnsubmittedCount > 0 ? (
+          <Link href="/staff/timecard" className="mt-3 block text-center text-sm font-semibold text-primary underline">
+            ほかに未提出が{moreUnsubmittedCount}件あります（タイムカードへ）
+          </Link>
+        ) : null}
       </div>
     </div>
   );

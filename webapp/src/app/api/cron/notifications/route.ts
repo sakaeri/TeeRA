@@ -1,6 +1,7 @@
 import {
   runShiftRequestDigest,
   runShiftStartReminders,
+  runUnsubmittedReportPushReminders,
   runUnsubmittedWorkReportReminders,
   runContractConsentReminders,
 } from "@/lib/domain/emailNotifications";
@@ -25,6 +26,8 @@ export async function GET(request: Request) {
   switch (job) {
     case "shift-start-reminders":
       await runShiftStartReminders();
+      // 退勤3時間後の未提出リマインド（同じ5分おきのジョブで動かす）
+      await runUnsubmittedReportPushReminders();
       break;
     case "shift-request-digest":
       await runShiftRequestDigest();

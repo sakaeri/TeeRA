@@ -50,20 +50,40 @@ export function StaffTimecardView({
 }) {
   const actionable = shifts.filter((s) => !isDone(s));
   const done = shifts.filter(isDone);
+  // 「未提出」（退勤済み・過去日・差し戻し等で報告が必要なもの）を一番上に
+  // まとめ、今日これから勤務するシフトとは分ける — 以前は日付の新しい順に
+  // 混ざって並んでいたため、今日のシフトの下に未提出の過去分が埋もれていた。
+  const unsubmitted = actionable.filter(needsReportNow);
+  const upcomingToday = actionable.filter((s) => !needsReportNow(s));
 
   return (
     <div className="flex flex-col gap-6">
-      <ul className="flex flex-col gap-4">
-        {actionable.map((s) => (
-          <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} />
-        ))}
-        {shifts.length === 0 ? (
-          <p className="text-sm text-muted">対象のシフトがありません。</p>
-        ) : null}
-        {shifts.length > 0 && actionable.length === 0 ? (
-          <p className="text-sm text-muted">対応が必要な報告はありません。</p>
-        ) : null}
-      </ul>
+      {unsubmitted.length > 0 ? (
+        <section>
+          <h2 className="mb-2 text-sm font-bold text-red-700">未提出の業務報告（{unsubmitted.length}件）</h2>
+          <ul className="flex flex-col gap-4">
+            {unsubmitted.map((s) => (
+              <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} />
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {upcomingToday.length > 0 ? (
+        <section>
+          <h2 className="mb-2 text-sm font-bold text-muted">今日のシフト</h2>
+          <ul className="flex flex-col gap-4">
+            {upcomingToday.map((s) => (
+              <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} />
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {shifts.length === 0 ? <p className="text-sm text-muted">対象のシフトがありません。</p> : null}
+      {shifts.length > 0 && actionable.length === 0 ? (
+        <p className="text-sm text-muted">対応が必要な報告はありません。</p>
+      ) : null}
 
       <UnscheduledReportButton companies={unscheduledCompanies} knownTaskNamesByCompany={knownTaskNamesByCompany} />
 
@@ -80,6 +100,18 @@ export function StaffTimecardView({
         </details>
       ) : null}
     </div>
+  );
+}
+
+// 今すぐ報告が必要か（退勤済み・過去日・差し戻し・修正の確認待ち）。
+// 今日これから勤務する（まだ退勤していない）シフトはfalse。
+export function needsReportNow(shift: ShiftRow) {
+  if (isDone(shift)) return false;
+  return (
+    shift.date < todayJst() ||
+    Boolean(shift.clockOut) ||
+    shift.approvalStatus === "REJECTED" ||
+    shift.approvalStatus === "NEEDS_CONFIRMATION"
   );
 }
 
@@ -165,8 +197,24 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
     Boolean(shift.submittedAt) &&
     (shift.approvalStatus === "PENDING" || shift.approvalStatus === "APPROVED");
 
+  // 退勤済み（または過去日）なのにまだ提出していない — 退勤を押した時点で
+  // 終わった気になって提出し忘れることが多かったため、目立たせる
+  const awaitingSubmit =
+    !submitted &&
+    !finalized &&
+    shift.approvalStatus !== "NEEDS_CONFIRMATION" &&
+    shift.approvalStatus !== "REJECTED" &&
+    (Boolean(shift.clockOut) || isPastShift);
+
   return (
-    <li className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/5">
+    <li
+      className={`rounded-2xl bg-white p-5 shadow-sm ${awaitingSubmit ? "ring-2 ring-amber-400" : "ring-1 ring-black/5"}`}
+    >
+      {awaitingSubmit ? (
+        <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+          まだ業務報告を提出していません。内容を確認して「業務報告を提出する」を押してください。
+        </p>
+      ) : null}
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="min-w-0 font-medium">{shift.date}</span>
         {/* approvalStatusは出勤した瞬間からデフォルトでPENDINGが入っている
@@ -405,7 +453,7 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
                     }
                   })
                 }
-                className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-60"
               >
                 業務報告を提出する
               </button>
