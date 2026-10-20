@@ -453,6 +453,24 @@ export async function updateCompanyNotificationEmailAction(notificationEmail: st
   revalidatePath("/company/settings");
 }
 
+// 請求書の電子印（社印）。nullで削除。画像はブラウザ側で白背景を透過・縮小
+// したPNGのdata URLで受け取る。
+const MAX_SEAL_DATA_URL_LENGTH = 400_000;
+export async function updateCompanySealAction(sealImageDataUrl: string | null) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  if (sealImageDataUrl !== null) {
+    if (!sealImageDataUrl.startsWith("data:image/png;base64,")) throw new Error("invalid_image");
+    if (sealImageDataUrl.length > MAX_SEAL_DATA_URL_LENGTH) throw new Error("image_too_large");
+  }
+
+  await prisma.company.update({
+    where: { id: membership.companyId },
+    data: { sealImageDataUrl },
+  });
+  revalidatePath("/company/settings");
+}
+
 export async function updateCompanyBankInfoAction(bankInfo: {
   bankName: string;
   branchName: string;

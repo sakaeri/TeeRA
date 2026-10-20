@@ -43,6 +43,7 @@ export async function GET(request: Request) {
     const clientName = invoice.companyRelationship.clientCompany?.name ?? invoice.companyRelationship.proxyName ?? "";
     const data: InvoicePdfData = {
       issuingCompanyName: issuingCompany.name,
+      sealImageDataUrl: (snap.sealImageDataUrl as string | null | undefined) ?? null,
       issuingCompanyAddress: issuingCompany.address,
       issuingCompanyPhoneNumber: issuingCompany.phoneNumber,
       clientName,

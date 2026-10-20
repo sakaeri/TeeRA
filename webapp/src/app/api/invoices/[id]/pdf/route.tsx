@@ -36,6 +36,8 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
     const snap = issue.snapshot as unknown as Record<string, unknown>;
     data = {
       issuingCompanyName: invoice.issuingCompany.name,
+      // 発行時点の印（この機能より前に発行したものは印なし）
+      sealImageDataUrl: (snap.sealImageDataUrl as string | null | undefined) ?? null,
       issuingCompanyAddress: invoice.issuingCompany.address,
       issuingCompanyPhoneNumber: invoice.issuingCompany.phoneNumber,
       clientName,
@@ -62,6 +64,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
     const totals = computeInvoiceTotals({ lines: invoice.lines, registered });
     data = {
       issuingCompanyName: invoice.issuingCompany.name,
+      sealImageDataUrl: invoice.issuingCompany.sealImageDataUrl,
       issuingCompanyAddress: invoice.issuingCompany.address,
       issuingCompanyPhoneNumber: invoice.issuingCompany.phoneNumber,
       clientName,

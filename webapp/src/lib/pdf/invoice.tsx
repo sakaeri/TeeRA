@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet, Font } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet, Font } from "@react-pdf/renderer";
 
 Font.register({
   family: "Noto Sans JP",
@@ -33,7 +33,9 @@ const styles = StyleSheet.create({
   recipientBlock: { flexGrow: 1 },
   recipientName: { fontSize: 14, fontWeight: 700, marginBottom: 10 },
   subjectLine: { fontSize: 10, marginBottom: 4 },
-  issuerBlock: { alignItems: "flex-end", textAlign: "right" },
+  issuerBlock: { alignItems: "flex-end", textAlign: "right", position: "relative" },
+  // 電子印：会社名の右端に少し重なるように押す（約2cm角、白背景は透過済み）
+  seal: { position: "absolute", top: -14, right: -8, width: 56, height: 56, opacity: 0.9 },
   issuerName: { fontSize: 12, fontWeight: 700, color: "#0b3d2e", marginBottom: 3 },
   issuerLine: { fontSize: 9, color: "#45534d", marginBottom: 2 },
   metaBlock: { marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 24 },
@@ -116,6 +118,8 @@ const styles = StyleSheet.create({
 
 export type InvoicePdfData = {
   issuingCompanyName: string;
+  // 電子印（PNGのdata URL）。発行済みの請求書は発行時点のものを使う
+  sealImageDataUrl?: string | null;
   issuingCompanyAddress: string | null;
   issuingCompanyPhoneNumber: string | null;
   clientName: string;
@@ -168,6 +172,8 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
             <Text style={styles.issuerLine}>
               {data.registered ? `登録番号: ${data.invoiceRegistrationNumber}` : "登録なし（適格請求書発行事業者登録なし）"}
             </Text>
+            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdfのImageにはaltが無い */}
+            {data.sealImageDataUrl ? <Image src={data.sealImageDataUrl} style={styles.seal} /> : null}
           </View>
         </View>
 

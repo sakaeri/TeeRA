@@ -397,6 +397,10 @@ export async function issueInvoice(params: { invoiceId: string; issuedByUserId: 
 
   return prisma.$transaction(async (tx) => {
     let countsAgainstQuota = false;
+    const issuer = await tx.company.findUniqueOrThrow({
+      where: { id: invoice.issuingCompanyId },
+      select: { sealImageDataUrl: true },
+    });
 
     if (!alreadyIssuedThisMonth) {
       const company = await tx.company.findUniqueOrThrow({
@@ -435,6 +439,8 @@ export async function issueInvoice(params: { invoiceId: string; issuedByUserId: 
           accountType: invoice.accountType,
           accountNumber: invoice.accountNumber,
           accountHolderName: invoice.accountHolderName,
+          // 発行時点の電子印を固定する（後で差し替えても過去の請求書は変わらない）
+          sealImageDataUrl: issuer.sealImageDataUrl,
           ...totals,
           issuedAt: new Date().toISOString(),
         },

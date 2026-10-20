@@ -82,6 +82,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
         accountType={isCompanyAdmin ? (company.accountType ?? "") : ""}
         accountNumber={isCompanyAdmin ? (company.accountNumber ?? "") : ""}
         accountHolderName={isCompanyAdmin ? (company.accountHolderName ?? "") : ""}
+        sealImageDataUrl={isCompanyAdmin ? company.sealImageDataUrl : null}
         teeBalance={company.teeBalance}
         admins={admins.map((a) => ({
           userId: a.userId,
