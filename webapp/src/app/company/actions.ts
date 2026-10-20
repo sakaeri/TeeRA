@@ -471,6 +471,17 @@ export async function updateCompanySealAction(sealImageDataUrl: string | null) {
   revalidatePath("/company/settings");
 }
 
+// 電子印の濃さ（薄め/標準/濃いめ）
+const SEAL_OPACITY_CHOICES = [30, 45, 70];
+export async function updateCompanySealOpacityAction(sealOpacity: number) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  if (!SEAL_OPACITY_CHOICES.includes(sealOpacity)) throw new Error("invalid_opacity");
+
+  await prisma.company.update({ where: { id: membership.companyId }, data: { sealOpacity } });
+  revalidatePath("/company/settings");
+}
+
 export async function updateCompanyBankInfoAction(bankInfo: {
   bankName: string;
   branchName: string;

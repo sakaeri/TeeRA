@@ -399,7 +399,7 @@ export async function issueInvoice(params: { invoiceId: string; issuedByUserId: 
     let countsAgainstQuota = false;
     const issuer = await tx.company.findUniqueOrThrow({
       where: { id: invoice.issuingCompanyId },
-      select: { sealImageDataUrl: true },
+      select: { sealImageDataUrl: true, sealOpacity: true },
     });
 
     if (!alreadyIssuedThisMonth) {
@@ -441,6 +441,7 @@ export async function issueInvoice(params: { invoiceId: string; issuedByUserId: 
           accountHolderName: invoice.accountHolderName,
           // 発行時点の電子印を固定する（後で差し替えても過去の請求書は変わらない）
           sealImageDataUrl: issuer.sealImageDataUrl,
+          sealOpacity: issuer.sealOpacity,
           ...totals,
           issuedAt: new Date().toISOString(),
         },
