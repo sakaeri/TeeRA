@@ -384,6 +384,33 @@ export async function runShiftStartReminders() {
   }
 }
 
+// 退勤から3時間たっても業務報告が出ていなければ、本人にプッシュ通知で
+// 知らせる（1件につき1回だけ）。5分おきのリマインドと一緒に動かす。
+// Cronが間引かれても拾えるよう「3時間を過ぎていて未送信なら送る」判定にし、
+// 古すぎるもの（2日以上前の退勤）は今更なので対象外にする（初回の一斉送信も防ぐ）。
+export async function runUnsubmittedReportPushReminders() {
+  const now = Date.now();
+  const reports = await prisma.workReport.findMany({
+    where: {
+      submittedAt: null,
+      submitReminderSentAt: null,
+      clockOut: { lte: new Date(now - 3 * 60 * 60 * 1000), gte: new Date(now - 2 * 24 * 60 * 60 * 1000) },
+      shift: { status: "CONFIRMED" },
+      staff: { isProxy: false },
+    },
+    include: { shift: { include: { company: true } } },
+  });
+
+  for (const report of reports) {
+    await prisma.workReport.update({ where: { id: report.id }, data: { submitReminderSentAt: new Date() } });
+    await sendPushToUser(report.staffUserId, {
+      title: "業務報告がまだ提出されていません",
+      body: `${report.shift.date.toISOString().slice(0, 10)} ${report.shift.company.name}の業務報告を提出してください`,
+      url: "/staff/timecard",
+    });
+  }
+}
+
 // ⑤未提出の業務報告リマインド（週次、スタッフ本人宛）— 出勤/退勤打刻済み
 // なのに提出（submittedAt）まで済んでいないシフトをスタッフごとに集計する。
 export async function runUnsubmittedWorkReportReminders() {

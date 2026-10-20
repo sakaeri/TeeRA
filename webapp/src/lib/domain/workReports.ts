@@ -228,17 +228,49 @@ export async function listOwnShiftsNeedingReport(staffUserId: string, companyIds
   // 台）は「今日」が前日扱いになり、今日の（JSTでの）シフトが一時的に一覧
   // から消えてしまっていた。
   const today = new Date(`${todayJst()}T23:59:59.999Z`);
+  const base = { staffUserId, companyId: { in: companyIds }, status: "CONFIRMED" as const, date: { lte: today } };
+  const include = { company: true, workReport: true, companyRelationship: { include: { clientCompany: true } } };
 
-  return prisma.shift.findMany({
+  // 未提出・要対応のものは件数で切らずに全部（以前は提出済みも含めた直近
+  // 30件だけを読んでいたため、毎日勤務する人だと古い未提出が一覧から消え、
+  // 提出する手段がなくなっていた）。提出済みは履歴表示用に直近30件だけ。
+  const [needsAction, recent] = await Promise.all([
+    prisma.shift.findMany({
+      where: { ...base, OR: needsReportConditions() },
+      include,
+      orderBy: { date: "desc" },
+      take: 300,
+    }),
+    prisma.shift.findMany({ where: base, include, orderBy: { date: "desc" }, take: 30 }),
+  ]);
+  const byId = new Map([...recent, ...needsAction].map((s) => [s.id, s]));
+  return Array.from(byId.values()).sort((a, b) => b.date.getTime() - a.date.getTime());
+}
+
+// まだスタッフの対応が必要なシフトの条件（未提出・差し戻し・修正の確認待ち）。
+// 欠勤・キャンセルの報告もsubmittedAtが入るので、ここには含まれない。
+function needsReportConditions() {
+  return [
+    { workReport: null },
+    { workReport: { submittedAt: null } },
+    { workReport: { approvalStatus: { in: ["REJECTED" as const, "NEEDS_CONFIRMATION" as const] } } },
+  ];
+}
+
+// ナビの「タイムカード」バッジ用 — 報告が必要なのにまだ出ていない件数。
+// 今日のこれから勤務するシフト（まだ退勤していない）は数えない。
+export async function countUnsubmittedReports(staffUserId: string, companyIds: string[]) {
+  const todayStart = new Date(`${todayJst()}T00:00:00.000Z`);
+  return prisma.shift.count({
     where: {
       staffUserId,
       companyId: { in: companyIds },
       status: "CONFIRMED",
-      date: { lte: today },
+      AND: [
+        { OR: needsReportConditions() },
+        { OR: [{ date: { lt: todayStart } }, { workReport: { clockOut: { not: null } } }] },
+      ],
     },
-    include: { company: true, workReport: true, companyRelationship: { include: { clientCompany: true } } },
-    orderBy: { date: "desc" },
-    take: 30,
   });
 }
 

@@ -45,8 +45,10 @@ export default async function StaffHomePage({
   // 済んでいないシフトだけ（対応済みは今まで通りタイムカードのページの
   // 履歴側で見る）。
   const todayStr = todayJst();
-  const todayShifts = shiftsNeedingReport
-    .filter((s) => s.date.toISOString().slice(0, 10) === todayStr)
+  // 今日の分に加え、前日以前の未提出も出す（日付が変わると前日の未提出に
+  // 気付く場所がなかったため）。
+  const popupCandidates = shiftsNeedingReport
+    .filter((s) => s.date.toISOString().slice(0, 10) <= todayStr)
     .map((s) => ({
       id: s.id,
       workReportId: s.workReport?.id ?? null,
@@ -69,6 +71,10 @@ export default async function StaffHomePage({
       submittedAt: s.workReport?.submittedAt?.toISOString() ?? null,
     }))
     .filter((s) => !isDone(s));
+  const todayShifts = popupCandidates.filter((s) => s.date === todayStr);
+  const pastUnsubmitted = popupCandidates.filter((s) => s.date < todayStr);
+  // 前日以前の分は多いとポップアップが長くなるので3件まで（残りはタイムカードへ）
+  const PAST_IN_POPUP = 3;
 
   // 1件のShiftRequestが複数日をまとめて持っているため、カレンダー表示用に
   // 「1日=1行」へ展開する。過去日は会社側が対応し忘れていてもマッチしよう
@@ -93,7 +99,11 @@ export default async function StaffHomePage({
       <StaffNoticesSection
         notices={unreadNotices.map((n) => ({ id: n.id, message: n.message, createdAt: n.createdAt.toISOString() }))}
       />
-      <TodayShiftPopup shifts={todayShifts} knownTaskNamesByCompany={knownTaskNames} />
+      <TodayShiftPopup
+        shifts={[...todayShifts, ...pastUnsubmitted.slice(0, PAST_IN_POPUP)]}
+        moreUnsubmittedCount={Math.max(pastUnsubmitted.length - PAST_IN_POPUP, 0)}
+        knownTaskNamesByCompany={knownTaskNames}
+      />
       <StaffCalendarView
         year={year}
         month={month}

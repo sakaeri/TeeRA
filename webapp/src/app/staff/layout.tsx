@@ -3,6 +3,7 @@ import { hasAnyTeamManagementRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { getStaffPointsBalance } from "@/lib/domain/promo";
 import { listOpenRecruitmentsForStaff } from "@/lib/domain/recruitment";
+import { countUnsubmittedReports } from "@/lib/domain/workReports";
 import { StaffShell } from "@/components/staff/StaffShell";
 
 export default async function StaffLayout({
@@ -34,6 +35,11 @@ export default async function StaffLayout({
   // ナビの「設定」バッジ用 — 契約書未確認（同意待ち）＋単価変更などの未読
   // お知らせの合算。設定を開かないと新着に気づけない問題への対応。
   const contractSettingsBadgeCount = pendingContractCount + unreadNoticeCount;
+  // ナビの「タイムカード」バッジ用 — 業務報告が未提出の件数（所属する全社分）
+  const unsubmittedReportCount = await countUnsubmittedReports(
+    userId,
+    myMemberships.map((m) => m.companyId),
+  );
 
   return (
     <StaffShell
@@ -43,6 +49,7 @@ export default async function StaffLayout({
       hasMultipleCompanies={myMemberships.length > 1}
       showCompanyScreenLink={membership.role !== "STAFF" || hasAnyTeamManagementRole(membership)}
       openRecruitmentCount={openRecruitmentCount}
+      unsubmittedReportCount={unsubmittedReportCount}
       contractSettingsBadgeCount={contractSettingsBadgeCount}
       hasPendingContracts={pendingContractCount > 0}
     >

@@ -867,6 +867,8 @@ model WorkReport {
   // 「実際に業務報告を提出した」を区別できない。submitWorkReport()が
   // 呼ばれた時にのみセットされる、提出済みの唯一の目印。
   submittedAt       DateTime?
+  // 退勤から3時間たっても未提出のときに送るプッシュ通知の送信済み記録（1回だけ送る）
+  submitReminderSentAt DateTime?
   approvalStatus    ApprovalStatus    @default(PENDING)
   approverUserId    String?
   approvedAt        DateTime?
