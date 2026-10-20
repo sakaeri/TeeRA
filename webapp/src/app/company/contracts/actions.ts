@@ -134,22 +134,16 @@ export async function deletePlacementTaskNameAction(placementRateId: string) {
   revalidatePath("/company/calendar");
 }
 
-// 依頼主×業務内容ごとのキャンセル規定（依頼主がオーダーを取り消した時の扱い）。
-export async function setPlacementCancelRuleAction(input: {
-  placementRateId: string;
+type CancelRuleInput = {
   cancelPolicy: "FREE" | "FEE_AFTER_DEADLINE" | "DENY_AFTER_DEADLINE" | "NOT_ALLOWED";
   cancelDeadlineDaysBefore: number | null;
   cancelDeadlineTime: string | null;
   cancelFeeAmount: number | null;
   cancelStaffHandling: "HOLD" | "RELEASE";
-}) {
-  const { membership } = await requireCompanyAdminOrEditor();
-  const rate = await prisma.companyPlacementRate.findFirstOrThrow({
-    where: { id: input.placementRateId, companyId: membership.companyId },
-  });
-  const clientTeamIds = rate.companyRelationshipId ? await getClientTeamIds(rate.companyRelationshipId) : [];
-  if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
+};
 
+// 入力を検証し、規定の種類に関係ない項目を落とした保存用の値にする
+function normalizeCancelRule(input: CancelRuleInput) {
   const needsDeadline = input.cancelPolicy === "FEE_AFTER_DEADLINE" || input.cancelPolicy === "DENY_AFTER_DEADLINE";
   if (needsDeadline) {
     if (input.cancelDeadlineDaysBefore == null || input.cancelDeadlineDaysBefore < 0 || !/^\d{2}:\d{2}$/.test(input.cancelDeadlineTime ?? "")) {
@@ -159,15 +153,67 @@ export async function setPlacementCancelRuleAction(input: {
   if (input.cancelPolicy === "FEE_AFTER_DEADLINE" && !(input.cancelFeeAmount && input.cancelFeeAmount > 0)) {
     throw new Error("invalid_fee");
   }
+  return {
+    cancelPolicy: input.cancelPolicy,
+    cancelDeadlineDaysBefore: needsDeadline ? input.cancelDeadlineDaysBefore : null,
+    cancelDeadlineTime: needsDeadline ? input.cancelDeadlineTime : null,
+    cancelFeeAmount: input.cancelPolicy === "FEE_AFTER_DEADLINE" ? input.cancelFeeAmount : null,
+    cancelStaffHandling: input.cancelStaffHandling,
+  };
+}
+
+// 依頼主共通のキャンセル規定（依頼主がオーダーを取り消した時の扱い）。
+export async function setClientCancelRuleAction(input: CancelRuleInput & { companyRelationshipId: string }) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const relationship = await prisma.companyRelationship.findFirstOrThrow({
+    where: { id: input.companyRelationshipId, agencyCompanyId: membership.companyId },
+  });
+  const clientTeamIds = await getClientTeamIds(relationship.id);
+  if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
+
+  const data = normalizeCancelRule(input);
+  await prisma.clientCancelRule.upsert({
+    where: { companyId_companyRelationshipId: { companyId: membership.companyId, companyRelationshipId: relationship.id } },
+    create: { companyId: membership.companyId, companyRelationshipId: relationship.id, ...data },
+    update: data,
+  });
+  revalidatePath("/company/roster");
+}
+
+// 業務内容ごとのキャンセル規定（依頼主共通と違う場合だけの例外）。
+export async function setPlacementCancelRuleAction(input: CancelRuleInput & { placementRateId: string }) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const rate = await prisma.companyPlacementRate.findFirstOrThrow({
+    where: { id: input.placementRateId, companyId: membership.companyId },
+  });
+  const clientTeamIds = rate.companyRelationshipId ? await getClientTeamIds(rate.companyRelationshipId) : [];
+  if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
+
+  await prisma.companyPlacementRate.update({
+    where: { id: rate.id },
+    data: { cancelRuleOverride: true, ...normalizeCancelRule(input) },
+  });
+  revalidatePath("/company/roster");
+}
+
+// 業務内容ごとの例外をやめて、依頼主共通の規定に戻す。
+export async function clearPlacementCancelRuleAction(placementRateId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const rate = await prisma.companyPlacementRate.findFirstOrThrow({
+    where: { id: placementRateId, companyId: membership.companyId },
+  });
+  const clientTeamIds = rate.companyRelationshipId ? await getClientTeamIds(rate.companyRelationshipId) : [];
+  if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
 
   await prisma.companyPlacementRate.update({
     where: { id: rate.id },
     data: {
-      cancelPolicy: input.cancelPolicy,
-      cancelDeadlineDaysBefore: needsDeadline ? input.cancelDeadlineDaysBefore : null,
-      cancelDeadlineTime: needsDeadline ? input.cancelDeadlineTime : null,
-      cancelFeeAmount: input.cancelPolicy === "FEE_AFTER_DEADLINE" ? input.cancelFeeAmount : null,
-      cancelStaffHandling: input.cancelStaffHandling,
+      cancelRuleOverride: false,
+      cancelPolicy: "FREE",
+      cancelDeadlineDaysBefore: null,
+      cancelDeadlineTime: null,
+      cancelFeeAmount: null,
+      cancelStaffHandling: "HOLD",
     },
   });
   revalidatePath("/company/roster");

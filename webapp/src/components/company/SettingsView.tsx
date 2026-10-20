@@ -505,11 +505,11 @@ function HowToSection() {
           image="/howto/cancel-rule.png"
           alt="キャンセル規定の設定画面"
           steps={[
-            "「スタッフ名簿」→「依頼主一覧」から依頼主を開き、「単価」タブの業務内容の「キャンセル規定」を押す",
+            "「スタッフ名簿」→「依頼主一覧」から依頼主を開き、「単価」タブの一番上の「キャンセル規定」で「共通の規定を設定」を押す（その依頼主の全部の業務内容に効く）",
             "「いつでもキャンセルできる」「締切を過ぎたらキャンセル料がかかる」「締切を過ぎたらキャンセルできない」「キャンセルできない」から選ぶ。締切は「勤務日の◯日前の◯時」で指定する",
             "「取り消された時のスタッフの扱い」を選ぶ。請負のように自社で振り替える場合は「調整中にする」、派遣のように依頼主が休みにしたらそのまま休みの場合は「そのまま休みにする」",
           ]}
-          note="依頼主がアプリでオーダーを取り消す時は、この規定に従って取り消せない・キャンセル料の了承が必要などの確認が出ます。キャンセル料はその月の請求書に自動で載ります。何も設定しない場合は「いつでもキャンセルできる・調整中にする」の扱いです。"
+          note="依頼主がアプリでオーダーを取り消す時は、この規定に従って取り消せない・キャンセル料の了承が必要などの確認が出ます。キャンセル料はその月の請求書に自動で載ります。業務内容によって扱いが違う場合だけ、「＋業務内容ごとに変える」でその業務内容を選んで別の規定にできます（「共通に戻す」で元に戻せます）。何も設定しない場合は「いつでもキャンセルできる・調整中にする」の扱いです。"
         />
       </SectionCard>
 
@@ -1146,8 +1146,13 @@ function AdminsSection({ admins, staff }: { admins: Admin[]; staff: StaffOption[
   const [pending, startTransition] = useTransition();
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   // ＋招待：新しく招待する（URL発行）か、既に所属しているスタッフから選ぶ
-  const [inviteMode, setInviteMode] = useState<"closed" | "choose" | "existing">("closed");
+  const [inviteMode, setInviteMode] = useState<"closed" | "new" | "existing">("closed");
   const [promoteUserId, setPromoteUserId] = useState("");
+  const closeInvite = () => {
+    setInviteMode("closed");
+    setInviteUrl(null);
+    setPromoteUserId("");
+  };
   const adminIds = new Set(admins.map((a) => a.userId));
   const promotableStaff = staff.filter((s) => !adminIds.has(s.userId));
   const [error, setError] = useState<string | null>(null);
@@ -1280,67 +1285,73 @@ function AdminsSection({ admins, staff }: { admins: Admin[]; staff: StaffOption[
       {inviteMode === "closed" ? (
         <button
           type="button"
-          onClick={() => setInviteMode("choose")}
+          onClick={() => setInviteMode("new")}
           className="rounded-lg border border-primary px-4 py-2 text-sm text-primary"
         >
           ＋招待
         </button>
       ) : (
-        <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() =>
-                startTransition(async () => {
-                  setInviteMode("choose");
-                  const url = await inviteCompanyAdminAction("COMPANY_ADMIN");
-                  setInviteUrl(url);
-                })
-              }
-              className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary disabled:opacity-60"
-            >
-              新しく招待する（URLを発行）
-            </button>
-            <button
-              type="button"
-              disabled={pending || promotableStaff.length === 0}
-              onClick={() => {
-                setInviteUrl(null);
-                setInviteMode("existing");
-              }}
-              className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary disabled:opacity-60"
-            >
-              既存スタッフから選ぶ
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setInviteMode("closed");
-                setInviteUrl(null);
-                setPromoteUserId("");
-              }}
-              className="text-xs text-muted hover:text-primary"
-            >
-              閉じる
-            </button>
-          </div>
-          {inviteUrl ? <CopyUrlField url={inviteUrl} /> : null}
-          {inviteMode === "existing" ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                aria-label="本部管理者にするスタッフ"
-                value={promoteUserId}
-                onChange={(e) => setPromoteUserId(e.target.value)}
-                className="rounded-lg border border-border px-2 py-1.5 text-sm"
+        // チームの「＋招待」（TeamInviteForm）と同じ見た目にそろえる
+        <div className="rounded-lg border border-border bg-background/40 p-3 text-sm">
+          <div className="mb-3 inline-flex rounded-lg border border-border bg-white p-0.5 text-xs">
+            {(
+              [
+                ["new", "新しく招待する"],
+                ["existing", "既存スタッフから選ぶ"],
+              ] as const
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setInviteMode(mode)}
+                className={`rounded-md px-3 py-1.5 font-semibold transition-colors ${
+                  inviteMode === mode ? "bg-primary text-primary-foreground" : "text-muted hover:text-foreground"
+                }`}
               >
-                <option value="">スタッフを選択</option>
-                {promotableStaff.map((s) => (
-                  <option key={s.userId} value={s.userId}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-end gap-2">
+            {inviteMode === "existing" ? (
+              promotableStaff.length === 0 ? (
+                <p className="text-xs text-muted">本部管理者にできる既存スタッフがいません。</p>
+              ) : (
+                <label className="flex flex-col gap-0.5 text-xs">
+                  <span className="text-muted">スタッフ</span>
+                  <select
+                    aria-label="本部管理者にするスタッフ"
+                    value={promoteUserId}
+                    onChange={(e) => setPromoteUserId(e.target.value)}
+                    className="rounded-lg border border-border px-2 py-1.5 text-sm text-foreground"
+                  >
+                    <option value="">スタッフを選択</option>
+                    {promotableStaff.map((s) => (
+                      <option key={s.userId} value={s.userId}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )
+            ) : null}
+
+            {inviteMode === "new" ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    const url = await inviteCompanyAdminAction("COMPANY_ADMIN");
+                    setInviteUrl(url);
+                  })
+                }
+                className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                招待URLを発行する
+              </button>
+            ) : promotableStaff.length > 0 ? (
               <button
                 type="button"
                 disabled={pending || !promoteUserId}
@@ -1349,8 +1360,7 @@ function AdminsSection({ admins, staff }: { admins: Admin[]; staff: StaffOption[
                     setError(null);
                     try {
                       await promoteStaffToCompanyAdminAction(promoteUserId);
-                      setPromoteUserId("");
-                      setInviteMode("closed");
+                      closeInvite();
                     } catch {
                       setError("本部管理者にできませんでした。");
                     }
@@ -1360,10 +1370,21 @@ function AdminsSection({ admins, staff }: { admins: Admin[]; staff: StaffOption[
               >
                 本部管理者にする
               </button>
-              <p className="w-full text-xs text-muted">
-                シフトにはこれまで通り入れます（「このメンバーはシフトにも入れる」がオンになります）。チームでの役職もそのままです。
-              </p>
+            ) : null}
+            <button type="button" onClick={closeInvite} className="rounded-lg border border-border px-3 py-1.5 text-xs">
+              キャンセル
+            </button>
+          </div>
+
+          {inviteMode === "new" && inviteUrl ? (
+            <div className="mt-2">
+              <CopyUrlField url={inviteUrl} size="sm" />
             </div>
+          ) : null}
+          {inviteMode === "existing" && promotableStaff.length > 0 ? (
+            <p className="mt-2 text-xs text-muted">
+              シフトにはこれまで通り入れます（「このメンバーはシフトにも入れる」がオンになります）。チームでの役職もそのままです。
+            </p>
           ) : null}
         </div>
       )}

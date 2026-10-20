@@ -23,6 +23,8 @@ import {
   addPlacementRateVersionAction,
   deletePlacementTaskNameAction,
   setPlacementCancelRuleAction,
+  setClientCancelRuleAction,
+  clearPlacementCancelRuleAction,
 } from "@/app/company/contracts/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
 import { CopyUrlField } from "@/components/CopyUrlField";
@@ -30,18 +32,22 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type CancelPolicy = "FREE" | "FEE_AFTER_DEADLINE" | "DENY_AFTER_DEADLINE" | "NOT_ALLOWED";
 
-type PlacementRate = {
-  id: string;
-  taskName: string;
-  currentLabel: string;
-  cancelRuleUnset: boolean;
-  versions: { id: string; label: string; effectiveFrom: string }[];
+type CancelRule = {
   cancelPolicy: CancelPolicy;
   cancelDeadlineDaysBefore: number | null;
   cancelDeadlineTime: string | null;
   cancelFeeAmount: number | null;
   cancelStaffHandling: "HOLD" | "RELEASE";
-  cancelLabel: string;
+  label: string;
+};
+
+type PlacementRate = {
+  id: string;
+  taskName: string;
+  currentLabel: string;
+  versions: { id: string; label: string; effectiveFrom: string }[];
+  // 業務内容ごとの例外（nullなら依頼主共通の規定に従う）
+  cancelRule: CancelRule | null;
 };
 
 type RelationshipNote = {
@@ -79,6 +85,7 @@ type ClientMonthDetail = {
   workedHours: number;
   unapprovedCount: number;
   invoiceTotal: number | null;
+  clientCancelRule: CancelRule | null;
   placementRates: PlacementRate[];
   days: {
     shiftId: string;
@@ -744,6 +751,7 @@ export function ClientDetailPanel({
               <PlacementRatesTab
                 relationshipId={relationshipId}
                 rates={data.placementRates}
+                clientCancelRule={data.clientCancelRule}
                 knownTaskNames={knownTaskNames}
                 onChanged={refresh}
               />
@@ -1104,11 +1112,13 @@ const NEW_TASK_NAME_SENTINEL = "__new__";
 function PlacementRatesTab({
   relationshipId,
   rates,
+  clientCancelRule,
   knownTaskNames,
   onChanged,
 }: {
   relationshipId: string;
   rates: PlacementRate[];
+  clientCancelRule: CancelRule | null;
   knownTaskNames: string[];
   onChanged: () => Promise<void>;
 }) {
@@ -1120,7 +1130,6 @@ function PlacementRatesTab({
   const [amendHolidayAmount, setAmendHolidayAmount] = useState("");
   const [amendEffectiveFrom, setAmendEffectiveFrom] = useState(todayJst());
   const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null);
-  const [cancelRuleRate, setCancelRuleRate] = useState<PlacementRate | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
   const [newTaskNameMode, setNewTaskNameMode] = useState<"pick" | "custom">("custom");
   const [newTaskName, setNewTaskName] = useState("");
@@ -1195,7 +1204,14 @@ function PlacementRatesTab({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="mb-1 flex items-center justify-end">
+      <CancelRuleSection
+        relationshipId={relationshipId}
+        clientRule={clientCancelRule}
+        rates={rates}
+        onChanged={onChanged}
+      />
+
+      <div className="mb-1 mt-2 flex items-center justify-end">
         <button
           type="button"
           onClick={openNewForm}
@@ -1228,9 +1244,6 @@ function PlacementRatesTab({
                 <button type="button" onClick={() => startAmend(r)} className="rounded-md border border-primary/40 px-2.5 py-1 font-semibold text-primary hover:bg-primary/5">
                   単価を変更
                 </button>
-                <button type="button" onClick={() => setCancelRuleRate(r)} className="rounded-md border border-primary/40 px-2.5 py-1 font-semibold text-primary hover:bg-primary/5">
-                  キャンセル規定
-                </button>
                 <button
                   type="button"
                   disabled={pending}
@@ -1241,11 +1254,6 @@ function PlacementRatesTab({
                 </button>
               </div>
 
-              {r.cancelRuleUnset ? (
-                <p className="mt-1 text-xs font-semibold text-amber-700">キャンセル規定：未設定（キャンセル自由として扱います）</p>
-              ) : (
-                <p className="mt-1 text-xs text-muted">キャンセル規定：{r.cancelLabel}</p>
-              )}
               {deleteError?.id === r.id ? <p className="mt-1 text-xs text-red-600">{deleteError.message}</p> : null}
 
               {expandedId === r.id ? (
@@ -1264,17 +1272,6 @@ function PlacementRatesTab({
         })}
         {rates.length === 0 ? <p className="py-6 text-center text-sm text-muted">業務内容が登録されていません。</p> : null}
       </ul>
-
-      {cancelRuleRate ? (
-        <CancelRuleModal
-          rate={cancelRuleRate}
-          onClose={() => setCancelRuleRate(null)}
-          onSaved={async () => {
-            setCancelRuleRate(null);
-            await onChanged();
-          }}
-        />
-      ) : null}
 
       {amendingRate ? (
         <div
@@ -1471,23 +1468,136 @@ const CANCEL_POLICY_OPTIONS: { value: CancelPolicy; label: string }[] = [
   { value: "NOT_ALLOWED", label: "キャンセルできない" },
 ];
 
-// 依頼主がオーダーを取り消した時の扱い（この依頼主×業務内容ごと）。締切は
-// 「勤務日のN日前のHH:MM」で指定する（0日前＝勤務日当日）。
-function CancelRuleModal({
-  rate,
-  onClose,
-  onSaved,
+// 単価タブ一番上の「キャンセル規定」。依頼主ごとに1つ（全業務共通）を基本に、
+// 業務内容によって違う場合だけ例外を追加する。
+function CancelRuleSection({
+  relationshipId,
+  clientRule,
+  rates,
+  onChanged,
 }: {
-  rate: PlacementRate;
-  onClose: () => void;
-  onSaved: () => Promise<void>;
+  relationshipId: string;
+  clientRule: CancelRule | null;
+  rates: PlacementRate[];
+  onChanged: () => Promise<void>;
 }) {
   const [pending, startTransition] = useTransition();
-  const [policy, setPolicy] = useState<CancelPolicy>(rate.cancelPolicy);
-  const [daysBefore, setDaysBefore] = useState(String(rate.cancelDeadlineDaysBefore ?? 1));
-  const [time, setTime] = useState(rate.cancelDeadlineTime ?? "18:00");
-  const [fee, setFee] = useState(rate.cancelFeeAmount ? String(rate.cancelFeeAmount) : "");
-  const [staffHandling, setStaffHandling] = useState<"HOLD" | "RELEASE">(rate.cancelStaffHandling);
+  // 編集中の規定：依頼主共通（"client"）か、例外にする業務内容
+  const [editing, setEditing] = useState<"client" | PlacementRate | null>(null);
+  const exceptions = rates.filter((r) => r.cancelRule);
+  const exceptionCandidates = rates.filter((r) => !r.cancelRule);
+
+  return (
+    <div className="rounded-lg border border-border bg-background/40 p-3 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium">キャンセル規定</span>
+        <button
+          type="button"
+          onClick={() => setEditing("client")}
+          className="rounded-md border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/5"
+        >
+          {clientRule ? "共通の規定を変更" : "共通の規定を設定"}
+        </button>
+      </div>
+      {clientRule ? (
+        <p className="mt-1 text-xs text-muted">全業務共通：{clientRule.label}</p>
+      ) : (
+        <p className="mt-1 text-xs font-semibold text-amber-700">未設定（キャンセル自由として扱います）</p>
+      )}
+
+      {exceptions.length > 0 ? (
+        <ul className="mt-2 flex flex-col border-t border-border/60 pt-2 text-xs">
+          {exceptions.map((r) => (
+            <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1">
+              <span className="min-w-0 flex-1">
+                <span className="font-medium">{r.taskName}</span>
+                <span className="text-muted">：{r.cancelRule!.label}</span>
+              </span>
+              <button type="button" onClick={() => setEditing(r)} className="text-primary hover:underline">
+                変更
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    await clearPlacementCancelRuleAction(r.id);
+                    await onChanged();
+                  })
+                }
+                className="text-muted hover:text-red-600 disabled:opacity-60"
+              >
+                共通に戻す
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {exceptionCandidates.length > 0 ? (
+        <select
+          aria-label="業務内容ごとに変える"
+          value=""
+          onChange={(e) => {
+            const rate = rates.find((r) => r.id === e.target.value);
+            if (rate) setEditing(rate);
+          }}
+          className="mt-2 rounded-lg border border-border bg-white px-2 py-1 text-xs text-muted"
+        >
+          <option value="">＋業務内容ごとに変える</option>
+          {exceptionCandidates.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.taskName}
+            </option>
+          ))}
+        </select>
+      ) : null}
+
+      {editing ? (
+        <CancelRuleModal
+          title={editing === "client" ? "キャンセル規定（全業務共通）" : `キャンセル規定（${editing.taskName}だけ）`}
+          description={
+            editing === "client"
+              ? "依頼主がオーダーを取り消した時の扱いです。この依頼主のすべての業務内容に効きます（業務内容ごとに変えたものを除く）。キャンセル料はその月の請求書に自動で記載されます。"
+              : `「${editing.taskName}」だけ共通の規定と違う扱いにします。キャンセル料はその月の請求書に自動で記載されます。`
+          }
+          initial={editing === "client" ? clientRule : (editing.cancelRule ?? clientRule)}
+          onClose={() => setEditing(null)}
+          onSubmit={async (rule) => {
+            if (editing === "client") {
+              await setClientCancelRuleAction({ companyRelationshipId: relationshipId, ...rule });
+            } else {
+              await setPlacementCancelRuleAction({ placementRateId: editing.id, ...rule });
+            }
+            setEditing(null);
+            await onChanged();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// 締切は「勤務日のN日前のHH:MM」で指定する（0日前＝勤務日当日）。
+function CancelRuleModal({
+  title,
+  description,
+  initial,
+  onClose,
+  onSubmit,
+}: {
+  title: string;
+  description: string;
+  initial: CancelRule | null;
+  onClose: () => void;
+  onSubmit: (rule: Omit<CancelRule, "label">) => Promise<void>;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [policy, setPolicy] = useState<CancelPolicy>(initial?.cancelPolicy ?? "FREE");
+  const [daysBefore, setDaysBefore] = useState(String(initial?.cancelDeadlineDaysBefore ?? 1));
+  const [time, setTime] = useState(initial?.cancelDeadlineTime ?? "18:00");
+  const [fee, setFee] = useState(initial?.cancelFeeAmount ? String(initial.cancelFeeAmount) : "");
+  const [staffHandling, setStaffHandling] = useState<"HOLD" | "RELEASE">(initial?.cancelStaffHandling ?? "HOLD");
   const [error, setError] = useState<string | null>(null);
 
   const needsDeadline = policy === "FEE_AFTER_DEADLINE" || policy === "DENY_AFTER_DEADLINE";
@@ -1499,21 +1609,18 @@ function CancelRuleModal({
     setError(null);
     startTransition(async () => {
       try {
-        await setPlacementCancelRuleAction({
-          placementRateId: rate.id,
+        await onSubmit({
           cancelPolicy: policy,
           cancelDeadlineDaysBefore: needsDeadline ? Number(daysBefore) : null,
           cancelDeadlineTime: needsDeadline ? time : null,
           cancelFeeAmount: policy === "FEE_AFTER_DEADLINE" ? Number(fee) : null,
           cancelStaffHandling: staffHandling,
         });
-        await onSaved();
       } catch {
         setError("保存できませんでした。入力内容を確認してください。");
       }
     });
   }
-
   return (
     <div
       className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
@@ -1524,14 +1631,12 @@ function CancelRuleModal({
     >
       <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
-          <h4 className="font-serif-jp text-base font-bold text-primary">キャンセル規定（{rate.taskName}）</h4>
+          <h4 className="font-serif-jp text-base font-bold text-primary">{title}</h4>
           <button type="button" onClick={onClose} aria-label="閉じる" className="text-muted hover:text-primary">
             ✕
           </button>
         </div>
-        <p className="mb-3 text-xs text-muted">
-          依頼主がアプリ上でオーダーを取り消した時、この業務内容に入っている自社スタッフの扱いを決めます。キャンセル料はその月の請求書に自動で記載されます。
-        </p>
+        <p className="mb-3 text-xs text-muted">{description}</p>
         <div className="flex flex-col gap-3 text-sm">
           <select
             value={policy}

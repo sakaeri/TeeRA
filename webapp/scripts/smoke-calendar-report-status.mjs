@@ -59,7 +59,7 @@ try {
     `with ins as (insert into "CompanyRelationship" (id, "ownerCompanyId", "agencyCompanyId", "proxyName", status, "createdAt") values (gen_random_uuid()::text, '${companyId}', '${companyId}', '反映確認ゴルフ場', 'ACTIVE', now()) returning id) select id from ins;`,
   );
   psql(
-    `insert into "CompanyPlacementRate" (id, "companyId", "companyRelationshipId", "taskName", "cancelPolicy", "cancelDeadlineDaysBefore", "cancelDeadlineTime", "cancelFeeAmount") values (gen_random_uuid()::text, '${companyId}', '${relId}', 'キャディ', 'FEE_AFTER_DEADLINE', 1, '17:00', 3000);`,
+    `insert into "ClientCancelRule" (id, "companyId", "companyRelationshipId", "cancelPolicy", "cancelDeadlineDaysBefore", "cancelDeadlineTime", "cancelFeeAmount", "updatedAt") values (gen_random_uuid()::text, '${companyId}', '${relId}', 'FEE_AFTER_DEADLINE', 1, '17:00', 3000, now());`,
   );
 
   const day = psql(`select ((now() at time zone 'Asia/Tokyo')::date - 1)::text;`);

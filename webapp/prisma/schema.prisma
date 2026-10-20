@@ -131,6 +131,7 @@ model Company {
   clientRelationships  CompanyRelationship[]  @relation("ClientSide") // this company receives staff
   relationshipNotes    RelationshipNote[]
   placementRates       CompanyPlacementRate[]
+  clientCancelRules    ClientCancelRule[]
   staffTaskRates       StaffTaskRate[]
   staffNotices         StaffNotice[]
   contractTemplates    ContractTemplate[]
@@ -369,6 +370,7 @@ model CompanyRelationship {
   clientCompany Company? @relation("ClientSide", fields: [clientCompanyId], references: [id], onDelete: SetNull)
 
   placementRates       CompanyPlacementRate[]
+  clientCancelRules    ClientCancelRule[]
   staffTaskRates       StaffTaskRate[]
   contractTemplates    ContractTemplate[]
   shifts               Shift[]
@@ -449,8 +451,10 @@ model CompanyPlacementRate {
   companyRelationshipId String? // null = 自社（本社/支社）
   taskName              String
   createdAt             DateTime @default(now())
-  // 依頼主がオーダーを取り消した時のキャンセル規定（依頼主×業務内容ごと）。
+  // 業務内容ごとのキャンセル規定（例外）。cancelRuleOverride=falseの間は
+  // 下の項目は使わず、依頼主共通の規定（ClientCancelRule）に従う。
   // 締切は「勤務日のN日前のHH:MM（JST）」で表す（0日前＝勤務日当日）。
+  cancelRuleOverride       Boolean      @default(false)
   cancelPolicy             CancelPolicy @default(FREE)
   cancelDeadlineDaysBefore Int?
   cancelDeadlineTime       String?
@@ -465,6 +469,27 @@ model CompanyPlacementRate {
 
   @@unique([companyId, companyRelationshipId, taskName])
   @@index([companyId])
+}
+
+// 依頼主がオーダーを取り消した時のキャンセル規定（依頼主ごとに1つ、全業務共通）。
+// 業務内容によって違う場合だけ、CompanyPlacementRate側で例外を持つ。
+model ClientCancelRule {
+  id                       String              @id @default(cuid())
+  companyId                String
+  companyRelationshipId    String
+  cancelPolicy             CancelPolicy        @default(FREE)
+  cancelDeadlineDaysBefore Int?
+  cancelDeadlineTime       String?
+  cancelFeeAmount          Int? // 1人あたりのキャンセル料（円）
+  cancelStaffHandling      CancelStaffHandling @default(HOLD)
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+
+  company             Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyRelationship CompanyRelationship @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, companyRelationshipId])
+  @@index([companyRelationshipId])
 }
 
 enum CancelStaffHandling {

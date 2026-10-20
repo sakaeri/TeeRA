@@ -14,6 +14,31 @@ export type CancelRule = {
   cancelStaffHandling: CancelStaffHandling;
 };
 
+// その依頼主×業務内容に効くキャンセル規定。業務内容ごとの例外があればそれを、
+// 無ければ依頼主共通の規定を使う。どちらも無ければnull（キャンセル自由・調整中）。
+export async function findCancelRule(
+  client: Tx | typeof prisma,
+  params: { companyId: string; companyRelationshipId: string | null; taskName: string | null },
+): Promise<CancelRule | null> {
+  if (!params.companyRelationshipId) return null;
+  if (params.taskName) {
+    const rate = await client.companyPlacementRate.findFirst({
+      where: {
+        companyId: params.companyId,
+        companyRelationshipId: params.companyRelationshipId,
+        taskName: params.taskName,
+        cancelRuleOverride: true,
+      },
+    });
+    if (rate) return rate;
+  }
+  return client.clientCancelRule.findUnique({
+    where: {
+      companyId_companyRelationshipId: { companyId: params.companyId, companyRelationshipId: params.companyRelationshipId },
+    },
+  });
+}
+
 // 締切 =「勤務日のN日前のHH:MM（JST）」。0日前は勤務日当日。
 export function cancelDeadline(shiftDate: Date, rule: CancelRule): Date | null {
   if (rule.cancelDeadlineDaysBefore == null || !rule.cancelDeadlineTime) return null;
@@ -76,8 +101,8 @@ export type RecruitmentCancelImpact = {
 };
 
 // 依頼主が自分のオーダーを取り消した時に、派遣元（別会社）のスタッフの
-// シフトがどう扱われるか。規定は派遣元がその依頼主×業務内容の単価欄で
-// 設定したもの（CompanyPlacementRate）を使う。自社スタッフのシフトは対象外。
+// シフトがどう扱われるか。規定は派遣元がその依頼主の単価タブで設定した
+// もの（依頼主共通＋業務内容ごとの例外、findCancelRule）を使う。自社スタッフのシフトは対象外。
 export async function listRecruitmentCancelImpacts(
   client: Tx | typeof prisma,
   recruitmentId: string,
@@ -96,12 +121,7 @@ export async function listRecruitmentCancelImpacts(
 
   const impacts: RecruitmentCancelImpact[] = [];
   for (const s of shifts) {
-    const rule =
-      s.companyRelationshipId && s.taskName
-        ? await client.companyPlacementRate.findFirst({
-            where: { companyId: s.companyId, companyRelationshipId: s.companyRelationshipId, taskName: s.taskName },
-          })
-        : null;
+    const rule = await findCancelRule(client, s);
     impacts.push({
       shiftId: s.id,
       staffUserId: s.staffUserId,
@@ -124,12 +144,7 @@ export async function previewShiftCancellation(shiftId: string, now = new Date()
     where: { id: shiftId },
     include: { cancellation: true, companyRelationship: { include: { clientCompany: true } } },
   });
-  const rule =
-    shift.source === "CLIENT" && shift.companyRelationshipId && shift.taskName
-      ? await prisma.companyPlacementRate.findFirst({
-          where: { companyId: shift.companyId, companyRelationshipId: shift.companyRelationshipId, taskName: shift.taskName },
-        })
-      : null;
+  const rule = shift.source === "CLIENT" ? await findCancelRule(prisma, shift) : null;
   const evaluation = evaluateCancellation(shift.date, rule, now);
   return {
     shift,

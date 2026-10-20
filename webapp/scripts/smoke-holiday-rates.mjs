@@ -82,7 +82,7 @@ try {
   await page.waitForTimeout(800);
   const clientText = await clientPanel.innerText();
   log("単価タブに平日・土日祝の単価が出る", clientText.includes("時給2000円／土日祝2500円"));
-  log("キャンセル規定が未設定なら「未設定」と出る", clientText.includes("キャンセル規定：未設定"));
+  log("キャンセル規定が未設定なら「未設定」と出る", clientText.includes("未設定（キャンセル自由として扱います）"));
   await clientPanel.getByText("閉じる").first().click();
   await page.waitForTimeout(300);
 

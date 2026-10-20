@@ -47,7 +47,7 @@ try {
   await page.waitForTimeout(800);
   await page.getByRole("button", { name: "＋招待" }).first().click();
   log("「新しく招待する」と「既存スタッフから選ぶ」が選べる",
-    (await page.getByRole("button", { name: "新しく招待する（URLを発行）" }).count()) === 1 &&
+    (await page.getByRole("button", { name: "新しく招待する", exact: true }).count()) === 1 &&
       (await page.getByRole("button", { name: "既存スタッフから選ぶ" }).count()) === 1);
   await page.getByRole("button", { name: "既存スタッフから選ぶ" }).click();
   const select = page.getByLabel("本部管理者にするスタッフ");

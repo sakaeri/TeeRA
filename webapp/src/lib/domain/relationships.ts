@@ -4,7 +4,18 @@ import { prisma } from "@/lib/prisma";
 import { reportDisplay } from "@/lib/workReportDisplay";
 import { resolveRateVersion, excludeBaselineVersion } from "@/lib/domain/contracts";
 import { computeInvoiceTotals } from "@/lib/domain/invoicing";
-import { describeCancelRule } from "@/lib/domain/cancellation";
+import { describeCancelRule, type CancelRule } from "@/lib/domain/cancellation";
+
+function serializeCancelRule(r: CancelRule) {
+  return {
+    cancelPolicy: r.cancelPolicy,
+    cancelDeadlineDaysBefore: r.cancelDeadlineDaysBefore,
+    cancelDeadlineTime: r.cancelDeadlineTime,
+    cancelFeeAmount: r.cancelFeeAmount,
+    cancelStaffHandling: r.cancelStaffHandling,
+    label: describeCancelRule(r),
+  };
+}
 
 // 依頼主一覧 (from this company's perspective as the sending/agency side):
 // companies this company sends staff to. ownerCompanyIdでは絞らない —
@@ -365,6 +376,17 @@ export async function getClientMonthDetail(params: {
   const start = new Date(Date.UTC(params.year, params.month - 1, 1));
   const end = new Date(Date.UTC(params.year, params.month, 1));
 
+  const clientCancelRule = shiftOwnerCompanyId
+    ? await prisma.clientCancelRule.findUnique({
+        where: {
+          companyId_companyRelationshipId: {
+            companyId: shiftOwnerCompanyId,
+            companyRelationshipId: params.companyRelationshipId,
+          },
+        },
+      })
+    : null;
+
   // shiftOwnerCompanyId未リンク（相手がまだ仮アカウントのまま）だと
   // シフト・単価はまだ一件も存在し得ないので、クエリせず空のまま返す。
   const [shifts, placementRates, placements] = await Promise.all([
@@ -475,6 +497,8 @@ export async function getClientMonthDetail(params: {
     workedHours,
     unapprovedCount,
     invoiceTotal,
+    // 依頼主共通のキャンセル規定（未設定ならnull＝キャンセル自由として扱う）
+    clientCancelRule: clientCancelRule ? serializeCancelRule(clientCancelRule) : null,
     placementRates: placementRates.map((r) => {
       const current = resolveRateVersion(r.versions, today);
       return {
@@ -483,18 +507,8 @@ export async function getClientMonthDetail(params: {
         currentLabel: current
           ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円${current.holidayAmount != null ? `／土日祝${current.holidayAmount}円` : ""}`
           : "単価未設定",
-        cancelPolicy: r.cancelPolicy,
-        cancelDeadlineDaysBefore: r.cancelDeadlineDaysBefore,
-        cancelDeadlineTime: r.cancelDeadlineTime,
-        cancelFeeAmount: r.cancelFeeAmount,
-        cancelStaffHandling: r.cancelStaffHandling,
-        // 規定をまだ一度も設定していない（既定値のまま）なら未設定として出す
-        cancelRuleUnset:
-          r.cancelPolicy === "FREE" &&
-          r.cancelDeadlineDaysBefore == null &&
-          r.cancelFeeAmount == null &&
-          r.cancelStaffHandling === "HOLD",
-        cancelLabel: describeCancelRule(r),
+        // 業務内容ごとの例外（falseなら依頼主共通の規定に従う）
+        cancelRule: r.cancelRuleOverride ? serializeCancelRule(r) : null,
         versions: excludeBaselineVersion(r.versions).map((v) => ({
           id: v.id,
           label:
