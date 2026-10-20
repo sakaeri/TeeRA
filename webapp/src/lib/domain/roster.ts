@@ -422,6 +422,17 @@ export async function getStaffMonthDetail(params: {
         partyName: c.partyName,
         partyAddress: c.partyAddress,
         partyPhoneNumber: c.partyPhoneNumber,
+        // 同意の記録（この機能より前に同意した契約・同意前の契約はnull）
+        consentRecord: c.consentSnapshot
+          ? {
+              email: c.consentEmail,
+              emailVerified: c.consentEmailVerified,
+              ip: c.consentIp,
+              userAgent: c.consentUserAgent,
+              hash: c.consentHash,
+              copySentAt: c.consentCopySentAt?.toISOString() ?? null,
+            }
+          : null,
         wageVersions: excludeBaselineVersion(c.wageVersions).map((v) => ({
           id: v.id,
           label: `${WAGE_TYPE_LABEL[c.template.wageType]}${v.wageAmount}円`,

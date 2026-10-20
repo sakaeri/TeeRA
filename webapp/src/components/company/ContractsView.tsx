@@ -57,6 +57,15 @@ export type UploadOnlyTemplate = {
 
 export type ClientOption = { id: string; name: string };
 
+export type ConsentRecord = {
+  email: string | null;
+  emailVerified: boolean | null;
+  ip: string | null;
+  userAgent: string | null;
+  hash: string | null;
+  copySentAt: string | null;
+};
+
 const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
   PART_TIME: "アルバイト",
   FIXED_TERM_EMPLOYEE: "契約社員",
@@ -802,6 +811,8 @@ export function TemplateModal({
   onClose,
   onSaved,
   readOnly,
+  pdfUrl,
+  consentRecord,
 }: {
   clients: ClientOption[];
   companyName: string;
@@ -832,6 +843,11 @@ export function TemplateModal({
   // 表示に固定し、編集・保存のボタンを出さない — 誤って共有テンプレートを
   // 書き換えてしまわないようにするため。
   readOnly?: boolean;
+  // 既存の契約を見る時の「PDFで開く」のリンク先（/api/contracts/[id]/pdf）
+  pdfUrl?: string;
+  // 会社側で見る時の同意の記録（本人が同意した証拠）。同意前・記録が無い
+  // 古い契約はnull
+  consentRecord?: ConsentRecord | null;
 }) {
   const [pending, startTransition] = useTransition();
   const [customTitle, setCustomTitle] = useState(
@@ -975,9 +991,21 @@ export function TemplateModal({
                   editingTemplate && !preview ? (duplicateAsNew ? "の複製" : "の編集") : ""
                 }`}
           </h3>
-          <button type="button" onClick={onClose} className="text-muted">
-            ✕
-          </button>
+          <div className="flex items-center gap-3">
+            {pdfUrl ? (
+              <a
+                href={pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/5"
+              >
+                PDFで開く
+              </a>
+            ) : null}
+            <button type="button" onClick={onClose} className="text-muted">
+              ✕
+            </button>
+          </div>
         </div>
         {generateForStaff && !preview ? (
           <p className="mb-3 text-xs text-muted">
@@ -1016,6 +1044,28 @@ export function TemplateModal({
             乙の住所・連絡先：{partyInfo.address || "未登録"}
             {partyInfo.phoneNumber ? ` ／ ${partyInfo.phoneNumber}` : ""}
           </p>
+        ) : null}
+        {consentRecord ? (
+          <div className="mt-3 rounded-lg border border-border bg-background/40 p-3 text-xs">
+            <p className="mb-1 font-semibold text-primary">同意の記録</p>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-muted">
+              <dt>同意したアカウント</dt>
+              <dd className="break-all text-foreground">
+                {consentRecord.email ?? "—"}
+                {consentRecord.emailVerified ? "（メールアドレス確認済み）" : ""}
+              </dd>
+              <dt>接続元IPアドレス</dt>
+              <dd className="break-all text-foreground">{consentRecord.ip ?? "—"}</dd>
+              <dt>端末・ブラウザ</dt>
+              <dd className="break-all text-foreground">{consentRecord.userAgent ?? "—"}</dd>
+              <dt>控えのメール</dt>
+              <dd className="text-foreground">
+                {consentRecord.copySentAt ? `${formatSignedAt(consentRecord.copySentAt)}に本人へ送信` : "未送信"}
+              </dd>
+              <dt>文書ハッシュ</dt>
+              <dd className="break-all font-mono text-[10px] text-foreground">{consentRecord.hash ?? "—"}</dd>
+            </dl>
+          </div>
         ) : null}
         <div className="my-4 border-t border-border" />
 

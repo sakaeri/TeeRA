@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { todayJst } from "@/lib/date";
+import { buildContractDocument, hashContractConsent } from "@/lib/contractDocument";
 import type {
   EmploymentType,
   WorkplaceType,
@@ -293,18 +294,38 @@ export async function consentStaffContract(params: {
   partyName: string;
   partyAddress: string;
   partyPhoneNumber: string;
+  // 同意の記録（接続元・端末）。アクション側でリクエストヘッダーから取る
+  ip: string | null;
+  userAgent: string | null;
 }) {
   const contract = await prisma.staffContract.findFirstOrThrow({
     where: { id: params.staffContractId, staffUserId: params.staffUserId, status: "PENDING_CONSENT" },
+    include: { template: { include: { company: true } }, staff: true },
+  });
+  const consentedAt = new Date();
+  // 同意した時点の契約書の内容をそのまま残し、内容＋同意日時のハッシュを取る
+  const document = buildContractDocument({
+    company: { name: contract.template.company.name, address: contract.template.company.address },
+    party: { name: params.partyName, address: params.partyAddress, phoneNumber: params.partyPhoneNumber },
+    template: contract.template,
+    wageAmount: contract.wageAmountSnapshot,
+    contractStartDate: (contract.contractStartDate ?? contract.template.contractStartDate).toISOString().slice(0, 10),
+    contractEndDate: (contract.contractEndDate ?? contract.template.contractEndDate)?.toISOString().slice(0, 10) ?? null,
   });
   return prisma.staffContract.update({
     where: { id: contract.id },
     data: {
       status: "ACTIVE",
-      consentedAt: new Date(),
+      consentedAt,
       partyName: params.partyName,
       partyAddress: params.partyAddress,
       partyPhoneNumber: params.partyPhoneNumber,
+      consentSnapshot: document,
+      consentHash: hashContractConsent(document, consentedAt.toISOString()),
+      consentIp: params.ip,
+      consentUserAgent: params.userAgent,
+      consentEmail: contract.staff.email,
+      consentEmailVerified: contract.staff.emailVerified,
     },
   });
 }

@@ -1038,6 +1038,17 @@ model StaffContract {
   partyName           String?
   partyAddress        String?
   partyPhoneNumber    String?
+  // 同意の記録（本人が同意したことの証拠）。同意した時点の契約書の内容
+  // （lib/contractDocument.tsのContractDocument）と、その内容＋同意日時の
+  // SHA-256、同意した時の接続元・端末・ログイン中のアカウントのメール
+  // アドレスを残す。控えのPDFは同意直後に本人のメールへ送る。
+  consentSnapshot       Json?
+  consentHash           String?
+  consentIp             String?
+  consentUserAgent      String?
+  consentEmail          String?
+  consentEmailVerified  Boolean?
+  consentCopySentAt     DateTime?
   // 手動で「終了する」を押した際に本人へ通知した日（任意入力）。解雇予告・
   // 雇止め予告・フリーランス新法などの事前通知義務の確認補助として記録する
   // だけで、システム側で法律要件の充足を判定するものではない。

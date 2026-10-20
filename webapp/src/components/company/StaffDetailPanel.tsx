@@ -38,6 +38,7 @@ import {
   UploadOnlyContractDetail,
   type Template,
   type UploadOnlyTemplate,
+  type ConsentRecord,
 } from "@/components/company/ContractsView";
 
 const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
@@ -120,6 +121,7 @@ type StaffMonthDetail = {
     partyName: string | null;
     partyAddress: string | null;
     partyPhoneNumber: string | null;
+    consentRecord: ConsentRecord | null;
   }[];
   taskRates: StaffTaskRate[];
   days: {
@@ -1438,6 +1440,8 @@ export function StaffDetailPanel({
                   phoneNumber: detailContract.partyPhoneNumber ?? undefined,
                   consentedAt: detailContract.consentedAt,
                 }}
+                pdfUrl={`/api/contracts/${detailContract.id}/pdf`}
+                consentRecord={detailContract.consentRecord}
                 onClose={() => setDetailContractId(null)}
               />
             );

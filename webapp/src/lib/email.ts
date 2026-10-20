@@ -27,13 +27,19 @@ function htmlToPlainText(html: string) {
     .trim();
 }
 
-async function sendMail(to: string, subject: string, html: string) {
+async function sendMail(
+  to: string,
+  subject: string,
+  html: string,
+  attachments?: { filename: string; content: Buffer }[],
+) {
   const text = htmlToPlainText(html);
   if (!resend) {
-    console.log(`[email:fallback] RESEND_API_KEY未設定のため送信をスキップしました。宛先=${to} 件名=${subject}\n${html}`);
+    const attached = attachments?.length ? ` 添付=${attachments.map((a) => `${a.filename}(${a.content.length}bytes)`).join(",")}` : "";
+    console.log(`[email:fallback] RESEND_API_KEY未設定のため送信をスキップしました。宛先=${to} 件名=${subject}${attached}\n${html}`);
     return;
   }
-  const result = await resend.emails.send({ from: FROM, to, subject, html, text });
+  const result = await resend.emails.send({ from: FROM, to, subject, html, text, attachments });
   if (result.error) {
     console.error(`[email:resend-error] 宛先=${to} 件名=${subject}`, result.error);
   } else {
@@ -80,6 +86,29 @@ function button(url: string, label: string) {
 
 function note(html: string) {
   return `<p style="margin:16px 0 0;font-size:12px;color:#8b968e;line-height:1.6;">${html}</p>`;
+}
+
+// 雇用契約書に同意した直後に、本人へ控え（同意の記録つきPDF）を送る。
+// 本人以外が同意していた場合に本人が気づけるようにするのも目的。
+export async function sendContractConsentCopyEmail(params: {
+  to: string;
+  name: string;
+  companyName: string;
+  consentedAtLabel: string;
+  pdf: Buffer;
+}) {
+  await sendMail(
+    params.to,
+    `【TeeRA】雇用契約書の控え（${params.companyName}）`,
+    emailLayout(
+      "雇用契約書の控え",
+      `${greeting(params.name)}
+       <p style="margin:0 0 12px;font-size:14px;line-height:1.6;">${params.companyName}との雇用契約書に同意しました。控えとして、同意した内容のPDFを添付します。</p>
+       ${infoRow("同意日時", params.consentedAtLabel)}
+       ${note("心当たりがない場合は、すぐに" + params.companyName + "へご連絡ください。")}`,
+    ),
+    [{ filename: "雇用契約書.pdf", content: params.pdf }],
+  );
 }
 
 export async function sendPasswordResetEmail(to: string, name: string, resetUrl: string) {

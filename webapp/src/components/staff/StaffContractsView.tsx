@@ -143,6 +143,7 @@ export function StaffContractsView({
   const [showPastContracts, setShowPastContracts] = useState(false);
   const [expandedRateId, setExpandedRateId] = useState<string | null>(null);
   const [detailContract, setDetailContract] = useState<{
+    id: string;
     templateDetail: Template;
     uploadedDocumentUrl?: string | null;
     isUploadOnly: boolean;
@@ -413,6 +414,7 @@ export function StaffContractsView({
             phoneNumber: detailContract.partyPhoneNumber ?? undefined,
             consentedAt: detailContract.consentedAt,
           }}
+          pdfUrl={`/api/contracts/${detailContract.id}/pdf`}
           onClose={() => setDetailContract(null)}
         />
       ) : null}
