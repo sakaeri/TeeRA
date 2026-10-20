@@ -760,17 +760,22 @@ function SealSection({ companyName, sealImageDataUrl }: { companyName: string; s
   return (
     <SectionCard title="電子印（請求書）">
       <p className="mb-3 text-xs text-muted">
-        印鑑の画像をアップロードすると、請求書の発行元に押した形で表示されます。白い背景は自動で透明になります。発行済みの請求書は、発行したときの印のままです。
+        印鑑の画像をアップロードすると、請求書の発行元（会社名・住所など）の後ろに薄く表示されます。白い背景は自動で透明になります。発行済みの請求書は、発行したときの印のままです。
       </p>
       <div className="flex flex-wrap items-center gap-4">
-        {/* 請求書での見え方のプレビュー（会社名の右端に重なる） */}
-        <div className="relative rounded-lg border border-border bg-white px-6 py-5 pr-12 text-right">
-          <p className="text-sm font-bold text-primary">{companyName}</p>
-          <p className="text-[10px] text-muted">請求書での表示イメージ</p>
-          {shown ? (
-            // eslint-disable-next-line @next/next/no-img-element -- data URLのプレビュー
-            <img src={shown} alt="電子印" className="absolute -right-1 -top-3 h-14 w-14 object-contain opacity-90" />
-          ) : null}
+        {/* 請求書での見え方のプレビュー（発行元の文字の後ろに薄く敷く） */}
+        <div className="rounded-lg border border-border bg-white px-6 py-5 text-right">
+          <div className="relative inline-block">
+            {shown ? (
+              // eslint-disable-next-line @next/next/no-img-element -- data URLのプレビュー
+              <img src={shown} alt="電子印" className="absolute right-0 top-0 h-14 w-14 object-contain opacity-45" />
+            ) : null}
+            <p className="relative text-sm font-bold text-primary">{companyName}</p>
+            <p className="relative text-[10px] text-muted">千葉県〇〇市〇〇1-2-3</p>
+            <p className="relative text-[10px] text-muted">TEL: 000-000-0000</p>
+            <p className="relative text-[10px] text-muted">登録番号: T0000000000000</p>
+          </div>
+          <p className="mt-2 text-[10px] text-muted">請求書での表示イメージ</p>
         </div>
         <div className="flex flex-col gap-2">
           <label className="cursor-pointer rounded-lg border border-primary px-3 py-1.5 text-center text-xs font-semibold text-primary">
