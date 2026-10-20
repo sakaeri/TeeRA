@@ -78,6 +78,23 @@ try {
   log("余白が切り詰められ300px以内に縮む", Math.max(pixels.width, pixels.height) <= 300);
   void section;
 
+  // --- 濃さを選べる（選んだ時点で保存） ---
+  await page.getByRole("button", { name: "濃いめ", exact: true }).click();
+  await page.waitForTimeout(800);
+  log("濃さ「濃いめ」が保存される（70%）", psql(`select "sealOpacity" from "Company" where id='${companyId}';`) === "70");
+  log("プレビューにも濃さが反映される", ((await page.locator('img[alt="電子印"]').getAttribute("style")) ?? "").includes("0.7"));
+
+  // --- 画像を選んだ後にキャンセルできる（保存済みの印はそのまま） ---
+  await page.locator('input[type=file][accept="image/*"]').first().setInputFiles(sealFile);
+  await page.waitForTimeout(800);
+  await page.getByRole("button", { name: "キャンセル", exact: true }).click();
+  await page.waitForTimeout(300);
+  log(
+    "キャンセルすると保存ボタンが消え、保存済みの印は変わらない",
+    (await page.getByRole("button", { name: "この印で保存する" }).count()) === 0 &&
+      psql(`select "sealImageDataUrl" from "Company" where id='${companyId}';`) === saved,
+  );
+
   // --- 請求書PDFに印が入る ---
   const month = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 7);
   await page.goto(`http://localhost:3000/company/invoices?month=${month}&client=${relId}`);

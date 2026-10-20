@@ -38,6 +38,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
       issuingCompanyName: invoice.issuingCompany.name,
       // 発行時点の印（この機能より前に発行したものは印なし）
       sealImageDataUrl: (snap.sealImageDataUrl as string | null | undefined) ?? null,
+      sealOpacity: (snap.sealOpacity as number | null | undefined) ?? null,
       issuingCompanyAddress: invoice.issuingCompany.address,
       issuingCompanyPhoneNumber: invoice.issuingCompany.phoneNumber,
       clientName,
@@ -65,6 +66,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
     data = {
       issuingCompanyName: invoice.issuingCompany.name,
       sealImageDataUrl: invoice.issuingCompany.sealImageDataUrl,
+      sealOpacity: invoice.issuingCompany.sealOpacity,
       issuingCompanyAddress: invoice.issuingCompany.address,
       issuingCompanyPhoneNumber: invoice.issuingCompany.phoneNumber,
       clientName,

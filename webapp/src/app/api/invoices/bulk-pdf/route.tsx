@@ -44,6 +44,7 @@ export async function GET(request: Request) {
     const data: InvoicePdfData = {
       issuingCompanyName: issuingCompany.name,
       sealImageDataUrl: (snap.sealImageDataUrl as string | null | undefined) ?? null,
+      sealOpacity: (snap.sealOpacity as number | null | undefined) ?? null,
       issuingCompanyAddress: issuingCompany.address,
       issuingCompanyPhoneNumber: issuingCompany.phoneNumber,
       clientName,

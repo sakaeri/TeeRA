@@ -10,6 +10,7 @@ import {
   updateCompanyNotificationEmailAction,
   updateCompanyBankInfoAction,
   updateCompanySealAction,
+  updateCompanySealOpacityAction,
   setMemberCanWorkShiftsAction,
   removeCompanyMemberRoleAction,
   inviteCompanyAdminAction,
@@ -111,6 +112,7 @@ export function SettingsView({
   accountNumber,
   accountHolderName,
   sealImageDataUrl,
+  sealOpacity,
   admins,
   teams,
   staff,
@@ -134,6 +136,7 @@ export function SettingsView({
   accountNumber: string;
   accountHolderName: string;
   sealImageDataUrl: string | null;
+  sealOpacity: number;
   admins: Admin[];
   teams: Team[];
   staff: StaffOption[];
@@ -186,7 +189,7 @@ export function SettingsView({
             accountNumber={accountNumber}
             accountHolderName={accountHolderName}
           />
-          <SealSection companyName={companyName} sealImageDataUrl={sealImageDataUrl} />
+          <SealSection companyName={companyName} sealImageDataUrl={sealImageDataUrl} sealOpacity={sealOpacity} />
           <AdminsSection admins={admins} />
           <TeamsSection teams={teams} staff={staff} teeBalance={teeBalance} currentUserId={currentUserId} />
         </div>
@@ -729,11 +732,38 @@ async function processSealImage(file: File): Promise<string> {
 }
 
 // 請求書の発行元に押す電子印（社印）。本部の管理者/編集者だけに表示する。
-function SealSection({ companyName, sealImageDataUrl }: { companyName: string; sealImageDataUrl: string | null }) {
+const SEAL_OPACITY_OPTIONS = [
+  { value: 30, label: "薄め" },
+  { value: 45, label: "標準" },
+  { value: 70, label: "濃いめ" },
+];
+
+function SealSection({
+  companyName,
+  sealImageDataUrl,
+  sealOpacity,
+}: {
+  companyName: string;
+  sealImageDataUrl: string | null;
+  sealOpacity: number;
+}) {
   const [pending, startTransition] = useTransition();
   const [preview, setPreview] = useState<string | null>(null);
+  const [opacity, setOpacity] = useState(sealOpacity);
   const [error, setError] = useState<string | null>(null);
   const shown = preview ?? sealImageDataUrl;
+
+  // 濃さは選んだ時点で保存する（プレビューにもすぐ反映）
+  function chooseOpacity(value: number) {
+    setOpacity(value);
+    startTransition(async () => {
+      try {
+        await updateCompanySealOpacityAction(value);
+      } catch {
+        setError("濃さを保存できませんでした。");
+      }
+    });
+  }
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -768,7 +798,12 @@ function SealSection({ companyName, sealImageDataUrl }: { companyName: string; s
           <div className="relative inline-block">
             {shown ? (
               // eslint-disable-next-line @next/next/no-img-element -- data URLのプレビュー
-              <img src={shown} alt="電子印" className="absolute right-0 top-0 h-14 w-14 object-contain opacity-45" />
+              <img
+                src={shown}
+                alt="電子印"
+                style={{ opacity: opacity / 100 }}
+                className="absolute right-0 top-0 h-14 w-14 object-contain"
+              />
             ) : null}
             <p className="relative text-sm font-bold text-primary">{companyName}</p>
             <p className="relative text-[10px] text-muted">千葉県〇〇市〇〇1-2-3</p>
@@ -791,14 +826,28 @@ function SealSection({ companyName, sealImageDataUrl }: { companyName: string; s
             />
           </label>
           {preview ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => save(preview)}
-              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              この印で保存する
-            </button>
+            <>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => save(preview)}
+                className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                この印で保存する
+              </button>
+              {/* 選んだ画像を保存せずに取り消す（保存済みの印はそのまま） */}
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  setPreview(null);
+                  setError(null);
+                }}
+                className="text-xs text-muted hover:text-primary disabled:opacity-60"
+              >
+                キャンセル
+              </button>
+            </>
           ) : null}
           {sealImageDataUrl && !preview ? (
             <button
@@ -812,6 +861,24 @@ function SealSection({ companyName, sealImageDataUrl }: { companyName: string; s
           ) : null}
         </div>
       </div>
+      {shown ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-muted">濃さ</span>
+          {SEAL_OPACITY_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              disabled={pending}
+              onClick={() => chooseOpacity(o.value)}
+              className={`rounded-full border px-3 py-1 disabled:opacity-60 ${
+                opacity === o.value ? "border-primary bg-primary/10 font-semibold text-primary" : "border-border text-foreground"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
     </SectionCard>
   );
