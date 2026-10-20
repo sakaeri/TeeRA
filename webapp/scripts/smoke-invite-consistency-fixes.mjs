@@ -200,6 +200,8 @@ try {
   // --- ④ 本部メンバー招待を既存メンバーに送った場合のヒント文言 ---
   await admin.goto("http://localhost:3000/company/settings?tab=basic");
   await admin.getByRole("button", { name: "＋招待" }).click();
+  // ＋招待のあと「新しく招待する」を選ぶとURLが発行される
+  await admin.getByRole("button", { name: "新しく招待する（URLを発行）" }).click();
   await admin.waitForTimeout(400);
   const adminInviteUrl = await admin.locator('section:has-text("本部メンバー権限") input[readonly]').inputValue();
   log("本部メンバー招待URLが発行された", Boolean(adminInviteUrl?.startsWith("http://localhost:3000/invite/")));

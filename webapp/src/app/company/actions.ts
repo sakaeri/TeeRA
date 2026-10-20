@@ -46,6 +46,7 @@ import {
   setTeamMemberRole,
   setMemberCanWorkShifts,
   removeCompanyMemberRole,
+  promoteStaffToCompanyAdmin,
   setStaffPlainTeamMemberships,
   setClientTeams,
   getStaffTeamIds,
@@ -532,6 +533,15 @@ export async function removeCompanyMemberRoleAction(targetUserId: string) {
   }
   revalidatePath("/company/settings");
   return { error: null };
+}
+
+// 既に所属しているスタッフを本部管理者に格上げする
+export async function promoteStaffToCompanyAdminAction(targetUserId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+
+  await promoteStaffToCompanyAdmin({ companyId: membership.companyId, userId: targetUserId });
+  revalidatePath("/company/settings");
 }
 
 export async function inviteCompanyAdminAction(role: "COMPANY_ADMIN" | "COMPANY_EDITOR") {

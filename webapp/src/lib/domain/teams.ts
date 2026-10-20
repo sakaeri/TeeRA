@@ -170,6 +170,20 @@ export async function setMemberCanWorkShifts(params: {
 // 本部メンバー（管理者/編集者）権限を外し、一般スタッフに戻す
 // （会社からは削除しない — チーム側のremoveTeamMemberと対称の操作）。
 // 本部管理者が0人になってしまう変更は拒否する。
+// 既に所属している一般スタッフ（チームのマネージャー/リーダーを含む）を本部
+// 管理者に格上げする。招待URLは既存の所属者には使えないため、こちらで直接
+// 変更する。スタッフとして勤務していた人なので、シフトに入れる設定を残す。
+export async function promoteStaffToCompanyAdmin(params: { companyId: string; userId: string }) {
+  const target = await prisma.companyMembership.findFirstOrThrow({
+    where: { companyId: params.companyId, userId: params.userId },
+  });
+  if (target.role !== "STAFF") throw new Error("not_staff");
+  await prisma.companyMembership.update({
+    where: { id: target.id },
+    data: { role: "COMPANY_ADMIN", canWorkShifts: true },
+  });
+}
+
 export async function removeCompanyMemberRole(params: { companyId: string; userId: string }) {
   await prisma.$transaction(async (tx) => {
     const target = await tx.companyMembership.findFirstOrThrow({
