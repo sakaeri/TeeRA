@@ -507,6 +507,7 @@ export async function getClientMonthDetail(params: {
         currentLabel: current
           ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円${current.holidayAmount != null ? `／土日祝${current.holidayAmount}円` : ""}`
           : "単価未設定",
+        unpriced: !current,
         // 業務内容ごとの例外（falseなら依頼主共通の規定に従う）
         cancelRule: r.cancelRuleOverride ? serializeCancelRule(r) : null,
         versions: excludeBaselineVersion(r.versions).map((v) => ({

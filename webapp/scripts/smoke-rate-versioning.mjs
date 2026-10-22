@@ -179,7 +179,8 @@ try {
   await panel.getByRole("button", { name: "＋業務内容を追加" }).click();
   await admin.waitForTimeout(150);
   if ((await panel.locator('input[placeholder*="業務内容"]').count()) === 0) {
-    await panel.locator("select").first().selectOption({ label: "＋ 新しい業務内容を追加する" });
+    // 業務内容を追加のモーダル内に絞る（単価タブにはキャンセル規定の選択欄もある）
+    await admin.locator("div.fixed.inset-0.z-40").last().locator("select").first().selectOption({ label: "＋ 新しい業務内容を追加する" });
   }
   await panel.locator('input[placeholder*="業務内容"]').fill("未使用業務");
   await panel.locator('input[placeholder="金額"]').fill("2000");

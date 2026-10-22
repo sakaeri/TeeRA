@@ -45,6 +45,8 @@ type PlacementRate = {
   id: string;
   taskName: string;
   currentLabel: string;
+  // 今日時点の単価が無い（未設定・終了）。単価を変えていない＝履歴が0件とは別
+  unpriced: boolean;
   versions: { id: string; label: string; effectiveFrom: string }[];
   // 業務内容ごとの例外（nullなら依頼主共通の規定に従う）
   cancelRule: CancelRule | null;
@@ -1223,12 +1225,11 @@ function PlacementRatesTab({
 
       <ul className="flex flex-col gap-2">
         {rates.map((r) => {
-          const isUnpriced = r.versions.length === 0;
           return (
             <li key={r.id} className="rounded-lg border border-border p-3 text-sm">
               <div className="flex items-center justify-between">
                 <span className="font-medium">{r.taskName}</span>
-                <span className={isUnpriced ? "text-amber-700" : "text-muted"}>{r.currentLabel}</span>
+                <span className={r.unpriced ? "font-semibold text-amber-700" : "text-foreground"}>{r.currentLabel}</span>
               </div>
 
               <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
