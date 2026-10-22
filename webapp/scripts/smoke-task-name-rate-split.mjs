@@ -131,8 +131,9 @@ try {
   const clientPanel = admin.locator("div.fixed.inset-0.z-30").last();
   await clientPanel.getByRole("button", { name: "単価", exact: true }).click();
   await clientPanel.getByRole("button", { name: "単価を変更" }).click();
-  await clientPanel.locator("select").selectOption("DAILY");
-  await clientPanel.locator('input[type=number]').fill("9000");
+  // 単価を変更のモーダル（単価タブにはキャンセル規定の選択欄もあるので、モーダル内に絞る）
+  await admin.locator("div.fixed.inset-0.z-40").last().locator("select").first().selectOption("DAILY");
+  await admin.locator("div.fixed.inset-0.z-40").last().locator('input[placeholder="金額"]').fill("9000");
   await clientPanel.getByRole("button", { name: "保存" }).click();
   await admin.waitForTimeout(500);
 
