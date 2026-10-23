@@ -17,7 +17,14 @@ type ShiftRow = {
   endTime: string | null;
   isAllDay: boolean;
   isUndecided: boolean;
+  // 提出済みの業務報告の状態（未提出ならnull）
   approvalStatus: string | null;
+  outcome: string | null;
+  reportedTimeLabel: string | null;
+  workedMinutes: number;
+  breakMinutes: number;
+  rejectionReason: string | null;
+  clockedOut: boolean;
   taskName: string | null;
   // ON_HOLD＝依頼主の都合で予定が変わり、会社が振り替え先を調整している最中
   status: string;
@@ -77,18 +84,44 @@ function shortCompanyName(name: string) {
   return stripped || name;
 }
 
-// 「未報告」の赤丸は、業務時間を過ぎてから初めて意味を持つ警告 —
-// 未来日やまだ終了時刻前の当日シフトを「未報告」扱いにすると、単なる
-// ノイズになる（会社画面のCalendarView.tsxと同じ考え方）。
-function isReportOverdue(s: ShiftRow) {
-  if (s.status === "ON_HOLD") return false;
-  if (s.approvalStatus) return false;
+// 業務報告の状態。「未提出」は業務時間を過ぎてから初めて意味を持つ警告 —
+// 未来日やまだ終了時刻前の当日シフトを未提出扱いにすると、単なるノイズに
+// なる（会社画面のCalendarView.tsxと同じ考え方）。当日でも退勤済みなら未提出。
+type ReportState = "hold" | "unsubmitted" | "pending" | "approved" | "rejected" | "absent" | "cancelled" | null;
+
+function reportState(s: ShiftRow): ReportState {
+  if (s.status === "ON_HOLD") return "hold";
+  if (s.outcome === "ABSENT") return "absent";
+  if (s.outcome === "CANCELLED_BY_EMPLOYER") return "cancelled";
+  if (s.approvalStatus === "APPROVED") return "approved";
+  if (s.approvalStatus === "REJECTED") return "rejected";
+  if (s.approvalStatus) return "pending";
   const todayStr = todayJst();
-  if (s.date > todayStr) return false;
-  if (s.date < todayStr) return true;
-  if (s.isAllDay || s.isUndecided || !s.endTime) return false;
-  return nowJstHHMM() >= s.endTime;
+  if (s.date > todayStr) return null;
+  if (s.date < todayStr || s.clockedOut) return "unsubmitted";
+  if (s.isAllDay || s.isUndecided || !s.endTime) return null;
+  return nowJstHHMM() >= s.endTime ? "unsubmitted" : null;
 }
+
+const REPORT_STATE: Record<Exclude<ReportState, null>, { label: string; tagClass: string; dotClass: string; badgeClass: string }> = {
+  hold: { label: "調整中", tagClass: "bg-gray-200 text-gray-700", dotClass: "bg-gray-400", badgeClass: "bg-gray-100 text-gray-700" },
+  unsubmitted: {
+    label: "未提出",
+    tagClass: "bg-orange-200 text-orange-900 font-semibold",
+    dotClass: "bg-orange-500",
+    badgeClass: "bg-orange-100 text-orange-800",
+  },
+  pending: { label: "承認待ち", tagClass: "bg-yellow-100 text-yellow-900", dotClass: "bg-yellow-400", badgeClass: "bg-yellow-100 text-yellow-900" },
+  approved: { label: "承認済み", tagClass: "bg-emerald-100 text-emerald-900", dotClass: "bg-emerald-500", badgeClass: "bg-sky-100 text-sky-800" },
+  rejected: { label: "差戻し", tagClass: "bg-red-100 text-red-800 font-semibold", dotClass: "bg-red-500", badgeClass: "bg-rose-100 text-rose-800" },
+  absent: { label: "欠勤", tagClass: "bg-gray-100 text-gray-500 line-through", dotClass: "bg-gray-400", badgeClass: "bg-gray-100 text-gray-700" },
+  cancelled: {
+    label: "勤務先キャンセル",
+    tagClass: "bg-gray-100 text-gray-500 line-through",
+    dotClass: "bg-gray-400",
+    badgeClass: "bg-gray-100 text-gray-700",
+  },
+};
 
 function buildMonthCells(year: number, month: number) {
   const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
@@ -283,20 +316,21 @@ export function StaffCalendarView({
                 />
               ) : null}
               <div className="mt-px flex flex-col gap-[2px]">
-                {visibleShifts.map((s) => (
-                  <span
-                    key={s.id}
-                    className={`block w-full overflow-hidden text-clip whitespace-nowrap rounded px-0 py-px text-center text-[8px] font-medium leading-tight tracking-tighter ${
-                      s.status === "ON_HOLD" ? "bg-gray-200 text-gray-700" : "bg-emerald-100 text-emerald-900"
-                    }`}
-                  >
-                    {s.status === "ON_HOLD" ? "調整中" : null}
-                    {s.status === "ON_HOLD" ? null : isReportOverdue(s) ? (
-                      <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" aria-label="未報告" />
-                    ) : null}
-                    {s.status === "ON_HOLD" ? null : shortCompanyName(s.workplaceName ?? s.companyName)}
-                  </span>
-                ))}
+                {visibleShifts.map((s) => {
+                  const state = reportState(s);
+                  return (
+                    <span
+                      key={s.id}
+                      title={state ? REPORT_STATE[state].label : undefined}
+                      data-report-state={state ?? "none"}
+                      className={`block w-full overflow-hidden text-clip whitespace-nowrap rounded px-0 py-px text-center text-[8px] font-medium leading-tight tracking-tighter ${
+                        state ? REPORT_STATE[state].tagClass : "bg-emerald-100 text-emerald-900"
+                      }`}
+                    >
+                      {state === "hold" ? "調整中" : shortCompanyName(s.workplaceName ?? s.companyName)}
+                    </span>
+                  );
+                })}
                 {visibleRequests.map((r) =>
                   r.desire === "OFF" ? (
                     <span
@@ -436,23 +470,50 @@ function DayDetailPanel({
           <p className="mb-5 rounded-xl bg-background/60 px-4 py-6 text-center text-sm text-muted">この日の予定はありません。</p>
         ) : (
           <ul className="mb-5 flex flex-col gap-2">
-            {shifts.map((s) => (
-              <DetailAccordionItem
-                key={s.id}
-                dotClassName={s.status === "ON_HOLD" ? "bg-gray-400" : isReportOverdue(s) ? "bg-red-500" : "bg-emerald-500"}
-                primary={s.status === "ON_HOLD" ? "調整中" : (s.workplaceName ?? s.companyName)}
-                secondary={s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`}
-              >
-                {s.status === "ON_HOLD" ? (
-                  <p className="font-medium text-foreground">
-                    予定が変更になり、会社が調整しています。会社から連絡がありますので、休みと判断せずにお待ちください。
-                  </p>
-                ) : null}
-                <p>所属会社：{s.companyName}</p>
-                {s.taskName ? <p>業務内容：{s.taskName}</p> : null}
-                {isReportOverdue(s) ? <p className="font-medium text-red-600">業務報告が未提出です。</p> : null}
-              </DetailAccordionItem>
-            ))}
+            {shifts.map((s) => {
+              const state = reportState(s);
+              const scheduled = s.isAllDay ? "終日" : s.isUndecided ? "未定" : `${s.startTime}〜${s.endTime}`;
+              // 報告済みなら予定ではなく報告した時間（実働・休憩つき）を出す
+              const secondary = s.reportedTimeLabel
+                ? `${s.reportedTimeLabel}（実働${Math.round((s.workedMinutes / 60) * 10) / 10}時間／休憩${s.breakMinutes}分）`
+                : scheduled;
+              return (
+                <DetailAccordionItem
+                  key={s.id}
+                  dotClassName={state ? REPORT_STATE[state].dotClass : "bg-emerald-500"}
+                  primary={state === "hold" ? "調整中" : (s.workplaceName ?? s.companyName)}
+                  secondary={state === "hold" ? scheduled : secondary}
+                  badge={
+                    state && state !== "hold" ? (
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${REPORT_STATE[state].badgeClass}`}>
+                        {REPORT_STATE[state].label}
+                      </span>
+                    ) : null
+                  }
+                  defaultOpen={state === "unsubmitted" || state === "rejected"}
+                >
+                  {state === "hold" ? (
+                    <p className="font-medium text-foreground">
+                      予定が変更になり、会社が調整しています。会社から連絡がありますので、休みと判断せずにお待ちください。
+                    </p>
+                  ) : null}
+                  <p>所属会社：{s.companyName}</p>
+                  {s.taskName ? <p>業務内容：{s.taskName}</p> : null}
+                  {s.reportedTimeLabel ? <p>予定：{scheduled}</p> : null}
+                  {state === "rejected" && s.rejectionReason ? (
+                    <p className="font-medium text-red-700">差戻しの理由：{s.rejectionReason}</p>
+                  ) : null}
+                  {state === "unsubmitted" || state === "rejected" ? (
+                    <Link
+                      href={`/staff/timecard#shift-${s.id}`}
+                      className="mt-1 inline-block rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+                    >
+                      {state === "rejected" ? "業務報告を直して出し直す" : "業務報告を提出する"}
+                    </Link>
+                  ) : null}
+                </DetailAccordionItem>
+              );
+            })}
             {requests.map((r) =>
               r.desire === "OFF" ? (
                 <DetailAccordionItem key={r.id} dotClassName="bg-gray-400" primary="休み申請済み">
@@ -493,14 +554,19 @@ function DetailAccordionItem({
   dotClassName,
   primary,
   secondary,
+  badge,
+  defaultOpen = false,
   children,
 }: {
   dotClassName: string;
   primary: string;
   secondary?: string;
+  // 見出しの右に出す小さなラベル（業務報告の状態など）
+  badge?: React.ReactNode;
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <li className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5">
       <button
@@ -513,6 +579,7 @@ function DetailAccordionItem({
           <span className="block truncate text-sm font-semibold text-foreground">{primary}</span>
           {secondary ? <span className="block text-xs text-muted">{secondary}</span> : null}
         </span>
+        {badge ? <span className="shrink-0">{badge}</span> : null}
         <svg
           viewBox="0 0 20 20"
           fill="none"

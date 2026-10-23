@@ -208,7 +208,8 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
 
   return (
     <li
-      className={`rounded-2xl bg-white p-5 shadow-sm ${awaitingSubmit ? "ring-2 ring-amber-400" : "ring-1 ring-black/5"}`}
+      id={`shift-${shift.id}`}
+      className={`scroll-mt-24 rounded-2xl bg-white p-5 shadow-sm ${awaitingSubmit ? "ring-2 ring-amber-400" : "ring-1 ring-black/5"}`}
     >
       {awaitingSubmit ? (
         <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">

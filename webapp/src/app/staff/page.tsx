@@ -8,6 +8,7 @@ import { StaffCalendarView } from "@/components/staff/StaffCalendarView";
 import { StaffNoticesSection } from "@/components/staff/StaffNoticesSection";
 import { TodayShiftPopup } from "@/components/staff/TodayShiftPopup";
 import { isDone } from "@/lib/staffShiftStatus";
+import { reportDisplay } from "@/lib/workReportDisplay";
 
 function formatJstTime(date: Date) {
   return new Intl.DateTimeFormat("ja-JP", {
@@ -108,20 +109,31 @@ export default async function StaffHomePage({
         year={year}
         month={month}
         companies={myMemberships.map((m) => ({ id: m.companyId, name: m.companyName }))}
-        shifts={shifts.map((s) => ({
-          id: s.id,
-          date: s.date.toISOString().slice(0, 10),
-          companyId: s.companyId,
-          companyName: s.company.name,
-          workplaceName: s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? null,
-          startTime: s.startTime,
-          endTime: s.endTime,
-          isAllDay: s.isAllDay,
-          isUndecided: s.isUndecided,
-          approvalStatus: s.workReport?.approvalStatus ?? null,
-          taskName: s.taskName ?? s.workReport?.taskName ?? null,
-          status: s.status,
-        }))}
+        shifts={shifts.map((s) => {
+          const report = reportDisplay(s.workReport);
+          return {
+            id: s.id,
+            date: s.date.toISOString().slice(0, 10),
+            companyId: s.companyId,
+            companyName: s.company.name,
+            workplaceName: s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? null,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            isAllDay: s.isAllDay,
+            isUndecided: s.isUndecided,
+            // 提出済みの報告の状態（未提出ならnull）。打刻した時点でapprovalStatusは
+            // PENDINGになるため、提出したかどうかはreportDisplayで判定する
+            approvalStatus: report.approvalStatus,
+            outcome: report.outcome,
+            reportedTimeLabel: report.reportedTimeLabel,
+            workedMinutes: s.workReport?.computedMinutes ?? 0,
+            breakMinutes: s.workReport?.breakMinutes ?? 0,
+            rejectionReason: report.approvalStatus === "REJECTED" ? (s.workReport?.rejectionReason ?? null) : null,
+            clockedOut: Boolean(s.workReport?.clockOut),
+            taskName: report.reportedTaskName ?? s.taskName ?? s.workReport?.taskName ?? null,
+            status: s.status,
+          };
+        })}
         pendingRequests={requestRows}
       />
     </main>
