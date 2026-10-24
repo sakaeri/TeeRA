@@ -8,7 +8,6 @@ import {
   sendPromoOrderEmail,
   sendShiftReminderEmail,
   sendUnsubmittedWorkReportReminderEmail,
-  sendTodayWorkReportReminderEmail,
   sendContractConsentReminderEmail,
   sendClientCancellationEmail,
 } from "@/lib/email";
@@ -413,8 +412,8 @@ export async function runUnsubmittedReportPushReminders() {
   }
 }
 
-// 当日20時になっても業務報告が提出されていないシフトを、本人にメールと
-// プッシュ通知で知らせる（1シフトにつき1回だけ）。退勤の打刻を忘れた日は
+// 当日20時になっても業務報告が提出されていないシフトを、本人にプッシュ
+// 通知で知らせる（1シフトにつき1回だけ。メールは週1回のまとめだけにする）。退勤の打刻を忘れた日は
 // 「退勤3時間後」のリマインドが動かないため、その取りこぼしもここで拾う。
 // Cronが間引かれても拾えるよう「20時を過ぎていて未送信なら送る」判定にし、
 // 対象は当日分だけにする（翌日以降は週次のまとめメールに任せる）。
@@ -436,15 +435,10 @@ export async function runEveningUnsubmittedReminders(now = new Date()) {
     include: { staff: true, company: true },
   });
 
-  const byStaff = new Map<string, { email: string; name: string; companyNames: Set<string>; shiftIds: string[] }>();
+  const byStaff = new Map<string, { companyNames: Set<string>; shiftIds: string[] }>();
   for (const shift of shifts) {
     if (shift.endTime && !shift.isAllDay && !shift.isUndecided && shift.endTime > nowHHMM) continue;
-    const entry = byStaff.get(shift.staffUserId) ?? {
-      email: shift.staff.email,
-      name: shift.staff.name,
-      companyNames: new Set<string>(),
-      shiftIds: [],
-    };
+    const entry = byStaff.get(shift.staffUserId) ?? { companyNames: new Set<string>(), shiftIds: [] };
     entry.companyNames.add(shift.company.name);
     entry.shiftIds.push(shift.id);
     byStaff.set(shift.staffUserId, entry);
@@ -453,12 +447,6 @@ export async function runEveningUnsubmittedReminders(now = new Date()) {
   for (const [staffUserId, entry] of byStaff) {
     await prisma.shift.updateMany({ where: { id: { in: entry.shiftIds } }, data: { reportReminderSentAt: new Date() } });
     const companies = Array.from(entry.companyNames).join("、");
-    await sendTodayWorkReportReminderEmail(entry.email, {
-      name: entry.name,
-      date: todayStr,
-      companyNames: companies,
-      appUrl: absoluteUrl("/staff/timecard"),
-    });
     await sendPushToUser(staffUserId, {
       title: "今日の業務報告がまだ提出されていません",
       body: `${todayStr} ${companies}の業務報告を提出してください`,

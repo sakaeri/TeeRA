@@ -293,25 +293,6 @@ export async function sendShiftReminderEmail(
   );
 }
 
-// 当日20時になっても業務報告が出ていない時の、その日の分だけのリマインド。
-export async function sendTodayWorkReportReminderEmail(
-  to: string,
-  params: { name: string; date: string; companyNames: string; appUrl: string },
-) {
-  await sendMail(
-    to,
-    "【TeeRA】今日の業務報告がまだ提出されていません",
-    emailLayout(
-      "今日の業務報告がまだ提出されていません",
-      `${greeting(params.name)}
-       <p style="margin:0 0 12px;font-size:14px;line-height:1.6;">本日の業務報告がまだ提出されていません。退勤の打刻がまだの場合は、退勤時刻を入れてから提出してください。</p>
-       ${infoRow("日付", params.date)}
-       ${infoRow("所属会社", params.companyNames)}
-       ${button(params.appUrl, "業務報告を提出する")}`,
-    ),
-  );
-}
-
 export async function sendUnsubmittedWorkReportReminderEmail(to: string, name: string, count: number, appUrl: string) {
   await sendMail(
     to,

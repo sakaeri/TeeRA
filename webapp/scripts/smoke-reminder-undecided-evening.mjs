@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 
 // 通知のリマインドを検証する（テスト用に現在時刻を指定してCronの受付口を叩く）：
 // ・時間「未定」のシフトにも、当日朝6時以降に朝のリマインドが届く（以前は届かなかった）
-// ・当日20時を過ぎても業務報告が出ていなければ、メールとプッシュで知らせる
+// ・当日20時を過ぎても業務報告が出ていなければ、プッシュ通知で知らせる（メールは送らない）
 //   （退勤の打刻を忘れた日も対象。まだ勤務中・提出済みのシフトは対象外。1回だけ）
 
 const CRON_SECRET = "local-dev-cron-secret-not-for-production";
@@ -41,6 +41,11 @@ const staffId = psql(
   `with ins as (insert into "User" (id, email, "passwordHash", name, "updatedAt") values (gen_random_uuid()::text, '${staffEmail}', 'x', 'リマインド確認スタッフ', now()) returning id) select id from ins;`,
 );
 psql(`insert into "CompanyMembership" (id, "userId", "companyId", role) values (gen_random_uuid()::text, '${staffId}', '${companyId}', 'STAFF');`);
+// 届かない宛先のプッシュ購読（送ろうとすると失敗のログに宛先が出るので、送ったかどうかを確かめられる）
+const pushEndpoint = `https://push.invalid/reminder-${suffix}`;
+psql(
+  `insert into "PushSubscription" (id, "userId", endpoint, p256dh, auth) values (gen_random_uuid()::text, '${staffId}', '${pushEndpoint}', 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM', 'tBHItJI5svbpez7KI4CCXg');`,
+);
 const shift = (extra) =>
   psql(
     `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${companyId}', '${staffId}', 'INHOUSE', 'キャディ', '${today}', ${extra}, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
@@ -74,10 +79,8 @@ offset = logSize();
 await callCron("20:10");
 const mailLog = logSince(offset);
 log("20時を過ぎて未提出のシフトにリマインドを送る（退勤3時間後とは別）", sentAt(undecidedId, "reportReminderSentAt") !== "");
-log(
-  "メールで「今日の業務報告がまだ提出されていません」が届く",
-  mailLog.includes(`宛先=${staffEmail} 件名=【TeeRA】今日の業務報告がまだ提出されていません`),
-);
+log("本人にプッシュ通知を送る", mailLog.includes(pushEndpoint));
+log("メールは送らない（未提出のメールは週1回のまとめだけ）", !mailLog.includes(`宛先=${staffEmail} 件名=【TeeRA】今日の業務報告`));
 log("まだ勤務中（終了予定が今より後）のシフトは対象外", sentAt(lateId, "reportReminderSentAt") === "");
 log("提出済みのシフトは対象外", sentAt(submittedId, "reportReminderSentAt") === "");
 const first = sentAt(undecidedId, "reportReminderSentAt");
@@ -86,7 +89,7 @@ await callCron("20:15");
 log(
   "2回目は送らない",
   sentAt(undecidedId, "reportReminderSentAt") === first &&
-    !logSince(offset).includes(`宛先=${staffEmail} 件名=【TeeRA】今日の業務報告がまだ提出されていません`),
+    !logSince(offset).includes(pushEndpoint),
 );
 
 console.log(process.exitCode ? "REMINDER UNDECIDED/EVENING SMOKE TEST HAD FAILURES" : "REMINDER UNDECIDED/EVENING SMOKE TEST PASSED");
