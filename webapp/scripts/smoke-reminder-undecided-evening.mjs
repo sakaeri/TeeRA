@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 // ・時間「未定」のシフトにも、当日朝6時以降に朝のリマインドが届く（以前は届かなかった）
 // ・当日20時を過ぎても業務報告が出ていなければ、プッシュ通知で知らせる（メールは送らない）
 //   （退勤の打刻を忘れた日も対象。まだ勤務中・提出済みのシフトは対象外。1回だけ）
+// ・未提出のプッシュは「退勤3時間後」と「20時」のどちらか1回だけ
 
 const CRON_SECRET = "local-dev-cron-secret-not-for-production";
 
@@ -62,8 +63,24 @@ const submittedId = shift(`'08:00', '12:00', false, false`);
 psql(
   `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "computedMinutes", "submittedAt", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${submittedId}', '${staffId}', 'WORKED', 'PENDING', 240, now(), now(), now());`,
 );
+// 別のスタッフ：15時前に退勤（＝20時より前に「退勤3時間後」が送られる）
+const staff2Id = psql(
+  `with ins as (insert into "User" (id, email, "passwordHash", name, "updatedAt") values (gen_random_uuid()::text, 'reminder-staff2-${suffix}@example.com', 'x', 'リマインド確認スタッフ2', now()) returning id) select id from ins;`,
+);
+psql(`insert into "CompanyMembership" (id, "userId", "companyId", role) values (gen_random_uuid()::text, '${staff2Id}', '${companyId}', 'STAFF');`);
+const push2Endpoint = `https://push.invalid/reminder2-${suffix}`;
+psql(
+  `insert into "PushSubscription" (id, "userId", endpoint, p256dh, auth) values (gen_random_uuid()::text, '${staff2Id}', '${push2Endpoint}', 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM', 'tBHItJI5svbpez7KI4CCXg');`,
+);
+const earlyId = psql(
+  `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${companyId}', '${staff2Id}', 'INHOUSE', 'キャディ', '${today}', null, null, false, true, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
+);
+psql(
+  `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "clockIn", "clockOut", "computedMinutes", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${earlyId}', '${staff2Id}', 'WORKED', 'PENDING', now() - interval '12 hours', now() - interval '4 hours', 420, now(), now());`,
+);
 const sentAt = (id, col) => psql(`select coalesce("${col}"::text, '') from "Shift" where id='${id}';`);
 
+const runStartOffset = logSize();
 // --- 朝のリマインド ---
 log("リマインドのジョブが動く", (await callCron("05:30")) === 200);
 log("時間未定のシフトは6時前にはまだ送らない", sentAt(undecidedId, "reminderSentAt") === "");
@@ -89,6 +106,23 @@ await callCron("20:15");
 log(
   "2回目は送らない",
   sentAt(undecidedId, "reportReminderSentAt") === first &&
+    !logSince(offset).includes(pushEndpoint),
+);
+
+// --- 未提出のプッシュは1回だけ ---
+const count = (text, needle) => text.split(needle).length - 1;
+log(
+  "「退勤3時間後」を送ったシフトには20時のプッシュを送らない（1回だけ）",
+  psql(`select ("submitReminderSentAt" is not null)::text from "WorkReport" where "shiftId"='${earlyId}';`) === "true" &&
+    count(mailLog, push2Endpoint) === 0,
+);
+// 20時のプッシュを送ったシフトが、そのあと「退勤3時間後」の条件を満たしても送らない
+psql(`update "WorkReport" set "clockOut" = now() - interval '4 hours' where "shiftId"='${undecidedId}';`);
+offset = logSize();
+await callCron("20:20");
+log(
+  "20時のプッシュを送ったシフトには、あとから「退勤3時間後」を送らない（1回だけ）",
+  psql(`select ("submitReminderSentAt" is null)::text from "WorkReport" where "shiftId"='${undecidedId}';`) === "true" &&
     !logSince(offset).includes(pushEndpoint),
 );
 

@@ -389,6 +389,8 @@ export async function runShiftStartReminders(now = new Date()) {
 // 知らせる（1件につき1回だけ）。5分おきのリマインドと一緒に動かす。
 // Cronが間引かれても拾えるよう「3時間を過ぎていて未送信なら送る」判定にし、
 // 古すぎるもの（2日以上前の退勤）は今更なので対象外にする（初回の一斉送信も防ぐ）。
+// 当日20時のリマインドと合わせて、未提出のプッシュは1シフトにつき1回だけ
+// （どちらかが送ったらShift.reportReminderSentAtを付け、もう片方は送らない）。
 export async function runUnsubmittedReportPushReminders() {
   const now = Date.now();
   const reports = await prisma.workReport.findMany({
@@ -396,7 +398,7 @@ export async function runUnsubmittedReportPushReminders() {
       submittedAt: null,
       submitReminderSentAt: null,
       clockOut: { lte: new Date(now - 3 * 60 * 60 * 1000), gte: new Date(now - 2 * 24 * 60 * 60 * 1000) },
-      shift: { status: "CONFIRMED" },
+      shift: { status: "CONFIRMED", reportReminderSentAt: null },
       staff: { isProxy: false },
     },
     include: { shift: { include: { company: true } } },
@@ -404,6 +406,7 @@ export async function runUnsubmittedReportPushReminders() {
 
   for (const report of reports) {
     await prisma.workReport.update({ where: { id: report.id }, data: { submitReminderSentAt: new Date() } });
+    await prisma.shift.update({ where: { id: report.shiftId }, data: { reportReminderSentAt: new Date() } });
     await sendPushToUser(report.staffUserId, {
       title: "業務報告がまだ提出されていません",
       body: `${report.shift.date.toISOString().slice(0, 10)} ${report.shift.company.name}の業務報告を提出してください`,
@@ -413,8 +416,9 @@ export async function runUnsubmittedReportPushReminders() {
 }
 
 // 当日20時になっても業務報告が提出されていないシフトを、本人にプッシュ
-// 通知で知らせる（1シフトにつき1回だけ。メールは週1回のまとめだけにする）。退勤の打刻を忘れた日は
-// 「退勤3時間後」のリマインドが動かないため、その取りこぼしもここで拾う。
+// 通知で知らせる（メールは週1回のまとめだけにする）。退勤の打刻を忘れた日は
+// 「退勤3時間後」のリマインドが動かないため、その取りこぼしをここで拾う。
+// 「退勤3時間後」をすでに送ったシフトには送らない（未提出のプッシュは1シフト1回だけ）。
 // Cronが間引かれても拾えるよう「20時を過ぎていて未送信なら送る」判定にし、
 // 対象は当日分だけにする（翌日以降は週次のまとめメールに任せる）。
 // まだ勤務中（終了予定が今より後）のシフトは対象外。
