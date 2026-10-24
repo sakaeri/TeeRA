@@ -5,17 +5,19 @@ name: Email notifications cron
 # ただしGitHub Actionsの無料枠のスケジュール実行は混雑時に間引かれる/
 # スキップされることがある（実測で直近16日中4日、実行自体が見当たらなかった）
 # ため、1日1回で足りるジョブ（シフト希望のたまり＝shift-request-digest）は
-# vercel.jsonのVercel純正Cronに移した。GitHub Actionsは1日1回の上限に収まら
-# ない高頻度ジョブ（5分おきのリマインド）と週次ジョブだけを引き続き担当する。
+# vercel.jsonのVercel純正Cronに移した。さらに5分おきのジョブも実際には数時間
+# おきにしか動かず、リマインドが届かない原因になったため、5分おき・週次の
+# ジョブはSupabaseのCron（webapp/supabase/notifications-cron.sql）に移した。
+# ここの5分おきは予備としてだけ残している（各リマインドは送信済みの目印で
+# 二重送信しない）。週次ジョブは二重送信を防げないため、ここからは外した
+# （手動実行のweekly-digestは残す）。
 # 事前にリポジトリのSettings > Secrets and variablesで以下を設定すること:
 #   - APP_BASE_URL: 本番URL（例: https://teera-tau.vercel.app）
 #   - CRON_SECRET:  Vercel側の環境変数CRON_SECRETと同じ値
 on:
   schedule:
-    # 勤務開始1時間前リマインド — 5分おき
+    # 勤務開始リマインド・業務報告リマインドの予備 — 5分おき（本番の時計はSupabaseのCron）
     - cron: "*/5 * * * *"
-    # 未提出の業務報告・契約書の同意待ちリマインド — 毎週月曜9:00 JST (0:00 UTC 月曜)
-    - cron: "0 0 * * 1"
   workflow_dispatch:
     inputs:
       job:
