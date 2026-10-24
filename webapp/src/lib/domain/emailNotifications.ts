@@ -8,6 +8,7 @@ import {
   sendPromoOrderEmail,
   sendShiftReminderEmail,
   sendUnsubmittedWorkReportReminderEmail,
+  sendTodayWorkReportReminderEmail,
   sendContractConsentReminderEmail,
   sendClientCancellationEmail,
 } from "@/lib/email";
@@ -299,9 +300,8 @@ export async function runShiftRequestDigest() {
 // その狭い窓をCronの実行タイミングが外れただけで通知が消えてしまうため、
 // 「基準時刻を過ぎていて、まだ送っていなければ送る」という判定に緩めて
 // いる。二重送信を避けるため、対象シフトにはreminderSentAtを記録する。
-export async function runShiftStartReminders() {
-  const now = new Date();
-  const todayStr = todayJst();
+export async function runShiftStartReminders(now = new Date()) {
+  const todayStr = new Date(now.getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
   const tomorrow = new Date(`${todayStr}T00:00:00.000Z`);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 
@@ -348,14 +348,16 @@ export async function runShiftStartReminders() {
     });
   }
 
-  // 終日シフトは「開始時刻の◯時間前」という基準が使えないため、当日朝
-  // 6:00以降ならいつでも対象にする（同じ理由で「6:00ちょうど」に固定しない）。
+  // 終日・時間未定のシフトは「開始時刻の◯時間前」という基準が使えないため、
+  // 当日朝6:00以降ならいつでも対象にする（同じ理由で「6:00ちょうど」に固定
+  // しない）。以前は時間未定のシフトがどちらの対象にも入らず、朝のリマインドが
+  // 一切届いていなかった。
   const nowJstMinutesOfDay = Math.floor((now.getTime() + JST_OFFSET_MS) / 60000) % (24 * 60);
   if (nowJstMinutesOfDay >= 6 * 60) {
     const allDayCandidates = await prisma.shift.findMany({
       where: {
         status: "CONFIRMED",
-        isAllDay: true,
+        OR: [{ isAllDay: true }, { isUndecided: true }, { startTime: null }],
         reminderSentAt: null,
         date: { gte: new Date(`${todayStr}T00:00:00.000Z`), lt: tomorrow },
       },
@@ -377,7 +379,7 @@ export async function runShiftStartReminders() {
       });
       await sendPushToUser(shift.staffUserId, {
         title: "本日のシフトがあります",
-        body: `${shift.date.toISOString().slice(0, 10)} 終日${shift.taskName ? " " + shift.taskName : ""}`,
+        body: `${shift.date.toISOString().slice(0, 10)} ${shiftTimeLabel(shift)}${shift.taskName ? " " + shift.taskName : ""}`,
         url: "/staff/timecard",
       });
     }
@@ -406,6 +408,60 @@ export async function runUnsubmittedReportPushReminders() {
     await sendPushToUser(report.staffUserId, {
       title: "業務報告がまだ提出されていません",
       body: `${report.shift.date.toISOString().slice(0, 10)} ${report.shift.company.name}の業務報告を提出してください`,
+      url: "/staff/timecard",
+    });
+  }
+}
+
+// 当日20時になっても業務報告が提出されていないシフトを、本人にメールと
+// プッシュ通知で知らせる（1シフトにつき1回だけ）。退勤の打刻を忘れた日は
+// 「退勤3時間後」のリマインドが動かないため、その取りこぼしもここで拾う。
+// Cronが間引かれても拾えるよう「20時を過ぎていて未送信なら送る」判定にし、
+// 対象は当日分だけにする（翌日以降は週次のまとめメールに任せる）。
+// まだ勤務中（終了予定が今より後）のシフトは対象外。
+export async function runEveningUnsubmittedReminders(now = new Date()) {
+  const nowJstMinutesOfDay = Math.floor((now.getTime() + JST_OFFSET_MS) / 60000) % (24 * 60);
+  if (nowJstMinutesOfDay < 20 * 60) return;
+  const nowHHMM = `${String(Math.floor(nowJstMinutesOfDay / 60)).padStart(2, "0")}:${String(nowJstMinutesOfDay % 60).padStart(2, "0")}`;
+  const todayStr = new Date(now.getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
+
+  const shifts = await prisma.shift.findMany({
+    where: {
+      status: "CONFIRMED",
+      date: new Date(`${todayStr}T00:00:00.000Z`),
+      reportReminderSentAt: null,
+      staff: { isProxy: false },
+      OR: [{ workReport: null }, { workReport: { submittedAt: null } }],
+    },
+    include: { staff: true, company: true },
+  });
+
+  const byStaff = new Map<string, { email: string; name: string; companyNames: Set<string>; shiftIds: string[] }>();
+  for (const shift of shifts) {
+    if (shift.endTime && !shift.isAllDay && !shift.isUndecided && shift.endTime > nowHHMM) continue;
+    const entry = byStaff.get(shift.staffUserId) ?? {
+      email: shift.staff.email,
+      name: shift.staff.name,
+      companyNames: new Set<string>(),
+      shiftIds: [],
+    };
+    entry.companyNames.add(shift.company.name);
+    entry.shiftIds.push(shift.id);
+    byStaff.set(shift.staffUserId, entry);
+  }
+
+  for (const [staffUserId, entry] of byStaff) {
+    await prisma.shift.updateMany({ where: { id: { in: entry.shiftIds } }, data: { reportReminderSentAt: new Date() } });
+    const companies = Array.from(entry.companyNames).join("、");
+    await sendTodayWorkReportReminderEmail(entry.email, {
+      name: entry.name,
+      date: todayStr,
+      companyNames: companies,
+      appUrl: absoluteUrl("/staff/timecard"),
+    });
+    await sendPushToUser(staffUserId, {
+      title: "今日の業務報告がまだ提出されていません",
+      body: `${todayStr} ${companies}の業務報告を提出してください`,
       url: "/staff/timecard",
     });
   }
