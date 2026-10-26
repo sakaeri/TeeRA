@@ -36,6 +36,22 @@ body {
   font-family: var(--font-sans-jp), sans-serif;
 }
 
+/* iOSのホーム画面アプリ（ステータスバー透過＋viewport-fit=cover）では、
+   position:fixedの全画面要素（inset:0）が画面の下端まで届かず、ステータス
+   バーと同じ高さのすき間から下のページが見える（モバイルでポップアップを
+   開くと下に白い帯が出る）。ポップアップの背景色を、すき間の分だけ下に
+   伸ばして塗る。ブラウザで開いた時はsafe-area-inset-topが0なので何もしない。 */
+.fixed.inset-0::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: env(safe-area-inset-top, 0px);
+  background: inherit;
+  pointer-events: none;
+}
+
 /* Baseline interactive feedback for every button/link, app-wide — makes it
    clear something is clickable (hover) and that a click just registered
    (press). Component-level hover:/active: utility classes still win where

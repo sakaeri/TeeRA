@@ -620,7 +620,21 @@ function RequestWizard({
   const skipCompanyStep = companies.length <= 1;
   const [step, setStep] = useState<1 | 2 | 3 | 4>(skipCompanyStep ? 2 : 1);
 
-  const cells = useMemo(() => buildMonthCells(year, month), [year, month]);
+  // 申請する月は前後に切り替えられる（開いた時はカレンダーで見ていた月、
+  // 日付から開いた時はその日の月）。今月より前には戻れない。選んだ日付は
+  // 月を切り替えても残る。
+  const [view, setView] = useState(() =>
+    initialDate ? { y: Number(initialDate.slice(0, 4)), m: Number(initialDate.slice(5, 7)) } : { y: year, m: month },
+  );
+  const cells = useMemo(() => buildMonthCells(view.y, view.m), [view]);
+  const todayYm = todayJst().slice(0, 7);
+  const viewYm = `${view.y}-${String(view.m).padStart(2, "0")}`;
+  function shiftViewMonth(delta: number) {
+    setView((v) => {
+      const d = new Date(Date.UTC(v.y, v.m - 1 + delta, 1));
+      return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1 };
+    });
+  }
   const selectedCompanyName = companies.find((c) => c.id === companyId)?.name ?? "";
 
   function toggleDate(dateStr: string) {
@@ -733,7 +747,32 @@ function RequestWizard({
         ) : step === 3 ? (
           <div className="flex flex-col gap-3">
             <p className="text-sm font-semibold">日付を選んでください（複数選択できます）</p>
-            <p className="text-xs text-muted">{year}年{month}月</p>
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => shiftViewMonth(-1)}
+                disabled={viewYm <= todayYm}
+                aria-label="前の月"
+                className="rounded-full p-1.5 text-muted hover:bg-background hover:text-primary disabled:opacity-30"
+              >
+                <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+                  <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <p className="text-sm font-semibold text-foreground">
+                {view.y}年{view.m}月
+              </p>
+              <button
+                type="button"
+                onClick={() => shiftViewMonth(1)}
+                aria-label="次の月"
+                className="rounded-full p-1.5 text-muted hover:bg-background hover:text-primary"
+              >
+                <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+                  <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
             <div className="grid grid-cols-7 gap-1">
               {WEEKDAYS.map((w, i) => (
                 <div key={w} className={`py-0.5 text-center text-[10px] font-semibold ${weekdayColor(i)}`}>
