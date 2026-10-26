@@ -717,6 +717,8 @@ model Shift {
   publicRecruitmentId   String?
   // 勤務開始1時間前リマインドメールを送信済みかどうかの目印（二重送信防止）。
   reminderSentAt        DateTime?
+  // 当日20時の「業務報告がまだです」リマインドを送信済みかどうかの目印（二重送信防止）。
+  reportReminderSentAt  DateTime?
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
 
