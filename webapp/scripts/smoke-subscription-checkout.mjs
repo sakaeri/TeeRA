@@ -52,8 +52,8 @@ try {
   await page.getByRole("button", { name: "プランを選ぶ" }).click();
   bodyText = await page.textContent("body");
   log(
-    "Tee残高ページのプランポップアップにスタンダード/ビジネスへのアップグレードボタンが表示される",
-    (bodyText.match(/このプランにする/g) ?? []).length === 2,
+    "Tee残高ページのプランポップアップにスタンダード/ビジネス/プロ/エンタープライズへのアップグレードボタンが表示される",
+    (bodyText.match(/このプランにする/g) ?? []).length === 4,
   );
   await page.click("text=✕");
 
