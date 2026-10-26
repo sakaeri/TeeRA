@@ -769,7 +769,7 @@ function FabMenu({
   const menuRef = useClickOutside<HTMLDivElement>(open, () => setOpen(false));
 
   return (
-    <div ref={menuRef} className="fixed bottom-8 right-8 z-20 flex flex-col items-end gap-2">
+    <div ref={menuRef} className="fixed bottom-8 right-8 z-10 flex flex-col items-end gap-2">
       {open ? (
         <div className="mb-1 w-48 overflow-hidden rounded-xl border border-border bg-white shadow-lg">
           <button
