@@ -136,9 +136,9 @@ try {
   // --- admin: create an overlapping assigned shift on same day -> expect conflict
   // (the day-detail modal for this date is still open above, so its date is
   // already selected as the wizard's default date — no need to touch the mini
-  // calendar. 「通常業務」は直前のシフト作成で登録済みなので、今度は選択式になる)
-  await admin.locator("button", { hasText: "＋" }).last().click();
-  await admin.getByRole("button", { name: "シフトを作成", exact: true }).click();
+  // calendar. 「通常業務」は直前のシフト作成で登録済みなので、今度は選択式になる。
+  // 右下の＋はポップアップの下に隠れるので、日付の詳細の「＋シフトを作成」から作る)
+  await admin.locator("div.fixed.inset-0.z-20").last().getByRole("button", { name: "＋シフトを作成" }).click();
   const assignModal2 = admin.locator("div.fixed.inset-0.z-20").last();
   await assignModal2.getByRole("button", { name: "社内（自社スタッフとして勤務）" }).click();
   await admin.waitForTimeout(300);

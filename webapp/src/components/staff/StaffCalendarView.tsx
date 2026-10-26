@@ -359,7 +359,7 @@ export function StaffCalendarView({
         type="button"
         onClick={() => setShowWizard(true)}
         aria-label="シフト希望を申請する"
-        className="fixed bottom-8 right-8 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-2xl text-primary-foreground shadow-lg"
+        className="fixed bottom-8 right-8 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-2xl text-primary-foreground shadow-lg"
       >
         <span
           className={`inline-block transition-transform duration-200 ${showWizard ? "rotate-45" : "rotate-0"}`}

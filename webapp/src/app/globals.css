@@ -37,17 +37,17 @@ body {
 }
 
 /* iOSのホーム画面アプリ（ステータスバー透過＋viewport-fit=cover）では、
-   position:fixedの全画面要素（inset:0）が画面の下端まで届かず、ステータス
-   バーと同じ高さのすき間から下のページが見える（モバイルでポップアップを
-   開くと下に白い帯が出る）。ポップアップの背景色を、すき間の分だけ下に
-   伸ばして塗る。ブラウザで開いた時はsafe-area-inset-topが0なので何もしない。 */
+   position:fixedの全画面要素（inset:0）が画面の下端まで届かず、すき間から
+   下のページが見える（モバイルでポップアップを開くと下に白い帯が出る）。
+   すき間の高さは端末や表示状態で変わるため、ポップアップの背景色を画面1つ分
+   下まで伸ばして塗る（画面の外にはみ出した分は見えないだけで害はない）。 */
 .fixed.inset-0::after {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
   top: 100%;
-  height: env(safe-area-inset-top, 0px);
+  height: 100vh;
   background: inherit;
   pointer-events: none;
 }

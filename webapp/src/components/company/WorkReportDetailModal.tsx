@@ -116,7 +116,7 @@ export function WorkReportDetailModal({ shiftId, onClose }: { shiftId: string; o
             )}
 
             {!detail.submitted ? (
-              <p className="text-xs text-muted">打刻はありますが、スタッフがまだ業務報告を提出していません。</p>
+              <p className="text-xs text-muted">スタッフがまだ業務報告を提出していません。</p>
             ) : null}
 
             {detail.comment ? (
