@@ -29,7 +29,7 @@ const PLAN_INFO: Record<PlanTier, { yen: number; quota: number; detail: string }
   FREE: { yen: 0, quota: 0, detail: "過去データの閲覧は直近3ヶ月まで" },
   STANDARD: { yen: 3980, quota: 30, detail: "閲覧無制限・PDF発行 月30件まで無料" },
   BUSINESS: { yen: 7980, quota: 100, detail: "閲覧無制限・PDF発行 月100件まで無料" },
-  PRO: { yen: 19800, quota: 500, detail: "閲覧無制限・PDF発行 月500件まで無料（スタッフ300名規模の目安）" },
+  PRO: { yen: 19800, quota: 500, detail: "閲覧無制限・PDF発行 月500件まで無料" },
   ENTERPRISE: { yen: 39800, quota: 0, detail: "閲覧無制限・PDF発行 無制限" },
 };
 

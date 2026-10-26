@@ -115,8 +115,8 @@ try {
   await visitor.waitForTimeout(300);
   bodyText = await visitor.textContent("body");
   log(
-    "トップページの料金プランにプロ・エンタープライズと規模の目安が出る",
-    bodyText.includes("¥19,800 / 月") && bodyText.includes("¥39,800 / 月") && bodyText.includes("スタッフ300名・取引先200社規模の目安"),
+    "トップページの料金プランにプロ・エンタープライズが出る",
+    bodyText.includes("¥19,800 / 月") && bodyText.includes("¥39,800 / 月"),
   );
 
   console.log(process.exitCode ? "PLAN TIERS SMOKE TEST HAD FAILURES" : "PLAN TIERS SMOKE TEST PASSED");
