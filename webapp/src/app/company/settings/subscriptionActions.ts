@@ -3,12 +3,14 @@
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManageCompanySettings } from "@/lib/auth/permissions";
 import { createSubscriptionCheckoutSession } from "@/lib/domain/subscriptions";
+import { PLAN_YEN, type PaidPlanTier } from "@/lib/domain/plans";
 
 // wallet/actions.tsのcreateCheckoutSessionActionと同じ理由で、Stripe呼び出し
 // 部分は必ず捕まえてエラーを構造化データとして返す。
-export async function createSubscriptionCheckoutSessionAction(planTier: "STANDARD" | "BUSINESS") {
+export async function createSubscriptionCheckoutSessionAction(planTier: PaidPlanTier) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  if (!(planTier in PLAN_YEN)) throw new Error("invalid_plan");
 
   const base = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   try {

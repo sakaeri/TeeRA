@@ -1,12 +1,12 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { requireStripe } from "@/lib/stripe";
-import { PLAN_YEN } from "@/lib/domain/plans";
+import { PLAN_YEN, PLAN_LABEL, type PaidPlanTier } from "@/lib/domain/plans";
 import type { PlanTier } from "@/generated/prisma/enums";
 
 export async function createSubscriptionCheckoutSession(params: {
   companyId: string;
-  planTier: "STANDARD" | "BUSINESS";
+  planTier: PaidPlanTier;
   returnUrl: string;
 }) {
   const stripe = requireStripe();
@@ -25,7 +25,7 @@ export async function createSubscriptionCheckoutSession(params: {
           currency: "jpy",
           unit_amount: yenAmount,
           recurring: { interval: "month" },
-          product_data: { name: `TeeRA ${params.planTier === "STANDARD" ? "スタンダード" : "ビジネス"}プラン` },
+          product_data: { name: `TeeRA ${PLAN_LABEL[params.planTier]}プラン` },
         },
         quantity: 1,
       },

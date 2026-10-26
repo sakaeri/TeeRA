@@ -156,8 +156,12 @@ export default async function PayrollPage({
           <SalarySlipEditor
             slip={slipData}
             staffName={selectedStaffName}
-            willUseFreeQuota={pdfQuota.quota > 0 && pdfQuota.remaining > 0}
-            pdfQuota={pdfQuota.quota > 0 ? { remaining: pdfQuota.remaining, quota: pdfQuota.quota } : null}
+            willUseFreeQuota={pdfQuota.unlimited || (pdfQuota.quota > 0 && pdfQuota.remaining > 0)}
+            pdfQuota={
+              pdfQuota.unlimited || pdfQuota.quota > 0
+                ? { remaining: pdfQuota.remaining, quota: pdfQuota.quota, unlimited: pdfQuota.unlimited }
+                : null
+            }
           />
           {slipData.issues.length ? (
             <div className="mt-6">

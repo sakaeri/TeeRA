@@ -30,7 +30,7 @@ export type MonthCutoff = { year: number; month: number } | null;
 // 有料プランはnull（制限なし）。ダウングレード時のグランドファザリングは
 // 行わない方針のため、呼び出しの都度その場で計算する（保存されたカット
 // オフ値は持たない）。
-export function earliestAllowedMonth(planTier: "FREE" | "STANDARD" | "BUSINESS"): MonthCutoff {
+export function earliestAllowedMonth(planTier: string): MonthCutoff {
   if (planTier !== "FREE") return null;
   const { year, month } = todayJstParts();
   let y = year;

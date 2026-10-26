@@ -91,6 +91,8 @@ enum PlanTier {
   FREE
   STANDARD
   BUSINESS
+  PRO // 〜300人規模向け（PDF月500件）
+  ENTERPRISE // 大規模向け（PDF無制限）
 }
 
 model Company {

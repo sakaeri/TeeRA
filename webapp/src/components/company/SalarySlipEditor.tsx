@@ -49,7 +49,7 @@ export function SalarySlipEditor({
   };
   staffName: string;
   willUseFreeQuota: boolean;
-  pdfQuota: { remaining: number; quota: number } | null;
+  pdfQuota: { remaining: number; quota: number; unlimited?: boolean } | null;
 }) {
   const [pending, startTransition] = useTransition();
   const [showAddLineModal, setShowAddLineModal] = useState(false);
@@ -184,7 +184,9 @@ export function SalarySlipEditor({
           <div className="mt-4 flex flex-col gap-2">
             {pdfQuota ? (
               <p className="text-xs text-muted">
-                今月の無料発行枠（給与明細・請求書の合算）：残り{pdfQuota.remaining}/{pdfQuota.quota}件
+                {pdfQuota.unlimited
+                  ? "PDF発行は無制限です（エンタープライズプラン）"
+                  : `今月の無料発行枠（給与明細・請求書の合算）：残り${pdfQuota.remaining}/${pdfQuota.quota}件`}
               </p>
             ) : null}
             <div className="flex gap-2">

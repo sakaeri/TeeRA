@@ -53,6 +53,26 @@ const PLANS: {
       "過去の履歴を制限なく閲覧可能",
     ],
   },
+  {
+    name: "プロ",
+    price: "¥19,800 / 月",
+    features: [
+      "無料プランの内容をすべて含む",
+      "月500枚までPDF発行が月額に含まれる",
+      "過去の履歴を制限なく閲覧可能",
+      "スタッフ300名・取引先200社規模の目安",
+    ],
+  },
+  {
+    name: "エンタープライズ",
+    price: "¥39,800 / 月",
+    features: [
+      "無料プランの内容をすべて含む",
+      "PDF発行が無制限",
+      "過去の履歴を制限なく閲覧可能",
+      "スタッフ数・取引先数の多い会社向け",
+    ],
+  },
 ];
 
 const FEATURES: { key: string; icon: ReactNode; title: string; description: string; screenshot?: string }[] = [
@@ -226,7 +246,9 @@ export function LandingNav() {
 
       {openKey === "pricing" ? (
         <PopupShell title="料金プラン" onClose={close}>
-          <p className="mb-4 text-sm text-muted">基本機能は無料プランのままずっとご利用いただけます。</p>
+          <p className="mb-4 text-sm text-muted">
+            基本機能は無料プランのままずっとご利用いただけます。PDF発行（給与明細・請求書）が月額の枠を超えた分は、1枚ずつの従量課金で発行できます。
+          </p>
           <div className="flex flex-col gap-4">
             {PLANS.map((plan) => (
               <div
