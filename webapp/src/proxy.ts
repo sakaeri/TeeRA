@@ -23,8 +23,11 @@ export default auth((req) => {
   return NextResponse.next();
 });
 
+// 公開しているファイル（画像・sw.jsなど）はログインしていなくても取れるようにする。
+// sw.jsが転送されるとブラウザが登録を断るため、未ログインのLPで電波が弱いときの
+// 表示（public/sw.js）が効かなくなる。
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|icon.png|icon-192.png|apple-icon.png|manifest.webmanifest|lp/).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|icon.png|icon-192.png|apple-icon.png|logo-64.png|sw.js|manifest.webmanifest|lp/|howto/).*)",
   ],
 };

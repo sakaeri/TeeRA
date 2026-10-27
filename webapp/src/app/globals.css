@@ -19,7 +19,9 @@
   --color-border: var(--brand-border);
   --color-muted: var(--brand-muted);
   --font-serif-jp: var(--font-zen-old-mincho);
-  --font-sans-jp: var(--font-noto-sans-jp);
+  /* 端末にもともと入っている日本語の書体（layout.tsxのコメント参照） */
+  --font-sans-jp: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Noto Sans JP", "Yu Gothic UI",
+    "Yu Gothic", Meiryo;
 }
 
 html {
