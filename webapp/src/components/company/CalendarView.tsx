@@ -2514,19 +2514,22 @@ function ClientOrderRow({
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div
-      className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 p-4"
+      className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 px-4 pt-[max(1rem,calc(env(safe-area-inset-top)+0.5rem))] pb-[max(1rem,env(safe-area-inset-bottom))]"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-4 shadow-lg sm:p-6">
-        <div className="mb-4 flex items-center justify-between">
+      {/* スマホのホーム画面アプリでは画面の上端が時計・電池の表示に重なるため、
+          上下は安全領域の分あけ、高さは画面内に収める。内容が長いときは
+          見出し（✕）を残したまま本文だけスクロールする。 */}
+      <div className="flex max-h-full w-full max-w-2xl flex-col rounded-2xl bg-white shadow-lg">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2 sm:px-6">
           <h3 className="font-serif-jp text-lg font-bold text-primary">{title}</h3>
-          <button type="button" onClick={onClose} className="text-muted">
+          <button type="button" onClick={onClose} className="-mr-2 px-3 py-2 text-muted">
             ✕
           </button>
         </div>
-        {children}
+        <div className="min-h-0 overflow-y-auto p-4 sm:p-6">{children}</div>
       </div>
     </div>
   );
