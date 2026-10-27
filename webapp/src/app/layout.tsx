@@ -1,17 +1,23 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Sans_JP, Zen_Old_Mincho } from "next/font/google";
+import { Zen_Old_Mincho } from "next/font/google";
 import "./globals.css";
+import { ServiceWorkerSetup } from "@/components/ServiceWorkerSetup";
 
-const notoSansJP = Noto_Sans_JP({
-  variable: "--font-noto-sans-jp",
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-});
-
+// 本文の書体は、スマホ・パソコンにもともと入っている日本語の書体を使う
+// （globals.cssの--font-sans-jp）。以前はNoto Sans JPをネットから読み込んで
+// いたが、日本語の書体は数十ファイル・約600KBあり、電波が弱いと書体の到着を
+// 待つ間に文字が表示されない（ページが枠だけになる）ことがあったため。
+// Androidの標準の書体はNoto Sans（CJK）なので、見た目はほぼ変わらない。
+//
+// 見出しの明朝体だけはネットから読み込むが、すぐに届かなければ待たずに
+// 端末の明朝体で表示する（display: optional。2回目以降は保存された書体が使われる）。
 const zenOldMincho = Zen_Old_Mincho({
   variable: "--font-zen-old-mincho",
   subsets: ["latin"],
   weight: ["700"],
+  display: "optional",
+  preload: false,
+  fallback: ["Hiragino Mincho ProN", "Yu Mincho", "Noto Serif CJK JP", "Noto Serif JP", "serif"],
 });
 
 export const metadata: Metadata = {
@@ -44,9 +50,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="ja"
-      className={`${notoSansJP.variable} ${zenOldMincho.variable} h-full antialiased`}
+      className={`${zenOldMincho.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <ServiceWorkerSetup />
+      </body>
     </html>
   );
 }

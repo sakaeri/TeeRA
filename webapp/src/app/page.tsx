@@ -20,7 +20,7 @@ export default async function LandingPage() {
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-6">
         <div className="flex items-center gap-2 font-serif-jp text-xl font-bold text-primary-foreground">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/icon.png" alt="" className="h-8 w-8 rounded-lg" />
+          <img src="/logo-64.png" alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
           TeeRA
         </div>
         <Link href="/login" className="text-sm font-semibold text-accent hover:underline">
