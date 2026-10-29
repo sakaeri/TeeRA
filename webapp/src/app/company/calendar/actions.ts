@@ -8,6 +8,7 @@ import {
   createAssignedShift,
   cancelShift,
   dismissShiftRequest,
+  updateShiftTime,
 } from "@/lib/domain/shifts";
 import {
   createPublicRecruitment,
@@ -19,7 +20,11 @@ import {
   saveRecruitmentPublicDraft,
 } from "@/lib/domain/recruitment";
 import { listRecruitmentCancelImpacts, previewShiftCancellation } from "@/lib/domain/cancellation";
-import { notifyAgencyOfClientCancellation, notifyStaffShiftReleased } from "@/lib/domain/emailNotifications";
+import {
+  notifyAgencyOfClientCancellation,
+  notifyStaffShiftReleased,
+  notifyStaffShiftTimeChanged,
+} from "@/lib/domain/emailNotifications";
 import type { WageType } from "@/generated/prisma/enums";
 
 export async function createAssignedShiftAction(input: {
@@ -388,6 +393,66 @@ export async function cancelShiftAction(
   revalidatePath("/company/calendar");
   revalidatePath("/company");
   return { status: "ok" as const };
+}
+
+const UPDATE_SHIFT_TIME_ERROR_LABEL: Record<string, string> = {
+  forbidden: "権限がありません。",
+  invalid_time: "開始時刻と終了時刻を入力してください。",
+  shift_not_active: "このシフトは解除されているため変更できません。",
+  shift_in_past: "日付が過ぎたシフトは変更できません。",
+  report_submitted: "業務報告が提出済みのため変更できません（業務報告の内容を修正してください）。",
+};
+
+// シフトの出勤時間を入力・変更し、スタッフ本人に知らせる（毎回）。
+export async function updateShiftTimeAction(input: {
+  shiftId: string;
+  startTime: string | null;
+  endTime: string | null;
+  isAllDay: boolean;
+  isUndecided: boolean;
+  confirmedDespiteConflict?: boolean;
+}) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const shift = await prisma.shift.findUniqueOrThrow({ where: { id: input.shiftId } });
+  if (shift.companyId !== membership.companyId || !canManageShifts(membership, shift.teamId)) {
+    return { status: "error" as const, reason: UPDATE_SHIFT_TIME_ERROR_LABEL.forbidden };
+  }
+
+  let result: Awaited<ReturnType<typeof updateShiftTime>>;
+  try {
+    result = await updateShiftTime({
+      shiftId: input.shiftId,
+      actorCompanyId: membership.companyId,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      isAllDay: input.isAllDay,
+      isUndecided: input.isUndecided,
+      confirmedDespiteConflict: input.confirmedDespiteConflict,
+    });
+  } catch (error) {
+    if (error instanceof Error && UPDATE_SHIFT_TIME_ERROR_LABEL[error.message]) {
+      return { status: "error" as const, reason: UPDATE_SHIFT_TIME_ERROR_LABEL[error.message] };
+    }
+    throw error;
+  }
+
+  if (result.status === "conflict") {
+    return {
+      status: "conflict" as const,
+      conflicts: result.conflicts.map((c) => ({
+        id: c.id,
+        label: c.isAllDay ? "終日" : c.isUndecided ? "時間未定" : `${c.startTime}〜${c.endTime}`,
+      })),
+    };
+  }
+  if (result.status === "updated") {
+    await notifyStaffShiftTimeChanged({ shiftId: result.shift.id, previous: result.previous }).catch((err) =>
+      console.error("[notify] shift time changed failed", err),
+    );
+  }
+  revalidatePath("/company/calendar");
+  revalidatePath("/company");
+  return { status: result.status };
 }
 
 export async function dismissShiftRequestAction(requestId: string, date: string) {

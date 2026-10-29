@@ -92,7 +92,7 @@ export default async function CompanyCalendarPage({
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col bg-white px-1 pb-4 pt-2 sm:block sm:bg-transparent sm:px-8 sm:py-10">
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col bg-white px-1 pb-24 pt-2 sm:block sm:bg-transparent sm:px-8 sm:py-10">
       <CalendarView
         year={year}
         month={month}
@@ -126,6 +126,7 @@ export default async function CompanyCalendarPage({
             };
           })(),
           status: s.status,
+          ownShift: s.companyId === membership.companyId,
         }))}
         shiftHistory={shiftHistory.map((s) => ({
           id: s.id,

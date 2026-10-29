@@ -10,6 +10,7 @@ import {
   sendUnsubmittedWorkReportReminderEmail,
   sendContractConsentReminderEmail,
   sendClientCancellationEmail,
+  sendShiftTimeChangedEmail,
 } from "@/lib/email";
 import type { RecruitmentCancelImpact } from "@/lib/domain/cancellation";
 import { sendPushToUser, sendPushToUsers } from "@/lib/push";
@@ -561,5 +562,48 @@ export async function notifyStaffShiftReleased(params: { staffUserId: string; da
     title: "シフトがなくなりました",
     body: `${params.date.toISOString().slice(0, 10)}${params.workplaceName ? `の${params.workplaceName}` : ""}のシフトはなくなりました（休み）。`,
     url: "/staff",
+  });
+}
+
+const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
+
+// シフトの出勤時間が決まった・変わったことをスタッフ本人に知らせる。見逃すと
+// 遅刻につながるため毎回送る。プッシュ通知を受け取れる端末が無い人には、
+// 代わりにメールで送る。
+export async function notifyStaffShiftTimeChanged(params: {
+  shiftId: string;
+  previous: { isAllDay: boolean; isUndecided: boolean; startTime: string | null; endTime: string | null };
+}) {
+  const shift = await prisma.shift.findUniqueOrThrow({
+    where: { id: params.shiftId },
+    include: { staff: true, company: true, companyRelationship: { include: { clientCompany: true } } },
+  });
+  if (shift.staff.isProxy) return;
+  const dateLabel = `${shift.date.getUTCMonth() + 1}月${shift.date.getUTCDate()}日（${WEEKDAY_JA[shift.date.getUTCDay()]}）`;
+  const workplace =
+    shift.companyRelationship?.clientCompany?.name ?? shift.companyRelationship?.proxyName ?? shift.company.name;
+  const newLabel = shiftTimeLabel(shift);
+  const previousLabel = shiftTimeLabel(params.previous);
+  const decided = params.previous.isUndecided && !shift.isUndecided;
+  const title = decided ? "出勤時間が決まりました" : "出勤時間が変わりました";
+  const body = decided
+    ? `${dateLabel}の${workplace}の出勤時間は ${newLabel} です。`
+    : `${dateLabel}の${workplace}の出勤時間が ${previousLabel} から ${newLabel} に変わりました。`;
+
+  const pushDevices = await prisma.pushSubscription.count({ where: { userId: shift.staffUserId } });
+  if (pushDevices > 0) {
+    await sendPushToUser(shift.staffUserId, { title, body, url: "/staff" });
+    return;
+  }
+  await sendShiftTimeChangedEmail(shift.staff.email, {
+    staffName: shift.staff.name,
+    title,
+    intro: body,
+    dateLabel,
+    workplace,
+    timeLabel: newLabel,
+    previousTimeLabel: decided ? null : previousLabel,
+    taskLabel: shift.taskName,
+    appUrl: absoluteUrl("/staff"),
   });
 }

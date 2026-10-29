@@ -293,6 +293,37 @@ export async function sendShiftReminderEmail(
   );
 }
 
+export async function sendShiftTimeChangedEmail(
+  to: string,
+  params: {
+    staffName: string;
+    title: string;
+    intro: string;
+    dateLabel: string;
+    workplace: string;
+    timeLabel: string;
+    previousTimeLabel: string | null;
+    taskLabel: string | null;
+    appUrl: string;
+  },
+) {
+  await sendMail(
+    to,
+    `【TeeRA】${params.title}（${params.dateLabel}）`,
+    emailLayout(
+      params.title,
+      `${greeting(params.staffName)}
+       <p style="margin:0 0 12px;font-size:14px;line-height:1.6;">${params.intro}</p>
+       ${infoRow("日付", params.dateLabel)}
+       ${infoRow("出勤時間", params.timeLabel)}
+       ${params.previousTimeLabel ? infoRow("変更前", params.previousTimeLabel) : ""}
+       ${infoRow("勤務先", params.workplace)}
+       ${params.taskLabel ? infoRow("業務内容", params.taskLabel) : ""}
+       ${button(params.appUrl, "シフトを確認する")}`,
+    ),
+  );
+}
+
 export async function sendUnsubmittedWorkReportReminderEmail(to: string, name: string, count: number, appUrl: string) {
   await sendMail(
     to,
