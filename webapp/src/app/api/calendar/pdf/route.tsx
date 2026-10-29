@@ -59,7 +59,11 @@ export async function GET(request: Request) {
       endTime: s.endTime,
       isAllDay: s.isAllDay,
       isUndecided: s.isUndecided,
-      clientName: s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? null,
+      // 派遣会社が自社（依頼主）の現場に入れたシフトは、勤務先の代わりに派遣会社名を出す
+      clientName:
+        s.companyId !== membership.companyId
+          ? `派遣：${s.companyRelationship?.agencyCompany?.name ?? "派遣会社"}`
+          : (s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? null),
       taskName: s.taskName,
     })),
   };

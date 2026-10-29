@@ -352,6 +352,24 @@ export async function sendContractConsentReminderEmail(to: string, name: string,
 }
 
 // 依頼主がオーダーを取り消し、派遣元のスタッフのシフトが取り消された時の連絡。
+export async function sendClientTimeChangeEmail(
+  to: string,
+  params: { companyName: string; clientName: string; line: string; reviewUrl: string },
+) {
+  await sendMail(
+    to,
+    "【TeeRA】依頼主が出勤時間を変更しました",
+    emailLayout(
+      "依頼主が出勤時間を変更しました",
+      `${companyGreeting(params.companyName)}
+       ${infoRow("依頼主", params.clientName)}
+       ${infoRow("変更", params.line)}
+       <p style="margin:12px 0 0;font-size:13px;line-height:1.6;">スタッフ本人には、新しい出勤時間をお知らせ済みです。</p>
+       ${button(params.reviewUrl, "カレンダーで確認する")}`,
+    ),
+  );
+}
+
 export async function sendClientCancellationEmail(
   to: string,
   params: { companyName: string; clientName: string; lines: string[]; totalFee: number; reviewUrl: string },
