@@ -2600,7 +2600,7 @@ function BulkShiftTimeModal({ dateLabel, shifts, onClose }: { dateLabel: string;
         <p className="text-sm">{dateLabel}</p>
         <div className="flex flex-col gap-2 rounded-lg bg-background p-3">
           <p className="text-xs font-semibold text-muted">全員に同じ時間を入れる</p>
-          <div className="flex items-end gap-2">
+          <div className="flex gap-2">
             <Field label="開始">
               <input
                 type="time"
@@ -2619,14 +2619,14 @@ function BulkShiftTimeModal({ dateLabel, shifts, onClose }: { dateLabel: string;
                 className="w-full min-w-0 rounded-lg border border-border bg-white px-2 py-1.5 text-sm"
               />
             </Field>
-            <button
-              type="button"
-              onClick={applyAll}
-              className="shrink-0 rounded-lg border border-primary bg-white px-3 py-1.5 text-xs font-semibold text-primary"
-            >
-              全員に入れる
-            </button>
           </div>
+          <button
+            type="button"
+            onClick={applyAll}
+            className="rounded-lg border border-primary bg-white px-3 py-1.5 text-xs font-semibold text-primary"
+          >
+            全員に入れる
+          </button>
         </div>
 
         <ul className="flex flex-col divide-y divide-border/60">
