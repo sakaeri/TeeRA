@@ -23,6 +23,10 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
   const sp = await searchParams;
   const initialStaffId = typeof sp.staff === "string" ? sp.staff : undefined;
   const initialStaffTab = sp.tab === "contracts" ? ("contracts" as const) : undefined;
+  // ホームの「よく使う操作」から、追加メニュー・招待を開いた状態で来る
+  const initialTab = sp.tab === "clients" || sp.tab === "agencies" ? sp.tab : undefined;
+  const initialAddMenu = sp.add === "1";
+  const initialInviteStaff = sp.invite === "staff";
 
   // 本部管理者/編集者以外（チームマネージャー/リーダー）には、自分が
   // 管轄するチームに所属するスタッフ・依頼主・派遣会社だけを見せる
@@ -50,6 +54,9 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
         companyName={company.name}
         initialStaffId={initialStaffId}
         initialStaffTab={initialStaffTab}
+        initialTab={initialTab}
+        initialAddMenu={initialAddMenu}
+        initialInviteStaff={initialInviteStaff}
         knownTaskNames={knownTaskNames}
         clients={clients.map((c) => ({
           id: c.id,

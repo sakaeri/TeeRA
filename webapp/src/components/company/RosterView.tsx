@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   inviteStaffAction,
   createProxyStaffAction,
@@ -92,6 +92,9 @@ export function RosterView({
   knownTaskNames,
   initialStaffId,
   initialStaffTab,
+  initialTab,
+  initialAddMenu = false,
+  initialInviteStaff = false,
   isCompanyScopeAdmin,
   myManagedTeams,
 }: {
@@ -106,17 +109,31 @@ export function RosterView({
   knownTaskNames: string[];
   initialStaffId?: string;
   initialStaffTab?: "contracts";
+  initialTab?: "clients" | "agencies";
+  initialAddMenu?: boolean;
+  initialInviteStaff?: boolean;
   isCompanyScopeAdmin: boolean;
   myManagedTeams: Team[];
 }) {
-  const [tab, setTab] = useState<Tab>("staff");
+  const [tab, setTab] = useState<Tab>(initialTab ?? "staff");
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(initialStaffId ?? null);
   const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(null);
   const [selectedRelationshipKind, setSelectedRelationshipKind] = useState<"client" | "agency" | null>(null);
-  const [showInviteStaffModal, setShowInviteStaffModal] = useState(false);
+  const [showInviteStaffModal, setShowInviteStaffModal] = useState(initialInviteStaff);
   const [showInviteRelationshipModal, setShowInviteRelationshipModal] = useState<"client" | "agency" | null>(null);
   const [pending, startTransition] = useTransition();
-  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showAddMenu, setShowAddMenu] = useState(initialAddMenu);
+  // 「よく使う操作」から来た時の指定（?add=1・invite=staff）は一度開いたら消す（再読み込みで
+  // 何度も開かないように）
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("add") || url.searchParams.has("invite")) {
+      url.searchParams.delete("add");
+      url.searchParams.delete("invite");
+      window.history.replaceState(null, "", url);
+    }
+  }, []);
+
   const [showAddMenuInfo, setShowAddMenuInfo] = useState(false);
   const [teamFilter, setTeamFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
