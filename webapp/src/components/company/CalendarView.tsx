@@ -45,7 +45,8 @@ type ShiftRow = {
   cancelFeeAmount?: number; // 依頼主の取り消し（調整中・勤務先キャンセル）で記録したキャンセル料
   taskName?: string | null;
   status?: string; // "CONFIRMED" | "ON_HOLD"（依頼主の取り消しで調整中）
-  ownShift?: boolean; // 自社名義のシフト（出勤時間を変更できるのはこれだけ）
+  ownShift?: boolean; // 自社名義のシフト（解除できるのはこれだけ）
+  agencyName?: string; // 派遣会社が自社（依頼主）の現場に入れたシフトの派遣会社名（見る・時間を変えるだけ）
 };
 
 type ShiftHistoryRow = {
@@ -986,7 +987,11 @@ function DayDetailModal({
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
               {shifts.map((s) => {
-                const workplaceLabel = s.source === "CLIENT" ? (s.clientName ?? "依頼主") : (s.originLabel ?? "自社");
+                const workplaceLabel = s.agencyName
+                  ? `派遣：${s.agencyName}`
+                  : s.source === "CLIENT"
+                    ? (s.clientName ?? "依頼主")
+                    : (s.originLabel ?? "自社");
                 return (
                   <li
                     key={s.id}
@@ -1005,7 +1010,11 @@ function DayDetailModal({
                         <span
                           title={workplaceLabel}
                           className={`max-w-[220px] truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                            s.source === "CLIENT" ? "bg-sky-100 text-sky-800" : "bg-emerald-100 text-emerald-800"
+                            s.agencyName
+                              ? "bg-violet-100 text-violet-800"
+                              : s.source === "CLIENT"
+                                ? "bg-sky-100 text-sky-800"
+                                : "bg-emerald-100 text-emerald-800"
                           }`}
                         >
                           {workplaceLabel}
@@ -1018,7 +1027,7 @@ function DayDetailModal({
                       </span>
                     </button>
                     <div className="flex items-center justify-between gap-2 sm:contents">
-                      {!isPastDay && s.ownShift && s.status !== "ON_HOLD" && !s.approvalStatus ? (
+                      {!isPastDay && (s.ownShift || s.agencyName) && s.status !== "ON_HOLD" && !s.approvalStatus ? (
                         // 報告前なら、時間をタップして出勤時間を入力・変更できる（スタッフに通知）
                         <EditShiftTimeButton shift={s} />
                       ) : (
@@ -1045,7 +1054,8 @@ function DayDetailModal({
                       ) : (
                         <span className="w-fit rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
                       )}
-                      {isPastDay ? null : <CancelShiftButton shiftId={s.id} staffName={s.staffName} />}
+                      {/* 派遣会社名義のシフトは派遣会社が解除する（依頼主からは消せない） */}
+                      {isPastDay || !s.ownShift ? null : <CancelShiftButton shiftId={s.id} staffName={s.staffName} />}
                       </div>
                     </div>
                   </li>
@@ -1780,7 +1790,11 @@ function OrderCard({
           {expanded ? (
             <ul className="mt-1 flex flex-col text-xs">
               {assignedShifts.map((s) => {
-                const affiliation = s.originLabel && s.originLabel !== "自社" ? s.originLabel : null;
+                const affiliation = s.agencyName
+                  ? `派遣：${s.agencyName}`
+                  : s.originLabel && s.originLabel !== "自社"
+                    ? s.originLabel
+                    : null;
                 return (
                   <li
                     key={s.id}
@@ -1788,7 +1802,7 @@ function OrderCard({
                   >
                     <span className="truncate font-medium">{s.staffName}</span>
                     <span className="text-muted">{affiliation ?? ""}</span>
-                    {!isPastDay ? <CancelShiftButton shiftId={s.id} staffName={s.staffName} /> : null}
+                    {!isPastDay && s.ownShift ? <CancelShiftButton shiftId={s.id} staffName={s.staffName} /> : null}
                   </li>
                 );
               })}
@@ -2659,7 +2673,7 @@ function ClientOrderRow({
                   className="grid grid-cols-[1fr_auto] items-center gap-2 border-b border-border/50 py-1.5 last:border-b-0"
                 >
                   <span className="truncate font-medium">{s.staffName}</span>
-                  {!isPastDay ? <CancelShiftButton shiftId={s.id} staffName={s.staffName} /> : null}
+                  {!isPastDay && s.ownShift ? <CancelShiftButton shiftId={s.id} staffName={s.staffName} /> : null}
                 </li>
               ))}
             </ul>

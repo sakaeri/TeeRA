@@ -2,7 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { canManage, canManageAny, canManageCompanySettings, canManageShifts, canManageTeamRoles } from "@/lib/auth/permissions";
+import {
+  canManage,
+  canManageAny,
+  canManageCompanySettings,
+  canManageShifts,
+  canManageTeamRoles,
+  isCompanyScopeAdmin,
+} from "@/lib/auth/permissions";
+import { isClientSiteShiftOf } from "@/lib/domain/shifts";
 import { getWorkReportDetail } from "@/lib/domain/workReports";
 import { prisma } from "@/lib/prisma";
 import {
@@ -824,7 +832,15 @@ export async function updateClientAddressPhoneAction(
 // （給与額などは含まないため、カレンダーと同じcanManageShifts基準）。
 export async function getWorkReportDetailAction(shiftId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
-  const shift = await prisma.shift.findUniqueOrThrow({ where: { id: shiftId }, select: { companyId: true, teamId: true } });
-  if (shift.companyId !== membership.companyId || !canManageShifts(membership, shift.teamId)) throw new Error("forbidden");
+  const shift = await prisma.shift.findUniqueOrThrow({
+    where: { id: shiftId },
+    select: { companyId: true, teamId: true, source: true, companyRelationship: { select: { clientCompanyId: true } } },
+  });
+  // 派遣会社が自社（依頼主）の現場に入れたシフトも、カレンダーから開ける（依頼主は業務報告の承認もする）
+  const allowed =
+    shift.companyId === membership.companyId
+      ? canManageShifts(membership, shift.teamId)
+      : isClientSiteShiftOf(shift, membership.companyId) && isCompanyScopeAdmin(membership);
+  if (!allowed) throw new Error("forbidden");
   return getWorkReportDetail(shiftId);
 }

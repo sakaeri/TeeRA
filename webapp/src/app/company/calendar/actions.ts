@@ -9,6 +9,7 @@ import {
   cancelShift,
   dismissShiftRequest,
   updateShiftTime,
+  isClientSiteShiftOf,
 } from "@/lib/domain/shifts";
 import {
   createPublicRecruitment,
@@ -24,6 +25,7 @@ import {
   notifyAgencyOfClientCancellation,
   notifyStaffShiftReleased,
   notifyStaffShiftTimeChanged,
+  notifyAgencyOfClientTimeChange,
 } from "@/lib/domain/emailNotifications";
 import type { WageType } from "@/generated/prisma/enums";
 
@@ -413,8 +415,13 @@ export async function updateShiftTimeAction(input: {
   confirmedDespiteConflict?: boolean;
 }) {
   const { membership } = await requireCompanyAdminOrEditor();
-  const shift = await prisma.shift.findUniqueOrThrow({ where: { id: input.shiftId } });
-  if (shift.companyId !== membership.companyId || !canManageShifts(membership, shift.teamId)) {
+  const shift = await prisma.shift.findUniqueOrThrow({ where: { id: input.shiftId }, include: { companyRelationship: true } });
+  // 派遣会社が自社の現場に入れたシフトは、チームと関係がないので会社全体の管理者だけ
+  const allowed =
+    shift.companyId === membership.companyId
+      ? canManageShifts(membership, shift.teamId)
+      : isClientSiteShiftOf(shift, membership.companyId) && isCompanyScopeAdmin(membership);
+  if (!allowed) {
     return { status: "error" as const, reason: UPDATE_SHIFT_TIME_ERROR_LABEL.forbidden };
   }
 
@@ -449,6 +456,11 @@ export async function updateShiftTimeAction(input: {
     await notifyStaffShiftTimeChanged({ shiftId: result.shift.id, previous: result.previous }).catch((err) =>
       console.error("[notify] shift time changed failed", err),
     );
+    if (result.editedByClient) {
+      await notifyAgencyOfClientTimeChange({ shiftId: result.shift.id, previous: result.previous }).catch((err) =>
+        console.error("[notify] agency time change failed", err),
+      );
+    }
   }
   revalidatePath("/company/calendar");
   revalidatePath("/company");

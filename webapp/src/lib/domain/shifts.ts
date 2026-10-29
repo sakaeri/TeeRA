@@ -309,33 +309,50 @@ export async function listShiftsForMonth(params: {
   const start = new Date(Date.UTC(params.year, params.month - 1, 1));
   const end = new Date(Date.UTC(params.year, params.month, 1));
 
-  const where: Prisma.ShiftWhereInput = {
+  const own: Prisma.ShiftWhereInput = {
     companyId: params.companyId,
     teamId: params.teamId ?? (params.restrictToTeamIds ? { in: params.restrictToTeamIds } : undefined),
-    date: { gte: start, lt: end },
-    status: { notIn: ["SUPERSEDED", "CANCELLED"] },
   };
+  // 派遣会社が自社（依頼主）の現場に入れたシフト（派遣会社名義）。シフトは
+  // 派遣会社・スタッフ・依頼主の三者で共有するため、依頼主のカレンダーにも出す。
+  // チームでの絞り込みは依頼主側のチームとは関係がないので、全体表示の時だけ。
+  let clientSite: Prisma.ShiftWhereInput | null =
+    params.teamId || params.restrictToTeamIds
+      ? null
+      : {
+          source: "CLIENT",
+          companyId: { not: params.companyId },
+          companyRelationship: { clientCompanyId: params.companyId },
+        };
 
   if (params.companyRelationshipId) {
     const rel = await prisma.companyRelationship.findUniqueOrThrow({ where: { id: params.companyRelationshipId } });
     if (rel.agencyCompanyId === params.companyId) {
-      where.companyRelationshipId = params.companyRelationshipId;
+      own.companyRelationshipId = params.companyRelationshipId;
+      clientSite = null;
     } else if (rel.clientCompanyId === params.companyId) {
       const placements = await prisma.staffPlacement.findMany({
         where: { companyRelationshipId: params.companyRelationshipId },
         select: { staffUserId: true },
       });
-      where.staffUserId = { in: placements.map((p) => p.staffUserId) };
-      where.source = "INHOUSE";
+      own.staffUserId = { in: placements.map((p) => p.staffUserId) };
+      own.source = "INHOUSE";
+      if (clientSite) clientSite.companyRelationshipId = params.companyRelationshipId;
     }
   }
+
+  const where: Prisma.ShiftWhereInput = {
+    date: { gte: start, lt: end },
+    status: { notIn: ["SUPERSEDED", "CANCELLED"] },
+    OR: clientSite ? [own, clientSite] : [own],
+  };
 
   return prisma.shift.findMany({
     where,
     include: {
       staff: true,
       workReport: true,
-      companyRelationship: { include: { clientCompany: true } },
+      companyRelationship: { include: { clientCompany: true, agencyCompany: true } },
       cancellation: true,
     },
     orderBy: [{ date: "asc" }, { startTime: "asc" }],
@@ -567,6 +584,15 @@ export async function cancelShift(params: {
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+// 派遣会社（別会社）が、companyIdの会社（依頼主）の現場に入れたシフトかどうか。
+// 依頼主のカレンダーにも出し、依頼主が出勤時間を入力・変更できる対象。
+export function isClientSiteShiftOf(
+  shift: { companyId: string; source: string; companyRelationship: { clientCompanyId: string | null } | null },
+  companyId: string,
+) {
+  return shift.companyId !== companyId && shift.source === "CLIENT" && shift.companyRelationship?.clientCompanyId === companyId;
+}
+
 // 作成済みシフトの出勤時間を入力・変更する（「時間未定」で作ったシフトに、
 // 前日などに決まったスタート時間を入れる用途が主）。重複は作成時と同じく
 // 警告扱いで、確認のうえ続行できる（作成時と違い、重なる側のシフトは
@@ -590,8 +616,14 @@ export async function updateShiftTime(params: {
   const endTime = timed ? params.endTime : null;
 
   return prisma.$transaction(async (tx) => {
-    const shift = await tx.shift.findUniqueOrThrow({ where: { id: params.shiftId }, include: { workReport: true } });
-    if (shift.companyId !== params.actorCompanyId) throw new Error("forbidden");
+    const shift = await tx.shift.findUniqueOrThrow({
+      where: { id: params.shiftId },
+      include: { workReport: true, companyRelationship: true },
+    });
+    // 自社名義のシフトか、派遣会社が自社（依頼主）の現場に入れたシフトなら変えられる
+    // （スタート時間を決めるのは現場の依頼主側のことが多いため）
+    const editedByClient = isClientSiteShiftOf(shift, params.actorCompanyId);
+    if (shift.companyId !== params.actorCompanyId && !editedByClient) throw new Error("forbidden");
     if (shift.status !== "CONFIRMED") throw new Error("shift_not_active");
     if (isPastDate(shift.date)) throw new Error("shift_in_past");
     if (shift.workReport?.submittedAt) throw new Error("report_submitted");
@@ -602,7 +634,7 @@ export async function updateShiftTime(params: {
       shift.isAllDay === params.isAllDay &&
       shift.isUndecided === params.isUndecided
     ) {
-      return { status: "unchanged" as const, shift };
+      return { status: "unchanged" as const, shift, editedByClient };
     }
 
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${shift.staffUserId} || ':' || ${shift.date.toISOString()}))`;
@@ -631,6 +663,6 @@ export async function updateShiftTime(params: {
         ...(timed ? { reminderSentAt: null } : {}),
       },
     });
-    return { status: "updated" as const, shift: updated, previous: shift };
+    return { status: "updated" as const, shift: updated, previous: shift, editedByClient };
   });
 }

@@ -11,6 +11,7 @@ import {
   sendContractConsentReminderEmail,
   sendClientCancellationEmail,
   sendShiftTimeChangedEmail,
+  sendClientTimeChangeEmail,
 } from "@/lib/email";
 import type { RecruitmentCancelImpact } from "@/lib/domain/cancellation";
 import { sendPushToUser, sendPushToUsers } from "@/lib/push";
@@ -605,5 +606,33 @@ export async function notifyStaffShiftTimeChanged(params: {
     previousTimeLabel: decided ? null : previousLabel,
     taskLabel: shift.taskName,
     appUrl: absoluteUrl("/staff"),
+  });
+}
+
+// 依頼主が、派遣会社の入れたシフトの出勤時間を入力・変更したことを派遣会社に知らせる
+// （派遣会社が知らないうちに自社スタッフの時間が変わらないようにする）。
+export async function notifyAgencyOfClientTimeChange(params: {
+  shiftId: string;
+  previous: { isAllDay: boolean; isUndecided: boolean; startTime: string | null; endTime: string | null };
+}) {
+  const shift = await prisma.shift.findUniqueOrThrow({
+    where: { id: params.shiftId },
+    include: { staff: true, company: true, companyRelationship: { include: { clientCompany: true } } },
+  });
+  const clientName = shift.companyRelationship?.clientCompany?.name ?? "依頼主";
+  const dateLabel = `${shift.date.getUTCMonth() + 1}月${shift.date.getUTCDate()}日（${WEEKDAY_JA[shift.date.getUTCDay()]}）`;
+  const line = `${dateLabel} ${shift.staff.name}さん${shift.taskName ? `・${shift.taskName}` : ""}：${shiftTimeLabel(params.previous)} → ${shiftTimeLabel(shift)}`;
+  if (shift.company.notificationEmail) {
+    await sendClientTimeChangeEmail(shift.company.notificationEmail, {
+      companyName: shift.company.name,
+      clientName,
+      line,
+      reviewUrl: absoluteUrl("/company/calendar"),
+    });
+  }
+  await sendPushToUsers(await companyAdminUserIds(shift.companyId), {
+    title: "依頼主が出勤時間を変更しました",
+    body: `${clientName}：${line}`,
+    url: "/company/calendar",
   });
 }
