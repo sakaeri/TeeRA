@@ -186,6 +186,94 @@ function Tag({ kind }: { kind: string }) {
   );
 }
 
+// ホームの「よく使う操作」。カレンダー・名簿・設定に分かれている作成の入口を
+// まとめ、押すとその画面で作成・追加の画面を開いた状態にする。
+const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
+  {
+    href: "/company/calendar?create=shift",
+    label: "シフトを作成",
+    icon: (
+      <>
+        <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </>
+    ),
+  },
+  {
+    href: "/company/calendar?create=recruit",
+    label: "募集を作成",
+    icon: (
+      <>
+        <path d="M3 10v4a1 1 0 001 1h2l3 4V5L6 9H4a1 1 0 00-1 1z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        <path d="M11 6.5l7-3v17l-7-3" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      </>
+    ),
+  },
+  {
+    href: "/company/roster?invite=staff",
+    label: "スタッフを招待",
+    icon: (
+      <>
+        <circle cx="10" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M3.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M18 8v6M15 11h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </>
+    ),
+  },
+  {
+    href: "/company/roster?tab=clients&add=1",
+    label: "依頼主を追加",
+    icon: (
+      <>
+        <path d="M4 21V5a1 1 0 011-1h9a1 1 0 011 1v16M15 10h4a1 1 0 011 1v10M3 21h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M8 8h3M8 12h3M8 16h3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </>
+    ),
+  },
+  {
+    href: "/company/roster?tab=agencies&add=1",
+    label: "派遣会社を追加",
+    icon: (
+      <>
+        <circle cx="7" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+        <circle cx="17" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M2.5 19c.5-3 2.3-4.5 4.5-4.5s4 1.5 4.5 4.5M12.5 19c.5-3 2.3-4.5 4.5-4.5s4 1.5 4.5 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </>
+    ),
+  },
+  {
+    href: "/company/payroll",
+    label: "給与・請求書",
+    icon: (
+      <>
+        <rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </>
+    ),
+  },
+];
+
+function QuickActions() {
+  return (
+    <section aria-label="よく使う操作">
+      <h2 className="mb-2 text-sm font-semibold text-muted">よく使う操作</h2>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 sm:gap-3">
+        {QUICK_ACTIONS.map((a) => (
+          <Link
+            key={a.href}
+            href={a.href}
+            className="flex flex-col items-center gap-1.5 rounded-2xl border border-border bg-white px-2 py-3 text-center text-xs font-semibold text-foreground hover:border-primary hover:text-primary"
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 text-primary" aria-hidden="true">
+              {a.icon}
+            </svg>
+            {a.label}
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function DashboardView({
   kpis,
   autoTodos,
@@ -274,6 +362,8 @@ export function DashboardView({
           </button>
         </div>
       </div>
+
+      <QuickActions />
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         {KPI_CARDS.map((card) => {

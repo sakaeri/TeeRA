@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition, type TouchEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type TouchEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { todayJst } from "@/lib/date";
@@ -207,6 +207,7 @@ export function CalendarView({
   selectedRelationshipId,
   companyName,
   initialSelectedDate,
+  initialCreate,
   historyCutoff,
 }: {
   year: number;
@@ -229,6 +230,7 @@ export function CalendarView({
   selectedRelationshipId?: string;
   companyName: string;
   initialSelectedDate?: string;
+  initialCreate?: "shift" | "recruit";
   historyCutoff?: { year: number; month: number } | null;
 }) {
   const router = useRouter();
@@ -244,9 +246,19 @@ export function CalendarView({
     setPrevInitialSelectedDate(initialSelectedDate);
     if (initialSelectedDate) setSelectedDate(initialSelectedDate);
   }
-  const [showAssignForm, setShowAssignForm] = useState(false);
+  const [showAssignForm, setShowAssignForm] = useState(initialCreate === "shift");
   const [assignFormStaffUserId, setAssignFormStaffUserId] = useState<string | undefined>(undefined);
-  const [showRecruitForm, setShowRecruitForm] = useState(false);
+  const [showRecruitForm, setShowRecruitForm] = useState(initialCreate === "recruit");
+  // 「よく使う操作」から来た時の指定（?create=）は一度開いたら消す（再読み込みで
+  // 何度も開かないように）
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("create")) {
+      url.searchParams.delete("create");
+      window.history.replaceState(null, "", url);
+    }
+  }, []);
+
   const [sharingImage, setSharingImage] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef<number | null>(null);
