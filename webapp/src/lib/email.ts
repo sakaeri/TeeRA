@@ -377,7 +377,7 @@ export async function sendRecruitmentAnnouncementEmail(
 
 export async function sendClientTimeChangeEmail(
   to: string,
-  params: { companyName: string; clientName: string; line: string; reviewUrl: string },
+  params: { companyName: string; clientName: string; lines: string[]; reviewUrl: string },
 ) {
   await sendMail(
     to,
@@ -386,7 +386,7 @@ export async function sendClientTimeChangeEmail(
       "依頼主が出勤時間を変更しました",
       `${companyGreeting(params.companyName)}
        ${infoRow("依頼主", params.clientName)}
-       ${infoRow("変更", params.line)}
+       ${params.lines.map((l) => infoRow("変更", l)).join("")}
        <p style="margin:12px 0 0;font-size:13px;line-height:1.6;">スタッフ本人には、新しい出勤時間をお知らせ済みです。</p>
        ${button(params.reviewUrl, "カレンダーで確認する")}`,
     ),

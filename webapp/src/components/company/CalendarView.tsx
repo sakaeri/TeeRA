@@ -18,6 +18,7 @@ import {
   cancelShiftAction,
   previewShiftCancellationAction,
   updateShiftTimeAction,
+  bulkUpdateShiftTimesAction,
   addRecruitmentAnnouncementAction,
   deleteRecruitmentAnnouncementAction,
   dismissShiftRequestAction,
@@ -876,6 +877,7 @@ function DayDetailModal({
   const isPastDay = dateStr < todayJst();
   const leftOffShifts = clientCancelledLeftOff(history, shifts);
   const [reportDetailShiftId, setReportDetailShiftId] = useState<string | null>(null);
+  const [bulkTimeOpen, setBulkTimeOpen] = useState(false);
   const remaining = recruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
 
   const date = new Date(dateStr + "T00:00:00Z");
@@ -1001,6 +1003,26 @@ function DayDetailModal({
               ))}
             </ul>
           ) : null}
+          {shifts.filter((s) => canEditShiftTime(s, isPastDay)).length >= 2 ? (
+            <button
+              type="button"
+              onClick={() => setBulkTimeOpen(true)}
+              className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/5"
+            >
+              <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden="true">
+                <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M10 6v4l2.5 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+              出勤時間をまとめて入力
+            </button>
+          ) : null}
+          {bulkTimeOpen ? (
+            <BulkShiftTimeModal
+              dateLabel={dateLabel}
+              shifts={shifts.filter((s) => canEditShiftTime(s, isPastDay))}
+              onClose={() => setBulkTimeOpen(false)}
+            />
+          ) : null}
           {shifts.length === 0 && leftOffShifts.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted">この日のシフトはありません。</p>
           ) : (
@@ -1046,7 +1068,7 @@ function DayDetailModal({
                       </span>
                     </button>
                     <div className="flex items-center justify-between gap-2 sm:contents">
-                      {!isPastDay && (s.ownShift || s.agencyName) && s.status !== "ON_HOLD" && !s.approvalStatus ? (
+                      {canEditShiftTime(s, isPastDay) ? (
                         // 報告前なら、時間をタップして出勤時間を入力・変更できる（スタッフに通知）
                         <EditShiftTimeButton shift={s} />
                       ) : (
@@ -2482,6 +2504,199 @@ function RecruitmentAnnouncements({
 function formatAnnouncementTime(iso: string) {
   const d = new Date(new Date(iso).getTime() + 9 * 3600e3);
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+}
+
+// 出勤時間を入力・変更できるシフトか（報告前・解除前で、自社名義か自社の現場に派遣会社が入れたもの）
+function canEditShiftTime(s: ShiftRow, isPastDay: boolean) {
+  return !isPastDay && Boolean(s.ownShift || s.agencyName) && s.status !== "ON_HOLD" && !s.approvalStatus;
+}
+
+type BulkTimeRow = { shiftId: string; undecided: boolean; startTime: string; endTime: string };
+
+// 1日分のスタッフの出勤時間をまとめて入力する（スタート時間がばらばらでもよい）。
+// 保存すると時間が変わった人にだけ知らせる（派遣会社のスタッフは派遣会社にもまとめて知らせる）。
+function BulkShiftTimeModal({ dateLabel, shifts, onClose }: { dateLabel: string; shifts: ShiftRow[]; onClose: () => void }) {
+  const initialRows = (): BulkTimeRow[] =>
+    shifts.map((s) => ({
+      shiftId: s.id,
+      undecided: s.isUndecided || s.isAllDay,
+      startTime: s.startTime ?? "",
+      endTime: s.endTime ?? "",
+    }));
+  const [rows, setRows] = useState<BulkTimeRow[]>(initialRows);
+  const [allStart, setAllStart] = useState("");
+  const [allEnd, setAllEnd] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [conflicts, setConflicts] = useState<{ shiftId: string; labels: string[] }[] | null>(null);
+  const [savedCount, setSavedCount] = useState(0);
+  const [pending, startTransition] = useTransition();
+  const shiftById = new Map(shifts.map((s) => [s.id, s]));
+
+  function update(shiftId: string, patch: Partial<BulkTimeRow>) {
+    setRows((prev) => prev.map((r) => (r.shiftId === shiftId ? { ...r, ...patch } : r)));
+    setConflicts(null);
+  }
+
+  function applyAll() {
+    if (!allStart || !allEnd) {
+      setError("全員に入れる開始時刻と終了時刻を入力してください。");
+      return;
+    }
+    setError(null);
+    setRows((prev) => prev.map((r) => ({ ...r, undecided: false, startTime: allStart, endTime: allEnd })));
+    setConflicts(null);
+  }
+
+  // 元の値から変わった行だけ送る
+  function changedRows(only?: Set<string>) {
+    return rows.filter((r) => {
+      if (only && !only.has(r.shiftId)) return false;
+      const s = shiftById.get(r.shiftId)!;
+      const wasUndecided = s.isUndecided || s.isAllDay;
+      if (r.undecided) return !wasUndecided;
+      return wasUndecided || r.startTime !== (s.startTime ?? "") || r.endTime !== (s.endTime ?? "");
+    });
+  }
+
+  function save(confirmConflicts: boolean) {
+    setError(null);
+    const targets = changedRows(confirmConflicts && conflicts ? new Set(conflicts.map((c) => c.shiftId)) : undefined);
+    if (targets.length === 0) {
+      onClose();
+      return;
+    }
+    const missing = targets.find((r) => !r.undecided && (!r.startTime || !r.endTime));
+    if (missing) {
+      setError(`${shiftById.get(missing.shiftId)?.staffName}さんの開始時刻と終了時刻を入力してください。`);
+      return;
+    }
+    startTransition(async () => {
+      const result = await bulkUpdateShiftTimesAction(
+        targets.map((r) => ({
+          shiftId: r.shiftId,
+          startTime: r.undecided ? null : r.startTime,
+          endTime: r.undecided ? null : r.endTime,
+          isAllDay: false,
+          isUndecided: r.undecided,
+          confirmedDespiteConflict: confirmConflicts,
+        })),
+      );
+      setSavedCount((n) => n + result.updatedCount);
+      if (result.errors.length > 0) {
+        setError(result.errors.map((e) => `${shiftById.get(e.shiftId)?.staffName}さん：${e.reason}`).join("\n"));
+        return;
+      }
+      if (result.conflicts.length > 0) {
+        setConflicts(result.conflicts);
+        return;
+      }
+      onClose();
+    });
+  }
+
+  return (
+    <Modal title="出勤時間をまとめて入力" onClose={onClose}>
+      <div className="flex flex-col gap-3">
+        <p className="text-sm">{dateLabel}</p>
+        <div className="flex flex-col gap-2 rounded-lg bg-background p-3">
+          <p className="text-xs font-semibold text-muted">全員に同じ時間を入れる</p>
+          <div className="flex gap-2">
+            <Field label="開始">
+              <input
+                type="time"
+                value={allStart}
+                onChange={(e) => setAllStart(e.target.value)}
+                aria-label="全員の開始時刻"
+                className="w-full min-w-0 rounded-lg border border-border bg-white px-2 py-1.5 text-sm"
+              />
+            </Field>
+            <Field label="終了">
+              <input
+                type="time"
+                value={allEnd}
+                onChange={(e) => setAllEnd(e.target.value)}
+                aria-label="全員の終了時刻"
+                className="w-full min-w-0 rounded-lg border border-border bg-white px-2 py-1.5 text-sm"
+              />
+            </Field>
+          </div>
+          <button
+            type="button"
+            onClick={applyAll}
+            className="rounded-lg border border-primary bg-white px-3 py-1.5 text-xs font-semibold text-primary"
+          >
+            全員に入れる
+          </button>
+        </div>
+
+        <ul className="flex flex-col divide-y divide-border/60">
+          {rows.map((r) => {
+            const s = shiftById.get(r.shiftId)!;
+            const conflict = conflicts?.find((c) => c.shiftId === r.shiftId);
+            return (
+              <li key={r.shiftId} data-bulk-row={s.staffName} className="flex flex-col gap-1.5 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate text-sm font-semibold">
+                    {s.staffName}
+                    {s.agencyName ? <span className="ml-1.5 text-[10px] font-medium text-violet-700">派遣：{s.agencyName}</span> : null}
+                  </span>
+                  <label className="flex shrink-0 items-center gap-1 text-xs text-muted">
+                    <input type="checkbox" checked={r.undecided} onChange={(e) => update(r.shiftId, { undecided: e.target.checked })} />
+                    時間未定
+                  </label>
+                </div>
+                {!r.undecided ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="time"
+                      value={r.startTime}
+                      onChange={(e) => update(r.shiftId, { startTime: e.target.value })}
+                      aria-label={`${s.staffName}さんの開始時刻`}
+                      className="w-full min-w-0 rounded-lg border border-border px-2 py-1.5 text-sm"
+                    />
+                    <span className="text-muted">〜</span>
+                    <input
+                      type="time"
+                      value={r.endTime}
+                      onChange={(e) => update(r.shiftId, { endTime: e.target.value })}
+                      aria-label={`${s.staffName}さんの終了時刻`}
+                      className="w-full min-w-0 rounded-lg border border-border px-2 py-1.5 text-sm"
+                    />
+                  </div>
+                ) : null}
+                {conflict ? (
+                  <p className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-900">
+                    この日は {conflict.labels.join("・")} のシフトもあり、時間が近いか重なっています。
+                  </p>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+
+        {conflicts ? (
+          <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            {savedCount > 0 ? `${savedCount}名分は保存して通知しました。` : ""}
+            時間が近い・重なっている人がいます。このまま変更しますか？
+          </p>
+        ) : null}
+        {error ? <p className="whitespace-pre-wrap text-sm text-red-600">{error}</p> : null}
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm">
+            キャンセル
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => save(Boolean(conflicts))}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+          >
+            {pending ? "保存中…" : conflicts ? "このまま変更して通知する" : "保存して通知する"}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
 }
 
 function plannedTimeLabel(s: Pick<ShiftRow, "isAllDay" | "isUndecided" | "startTime" | "endTime">) {
