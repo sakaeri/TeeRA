@@ -564,3 +564,73 @@ export async function cancelShift(params: {
     return updated;
   });
 }
+
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// 作成済みシフトの出勤時間を入力・変更する（「時間未定」で作ったシフトに、
+// 前日などに決まったスタート時間を入れる用途が主）。重複は作成時と同じく
+// 警告扱いで、確認のうえ続行できる（作成時と違い、重なる側のシフトは
+// 置き換えずにそのまま残す）。業務報告が出た後・日付が過ぎた後は変えない
+// （実績側で直す）。
+export async function updateShiftTime(params: {
+  shiftId: string;
+  actorCompanyId: string;
+  startTime: string | null;
+  endTime: string | null;
+  isAllDay: boolean;
+  isUndecided: boolean;
+  confirmedDespiteConflict?: boolean;
+}) {
+  const timed = !params.isAllDay && !params.isUndecided;
+  if (params.isAllDay && params.isUndecided) throw new Error("invalid_time");
+  if (timed && !(params.startTime && TIME_PATTERN.test(params.startTime) && params.endTime && TIME_PATTERN.test(params.endTime))) {
+    throw new Error("invalid_time");
+  }
+  const startTime = timed ? params.startTime : null;
+  const endTime = timed ? params.endTime : null;
+
+  return prisma.$transaction(async (tx) => {
+    const shift = await tx.shift.findUniqueOrThrow({ where: { id: params.shiftId }, include: { workReport: true } });
+    if (shift.companyId !== params.actorCompanyId) throw new Error("forbidden");
+    if (shift.status !== "CONFIRMED") throw new Error("shift_not_active");
+    if (isPastDate(shift.date)) throw new Error("shift_in_past");
+    if (shift.workReport?.submittedAt) throw new Error("report_submitted");
+
+    if (
+      shift.startTime === startTime &&
+      shift.endTime === endTime &&
+      shift.isAllDay === params.isAllDay &&
+      shift.isUndecided === params.isUndecided
+    ) {
+      return { status: "unchanged" as const, shift };
+    }
+
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${shift.staffUserId} || ':' || ${shift.date.toISOString()}))`;
+    if (!params.confirmedDespiteConflict) {
+      const conflicts = await findConflictingShifts(tx, {
+        staffUserId: shift.staffUserId,
+        date: shift.date,
+        startTime,
+        endTime,
+        isAllDay: params.isAllDay,
+        isUndecided: params.isUndecided,
+        excludeShiftId: shift.id,
+      });
+      if (conflicts.length > 0) return { status: "conflict" as const, conflicts };
+    }
+
+    const updated = await tx.shift.update({
+      where: { id: shift.id },
+      data: {
+        startTime,
+        endTime,
+        isAllDay: params.isAllDay,
+        isUndecided: params.isUndecided,
+        // 時間が決まったら、その時間に合わせて開始前のリマインドを送り直せるようにする
+        // （未定・終日に戻した場合は、変更の通知で知らせるので朝のリマインドは送り直さない）
+        ...(timed ? { reminderSentAt: null } : {}),
+      },
+    });
+    return { status: "updated" as const, shift: updated, previous: shift };
+  });
+}
