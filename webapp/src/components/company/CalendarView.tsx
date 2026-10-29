@@ -18,6 +18,7 @@ import {
   cancelShiftAction,
   previewShiftCancellationAction,
   updateShiftTimeAction,
+  addRecruitmentAnnouncementAction,
   dismissShiftRequestAction,
 } from "@/app/company/calendar/actions";
 import { registerPlacementTaskNameAction } from "@/app/company/contracts/actions";
@@ -146,7 +147,11 @@ type RecruitmentRow = {
   hourlyWage: number | null;
   wageType: string | null;
   extraItems: { label: string; value: string }[];
+  announcements: AnnouncementRow[];
 };
+
+// 募集を作った後に書き足した「追加のお知らせ」
+type AnnouncementRow = { id: string; body: string; notified: boolean; createdAt: string };
 
 type ClientRecruitmentRow = {
   id: string;
@@ -157,6 +162,7 @@ type ClientRecruitmentRow = {
   endTime: string | null;
   maxEntries: number;
   filled: number;
+  announcements: AnnouncementRow[];
 };
 
 // mobileLabelはスマホ幅でだけ使う短い表示（スタッフ名を5文字で切ったもの）
@@ -1765,6 +1771,8 @@ function OrderCard({
         </div>
       </div>
 
+      <RecruitmentAnnouncements recruitmentId={r.id} announcements={r.announcements} canAdd={!isPastDay} />
+
       {assignedShifts.length > 0 ? (
         <div className="mt-3 border-t border-black/5 pt-2.5">
           <button
@@ -2292,6 +2300,125 @@ function RecruitmentAssignControls({
   );
 }
 
+// 募集の「追加のお知らせ」。募集を出した会社は書き足せる（通知するかは毎回選ぶ）。
+// recruitmentIdが無い時（他社の募集を見ている時）は見るだけ。
+function RecruitmentAnnouncements({
+  recruitmentId,
+  announcements,
+  canAdd = false,
+}: {
+  recruitmentId?: string;
+  announcements: AnnouncementRow[];
+  canAdd?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [body, setBody] = useState("");
+  const [notify, setNotify] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const editable = Boolean(recruitmentId) && canAdd;
+  if (announcements.length === 0 && !editable) return null;
+
+  function save() {
+    if (!recruitmentId) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await addRecruitmentAnnouncementAction({ recruitmentId, body, notify });
+      if (result.status === "error") {
+        setError(result.reason);
+        return;
+      }
+      setDone(
+        result.recipientCount === 0
+          ? "お知らせを追加しました（まだエントリーしているスタッフはいません）。"
+          : notify
+            ? `お知らせを追加し、${result.recipientCount}名に通知しました。`
+            : `お知らせを追加しました（${result.recipientCount}名のお知らせ欄に表示されます）。`,
+      );
+      setBody("");
+      setNotify(false);
+      setOpen(false);
+    });
+  }
+
+  return (
+    <div className="mt-3 flex flex-col gap-1.5 border-t border-black/5 pt-2.5">
+      {announcements.length > 0 ? (
+        <ul className="flex flex-col gap-1.5">
+          {announcements.map((a) => (
+            <li key={a.id} className="rounded-lg bg-accent/10 px-3 py-2 text-xs">
+              <p className="mb-0.5 flex items-center gap-1.5 text-[10px] font-semibold text-muted">
+                お知らせ・{formatAnnouncementTime(a.createdAt)}
+                {a.notified ? <span className="rounded-full bg-primary/10 px-1.5 text-primary">通知済み</span> : null}
+              </p>
+              <p className="whitespace-pre-wrap text-foreground">{a.body}</p>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {done ? <p className="text-xs text-primary">{done}</p> : null}
+      {editable && !open ? (
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(true);
+            setDone(null);
+          }}
+          className="self-start text-xs font-semibold text-primary hover:underline"
+        >
+          ＋お知らせを追加
+        </button>
+      ) : null}
+      {editable && open ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            rows={3}
+            maxLength={1000}
+            placeholder="例：集合場所がクラブハウス裏口に変わりました"
+            aria-label="お知らせの内容"
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+          />
+          <label className="flex items-start gap-2 text-xs">
+            <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="mt-0.5" />
+            <span>
+              エントリーしているスタッフに通知する
+              <span className="block text-muted">
+                通知しない場合も、スタッフのお知らせ欄には表示されます。必ず見てほしい内容の時だけ通知してください。
+              </span>
+            </span>
+          </label>
+          {error ? <p className="text-xs text-red-600">{error}</p> : null}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              disabled={pending || !body.trim()}
+              onClick={save}
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              {pending ? "追加中…" : notify ? "追加して通知する" : "追加する"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function formatAnnouncementTime(iso: string) {
+  const d = new Date(new Date(iso).getTime() + 9 * 3600e3);
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+}
+
 function plannedTimeLabel(s: Pick<ShiftRow, "isAllDay" | "isUndecided" | "startTime" | "endTime">) {
   if (s.isAllDay) return "終日";
   if (s.isUndecided) return "未定";
@@ -2642,6 +2769,8 @@ function ClientOrderRow({
           {order.filled}/{order.maxEntries}名
         </span>
       </div>
+      {/* 依頼主が書き足したお知らせ（派遣会社は見るだけ） */}
+      <RecruitmentAnnouncements announcements={order.announcements} />
 
       {assignedShifts.length > 0 ? (
         <div className="mt-2">

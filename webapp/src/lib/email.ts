@@ -9,6 +9,11 @@ import { Resend } from "resend";
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const FROM = process.env.EMAIL_FROM || "TeeRA <onboarding@resend.dev>";
 
+// 利用者が自由に書いた文章をメール本文（HTML）に入れる時に使う
+function escapeHtml(text: string) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 // HTMLからおおまかなプレーンテキスト版を自動生成する。複数の迷惑メール
 // フィルタはHTML単体より両方揃っているメールを信頼しやすいため、全メール
 // 共通で付与する（個別テンプレート側で書き分ける必要はない）。
@@ -352,6 +357,24 @@ export async function sendContractConsentReminderEmail(to: string, name: string,
 }
 
 // 依頼主がオーダーを取り消し、派遣元のスタッフのシフトが取り消された時の連絡。
+export async function sendRecruitmentAnnouncementEmail(
+  to: string,
+  params: { staffName: string; heading: string; body: string; appUrl: string },
+) {
+  await sendMail(
+    to,
+    `【TeeRA】募集のお知らせ（${params.heading}）`,
+    emailLayout(
+      "募集のお知らせが追加されました",
+      `${greeting(params.staffName)}
+       <p style="margin:0 0 12px;font-size:14px;line-height:1.6;">エントリーしている募集に、お知らせが追加されました。</p>
+       ${infoRow("募集", escapeHtml(params.heading))}
+       <p style="margin:12px 0 0;font-size:14px;line-height:1.7;white-space:pre-wrap;">${escapeHtml(params.body)}</p>
+       ${button(params.appUrl, "TeeRAを開く")}`,
+    ),
+  );
+}
+
 export async function sendClientTimeChangeEmail(
   to: string,
   params: { companyName: string; clientName: string; line: string; reviewUrl: string },

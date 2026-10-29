@@ -8,9 +8,15 @@ export async function createStaffNotice(params: { companyId: string; staffUserId
   return prisma.staffNotice.create({ data: params });
 }
 
-export async function listStaffNotices(staffUserId: string, companyId: string) {
+// 所属会社からのお知らせは、その会社を開いている時だけ出す。所属していない
+// 会社からのお知らせ（派遣先の依頼主が出した募集のお知らせなど）は、どの
+// 会社を開いていても出す（そうしないと見る場所がないため）。
+export async function listStaffNotices(staffUserId: string, activeCompanyId: string, memberCompanyIds: string[]) {
   return prisma.staffNotice.findMany({
-    where: { staffUserId, companyId },
+    where: {
+      staffUserId,
+      OR: [{ companyId: activeCompanyId }, { companyId: { notIn: memberCompanyIds } }],
+    },
     orderBy: { createdAt: "desc" },
     take: 20,
   });

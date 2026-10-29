@@ -63,6 +63,7 @@ model User {
   pushSubscriptions                   PushSubscription[]
 
   @@index([email])
+  recruitmentAnnouncements RecruitmentAnnouncement[] @relation("RecruitmentAnnouncementAuthor")
 }
 
 // ブラウザのプッシュ通知購読（端末ごとに1行）。本人がログイン中のブラウザで
@@ -839,8 +840,26 @@ model PublicRecruitment {
   entries          RecruitmentEntry[]
   shifts           Shift[]
   teeLedgerEntries TeeLedgerEntry[]
+  announcements    RecruitmentAnnouncement[]
 
   @@index([companyId, status])
+}
+
+// 募集を作った後に書き足す「追加のお知らせ」（集合場所の変更・持ち物など）。
+// 書いた時にエントリー済みのスタッフへ通知するかは毎回選ぶ（notified）。通知
+// しない場合も、スタッフのホームのお知らせ欄には出す（見落としにくくする）。
+model RecruitmentAnnouncement {
+  id                  String   @id @default(cuid())
+  publicRecruitmentId String
+  body                String
+  notified            Boolean  @default(false)
+  createdByUserId     String?
+  createdAt           DateTime @default(now())
+
+  publicRecruitment PublicRecruitment @relation(fields: [publicRecruitmentId], references: [id], onDelete: Cascade)
+  createdBy         User?             @relation("RecruitmentAnnouncementAuthor", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([publicRecruitmentId, createdAt])
 }
 
 enum RecruitmentEntryStatus {

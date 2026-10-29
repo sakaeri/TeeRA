@@ -28,6 +28,9 @@ type ShiftRow = {
   taskName: string | null;
   // ON_HOLD＝依頼主の都合で予定が変わり、会社が振り替え先を調整している最中
   status: string;
+  // 募集から入ったシフトの、募集の備考と後から書き足されたお知らせ
+  recruitmentNote: string | null;
+  announcements: { id: string; body: string; createdAt: string }[];
 };
 
 type PendingRequestRow = {
@@ -490,7 +493,7 @@ function DayDetailPanel({
                       </span>
                     ) : null
                   }
-                  defaultOpen={state === "unsubmitted" || state === "rejected"}
+                  defaultOpen={state === "unsubmitted" || state === "rejected" || s.announcements.length > 0}
                 >
                   {state === "hold" ? (
                     <p className="font-medium text-foreground">
@@ -500,6 +503,13 @@ function DayDetailPanel({
                   <p>所属会社：{s.companyName}</p>
                   {s.taskName ? <p>業務内容：{s.taskName}</p> : null}
                   {s.reportedTimeLabel ? <p>予定：{scheduled}</p> : null}
+                  {s.recruitmentNote ? <p className="whitespace-pre-wrap">備考：{s.recruitmentNote}</p> : null}
+                  {s.announcements.map((a) => (
+                    <div key={a.id} className="mt-1 rounded-lg bg-accent/15 px-3 py-2 text-foreground">
+                      <p className="text-[10px] font-semibold text-primary">お知らせ</p>
+                      <p className="whitespace-pre-wrap">{a.body}</p>
+                    </div>
+                  ))}
                   {state === "rejected" && s.rejectionReason ? (
                     <p className="font-medium text-red-700">差戻しの理由：{s.rejectionReason}</p>
                   ) : null}

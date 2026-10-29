@@ -19,6 +19,7 @@ import {
   assignStaffToRecruitment,
   openRecruitmentToPublic,
   saveRecruitmentPublicDraft,
+  addRecruitmentAnnouncement,
 } from "@/lib/domain/recruitment";
 import { listRecruitmentCancelImpacts, previewShiftCancellation } from "@/lib/domain/cancellation";
 import {
@@ -26,6 +27,7 @@ import {
   notifyStaffShiftReleased,
   notifyStaffShiftTimeChanged,
   notifyAgencyOfClientTimeChange,
+  notifyRecruitmentAnnouncement,
 } from "@/lib/domain/emailNotifications";
 import type { WageType } from "@/generated/prisma/enums";
 
@@ -465,6 +467,46 @@ export async function updateShiftTimeAction(input: {
   revalidatePath("/company/calendar");
   revalidatePath("/company");
   return { status: result.status };
+}
+
+const ANNOUNCEMENT_ERROR_LABEL: Record<string, string> = {
+  forbidden: "権限がありません。",
+  empty_body: "お知らせの内容を入力してください。",
+  too_long: "お知らせは1000文字以内で入力してください。",
+};
+
+// 募集に「追加のお知らせ」を書き足す。notify=trueの時だけ、エントリー済みの
+// スタッフにプッシュ通知（受け取れない人にはメール）も送る。
+export async function addRecruitmentAnnouncementAction(input: { recruitmentId: string; body: string; notify: boolean }) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: input.recruitmentId } });
+  if (recruitment.companyId !== membership.companyId || !canManageShifts(membership, recruitment.teamId)) {
+    return { status: "error" as const, reason: ANNOUNCEMENT_ERROR_LABEL.forbidden };
+  }
+  let result: Awaited<ReturnType<typeof addRecruitmentAnnouncement>>;
+  try {
+    result = await addRecruitmentAnnouncement({
+      recruitmentId: input.recruitmentId,
+      actorCompanyId: membership.companyId,
+      actorUserId: userId,
+      body: input.body,
+      notify: input.notify,
+    });
+  } catch (error) {
+    if (error instanceof Error && ANNOUNCEMENT_ERROR_LABEL[error.message]) {
+      return { status: "error" as const, reason: ANNOUNCEMENT_ERROR_LABEL[error.message] };
+    }
+    throw error;
+  }
+  if (input.notify) {
+    await notifyRecruitmentAnnouncement({
+      recipientIds: result.recipientIds,
+      heading: result.heading,
+      body: result.announcement.body,
+    }).catch((err) => console.error("[notify] recruitment announcement failed", err));
+  }
+  revalidatePath("/company/calendar");
+  return { status: "ok" as const, recipientCount: result.recipientIds.length };
 }
 
 export async function dismissShiftRequestAction(requestId: string, date: string) {

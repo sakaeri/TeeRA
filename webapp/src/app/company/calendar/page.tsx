@@ -181,6 +181,12 @@ export default async function CompanyCalendarPage({
           hourlyWage: r.hourlyWage,
           wageType: r.wageType,
           extraItems: r.extraItems as { label: string; value: string }[],
+          announcements: r.announcements.map((a) => ({
+            id: a.id,
+            body: a.body,
+            notified: a.notified,
+            createdAt: a.createdAt.toISOString(),
+          })),
         }))}
         clientRecruitments={clientRecruitments.map((r) => ({
           id: r.id,
@@ -191,6 +197,12 @@ export default async function CompanyCalendarPage({
           endTime: r.endTime,
           maxEntries: r.maxEntries,
           filled: r.entries.filter((e) => e.status !== "REJECTED").length,
+          announcements: r.announcements.map((a) => ({
+            id: a.id,
+            body: a.body,
+            notified: a.notified,
+            createdAt: a.createdAt.toISOString(),
+          })),
         }))}
         teeBalance={company.teeBalance}
         affordableMaxEntries={affordable}

@@ -35,7 +35,7 @@ export default async function StaffHomePage({
   const [shifts, pendingRequests, notices, shiftsNeedingReport, knownTaskNamesByCompany] = await Promise.all([
     listStaffShiftsForMonth({ staffUserId: userId, companyIds, year, month }),
     listOwnPendingShiftRequests({ staffUserId: userId, companyIds }),
-    listStaffNotices(userId, membership.companyId),
+    listStaffNotices(userId, membership.companyId, companyIds),
     listOwnShiftsNeedingReport(userId, companyIds),
     Promise.all(companyIds.map((id) => listKnownTaskNames(id))),
   ]);
@@ -95,7 +95,7 @@ export default async function StaffHomePage({
     .filter((r) => r.date >= todayStr);
 
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col bg-white px-1 pb-4 pt-2 sm:block sm:bg-transparent sm:px-6 sm:py-10">
+    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col bg-white px-1 pb-24 pt-2 sm:block sm:bg-transparent sm:px-6 sm:py-10">
       <h1 className="mb-6 hidden font-serif-jp text-2xl font-bold sm:block">シフトカレンダー</h1>
       <StaffNoticesSection
         notices={unreadNotices.map((n) => ({ id: n.id, message: n.message, createdAt: n.createdAt.toISOString() }))}
@@ -132,6 +132,13 @@ export default async function StaffHomePage({
             clockedOut: Boolean(s.workReport?.clockOut),
             taskName: report.reportedTaskName ?? s.taskName ?? s.workReport?.taskName ?? null,
             status: s.status,
+            // 募集から入ったシフトなら、募集の備考と追加のお知らせ
+            recruitmentNote: s.publicRecruitment?.note ?? null,
+            announcements: (s.publicRecruitment?.announcements ?? []).map((a) => ({
+              id: a.id,
+              body: a.body,
+              createdAt: a.createdAt.toISOString(),
+            })),
           };
         })}
         pendingRequests={requestRows}
