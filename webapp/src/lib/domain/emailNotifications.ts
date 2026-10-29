@@ -612,30 +612,47 @@ export async function notifyStaffShiftTimeChanged(params: {
 
 // 依頼主が、派遣会社の入れたシフトの出勤時間を入力・変更したことを派遣会社に知らせる
 // （派遣会社が知らないうちに自社スタッフの時間が変わらないようにする）。
-export async function notifyAgencyOfClientTimeChange(params: {
-  shiftId: string;
-  previous: { isAllDay: boolean; isUndecided: boolean; startTime: string | null; endTime: string | null };
-}) {
-  const shift = await prisma.shift.findUniqueOrThrow({
-    where: { id: params.shiftId },
+export async function notifyAgencyOfClientTimeChanges(
+  changes: {
+    shiftId: string;
+    previous: { isAllDay: boolean; isUndecided: boolean; startTime: string | null; endTime: string | null };
+  }[],
+) {
+  if (changes.length === 0) return;
+  const shifts = await prisma.shift.findMany({
+    where: { id: { in: changes.map((c) => c.shiftId) } },
     include: { staff: true, company: true, companyRelationship: { include: { clientCompany: true } } },
+    orderBy: [{ date: "asc" }, { startTime: "asc" }],
   });
-  const clientName = shift.companyRelationship?.clientCompany?.name ?? "依頼主";
-  const dateLabel = `${shift.date.getUTCMonth() + 1}月${shift.date.getUTCDate()}日（${WEEKDAY_JA[shift.date.getUTCDay()]}）`;
-  const line = `${dateLabel} ${shift.staff.name}さん${shift.taskName ? `・${shift.taskName}` : ""}：${shiftTimeLabel(params.previous)} → ${shiftTimeLabel(shift)}`;
-  if (shift.company.notificationEmail) {
-    await sendClientTimeChangeEmail(shift.company.notificationEmail, {
-      companyName: shift.company.name,
-      clientName,
-      line,
-      reviewUrl: absoluteUrl("/company/calendar"),
+  const previousById = new Map(changes.map((c) => [c.shiftId, c.previous]));
+  // まとめて入力した時も、派遣会社ごとに1通にまとめる
+  const byAgency = new Map<string, typeof shifts>();
+  for (const shift of shifts) {
+    const list = byAgency.get(shift.companyId) ?? [];
+    list.push(shift);
+    byAgency.set(shift.companyId, list);
+  }
+  for (const [agencyCompanyId, list] of byAgency) {
+    const company = list[0].company;
+    const clientName = list[0].companyRelationship?.clientCompany?.name ?? "依頼主";
+    const lines = list.map((shift) => {
+      const dateLabel = `${shift.date.getUTCMonth() + 1}月${shift.date.getUTCDate()}日（${WEEKDAY_JA[shift.date.getUTCDay()]}）`;
+      return `${dateLabel} ${shift.staff.name}さん${shift.taskName ? `・${shift.taskName}` : ""}：${shiftTimeLabel(previousById.get(shift.id)!)} → ${shiftTimeLabel(shift)}`;
+    });
+    if (company.notificationEmail) {
+      await sendClientTimeChangeEmail(company.notificationEmail, {
+        companyName: company.name,
+        clientName,
+        lines,
+        reviewUrl: absoluteUrl("/company/calendar"),
+      });
+    }
+    await sendPushToUsers(await companyAdminUserIds(agencyCompanyId), {
+      title: "依頼主が出勤時間を変更しました",
+      body: lines.length === 1 ? `${clientName}：${lines[0]}` : `${clientName}：${lines.length}名の出勤時間を変更しました（${lines[0]} ほか）`,
+      url: "/company/calendar",
     });
   }
-  await sendPushToUsers(await companyAdminUserIds(shift.companyId), {
-    title: "依頼主が出勤時間を変更しました",
-    body: `${clientName}：${line}`,
-    url: "/company/calendar",
-  });
 }
 
 // 募集の「追加のお知らせ」を、通知すると選ばれた時だけ送る。プッシュ通知を

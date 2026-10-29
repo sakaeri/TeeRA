@@ -27,7 +27,7 @@ import {
   notifyAgencyOfClientCancellation,
   notifyStaffShiftReleased,
   notifyStaffShiftTimeChanged,
-  notifyAgencyOfClientTimeChange,
+  notifyAgencyOfClientTimeChanges,
   notifyRecruitmentAnnouncement,
 } from "@/lib/domain/emailNotifications";
 import type { WageType } from "@/generated/prisma/enums";
@@ -409,15 +409,17 @@ const UPDATE_SHIFT_TIME_ERROR_LABEL: Record<string, string> = {
 };
 
 // シフトの出勤時間を入力・変更し、スタッフ本人に知らせる（毎回）。
-export async function updateShiftTimeAction(input: {
+type ShiftTimeInput = {
   shiftId: string;
   startTime: string | null;
   endTime: string | null;
   isAllDay: boolean;
   isUndecided: boolean;
   confirmedDespiteConflict?: boolean;
-}) {
-  const { membership } = await requireCompanyAdminOrEditor();
+};
+
+// 1件分の出勤時間の変更（権限の確認と保存だけ。通知は呼び出し側でまとめて送る）
+async function applyShiftTimeChange(membership: Awaited<ReturnType<typeof requireCompanyAdminOrEditor>>["membership"], input: ShiftTimeInput) {
   const shift = await prisma.shift.findUniqueOrThrow({ where: { id: input.shiftId }, include: { companyRelationship: true } });
   // 派遣会社が自社の現場に入れたシフトは、チームと関係がないので会社全体の管理者だけ
   const allowed =
@@ -455,19 +457,55 @@ export async function updateShiftTimeAction(input: {
       })),
     };
   }
-  if (result.status === "updated") {
-    await notifyStaffShiftTimeChanged({ shiftId: result.shift.id, previous: result.previous }).catch((err) =>
+  return result;
+}
+
+type AppliedChange = { shiftId: string; previous: { isAllDay: boolean; isUndecided: boolean; startTime: string | null; endTime: string | null }; editedByClient: boolean };
+
+// 変更したシフトのスタッフ本人に1件ずつ、依頼主として変更した分は派遣会社ごとにまとめて知らせる
+async function notifyShiftTimeChanges(changes: AppliedChange[]) {
+  for (const change of changes) {
+    await notifyStaffShiftTimeChanged({ shiftId: change.shiftId, previous: change.previous }).catch((err) =>
       console.error("[notify] shift time changed failed", err),
     );
-    if (result.editedByClient) {
-      await notifyAgencyOfClientTimeChange({ shiftId: result.shift.id, previous: result.previous }).catch((err) =>
-        console.error("[notify] agency time change failed", err),
-      );
-    }
+  }
+  await notifyAgencyOfClientTimeChanges(changes.filter((c) => c.editedByClient)).catch((err) =>
+    console.error("[notify] agency time change failed", err),
+  );
+}
+
+// シフトの出勤時間を入力・変更し、スタッフ本人に知らせる（毎回）。
+export async function updateShiftTimeAction(input: ShiftTimeInput) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const result = await applyShiftTimeChange(membership, input);
+  if (result.status === "error" || result.status === "conflict") return result;
+  if (result.status === "updated") {
+    await notifyShiftTimeChanges([{ shiftId: result.shift.id, previous: result.previous, editedByClient: result.editedByClient }]);
   }
   revalidatePath("/company/calendar");
   revalidatePath("/company");
   return { status: result.status };
+}
+
+// 1日分の出勤時間をまとめて入力する。重なりのない分は保存して知らせ、重なる分は
+// 「このまま変更するか」を聞くために返す（確認後はconfirmedDespiteConflict付きで再送される）。
+export async function bulkUpdateShiftTimesAction(inputs: ShiftTimeInput[]) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const applied: AppliedChange[] = [];
+  const conflicts: { shiftId: string; labels: string[] }[] = [];
+  const errors: { shiftId: string; reason: string }[] = [];
+  for (const input of inputs) {
+    const result = await applyShiftTimeChange(membership, input);
+    if (result.status === "error") errors.push({ shiftId: input.shiftId, reason: result.reason });
+    else if (result.status === "conflict") conflicts.push({ shiftId: input.shiftId, labels: result.conflicts.map((c) => c.label) });
+    else if (result.status === "updated") {
+      applied.push({ shiftId: result.shift.id, previous: result.previous, editedByClient: result.editedByClient });
+    }
+  }
+  await notifyShiftTimeChanges(applied);
+  revalidatePath("/company/calendar");
+  revalidatePath("/company");
+  return { updatedCount: applied.length, updatedShiftIds: applied.map((a) => a.shiftId), conflicts, errors };
 }
 
 const ANNOUNCEMENT_ERROR_LABEL: Record<string, string> = {
