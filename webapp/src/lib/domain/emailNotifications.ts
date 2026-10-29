@@ -12,6 +12,7 @@ import {
   sendClientCancellationEmail,
   sendShiftTimeChangedEmail,
   sendClientTimeChangeEmail,
+  sendRecruitmentAnnouncementEmail,
 } from "@/lib/email";
 import type { RecruitmentCancelImpact } from "@/lib/domain/cancellation";
 import { sendPushToUser, sendPushToUsers } from "@/lib/push";
@@ -635,4 +636,37 @@ export async function notifyAgencyOfClientTimeChange(params: {
     body: `${clientName}：${line}`,
     url: "/company/calendar",
   });
+}
+
+// 募集の「追加のお知らせ」を、通知すると選ばれた時だけ送る。プッシュ通知を
+// 受け取れる端末が無い人には、代わりにメールで送る。
+export async function notifyRecruitmentAnnouncement(params: {
+  recipientIds: string[];
+  heading: string;
+  body: string;
+}) {
+  if (params.recipientIds.length === 0) return;
+  const withPush = await prisma.pushSubscription.findMany({
+    where: { userId: { in: params.recipientIds } },
+    select: { userId: true },
+    distinct: ["userId"],
+  });
+  const pushIds = new Set(withPush.map((p) => p.userId));
+  await sendPushToUsers([...pushIds], {
+    title: "募集のお知らせが追加されました",
+    body: `${params.heading}：${params.body}`,
+    url: "/staff",
+  });
+  const mailTargets = await prisma.user.findMany({
+    where: { id: { in: params.recipientIds.filter((id) => !pushIds.has(id)) } },
+    select: { email: true, name: true },
+  });
+  for (const user of mailTargets) {
+    await sendRecruitmentAnnouncementEmail(user.email, {
+      staffName: user.name,
+      heading: params.heading,
+      body: params.body,
+      appUrl: absoluteUrl("/staff"),
+    });
+  }
 }

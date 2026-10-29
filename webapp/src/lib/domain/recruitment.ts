@@ -326,7 +326,7 @@ export async function listPublicRecruitments(params: { companyId: string; teamId
       teamId: params.teamId,
       status: "PUBLISHED",
     },
-    include: { entries: true },
+    include: { entries: true, announcements: { orderBy: { createdAt: "asc" } } },
     orderBy: { date: "asc" },
   });
 }
@@ -352,7 +352,7 @@ export async function listClientRecruitments(companyId: string) {
 
   return prisma.publicRecruitment.findMany({
     where: { companyId: { in: clientCompanyIds }, status: "PUBLISHED" },
-    include: { entries: true, company: true },
+    include: { entries: true, company: true, announcements: { orderBy: { createdAt: "asc" } } },
     orderBy: { date: "asc" },
   });
 }
@@ -797,3 +797,65 @@ export async function resolveStaffOrigins(params: {
   return result;
 }
 
+
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+
+// 募集を作った後に「追加のお知らせ」を書き足す。エントリー済み・確定済みの
+// スタッフ全員のホームのお知らせ欄に出し、notify=trueの時だけプッシュ通知
+// （受け取れない人にはメール）でも知らせる。誰に届けたかを返す。
+export async function addRecruitmentAnnouncement(params: {
+  recruitmentId: string;
+  actorCompanyId: string;
+  actorUserId: string;
+  body: string;
+  notify: boolean;
+}) {
+  const body = params.body.trim();
+  if (!body) throw new Error("empty_body");
+  if (body.length > 1000) throw new Error("too_long");
+
+  const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({
+    where: { id: params.recruitmentId },
+    include: { company: true },
+  });
+  if (recruitment.companyId !== params.actorCompanyId) throw new Error("forbidden");
+
+  const [shifts, entries] = await Promise.all([
+    prisma.shift.findMany({
+      where: { publicRecruitmentId: recruitment.id, status: { in: ["CONFIRMED", "ON_HOLD"] } },
+      select: { staffUserId: true },
+    }),
+    prisma.recruitmentEntry.findMany({
+      where: { publicRecruitmentId: recruitment.id, status: { in: ["APPLIED", "CONFIRMED"] } },
+      select: { staffUserId: true },
+    }),
+  ]);
+  const candidateIds = [...new Set([...shifts, ...entries].map((r) => r.staffUserId))];
+  const recipients = await prisma.user.findMany({
+    where: { id: { in: candidateIds }, isProxy: false },
+    select: { id: true },
+  });
+  const recipientIds = recipients.map((u) => u.id);
+
+  const d = recruitment.date;
+  const dateLabel = `${d.getUTCMonth() + 1}月${d.getUTCDate()}日（${WEEKDAY_LABELS[d.getUTCDay()]}）`;
+  const heading = `${recruitment.company.name}・${dateLabel} ${recruitment.title}`;
+
+  const announcement = await prisma.$transaction(async (tx) => {
+    const created = await tx.recruitmentAnnouncement.create({
+      data: { publicRecruitmentId: recruitment.id, body, notified: params.notify, createdByUserId: params.actorUserId },
+    });
+    if (recipientIds.length > 0) {
+      await tx.staffNotice.createMany({
+        data: recipientIds.map((staffUserId) => ({
+          companyId: recruitment.companyId,
+          staffUserId,
+          message: `【${heading}】${body}`,
+        })),
+      });
+    }
+    return created;
+  });
+
+  return { announcement, recipientIds, heading, dateLabel, companyName: recruitment.company.name, title: recruitment.title };
+}
