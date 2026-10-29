@@ -2496,13 +2496,14 @@ function EditShiftTimeButton({ shift }: { shift: ShiftRow }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"TIMED" | "UNDECIDED" | "ALL_DAY">("TIMED");
+  // 「終日」は作成時に選べない（時間未定と同じ扱い）ため、ここでも時間指定か未定の2択
+  const [mode, setMode] = useState<"TIMED" | "UNDECIDED">("TIMED");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [conflicts, setConflicts] = useState<{ id: string; label: string }[] | null>(null);
 
   function start() {
-    setMode(shift.isAllDay ? "ALL_DAY" : shift.isUndecided ? "UNDECIDED" : "TIMED");
+    setMode(shift.isAllDay || shift.isUndecided ? "UNDECIDED" : "TIMED");
     setStartTime(shift.startTime ?? "");
     setEndTime(shift.endTime ?? "");
     setError(null);
@@ -2521,7 +2522,7 @@ function EditShiftTimeButton({ shift }: { shift: ShiftRow }) {
         shiftId: shift.id,
         startTime: mode === "TIMED" ? startTime : null,
         endTime: mode === "TIMED" ? endTime : null,
-        isAllDay: mode === "ALL_DAY",
+        isAllDay: false,
         isUndecided: mode === "UNDECIDED",
         confirmedDespiteConflict,
       });
@@ -2564,7 +2565,6 @@ function EditShiftTimeButton({ shift }: { shift: ShiftRow }) {
                 [
                   ["TIMED", "時間を指定"],
                   ["UNDECIDED", "時間未定"],
-                  ["ALL_DAY", "終日"],
                 ] as const
               ).map(([value, label]) => (
                 <label
@@ -2614,9 +2614,6 @@ function EditShiftTimeButton({ shift }: { shift: ShiftRow }) {
                 </Field>
               </div>
             ) : null}
-            <p className="rounded-lg bg-background px-3 py-2 text-xs text-muted">
-              保存すると、{shift.staffName}さんに出勤時間をお知らせします（プッシュ通知。通知を受け取れない場合はメール）。
-            </p>
             {conflicts ? (
               <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                 この日は {conflicts.map((c) => c.label).join("・")} のシフトもあり、時間が近いか重なっています。このまま変更しますか？
