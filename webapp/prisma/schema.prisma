@@ -597,11 +597,15 @@ model StaffNotice {
   message     String
   readAt      DateTime?
   createdAt   DateTime  @default(now())
+  // 募集の「追加のお知らせ」から作られたもの（お知らせを削除したら一緒に消す）
+  recruitmentAnnouncementId String?
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  staff   User    @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+  company                 Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  staff                   User                     @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+  recruitmentAnnouncement RecruitmentAnnouncement? @relation(fields: [recruitmentAnnouncementId], references: [id], onDelete: Cascade)
 
   @@index([staffUserId, readAt])
+  @@index([recruitmentAnnouncementId])
 }
 
 enum InviteKind {
@@ -858,6 +862,7 @@ model RecruitmentAnnouncement {
 
   publicRecruitment PublicRecruitment @relation(fields: [publicRecruitmentId], references: [id], onDelete: Cascade)
   createdBy         User?             @relation("RecruitmentAnnouncementAuthor", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  staffNotices      StaffNotice[]
 
   @@index([publicRecruitmentId, createdAt])
 }

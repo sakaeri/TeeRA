@@ -20,6 +20,7 @@ import {
   openRecruitmentToPublic,
   saveRecruitmentPublicDraft,
   addRecruitmentAnnouncement,
+  deleteRecruitmentAnnouncement,
 } from "@/lib/domain/recruitment";
 import { listRecruitmentCancelImpacts, previewShiftCancellation } from "@/lib/domain/cancellation";
 import {
@@ -507,6 +508,27 @@ export async function addRecruitmentAnnouncementAction(input: { recruitmentId: s
   }
   revalidatePath("/company/calendar");
   return { status: "ok" as const, recipientCount: result.recipientIds.length };
+}
+
+export async function deleteRecruitmentAnnouncementAction(announcementId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const announcement = await prisma.recruitmentAnnouncement.findUniqueOrThrow({
+    where: { id: announcementId },
+    include: { publicRecruitment: true },
+  });
+  if (!canManageShifts(membership, announcement.publicRecruitment.teamId)) {
+    return { status: "error" as const, reason: ANNOUNCEMENT_ERROR_LABEL.forbidden };
+  }
+  try {
+    await deleteRecruitmentAnnouncement({ announcementId, actorCompanyId: membership.companyId });
+  } catch (error) {
+    if (error instanceof Error && error.message === "forbidden") {
+      return { status: "error" as const, reason: ANNOUNCEMENT_ERROR_LABEL.forbidden };
+    }
+    throw error;
+  }
+  revalidatePath("/company/calendar");
+  return { status: "ok" as const };
 }
 
 export async function dismissShiftRequestAction(requestId: string, date: string) {

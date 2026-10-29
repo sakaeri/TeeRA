@@ -851,6 +851,7 @@ export async function addRecruitmentAnnouncement(params: {
           companyId: recruitment.companyId,
           staffUserId,
           message: `【${heading}】${body}`,
+          recruitmentAnnouncementId: created.id,
         })),
       });
     }
@@ -858,4 +859,16 @@ export async function addRecruitmentAnnouncement(params: {
   });
 
   return { announcement, recipientIds, heading, dateLabel, companyName: recruitment.company.name, title: recruitment.title };
+}
+
+// 追加したお知らせを削除する（書き間違い等）。スタッフのお知らせ欄に出ている
+// 分も一緒に消える。送ってしまったプッシュ通知・メールは取り消せない。
+export async function deleteRecruitmentAnnouncement(params: { announcementId: string; actorCompanyId: string }) {
+  const announcement = await prisma.recruitmentAnnouncement.findUniqueOrThrow({
+    where: { id: params.announcementId },
+    include: { publicRecruitment: true },
+  });
+  if (announcement.publicRecruitment.companyId !== params.actorCompanyId) throw new Error("forbidden");
+  await prisma.recruitmentAnnouncement.delete({ where: { id: announcement.id } });
+  return announcement;
 }
