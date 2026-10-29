@@ -19,6 +19,7 @@ import {
   previewShiftCancellationAction,
   updateShiftTimeAction,
   addRecruitmentAnnouncementAction,
+  deleteRecruitmentAnnouncementAction,
   dismissShiftRequestAction,
 } from "@/app/company/calendar/actions";
 import { registerPlacementTaskNameAction } from "@/app/company/contracts/actions";
@@ -2312,8 +2313,8 @@ function RecruitmentAssignControls({
   );
 }
 
-// 募集の「追加のお知らせ」。募集を出した会社は書き足せる（通知するかは毎回選ぶ）。
-// recruitmentIdが無い時（他社の募集を見ている時）は見るだけ。
+// 募集の「追加のお知らせ」。募集を出した会社は書き足せる（通知するかは毎回選ぶ）・
+// 削除できる。recruitmentIdが無い時（他社の募集を見ている時）は見るだけ。
 function RecruitmentAnnouncements({
   recruitmentId,
   announcements,
@@ -2328,6 +2329,7 @@ function RecruitmentAnnouncements({
   const [notify, setNotify] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const editable = Boolean(recruitmentId) && canAdd;
   if (announcements.length === 0 && !editable) return null;
@@ -2354,6 +2356,19 @@ function RecruitmentAnnouncements({
     });
   }
 
+  function remove(id: string) {
+    setError(null);
+    startTransition(async () => {
+      const result = await deleteRecruitmentAnnouncementAction(id);
+      if (result.status === "error") {
+        setError(result.reason);
+        return;
+      }
+      setConfirmingDeleteId(null);
+      setDone("お知らせを削除しました。");
+    });
+  }
+
   return (
     <div className="mt-3 flex flex-col gap-1.5 border-t border-black/5 pt-2.5">
       {announcements.length > 0 ? (
@@ -2363,13 +2378,51 @@ function RecruitmentAnnouncements({
               <p className="mb-0.5 flex items-center gap-1.5 text-[10px] font-semibold text-muted">
                 お知らせ・{formatAnnouncementTime(a.createdAt)}
                 {a.notified ? <span className="rounded-full bg-primary/10 px-1.5 text-primary">通知済み</span> : null}
+                {recruitmentId && confirmingDeleteId !== a.id ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmingDeleteId(a.id);
+                      setError(null);
+                    }}
+                    className="ml-auto font-semibold text-muted hover:text-red-600"
+                  >
+                    削除
+                  </button>
+                ) : null}
               </p>
               <p className="whitespace-pre-wrap text-foreground">{a.body}</p>
+              {confirmingDeleteId === a.id ? (
+                <div className="mt-2 flex flex-col gap-1.5 rounded-md bg-white px-2.5 py-2">
+                  <p className="text-foreground">
+                    このお知らせを削除しますか？スタッフのお知らせ欄からも消えます。
+                    {a.notified ? "送ってしまったプッシュ通知・メールは取り消せません。" : ""}
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDeleteId(null)}
+                      className="rounded-lg border border-border px-3 py-1"
+                    >
+                      やめる
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => remove(a.id)}
+                      className="rounded-lg bg-red-600 px-3 py-1 font-semibold text-white disabled:opacity-50"
+                    >
+                      {pending ? "削除中…" : "削除する"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
       ) : null}
       {done ? <p className="text-xs text-primary">{done}</p> : null}
+      {error && !open ? <p className="text-xs text-red-600">{error}</p> : null}
       {editable && !open ? (
         <button
           type="button"

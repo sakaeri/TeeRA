@@ -10,6 +10,8 @@ import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 //   （受け取れない人にはメール）。派遣会社のスタッフも対象
 // ・派遣会社は依頼主のオーダーのお知らせを見られる（書き足しはできない）
 // ・スタッフのホームのお知らせ欄と、カレンダーの日付の詳細に出る
+// ・募集を出した会社はお知らせを削除でき、スタッフのお知らせ欄・詳細からも消える
+//   （派遣会社には削除ボタンが出ない）
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -146,6 +148,27 @@ try {
   const agencyText = await panel.innerText();
   log("派遣会社は依頼主のオーダーのお知らせを見られる", agencyText.includes("雨の場合はレインウェアを持参してください"));
   log("派遣会社は書き足せない", (await panel.getByRole("button", { name: "＋お知らせを追加" }).count()) === 0);
+  log("派遣会社には削除ボタンが出ない", (await panel.getByRole("button", { name: "削除", exact: true }).count()) === 0);
+
+  // --- 依頼主が1件目を削除 ---
+  panel = await openDay(client);
+  await panel.getByRole("button", { name: /募集一覧/ }).click();
+  await client.waitForTimeout(300);
+  // 募集のカード自体もliなので、一番内側（お知らせ1件分）のliを取る
+  const firstItem = panel.locator("li li", { hasText: "集合場所がクラブハウス裏口に変わりました" }).last();
+  await firstItem.getByRole("button", { name: "削除", exact: true }).click();
+  log("削除の前に確認が出る", (await firstItem.innerText()).includes("スタッフのお知らせ欄からも消えます"));
+  await firstItem.getByRole("button", { name: "削除する" }).click();
+  await client.waitForTimeout(1500);
+  const afterDelete = await panel.innerText();
+  log(
+    "削除したお知らせは募集のカードから消え、もう1件は残る",
+    !afterDelete.includes("集合場所がクラブハウス裏口に変わりました") && afterDelete.includes("雨の場合はレインウェアを持参してください"),
+  );
+  log(
+    "スタッフのお知らせ欄からも消える（残りは1件ずつ）",
+    noticeCount(ownStaffId) === 1 && noticeCount(agencyStaffId) === 1 && noticeCount(appliedId) === 1,
+  );
 
   // --- スタッフ側（派遣スタッフ：所属は派遣会社、募集は依頼主のもの）---
   await staffPage.goto("http://localhost:3000/login");
@@ -155,11 +178,12 @@ try {
   await staffPage.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 10000 });
   await staffPage.goto(`http://localhost:3000/staff?y=${ty}&m=${tm}`);
   await staffPage.waitForTimeout(1000);
+  const home = await staffPage.locator("main").innerText();
   log(
     "スタッフのホームのお知らせ欄に出る（所属以外の会社からのお知らせも）",
-    (await staffPage.locator("main").innerText()).includes(`【${clientName}`) &&
-      (await staffPage.locator("main").innerText()).includes("集合場所がクラブハウス裏口に変わりました"),
+    home.includes(`【${clientName}`) && home.includes("雨の場合はレインウェアを持参してください"),
   );
+  log("削除したお知らせはスタッフのお知らせ欄に出ない", !home.includes("集合場所がクラブハウス裏口に変わりました"));
   const popup = staffPage.locator("div.fixed.inset-0.z-30");
   if (await popup.count()) {
     await popup.last().getByRole("button", { name: "✕" }).click();
@@ -169,8 +193,8 @@ try {
   await staffPage.waitForTimeout(500);
   const detail = await staffPage.locator("div.fixed.inset-0.z-20").last().innerText();
   log(
-    "カレンダーの日付の詳細にお知らせが出る",
-    detail.includes("集合場所がクラブハウス裏口に変わりました") && detail.includes("雨の場合はレインウェアを持参してください"),
+    "カレンダーの日付の詳細にお知らせが出る（削除したものは出ない）",
+    detail.includes("雨の場合はレインウェアを持参してください") && !detail.includes("集合場所がクラブハウス裏口に変わりました"),
   );
 
   console.log(process.exitCode ? "RECRUITMENT ANNOUNCEMENT SMOKE TEST HAD FAILURES" : "RECRUITMENT ANNOUNCEMENT SMOKE TEST PASSED");
