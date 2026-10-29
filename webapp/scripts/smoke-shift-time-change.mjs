@@ -96,7 +96,11 @@ try {
   log("業務報告が提出済みのシフトには編集ボタンが出ない", (await editButton(panel, "報告済み次郎").count()) === 0);
   await editButton(panel, "プッシュ花子").click();
   let modal = admin.locator("div.fixed.inset-0.z-20").last();
-  log("「出勤時間を入力」が開き、通知することが書いてある", (await modal.innerText()).includes("プッシュ花子さんに出勤時間をお知らせします"));
+  const modalText = await modal.innerText();
+  log(
+    "「出勤時間を入力」が開き、選べるのは「時間を指定」「時間未定」の2つ（終日は無い）",
+    modalText.includes("出勤時間を入力") && modalText.includes("時間を指定") && modalText.includes("時間未定") && !modalText.includes("終日"),
+  );
   await modal.getByText("時間を指定", { exact: true }).click();
   await modal.locator('input[type="time"]').nth(0).fill("07:30");
   await modal.locator('input[type="time"]').nth(1).fill("15:00");
