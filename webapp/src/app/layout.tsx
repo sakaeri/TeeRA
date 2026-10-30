@@ -25,6 +25,7 @@ const SPLASH_SIZES: [number, number, number][] = [
   [440, 956, 3],
   [430, 932, 3],
   [402, 874, 3],
+  [420, 912, 3],
   [393, 852, 3],
   [428, 926, 3],
   [390, 844, 3],
@@ -53,6 +54,11 @@ export const metadata: Metadata = {
       url: `/splash/apple-splash-${w * dpr}x${h * dpr}.png`,
       media: `(device-width: ${w}px) and (device-height: ${h}px) and (-webkit-device-pixel-ratio: ${dpr}) and (orientation: portrait)`,
     })),
+  },
+  // iPhoneの起動画面（startupImage）は apple-mobile-web-app-capable が無いと表示されない。
+  // Next.jsのappleWebApp.capableは mobile-web-app-capable しか出さないため、別途出す。
+  other: {
+    "apple-mobile-web-app-capable": "yes",
   },
 };
 

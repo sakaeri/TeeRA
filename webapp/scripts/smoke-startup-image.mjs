@@ -19,8 +19,11 @@ try {
     els.map((e) => ({ href: e.getAttribute("href"), media: e.getAttribute("media") })),
   );
   const files = readdirSync("public/splash").filter((f) => f.endsWith(".png"));
-  log("起動画面の画像が12機種分指定されている", hrefs.length === 12 && hrefs.every((h) => h.media?.includes("device-width")));
+  log("起動画面の画像が13機種分指定されている", hrefs.length === 13 && hrefs.every((h) => h.media?.includes("device-width")));
   log("指定された画像がすべてpublic/splashにある", hrefs.every((h) => files.includes(h.href.replace("/splash/", ""))));
+  const capable = await page.locator('head meta[name="apple-mobile-web-app-capable"]').getAttribute("content");
+  log("apple-mobile-web-app-capable がある（無いとiPhoneの起動画面が出ない）", capable === "yes");
+  log("iPhone 17（402×874）の画像が指定されている", hrefs.some((h) => h.href.endsWith("1206x2622.png") && h.media.includes("402px")));
   let allOk = true;
   for (const h of hrefs) {
     const res = await page.request.get(`http://localhost:3000${h.href}`, { maxRedirects: 0 });
