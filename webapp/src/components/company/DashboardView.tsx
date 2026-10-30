@@ -186,6 +186,18 @@ function Tag({ kind }: { kind: string }) {
   );
 }
 
+// 一覧の一番最後に置く（使い方マニュアル）
+const QUICK_ACTION_LAST: { href: string; label: string; icon: ReactNode } = {
+  href: "/company/settings?tab=howto",
+  label: "使い方マニュアル",
+  icon: (
+    <>
+      <path d="M4 5.5C6.5 4 9.5 4 12 6c2.5-2 5.5-2 8-.5V19c-2.5-1.5-5.5-1.5-8 .5-2.5-2-5.5-2-8-.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M12 6v13.5" stroke="currentColor" strokeWidth="1.8" />
+    </>
+  ),
+};
+
 // ホームの「よく使う操作」。カレンダー・名簿・設定に分かれている作成の入口を
 // まとめ、押すとその画面で作成・追加の画面を開いた状態にする。
 const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
@@ -250,13 +262,45 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
       </>
     ),
   },
+  {
+    href: "/company/settings?tab=basic&create=team",
+    label: "シフトチームを作成",
+    icon: (
+      <>
+        <circle cx="12" cy="7.5" r="3" stroke="currentColor" strokeWidth="1.8" />
+        <circle cx="5" cy="10" r="2.2" stroke="currentColor" strokeWidth="1.6" />
+        <circle cx="19" cy="10" r="2.2" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M6.5 20c.6-3.3 2.8-5 5.5-5s4.9 1.7 5.5 5M1.5 18c.3-2 1.6-3 3.5-3M22.5 18c-.3-2-1.6-3-3.5-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </>
+    ),
+  },
+  {
+    href: "/company/settings?tab=basic#admins",
+    label: "本部メンバーを管理",
+    icon: (
+      <>
+        <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    ),
+  },
+  {
+    href: "/company/settings?tab=contracts&create=template",
+    label: "契約書の雛形を作成",
+    icon: (
+      <>
+        <path d="M6 3h8l4 4v14H6z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        <path d="M14 3v4h4M9 12h6M9 16h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    ),
+  },
 ];
 
 // スマホで3つを1列に収めるための、少し詰めた薄いボタン
 const QUICK_ACTION_CHIP_COMPACT =
   "flex min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-full border border-border bg-white px-1.5 py-2 text-[11px] font-semibold text-foreground hover:border-primary hover:text-primary";
-const QUICK_ACTION_CHIP =
-  "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground hover:border-primary hover:text-primary";
+const QUICK_ACTION_CHIP_GRID =
+  "flex min-w-0 items-center justify-center gap-1.5 rounded-xl border border-border bg-white px-2 py-2 text-center text-xs font-semibold leading-tight text-foreground hover:border-primary hover:text-primary";
 
 // ホームの中で開くもの（やることリスト・販促品）は、画面を移らずにその場で開く
 function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddPromo: () => void }) {
@@ -283,7 +327,11 @@ function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddP
     },
   ];
   const [showAll, setShowAll] = useState(false);
-  const all: { label: string; icon: ReactNode; href?: string; onClick?: () => void }[] = [...QUICK_ACTIONS, ...inPage];
+  const all: { label: string; icon: ReactNode; href?: string; onClick?: () => void }[] = [
+    ...QUICK_ACTIONS,
+    ...inPage,
+    QUICK_ACTION_LAST,
+  ];
   const icon = (node: ReactNode, size: string) => (
     <svg viewBox="0 0 24 24" fill="none" className={`${size} shrink-0 text-primary`} aria-hidden="true">
       {node}
@@ -328,7 +376,10 @@ function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddP
         {all.slice(0, 3).map((a) => renderAction(a, QUICK_ACTION_CHIP_COMPACT, "h-3.5 w-3.5"))}
       </div>
       {/* PCは幅があるので全部並べる */}
-      <div className="hidden flex-wrap gap-2 sm:flex">{all.map((a) => renderAction(a, QUICK_ACTION_CHIP, "h-4 w-4"))}</div>
+      {/* PCは6個ずつ2段にそろえる（1つだけ2段目にはみ出さないように） */}
+      <div className="hidden grid-cols-6 gap-2 sm:grid">
+        {all.map((a) => renderAction(a, QUICK_ACTION_CHIP_GRID, "h-4 w-4"))}
+      </div>
 
       {showAll ? (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={() => setShowAll(false)}>
@@ -430,8 +481,6 @@ export function DashboardView({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="hidden font-serif-jp text-2xl font-bold sm:block">ダッシュボード</h1>
-
       <QuickActions onAddTodo={() => setShowTodoForm(true)} onAddPromo={() => setShowPromoModal(true)} />
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">

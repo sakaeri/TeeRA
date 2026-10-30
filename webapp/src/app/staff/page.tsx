@@ -96,7 +96,6 @@ export default async function StaffHomePage({
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col bg-white px-1 pb-24 pt-2 sm:block sm:bg-transparent sm:px-6 sm:py-10">
-      <h1 className="mb-6 hidden font-serif-jp text-2xl font-bold sm:block">シフトカレンダー</h1>
       <StaffNoticesSection
         notices={unreadNotices.map((n) => ({ id: n.id, message: n.message, createdAt: n.createdAt.toISOString() }))}
       />

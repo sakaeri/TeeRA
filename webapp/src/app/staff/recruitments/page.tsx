@@ -8,7 +8,6 @@ export default async function StaffRecruitmentsPage() {
 
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-10">
-      <h1 className="mb-6 font-serif-jp text-2xl font-bold">募集一覧</h1>
       <RecruitmentListView
         recruitments={recruitments
           .map((r) => ({

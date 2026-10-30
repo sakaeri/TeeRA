@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   updateCompanyNameAction,
@@ -100,6 +100,7 @@ type TabKey = (typeof TABS)[number]["key"];
 
 export function SettingsView({
   initialTab,
+  initialCreate,
   isCompanyAdmin,
   currentUserId,
   companyName,
@@ -123,6 +124,7 @@ export function SettingsView({
   workReports,
 }: {
   initialTab: string;
+  initialCreate?: "template" | "team";
   // falseならチームマネージャー（会社情報は名称・住所・電話のみ、自チームだけ）
   isCompanyAdmin: boolean;
   currentUserId: string;
@@ -150,10 +152,17 @@ export function SettingsView({
   // 契約書テンプレートは本部が管理するため、チームマネージャーには出さない
   const tabs = isCompanyAdmin ? TABS : TABS.filter((t) => t.key !== "contracts");
   const tab: TabKey = tabs.some((t) => t.key === initialTab) ? (initialTab as TabKey) : "basic";
+  // 「よく使う操作」から来た時の作成の指定（?create=）は一度開いたら消す（再読み込みで何度も開かないように）
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("create")) {
+      url.searchParams.delete("create");
+      window.history.replaceState(null, "", url);
+    }
+  }, []);
 
   return (
     <div>
-      <h1 className="print-hide mb-6 font-serif-jp text-2xl font-bold">設定</h1>
       <div className="print-hide mb-8 flex gap-1 overflow-x-auto border-b border-border">
         {tabs.map((t) => (
           <button
@@ -172,7 +181,14 @@ export function SettingsView({
       {tab === "basic" && !isCompanyAdmin ? (
         <div className="flex flex-col gap-10">
           <CompanyInfoReadOnly companyName={companyName} address={address} phoneNumber={phoneNumber} />
-          <TeamsSection teams={teams} staff={staff} teeBalance={teeBalance} managerMode currentUserId={currentUserId} />
+          <TeamsSection
+            teams={teams}
+            staff={staff}
+            teeBalance={teeBalance}
+            managerMode
+            currentUserId={currentUserId}
+            openCreate={initialCreate === "team"}
+          />
         </div>
       ) : null}
 
@@ -191,13 +207,26 @@ export function SettingsView({
             accountHolderName={accountHolderName}
           />
           <SealSection companyName={companyName} sealImageDataUrl={sealImageDataUrl} sealOpacity={sealOpacity} />
-          <AdminsSection admins={admins} staff={staff} />
-          <TeamsSection teams={teams} staff={staff} teeBalance={teeBalance} currentUserId={currentUserId} />
+          <div id="admins" className="scroll-mt-24">
+            <AdminsSection admins={admins} staff={staff} />
+          </div>
+          <TeamsSection
+            teams={teams}
+            staff={staff}
+            teeBalance={teeBalance}
+            currentUserId={currentUserId}
+            openCreate={initialCreate === "team"}
+          />
         </div>
       ) : null}
 
       {tab === "contracts" ? (
-        <ContractsView templates={contractTemplates} clients={contractClients} companyName={companyName} />
+        <ContractsView
+          templates={contractTemplates}
+          clients={contractClients}
+          companyName={companyName}
+          openCreate={initialCreate === "template"}
+        />
       ) : null}
 
       {tab === "workreports" ? <WorkReportsQueue reports={workReports} /> : null}
@@ -1501,16 +1530,19 @@ function TeamsSection({
   teeBalance,
   managerMode = false,
   currentUserId,
+  openCreate = false,
 }: {
   teams: Team[];
   staff: StaffOption[];
   teeBalance: number;
   managerMode?: boolean;
   currentUserId: string;
+  openCreate?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [inviteFormTeamId, setInviteFormTeamId] = useState<string | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  // チームを作れるのは本部だけ（チームマネージャーの画面には作成ボタンが無い）
+  const [showCreateModal, setShowCreateModal] = useState(openCreate && !managerMode);
   const [removeConfirmTarget, setRemoveConfirmTarget] = useState<{ teamId: string; userId: string; name: string } | null>(
     null,
   );

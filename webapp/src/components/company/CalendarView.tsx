@@ -399,7 +399,6 @@ export function CalendarView({
     <div className="flex flex-1 flex-col sm:block">
       <div className="order-2 mb-2 flex items-center justify-between gap-2 sm:order-1 sm:mb-6 sm:gap-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
-          <h1 className="hidden shrink-0 font-serif-jp text-2xl font-bold sm:block">シフトカレンダー</h1>
           {/* チーム・依頼主・派遣会社を1つの絞り込みにまとめる。実運用では
               チーム＝契約先の依頼主がほぼ1:1なので、依頼主/派遣会社を選ぶ
               こと自体が実質そのチームの絞り込みも兼ねるという前提。 */}
