@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { isCompanyScopeAdmin, isLeaderOnly, myManagedOrLedTeamIds } from "@/lib/auth/permissions";
 import { listStaffWithSummary } from "@/lib/domain/roster";
-import { listClients, listAgencies } from "@/lib/domain/relationships";
+import { listClients, listAgencies, countMonthlyShiftsByRelationship } from "@/lib/domain/relationships";
 import { listTeams } from "@/lib/domain/teams";
 import { listTemplates, listUploadOnlyTemplates, listKnownTaskNames } from "@/lib/domain/contracts";
 import { RosterView } from "@/components/company/RosterView";
@@ -47,6 +47,12 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
     prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
   ]);
 
+  const monthlyShiftCounts = await countMonthlyShiftsByRelationship(
+    membership.companyId,
+    [...clients.map((c) => c.id), ...agencies.filter((a) => a.agencyCompany).map((a) => a.id)],
+    agencies.filter((a) => !a.agencyCompany).map((a) => a.id),
+  );
+
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
       <RosterView
@@ -63,6 +69,7 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
           name: c.clientCompany?.name ?? c.proxyName ?? "(名称未設定)",
           isProxy: !c.clientCompany,
           staffCount: c._count.staffPlacements,
+          monthlyShiftCount: monthlyShiftCounts.get(c.id) ?? 0,
           teams: c.teamLinks.map((l) => ({ id: l.team.id, name: l.team.name })),
         }))}
         agencies={agencies.map((a) => ({
@@ -72,6 +79,7 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
           // プロキシ（実体の無い）派遣会社はStaffPlacementが作られないため、
           // 所属タグ付けされたスタッフ数（membershipsViaAgency）で数える。
           staffCount: a.agencyCompany ? a._count.staffPlacements : a._count.membershipsViaAgency,
+          monthlyShiftCount: monthlyShiftCounts.get(a.id) ?? 0,
           teams: a.teamLinks.map((l) => ({ id: l.team.id, name: l.team.name })),
         }))}
         teams={teams
