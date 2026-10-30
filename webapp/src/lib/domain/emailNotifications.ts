@@ -282,14 +282,32 @@ export async function runShiftRequestDigest() {
     for (const [teamId, count] of countByTeamId) {
       const team = await prisma.team.findUnique({ where: { id: teamId }, select: { name: true, notificationEmail: true } });
       if (!team) continue;
+      const label = `${company.name}（${team.name}）`;
       if (team.notificationEmail) {
-        await sendShiftRequestDigestEmail(team.notificationEmail, `${company.name}（${team.name}）`, count, absoluteUrl("/company"));
+        await sendShiftRequestDigestEmail(team.notificationEmail, label, count, absoluteUrl("/company"));
       }
-      await sendPushToUsers(await teamManagerUserIds(teamId), {
+      // マネージャー/リーダーには、プッシュ通知を受け取れる端末があればプッシュで、
+      // 無ければ本人のメールアドレスに送る（チームの通知メール未設定でも届くように）
+      const managerIds = await teamManagerUserIds(teamId);
+      const withPush = await prisma.pushSubscription.findMany({
+        where: { userId: { in: managerIds } },
+        select: { userId: true },
+        distinct: ["userId"],
+      });
+      const pushIds = new Set(withPush.map((p) => p.userId));
+      await sendPushToUsers([...pushIds], {
         title: "未確定のシフト希望があります",
         body: `${team.name}：${count}件`,
         url: "/company",
       });
+      const mailTargets = await prisma.user.findMany({
+        where: { id: { in: managerIds.filter((id) => !pushIds.has(id)) }, isProxy: false },
+        select: { email: true },
+      });
+      for (const user of mailTargets) {
+        if (user.email === team.notificationEmail) continue;
+        await sendShiftRequestDigestEmail(user.email, label, count, absoluteUrl("/company"));
+      }
     }
   }
 }
@@ -307,10 +325,11 @@ export async function runShiftStartReminders(now = new Date()) {
   const tomorrow = new Date(`${todayStr}T00:00:00.000Z`);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 
-  // 「開始1時間前」ちょうどではなく、開始4時間前〜開始2時間後を対象にする
-  // （Cronが数時間単位で間引かれても、いずれかの実行がこの窓に入るように
-  // 幅を持たせている）。開始2時間を過ぎたら今更感があるので諦める。
-  const REMIND_BEFORE_MS = 4 * 60 * 60 * 1000;
+  // 開始1時間前〜開始2時間後を対象にする。SupabaseのCronで5分おきに動くので、
+  // 通常は開始の1時間前（〜55分前）に届く（以前は数時間おきにしか動かない
+  // 前提で4時間前から送っていたため、8:00出勤に4:00に届いていた）。
+  // 開始2時間を過ぎたら今更感があるので諦める。
+  const REMIND_BEFORE_MS = 60 * 60 * 1000;
   const GIVE_UP_AFTER_MS = 2 * 60 * 60 * 1000;
 
   const candidates = await prisma.shift.findMany({

@@ -34,7 +34,8 @@ async function callCron(job) {
 //   notificationEmailには届かない。チームに通知先メアドが無ければ本部へ
 //   フォールバックする。
 // - シフト希望ダイジェスト: 本部へは会社全体の集計のみ届き、各チームへは
-//   そのチームの通知先メアドが設定されていれば個別の件数が届く。
+//   そのチームの通知先メアドが設定されていれば個別の件数が届く。チームの
+//   マネージャー/リーダーには、プッシュの端末が無ければ本人のメールに届く。
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 const admin = await (await browser.newContext()).newPage();
@@ -187,6 +188,15 @@ try {
       `values (gen_random_uuid()::text, '${staffBUserId}', '${companyId}', '${teamBId}', 'WORK', ARRAY[current_date + 3]::date[], 'PENDING');`,
   );
 
+  // チームB（通知先メアドなし）のマネージャー。プッシュ通知の端末が無いので本人のメールに届く
+  const teamBManagerEmail = `team-b-manager-${suffix}@example.com`;
+  const teamBManagerId = psql(
+    `insert into "User" (id, email, "passwordHash", name, "updatedAt") values (gen_random_uuid()::text, '${teamBManagerEmail}', 'x', 'チームBマネージャー', now()) returning id;`,
+  );
+  psql(
+    `insert into "TeamMembership" (id, "teamId", "userId", role) values (gen_random_uuid()::text, '${teamBId}', '${teamBManagerId}', 'TEAM_MANAGER');`,
+  );
+
   const digestLogStart = readFileSync(DEV_LOG_PATH, "utf8").length;
   const digestRes = await callCron("shift-request-digest");
   await new Promise((r) => setTimeout(r, 600));
@@ -199,6 +209,10 @@ try {
   log(
     "チームA（通知先あり）には個別の件数（1件）が届く",
     digestLog.includes(teamANotifyEmail) && digestLog.includes("1件"),
+  );
+  log(
+    "チームB（通知先メアドなし）のマネージャーには、プッシュの端末が無いので本人のメールに届く",
+    digestLog.includes(teamBManagerEmail),
   );
 
   console.log(process.exitCode ? "TEAM-SCOPED NOTIFICATIONS SMOKE TEST HAD FAILURES" : "TEAM-SCOPED NOTIFICATIONS SMOKE TEST PASSED");

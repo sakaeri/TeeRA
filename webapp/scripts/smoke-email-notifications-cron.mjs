@@ -75,9 +75,7 @@ try {
   );
   log("会社宛メールには個人名でなく会社名に「御中」が付く", digestLog.includes(digestCompanyName) && digestLog.includes("御中"));
 
-  // ④勤務開始リマインド — GitHub Actionsの"*/5"スケジュールは実際には
-  // 数時間おきにしか実行されないことがあるため、「ちょうど1時間前」の狭い
-  // 窓ではなく「開始4時間前〜開始2時間後」の幅を持たせている
+  // ④勤務開始リマインド — 開始1時間前〜開始2時間後が対象
   // （emailNotifications.tsのrunShiftStartReminders参照）。
   function jstHHMMAfter(msFromNow) {
     const t = new Date(Date.now() + msFromNow + 9 * 60 * 60 * 1000);
@@ -123,13 +121,13 @@ try {
   const secondReminderLog = readServerLogSince(logStart);
   log("同じシフトに二重送信されない", !secondReminderLog.includes(reminderStaffEmail));
 
-  // Cronが数時間遅れて実行されても取りこぼさないよう窓を広げた分の検証:
-  // 開始3.5時間前（窓の中）は送られ、開始5時間前（窓の外）はまだ送られない。
+  // 開始50分前（窓の中）は送られ、開始2時間前（窓の外）はまだ送られない
+  // （以前は4時間前から送っていて、8:00出勤に4:00に届いていた）。
   const wideWindowStaffEmail = `cron-reminder-wide-staff-${suffix}@example.com`;
   const wideWindowStaffId = psql(
     `insert into "User" (id, email, "passwordHash", name, "updatedAt") values (gen_random_uuid()::text, '${wideWindowStaffEmail}', 'x', 'Cron広窓太郎', now()) returning id;`,
   );
-  const withinWideWindowHHMM = jstHHMMAfter(3.5 * 60 * 60 * 1000);
+  const withinWideWindowHHMM = jstHHMMAfter(50 * 60 * 1000);
   const withinWideWindowShiftId = psql(
     `insert into "Shift" (id, "companyId", "staffUserId", source, date, "startTime", "endTime", "createdVia", "updatedAt") ` +
       `values (gen_random_uuid()::text, '${reminderCompanyId}', '${wideWindowStaffId}', 'INHOUSE', (now() at time zone 'Asia/Tokyo')::date, '${withinWideWindowHHMM}', '${withinWideWindowHHMM}', 'ASSIGN', now()) returning id;`,
@@ -138,7 +136,7 @@ try {
   const tooEarlyStaffId = psql(
     `insert into "User" (id, email, "passwordHash", name, "updatedAt") values (gen_random_uuid()::text, '${tooEarlyStaffEmail}', 'x', 'Cron早すぎ太郎', now()) returning id;`,
   );
-  const tooEarlyHHMM = jstHHMMAfter(5 * 60 * 60 * 1000);
+  const tooEarlyHHMM = jstHHMMAfter(2 * 60 * 60 * 1000);
   const tooEarlyShiftId = psql(
     `insert into "Shift" (id, "companyId", "staffUserId", source, date, "startTime", "endTime", "createdVia", "updatedAt") ` +
       `values (gen_random_uuid()::text, '${reminderCompanyId}', '${tooEarlyStaffId}', 'INHOUSE', (now() at time zone 'Asia/Tokyo')::date, '${tooEarlyHHMM}', '${tooEarlyHHMM}', 'ASSIGN', now()) returning id;`,
@@ -148,14 +146,14 @@ try {
   await callCron("shift-start-reminders");
   await new Promise((r) => setTimeout(r, 500));
   const wideWindowLog = readServerLogSince(logStart);
-  log("開始3.5時間前（広げた窓の中）でもリマインドが送られる", wideWindowLog.includes(wideWindowStaffEmail));
-  log("開始5時間前（窓の外）はまだ送られない", !wideWindowLog.includes(tooEarlyStaffEmail));
+  log("開始50分前はリマインドが送られる", wideWindowLog.includes(wideWindowStaffEmail));
+  log("開始2時間前はまだ送られない（早すぎない）", !wideWindowLog.includes(tooEarlyStaffEmail));
   const tooEarlyReminded = psql(`select "reminderSentAt" is not null from "Shift" where id='${tooEarlyShiftId}';`);
-  log("開始5時間前のシフトのreminderSentAtはまだ立たない", tooEarlyReminded === "f");
+  log("開始2時間前のシフトのreminderSentAtはまだ立たない", tooEarlyReminded === "f");
   const withinWideWindowReminded = psql(
     `select "reminderSentAt" is not null from "Shift" where id='${withinWideWindowShiftId}';`,
   );
-  log("開始3.5時間前のシフトのreminderSentAtが立つ", withinWideWindowReminded === "t");
+  log("開始50分前のシフトのreminderSentAtが立つ", withinWideWindowReminded === "t");
 
   // 終日シフトは「開始◯時間前」の基準が使えないため、当日朝6:00以降なら
   // Cronの実行タイミングに関わらずいつでもリマインドする（6:00ちょうどの
