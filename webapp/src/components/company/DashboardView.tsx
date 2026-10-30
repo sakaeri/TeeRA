@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, useTransition, type ReactNode } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import {
   createManualTodoAction,
@@ -252,8 +252,9 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   },
 ];
 
-const QUICK_ACTION_TILE =
-  "flex flex-col items-center gap-1 rounded-xl border border-border bg-white px-1 py-2 text-center text-[11px] font-semibold leading-tight text-foreground hover:border-primary hover:text-primary";
+// スマホで3つを1列に収めるための、少し詰めた薄いボタン
+const QUICK_ACTION_CHIP_COMPACT =
+  "flex min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-full border border-border bg-white px-1.5 py-2 text-[11px] font-semibold text-foreground hover:border-primary hover:text-primary";
 const QUICK_ACTION_CHIP =
   "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground hover:border-primary hover:text-primary";
 
@@ -288,33 +289,12 @@ function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddP
       {node}
     </svg>
   );
-  // 小さいタイルでは「スタッフを招 / 待」のように切れないよう、「を」の後ろでだけ改行する
-  const tileLabel = (label: string) => (
-    <span className="[word-break:keep-all]">
-      {label.split("を").map((part, i, parts) => (
-        <Fragment key={i}>
-          {part}
-          {i < parts.length - 1 ? (
-            <>
-              を<wbr />
-            </>
-          ) : null}
-        </Fragment>
-      ))}
-    </span>
-  );
   // hrefがあれば画面を移り、なければホームの中でその場で開く
-  const renderAction = (
-    a: (typeof all)[number],
-    className: string,
-    iconSize: string,
-    onDone?: () => void,
-    tile = false,
-  ) =>
+  const renderAction = (a: (typeof all)[number], className: string, iconSize: string, onDone?: () => void) =>
     a.href ? (
       <Link key={a.label} href={a.href} className={className} onClick={onDone}>
         {icon(a.icon, iconSize)}
-        {tile ? tileLabel(a.label) : a.label}
+        {a.label}
       </Link>
     ) : (
       <button
@@ -327,27 +307,25 @@ function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddP
         className={className}
       >
         {icon(a.icon, iconSize)}
-        {tile ? tileLabel(a.label) : a.label}
+        {a.label}
       </button>
     );
 
   return (
     <section aria-label="よく使う操作">
-      <h2 className="mb-1.5 text-xs font-semibold text-muted">よく使う操作</h2>
-      {/* スマホは先頭の3つと「一覧で見る」（ダッシュボードの件数を上に見せるため小さく） */}
-      <div className="grid grid-cols-4 gap-2 sm:hidden">
-        {all.slice(0, 3).map((a) => renderAction(a, QUICK_ACTION_TILE, "h-5 w-5", undefined, true))}
-        <button type="button" onClick={() => setShowAll(true)} className={QUICK_ACTION_TILE}>
-          {icon(
-            <>
-              <circle cx="5" cy="12" r="1.6" fill="currentColor" />
-              <circle cx="12" cy="12" r="1.6" fill="currentColor" />
-              <circle cx="19" cy="12" r="1.6" fill="currentColor" />
-            </>,
-            "h-5 w-5",
-          )}
-          一覧で見る
+      <div className="mb-1.5 flex items-center justify-between">
+        <h2 className="text-xs font-semibold text-muted">よく使う操作</h2>
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="text-xs font-semibold text-primary hover:underline sm:hidden"
+        >
+          一覧で見る →
         </button>
+      </div>
+      {/* スマホは先頭の3つだけ（ダッシュボードの件数を上に見せるため薄く）。残りは「一覧で見る」から */}
+      <div className="grid grid-cols-3 gap-1.5 sm:hidden">
+        {all.slice(0, 3).map((a) => renderAction(a, QUICK_ACTION_CHIP_COMPACT, "h-3.5 w-3.5"))}
       </div>
       {/* PCは幅があるので全部並べる */}
       <div className="hidden flex-wrap gap-2 sm:flex">{all.map((a) => renderAction(a, QUICK_ACTION_CHIP, "h-4 w-4"))}</div>
