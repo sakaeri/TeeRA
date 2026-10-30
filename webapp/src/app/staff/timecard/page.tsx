@@ -35,7 +35,6 @@ export default async function StaffTimecardPage() {
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-10">
-      <h1 className="mb-6 font-serif-jp text-2xl font-bold">タイムカード・業務報告</h1>
       <StaffTimecardView
         knownTaskNamesByCompany={knownTaskNames}
         unscheduledCompanies={myMemberships.map((m) => ({

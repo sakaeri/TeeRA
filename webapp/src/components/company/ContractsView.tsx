@@ -92,14 +92,16 @@ export function ContractsView({
   templates,
   clients,
   companyName,
+  openCreate = false,
 }: {
   templates: Template[];
   clients: ClientOption[];
   companyName: string;
+  openCreate?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-10">
-      <TemplatesSection templates={templates} clients={clients} companyName={companyName} />
+      <TemplatesSection templates={templates} clients={clients} companyName={companyName} openCreate={openCreate} />
     </div>
   );
 }
@@ -117,12 +119,14 @@ function TemplatesSection({
   templates,
   clients,
   companyName,
+  openCreate,
 }: {
   templates: Template[];
   clients: ClientOption[];
   companyName: string;
+  openCreate: boolean;
 }) {
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal] = useState(openCreate);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();

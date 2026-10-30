@@ -204,7 +204,6 @@ export function RosterView({
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
-          <h1 className="hidden font-serif-jp text-2xl font-bold sm:block">スタッフ名簿</h1>
           <select
             value={teamFilter}
             onChange={(e) => setTeamFilter(e.target.value)}

@@ -41,7 +41,8 @@ try {
   await page.waitForTimeout(200);
   bodyText = await page.textContent("body");
   log("roster add-menu opens", bodyText.includes("本アカウントを招待") && bodyText.includes("仮アカウントを作成"));
-  await page.click("h1:has-text('スタッフ名簿')");
+  // 画面のタイトルは無くなったので、ヘッダーの空いている所を押して「外側をクリック」する
+  await page.mouse.click(400, 30);
   await page.waitForTimeout(200);
   const menuVisibleAfterOutsideClick = await page.locator("text=仮アカウントを作成").isVisible().catch(() => false);
   log("roster add-menu closes after clicking elsewhere", !menuVisibleAfterOutsideClick);
@@ -52,7 +53,7 @@ try {
   await page.waitForTimeout(200);
   bodyText = await page.textContent("body");
   log("calendar FAB menu opens", bodyText.includes("シフトを作成") && bodyText.includes("募集を作成"));
-  await page.click("h1:has-text('シフトカレンダー')");
+  await page.mouse.click(400, 30);
   await page.waitForTimeout(200);
   const fabVisibleAfterOutsideClick = await page.locator("text=募集を作成").isVisible().catch(() => false);
   log("calendar FAB menu closes after clicking elsewhere", !fabVisibleAfterOutsideClick);

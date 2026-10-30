@@ -35,6 +35,8 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
   );
   const sp = await searchParams;
   const initialTab = typeof sp.tab === "string" ? sp.tab : "basic";
+  // ホームの「よく使う操作」から、契約書の雛形・チームの作成を開いた状態で来る
+  const initialCreate = sp.create === "template" || sp.create === "team" ? sp.create : undefined;
 
   const company = await prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } });
 
@@ -69,6 +71,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
     <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10 print:p-0">
       <SettingsView
         initialTab={initialTab}
+        initialCreate={initialCreate}
         isCompanyAdmin={isCompanyAdmin}
         currentUserId={userId}
         companyName={company.name}
