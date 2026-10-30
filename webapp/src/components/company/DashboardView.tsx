@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type ReactNode } from "react";
+import { Fragment, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import {
   createManualTodoAction,
@@ -191,7 +191,7 @@ function Tag({ kind }: { kind: string }) {
 const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   {
     href: "/company/calendar?create=shift",
-    label: "シフトを作成",
+    label: "シフトを|作成",
     icon: (
       <>
         <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
@@ -201,7 +201,7 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: "/company/calendar?create=recruit",
-    label: "募集を作成",
+    label: "募集を|作成",
     icon: (
       <>
         <path d="M3 10v4a1 1 0 001 1h2l3 4V5L6 9H4a1 1 0 00-1 1z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
@@ -211,7 +211,7 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: "/company/roster?invite=staff",
-    label: "スタッフを招待",
+    label: "スタッフを|招待",
     icon: (
       <>
         <circle cx="10" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8" />
@@ -221,7 +221,7 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: "/company/roster?tab=clients&add=1",
-    label: "依頼主を追加",
+    label: "依頼主を|追加",
     icon: (
       <>
         <path d="M4 21V5a1 1 0 011-1h9a1 1 0 011 1v16M15 10h4a1 1 0 011 1v10M3 21h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -231,7 +231,7 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: "/company/roster?tab=agencies&add=1",
-    label: "派遣会社を追加",
+    label: "派遣会社を|追加",
     icon: (
       <>
         <circle cx="7" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.8" />
@@ -242,7 +242,7 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: "/company/payroll",
-    label: "給与・請求書",
+    label: "給与・|請求書",
     icon: (
       <>
         <rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" strokeWidth="1.8" />
@@ -252,22 +252,66 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   },
 ];
 
-function QuickActions() {
+// ラベルは「|」の位置でだけ改行する（4列だと「スタッフを招 / 待」のように切れるため）
+function TileLabel({ label }: { label: string }) {
+  return (
+    <span className="[word-break:keep-all]">
+      {label.split("|").map((part, i) => (
+        <Fragment key={i}>
+          {i > 0 ? <wbr /> : null}
+          {part}
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
+const QUICK_ACTION_TILE =
+  "flex flex-col items-center gap-1.5 rounded-2xl border border-border bg-white px-1 py-3 text-center text-[11px] font-semibold leading-tight text-foreground hover:border-primary hover:text-primary sm:text-xs";
+
+// ホームの中で開くもの（やることリスト・販促品）は、画面を移らずにその場で開く
+function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddPromo: () => void }) {
+  const inPage: { label: string; onClick: () => void; icon: ReactNode }[] = [
+    {
+      label: "やること|リスト作成",
+      onClick: onAddTodo,
+      icon: (
+        <>
+          <path d="M9 6h11M9 12h11M9 18h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          <path d="M3.5 6l1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      ),
+    },
+    {
+      label: "販促品を|登録",
+      onClick: onAddPromo,
+      icon: (
+        <>
+          <rect x="3.5" y="9" width="17" height="11.5" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M3 9h18v-3H3zM12 6v14.5M12 6c-1.5-3-5-3.5-5-1s3.5 1 5 1zM12 6c1.5-3 5-3.5 5-1s-3.5 1-5 1z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+        </>
+      ),
+    },
+  ];
   return (
     <section aria-label="よく使う操作">
       <h2 className="mb-2 text-sm font-semibold text-muted">よく使う操作</h2>
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 sm:gap-3">
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 sm:gap-3">
         {QUICK_ACTIONS.map((a) => (
-          <Link
-            key={a.href}
-            href={a.href}
-            className="flex flex-col items-center gap-1.5 rounded-2xl border border-border bg-white px-2 py-3 text-center text-xs font-semibold text-foreground hover:border-primary hover:text-primary"
-          >
+          <Link key={a.href} href={a.href} className={QUICK_ACTION_TILE}>
             <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 text-primary" aria-hidden="true">
               {a.icon}
             </svg>
-            {a.label}
+            <TileLabel label={a.label} />
           </Link>
+        ))}
+        {inPage.map((a) => (
+          <button key={a.label} type="button" onClick={a.onClick} className={QUICK_ACTION_TILE}>
+            <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 text-primary" aria-hidden="true">
+              {a.icon}
+            </svg>
+            <TileLabel label={a.label} />
+          </button>
         ))}
       </div>
     </section>
@@ -343,27 +387,9 @@ export function DashboardView({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="hidden font-serif-jp text-2xl font-bold sm:block">ダッシュボード</h1>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setShowPromoModal(true)}
-            className="flex-1 rounded-lg border border-primary bg-white px-4 py-2 text-sm font-semibold text-primary shadow-md transition hover:-translate-y-0.5 hover:shadow-lg sm:flex-none"
-          >
-            ＋販促品を登録
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowTodoForm(true)}
-            className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition hover:-translate-y-0.5 hover:shadow-lg sm:flex-none"
-          >
-            ＋やることリスト作成
-          </button>
-        </div>
-      </div>
+      <h1 className="hidden font-serif-jp text-2xl font-bold sm:block">ダッシュボード</h1>
 
-      <QuickActions />
+      <QuickActions onAddTodo={() => setShowTodoForm(true)} onAddPromo={() => setShowPromoModal(true)} />
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         {KPI_CARDS.map((card) => {

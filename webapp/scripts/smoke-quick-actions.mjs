@@ -2,7 +2,7 @@ import { chromium } from "playwright-core";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 // ホームの「よく使う操作」を検証する（スマホ幅）：
-// ・ホームの上に6つの操作が並ぶ
+// ・ホームの上に8つの操作が並ぶ（やることリスト作成・販促品を登録はその場で開く）
 // ・押すと、その画面で作成・追加の画面を開いた状態になる
 // ・開いた後はURLの指定が消え、再読み込みしても勝手に開かない
 
@@ -28,12 +28,32 @@ try {
   await page.waitForURL("http://localhost:3000/company");
 
   const section = page.getByRole("region", { name: "よく使う操作" });
-  const labels = await section.getByRole("link").allInnerTexts();
+  const labels = await section.locator("a, button").allInnerTexts();
   log(
-    "ホームに「よく使う操作」が6つ並ぶ",
+    "ホームに「よく使う操作」が8つ並ぶ",
     JSON.stringify(labels.map((l) => l.trim())) ===
-      JSON.stringify(["シフトを作成", "募集を作成", "スタッフを招待", "依頼主を追加", "派遣会社を追加", "給与・請求書"]),
+      JSON.stringify([
+        "シフトを作成",
+        "募集を作成",
+        "スタッフを招待",
+        "依頼主を追加",
+        "派遣会社を追加",
+        "給与・請求書",
+        "やることリスト作成",
+        "販促品を登録",
+      ]),
   );
+  log(
+    "ヘッダーの「＋販促品を登録」「＋やることリスト作成」は無くなった",
+    (await page.getByText("＋販促品を登録").count()) === 0 && (await page.getByText("＋やることリスト作成").count()) === 0,
+  );
+  await section.getByRole("button", { name: "やることリスト作成" }).click();
+  await page.waitForTimeout(400);
+  log("「やることリスト作成」でやることリストの作成がその場で開く", (await page.getByRole("heading", { name: "やることリストを作成" }).count()) === 1);
+  await page.goto("http://localhost:3000/company");
+  await page.getByRole("region", { name: "よく使う操作" }).getByRole("button", { name: "販促品を登録" }).click();
+  await page.waitForTimeout(400);
+  log("「販促品を登録」で販促品の登録がその場で開く", (await page.getByRole("heading", { name: /販促品を登録/ }).count()) === 1);
   if (process.env.QUICK_SHOT) await page.screenshot({ path: process.env.QUICK_SHOT });
 
   const tap = async (label) => {
