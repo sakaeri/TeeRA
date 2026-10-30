@@ -54,13 +54,13 @@ try {
         "スタッフを招待",
         "依頼主を追加",
         "派遣会社を追加",
-        "契約書の雛形を作成",
+        "給与・請求書",
         "シフトチームを作成",
         "本部メンバーを管理",
-        "使い方マニュアル",
-        "給与・請求書",
+        "契約書の雛形を作成",
         "やることリスト作成",
         "販促品を登録",
+        "使い方マニュアル",
       ]),
   );
   if (process.env.QUICK_SHOT) await page.screenshot({ path: process.env.QUICK_SHOT.replace(".png", "-list.png") });

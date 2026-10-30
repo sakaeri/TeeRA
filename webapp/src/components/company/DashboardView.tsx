@@ -186,6 +186,18 @@ function Tag({ kind }: { kind: string }) {
   );
 }
 
+// 一覧の一番最後に置く（使い方マニュアル）
+const QUICK_ACTION_LAST: { href: string; label: string; icon: ReactNode } = {
+  href: "/company/settings?tab=howto",
+  label: "使い方マニュアル",
+  icon: (
+    <>
+      <path d="M4 5.5C6.5 4 9.5 4 12 6c2.5-2 5.5-2 8-.5V19c-2.5-1.5-5.5-1.5-8 .5-2.5-2-5.5-2-8-.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M12 6v13.5" stroke="currentColor" strokeWidth="1.8" />
+    </>
+  ),
+};
+
 // ホームの「よく使う操作」。カレンダー・名簿・設定に分かれている作成の入口を
 // まとめ、押すとその画面で作成・追加の画面を開いた状態にする。
 const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
@@ -241,12 +253,12 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
     ),
   },
   {
-    href: "/company/settings?tab=contracts&create=template",
-    label: "契約書の雛形を作成",
+    href: "/company/payroll",
+    label: "給与・請求書",
     icon: (
       <>
-        <path d="M6 3h8l4 4v14H6z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-        <path d="M14 3v4h4M9 12h6M9 16h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        <rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       </>
     ),
   },
@@ -273,22 +285,12 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
     ),
   },
   {
-    href: "/company/settings?tab=howto",
-    label: "使い方マニュアル",
+    href: "/company/settings?tab=contracts&create=template",
+    label: "契約書の雛形を作成",
     icon: (
       <>
-        <path d="M4 5.5C6.5 4 9.5 4 12 6c2.5-2 5.5-2 8-.5V19c-2.5-1.5-5.5-1.5-8 .5-2.5-2-5.5-2-8-.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-        <path d="M12 6v13.5" stroke="currentColor" strokeWidth="1.8" />
-      </>
-    ),
-  },
-  {
-    href: "/company/payroll",
-    label: "給与・請求書",
-    icon: (
-      <>
-        <rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" strokeWidth="1.8" />
-        <path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M6 3h8l4 4v14H6z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        <path d="M14 3v4h4M9 12h6M9 16h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       </>
     ),
   },
@@ -325,7 +327,11 @@ function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddP
     },
   ];
   const [showAll, setShowAll] = useState(false);
-  const all: { label: string; icon: ReactNode; href?: string; onClick?: () => void }[] = [...QUICK_ACTIONS, ...inPage];
+  const all: { label: string; icon: ReactNode; href?: string; onClick?: () => void }[] = [
+    ...QUICK_ACTIONS,
+    ...inPage,
+    QUICK_ACTION_LAST,
+  ];
   const icon = (node: ReactNode, size: string) => (
     <svg viewBox="0 0 24 24" fill="none" className={`${size} shrink-0 text-primary`} aria-hidden="true">
       {node}
