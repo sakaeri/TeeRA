@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type ReactNode } from "react";
+import { Fragment, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import {
   createManualTodoAction,
@@ -252,7 +252,8 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   },
 ];
 
-// 横1列に並べ、入りきらない分は指で横にスクロールする（ダッシュボードの件数を上に見せるため小さく）
+const QUICK_ACTION_TILE =
+  "flex flex-col items-center gap-1 rounded-xl border border-border bg-white px-1 py-2 text-center text-[11px] font-semibold leading-tight text-foreground hover:border-primary hover:text-primary";
 const QUICK_ACTION_CHIP =
   "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground hover:border-primary hover:text-primary";
 
@@ -280,27 +281,104 @@ function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddP
       ),
     },
   ];
+  const [showAll, setShowAll] = useState(false);
+  const all: { label: string; icon: ReactNode; href?: string; onClick?: () => void }[] = [...QUICK_ACTIONS, ...inPage];
+  const icon = (node: ReactNode, size: string) => (
+    <svg viewBox="0 0 24 24" fill="none" className={`${size} shrink-0 text-primary`} aria-hidden="true">
+      {node}
+    </svg>
+  );
+  // 小さいタイルでは「スタッフを招 / 待」のように切れないよう、「を」の後ろでだけ改行する
+  const tileLabel = (label: string) => (
+    <span className="[word-break:keep-all]">
+      {label.split("を").map((part, i, parts) => (
+        <Fragment key={i}>
+          {part}
+          {i < parts.length - 1 ? (
+            <>
+              を<wbr />
+            </>
+          ) : null}
+        </Fragment>
+      ))}
+    </span>
+  );
+  // hrefがあれば画面を移り、なければホームの中でその場で開く
+  const renderAction = (
+    a: (typeof all)[number],
+    className: string,
+    iconSize: string,
+    onDone?: () => void,
+    tile = false,
+  ) =>
+    a.href ? (
+      <Link key={a.label} href={a.href} className={className} onClick={onDone}>
+        {icon(a.icon, iconSize)}
+        {tile ? tileLabel(a.label) : a.label}
+      </Link>
+    ) : (
+      <button
+        key={a.label}
+        type="button"
+        onClick={() => {
+          onDone?.();
+          a.onClick?.();
+        }}
+        className={className}
+      >
+        {icon(a.icon, iconSize)}
+        {tile ? tileLabel(a.label) : a.label}
+      </button>
+    );
+
   return (
     <section aria-label="よく使う操作">
       <h2 className="mb-1.5 text-xs font-semibold text-muted">よく使う操作</h2>
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden">
-        {QUICK_ACTIONS.map((a) => (
-          <Link key={a.href} href={a.href} className={QUICK_ACTION_CHIP}>
-            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0 text-primary" aria-hidden="true">
-              {a.icon}
-            </svg>
-            {a.label}
-          </Link>
-        ))}
-        {inPage.map((a) => (
-          <button key={a.label} type="button" onClick={a.onClick} className={QUICK_ACTION_CHIP}>
-            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0 text-primary" aria-hidden="true">
-              {a.icon}
-            </svg>
-            {a.label}
-          </button>
-        ))}
+      {/* スマホは先頭の3つと「一覧で見る」（ダッシュボードの件数を上に見せるため小さく） */}
+      <div className="grid grid-cols-4 gap-2 sm:hidden">
+        {all.slice(0, 3).map((a) => renderAction(a, QUICK_ACTION_TILE, "h-5 w-5", undefined, true))}
+        <button type="button" onClick={() => setShowAll(true)} className={QUICK_ACTION_TILE}>
+          {icon(
+            <>
+              <circle cx="5" cy="12" r="1.6" fill="currentColor" />
+              <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+              <circle cx="19" cy="12" r="1.6" fill="currentColor" />
+            </>,
+            "h-5 w-5",
+          )}
+          一覧で見る
+        </button>
       </div>
+      {/* PCは幅があるので全部並べる */}
+      <div className="hidden flex-wrap gap-2 sm:flex">{all.map((a) => renderAction(a, QUICK_ACTION_CHIP, "h-4 w-4"))}</div>
+
+      {showAll ? (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={() => setShowAll(false)}>
+          <div
+            role="dialog"
+            aria-label="よく使う操作の一覧"
+            className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-4 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="font-serif-jp text-lg font-bold text-primary">よく使う操作</h3>
+              <button type="button" onClick={() => setShowAll(false)} className="px-2 py-1 text-muted">
+                ✕
+              </button>
+            </div>
+            <div className="flex flex-col divide-y divide-border">
+              {all.map((a) =>
+                renderAction(
+                  a,
+                  "flex items-center gap-3 px-1 py-3 text-left text-sm font-semibold text-foreground hover:text-primary",
+                  "h-5 w-5",
+                  () => setShowAll(false),
+                ),
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
