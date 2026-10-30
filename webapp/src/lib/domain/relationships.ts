@@ -5,6 +5,7 @@ import { reportDisplay } from "@/lib/workReportDisplay";
 import { resolveRateVersion, excludeBaselineVersion } from "@/lib/domain/contracts";
 import { computeInvoiceTotals } from "@/lib/domain/invoicing";
 import { describeCancelRule, type CancelRule } from "@/lib/domain/cancellation";
+import { todayJstParts } from "@/lib/date";
 
 function serializeCancelRule(r: CancelRule) {
   return {
@@ -61,6 +62,47 @@ export async function listAgencies(companyId: string, restrictToTeamIds?: string
     },
     orderBy: { createdAt: "asc" },
   });
+}
+
+// 名簿の「今月のシフト」列：依頼主・派遣会社ごとの今月の確定シフト件数。
+// 依頼主・実体のある派遣会社はシフトのcompanyRelationshipIdで数える（派遣会社の
+// シフトは派遣会社側が持つので会社では絞らない）。プロキシの派遣会社は
+// シフトが自社扱いで作られるため、所属タグ付けされたスタッフの自社シフトで数える。
+export async function countMonthlyShiftsByRelationship(
+  companyId: string,
+  relationshipIds: string[],
+  proxyAgencyIds: string[],
+): Promise<Map<string, number>> {
+  const today = todayJstParts();
+  const date = { gte: new Date(Date.UTC(today.year, today.month - 1, 1)), lt: new Date(Date.UTC(today.year, today.month, 1)) };
+  const counts = new Map<string, number>();
+  if (relationshipIds.length > 0) {
+    const grouped = await prisma.shift.groupBy({
+      by: ["companyRelationshipId"],
+      where: { companyRelationshipId: { in: relationshipIds }, status: "CONFIRMED", date },
+      _count: { _all: true },
+    });
+    for (const g of grouped) if (g.companyRelationshipId) counts.set(g.companyRelationshipId, g._count._all);
+  }
+  if (proxyAgencyIds.length > 0) {
+    const memberships = await prisma.companyMembership.findMany({
+      where: { companyId, viaAgencyRelationshipId: { in: proxyAgencyIds } },
+      select: { userId: true, viaAgencyRelationshipId: true },
+    });
+    if (memberships.length > 0) {
+      const grouped = await prisma.shift.groupBy({
+        by: ["staffUserId"],
+        where: { companyId, staffUserId: { in: memberships.map((m) => m.userId) }, status: "CONFIRMED", date },
+        _count: { _all: true },
+      });
+      const byUser = new Map(grouped.map((g) => [g.staffUserId, g._count._all]));
+      for (const m of memberships) {
+        const id = m.viaAgencyRelationshipId!;
+        counts.set(id, (counts.get(id) ?? 0) + (byUser.get(m.userId) ?? 0));
+      }
+    }
+  }
+  return counts;
 }
 
 // 依頼主が「＋シフトを作成」で、実体のある（プロキシではない）連携済み
