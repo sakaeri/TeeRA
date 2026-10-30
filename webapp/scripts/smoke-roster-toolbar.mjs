@@ -5,6 +5,7 @@ import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 // スタッフ名簿の上の並びを検証する：
 // ・タブの下に「登録数 ◯件」と、検索・チーム絞り込み・追加ボタンが1行に並ぶ
 // ・検索で絞ると「◯件中 ◯件」になる
+// ・スマホも1行で、右端が一覧の枠とそろう。検索欄をタップすると広がる
 // ・依頼主一覧に「今月のシフト」列があり、今月シフトのある相手が上に来る
 
 function log(label, ok) {
@@ -67,7 +68,7 @@ try {
   const searchBox = await search.boundingBox();
   const addBox = await page.getByRole("button", { name: "＋依頼主を追加" }).boundingBox();
   const filterBox = await page.getByRole("combobox", { name: "チームで絞り込む" }).boundingBox();
-  const countText = page.locator("p", { hasText: "登録数" });
+  const countText = page.locator("main p[aria-live]");
   const countBox = await countText.boundingBox();
   log("検索欄がタブより下にある", searchBox.y > tabBox.y + tabBox.height - 2);
   log(
@@ -85,7 +86,7 @@ try {
 
   await search.fill("動いてない");
   await page.waitForTimeout(200);
-  log("検索すると「2件中 1件」になる", (await countText.innerText()).replace(/\s/g, "") === "登録数2件中1件");
+  log("検索すると「2件中 1件」になる", (await countText.innerText()).replace(/\s/g, "") === "2件中1件");
 
   // スタッフ一覧も同じ並び
   await page.getByRole("button", { name: "スタッフ一覧" }).click();
@@ -93,13 +94,36 @@ try {
   log("スタッフ一覧では「氏名で検索」「＋スタッフを追加」", await page.getByPlaceholder("氏名で検索").isVisible() && await page.getByRole("button", { name: "＋スタッフを追加" }).isVisible());
   await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/roster-staff.png` : "/dev/null" });
 
-  // スマホ：件数が出て、追加ボタンも見える
+  // スマホ：1行で並び、右端が一覧の枠とそろう。検索欄をタップすると広がる
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("http://localhost:3000/company/roster?tab=clients");
   await page.waitForTimeout(500);
-  log("スマホでも登録数が出る", (await page.locator("p", { hasText: "登録数" }).innerText()).replace(/\s/g, "") === "登録数2件");
-  log("スマホでも追加ボタンが見える", await page.getByRole("button", { name: "＋依頼主を追加" }).isVisible());
+  const mCount = page.locator("main p[aria-live]");
+  const mSearch = page.getByPlaceholder("名称で検索");
+  const mAdd = page.getByRole("button", { name: "＋依頼主を追加" });
+  log("スマホでも登録数が出る", (await mCount.innerText()).replace(/\s/g, "") === "登録数2件");
+  const [cb, sb, ab] = [await mCount.boundingBox(), await mSearch.boundingBox(), await mAdd.boundingBox()];
+  const mid = (b) => b.y + b.height / 2;
+  log("スマホでも件数・検索・追加ボタンが1行に並ぶ", Math.abs(mid(cb) - mid(sb)) < 6 && Math.abs(mid(sb) - mid(ab)) < 6);
+  const card = await page.locator("main button", { hasText: "動いてる依頼主" }).boundingBox();
+  log(
+    "左右の端が一覧の枠とそろう",
+    Math.abs(cb.x - card.x) < 2 && Math.abs(ab.x + ab.width - (card.x + card.width)) < 2,
+  );
+  log("検索欄と追加ボタンの高さがそろう", Math.abs(sb.height - ab.height) < 1);
   await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/roster-mobile.png` : "/dev/null" });
+  await mSearch.click();
+  await page.waitForTimeout(400);
+  const wide = await mSearch.boundingBox();
+  log("タップすると検索欄が広がる", wide.width > sb.width + 100);
+  log("広がっている間は追加ボタンを隠す", !(await mAdd.isVisible()));
+  await mSearch.fill("動いて");
+  await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/roster-mobile-search.png` : "/dev/null" });
+  await page.getByRole("button", { name: "検索をクリア" }).click();
+  log("×で検索を消しても広がったまま", (await mSearch.inputValue()) === "" && (await mSearch.boundingBox()).width > sb.width + 100);
+  await page.mouse.click(200, 760);
+  await page.waitForTimeout(400);
+  log("外をタップすると元に戻る", (await mAdd.isVisible()) && (await mSearch.boundingBox()).width < sb.width + 2);
 } catch (e) {
   console.error(e);
   process.exitCode = 1;

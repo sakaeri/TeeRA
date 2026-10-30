@@ -138,6 +138,7 @@ export function RosterView({
   const [showAddMenuInfo, setShowAddMenuInfo] = useState(false);
   const [teamFilter, setTeamFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   // 実体のない（TeeRAを使っていない）派遣会社にタグ付けされているスタッフは
   // 自社スタッフの名簿には出さない（その派遣会社の詳細パネル側だけに出す）。
   const ownStaff = staff.filter((s) => !s.viaAgencyRelationshipName);
@@ -254,35 +255,57 @@ export function RosterView({
         />
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted">
-          登録数{" "}
+      {/* スマホも1行。検索欄をタップしている間だけ、件数と追加ボタンを隠して検索欄を広げる */}
+      <div className="mb-4 flex items-center gap-2">
+        <p aria-live="polite" className={`shrink-0 whitespace-nowrap text-sm text-muted ${searchFocused ? "hidden sm:block" : ""}`}>
           {shownCount === totalCount ? (
-            <span className="font-semibold text-foreground">{totalCount}件</span>
+            <>
+              登録数 <span className="font-semibold text-foreground">{totalCount}件</span>
+            </>
           ) : (
             <>
               {totalCount}件中 <span className="font-semibold text-foreground">{shownCount}件</span>
             </>
           )}
         </p>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={tab === "staff" ? "氏名で検索" : "名称で検索"}
-            className="w-full max-w-[12rem] rounded-lg border border-border bg-white px-3 py-1.5 text-sm sm:max-w-xs"
-          />
-          {searchQuery ? (
-            <button type="button" onClick={() => setSearchQuery("")} className="shrink-0 text-xs text-muted hover:text-primary">
-              クリア
-            </button>
-          ) : null}
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+          <div className={`relative min-w-0 transition-all ${searchFocused ? "flex-1 sm:w-72 sm:flex-none" : "w-32 sm:w-56"}`}>
+            <svg
+              className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.45 4.39l3.08 3.08a.75.75 0 11-1.06 1.06l-3.08-3.08A7 7 0 012 9z" clipRule="evenodd" />
+            </svg>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              placeholder={tab === "staff" ? "氏名で検索" : "名称で検索"}
+              aria-label={tab === "staff" ? "氏名で検索" : "名称で検索"}
+              className={`h-9 w-full rounded-lg border border-border bg-white pl-8 text-sm [&::-webkit-search-cancel-button]:hidden ${searchQuery ? "pr-7" : "pr-2"}`}
+            />
+            {searchQuery ? (
+              <button
+                type="button"
+                // 押した瞬間に検索欄のフォーカスが外れて縮まないようにする
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setSearchQuery("")}
+                aria-label="検索をクリア"
+                className="absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-muted/20 text-xs text-muted"
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
           <select
             value={teamFilter}
             onChange={(e) => setTeamFilter(e.target.value)}
             aria-label="チームで絞り込む"
-            className="hidden rounded-lg border border-border bg-white px-3 py-1.5 text-sm sm:block"
+            className="hidden h-9 rounded-lg border border-border bg-white px-3 text-sm sm:block"
           >
             <option value="">全社（すべて表示）</option>
             {teams.map((t) => (
@@ -292,14 +315,14 @@ export function RosterView({
             ))}
           </select>
           {canShowAddButton ? (
-          <div className="relative shrink-0" ref={addMenuRef}>
+          <div className={`relative shrink-0 ${searchFocused ? "hidden sm:block" : ""}`} ref={addMenuRef}>
           <button
             type="button"
             onClick={() => {
               setShowAddMenu((v) => !v);
               setShowAddMenuInfo(false);
             }}
-            className="shrink-0 whitespace-nowrap rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+            className="h-9 shrink-0 whitespace-nowrap rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground sm:px-4"
           >
             {ADD_BUTTON_LABEL[tab]}
           </button>
