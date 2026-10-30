@@ -28,6 +28,6 @@ export default auth((req) => {
 // 表示（public/sw.js）が効かなくなる。
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|icon.png|icon-192.png|apple-icon.png|logo-64.png|sw.js|manifest.webmanifest|lp/|howto/).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|icon.png|icon-192.png|apple-icon.png|logo-64.png|sw.js|manifest.webmanifest|lp/|howto/|splash/).*)",
   ],
 };

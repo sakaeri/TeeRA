@@ -20,6 +20,22 @@ const zenOldMincho = Zen_Old_Mincho({
   fallback: ["Hiragino Mincho ProN", "Yu Mincho", "Noto Serif CJK JP", "Noto Serif JP", "serif"],
 });
 
+// iPhoneの画面サイズ（CSSピクセル幅・高さ・倍率）。public/splash/の画像と対応
+const SPLASH_SIZES: [number, number, number][] = [
+  [440, 956, 3],
+  [430, 932, 3],
+  [402, 874, 3],
+  [393, 852, 3],
+  [428, 926, 3],
+  [390, 844, 3],
+  [375, 812, 3],
+  [414, 896, 3],
+  [414, 896, 2],
+  [414, 736, 3],
+  [375, 667, 2],
+  [320, 568, 2],
+];
+
 export const metadata: Metadata = {
   title: "TeeRA — シフト管理",
   description: "TeeRA シフト管理プラットフォーム",
@@ -32,6 +48,11 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "TeeRA",
+    // ホーム画面のアイコンから開いた直後の画面（iPhoneは機種ごとの画面サイズの画像が必要）
+    startupImage: SPLASH_SIZES.map(([w, h, dpr]) => ({
+      url: `/splash/apple-splash-${w * dpr}x${h * dpr}.png`,
+      media: `(device-width: ${w}px) and (device-height: ${h}px) and (-webkit-device-pixel-ratio: ${dpr}) and (orientation: portrait)`,
+    })),
   },
 };
 

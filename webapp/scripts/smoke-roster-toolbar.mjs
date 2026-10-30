@@ -60,7 +60,7 @@ try {
 
   await page.goto("http://localhost:3000/company/roster?tab=clients");
   await page.waitForTimeout(500);
-  await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/roster-clients.png` : "/dev/null" });
+  if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/roster-clients.png` });
 
   // 件数・検索・絞り込み・追加ボタンがタブより下の1行にある
   const tabBox = await page.getByRole("button", { name: "依頼主一覧" }).boundingBox();
@@ -92,7 +92,7 @@ try {
   await page.getByRole("button", { name: "スタッフ一覧" }).click();
   await page.waitForTimeout(200);
   log("スタッフ一覧では「氏名で検索」「＋スタッフを追加」", await page.getByPlaceholder("氏名で検索").isVisible() && await page.getByRole("button", { name: "＋スタッフを追加" }).isVisible());
-  await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/roster-staff.png` : "/dev/null" });
+  if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/roster-staff.png` });
 
   // スマホ：1行で並び、右端が一覧の枠とそろう。検索欄をタップすると広がる
   await page.setViewportSize({ width: 390, height: 844 });
@@ -111,14 +111,14 @@ try {
     Math.abs(cb.x - card.x) < 2 && Math.abs(ab.x + ab.width - (card.x + card.width)) < 2,
   );
   log("検索欄と追加ボタンの高さがそろう", Math.abs(sb.height - ab.height) < 1);
-  await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/roster-mobile.png` : "/dev/null" });
+  if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/roster-mobile.png` });
   await mSearch.click();
   await page.waitForTimeout(400);
   const wide = await mSearch.boundingBox();
   log("タップすると検索欄が広がる", wide.width > sb.width + 100);
   log("広がっている間は追加ボタンを隠す", !(await mAdd.isVisible()));
   await mSearch.fill("動いて");
-  await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/roster-mobile-search.png` : "/dev/null" });
+  if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/roster-mobile-search.png` });
   await page.getByRole("button", { name: "検索をクリア" }).click();
   log("×で検索を消しても広がったまま", (await mSearch.inputValue()) === "" && (await mSearch.boundingBox()).width > sb.width + 100);
   await page.mouse.click(200, 760);
