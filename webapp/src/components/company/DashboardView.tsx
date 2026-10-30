@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, useTransition, type ReactNode } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import {
   createManualTodoAction,
@@ -191,7 +191,7 @@ function Tag({ kind }: { kind: string }) {
 const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   {
     href: "/company/calendar?create=shift",
-    label: "シフトを|作成",
+    label: "シフトを作成",
     icon: (
       <>
         <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
@@ -201,7 +201,7 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: "/company/calendar?create=recruit",
-    label: "募集を|作成",
+    label: "募集を作成",
     icon: (
       <>
         <path d="M3 10v4a1 1 0 001 1h2l3 4V5L6 9H4a1 1 0 00-1 1z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
@@ -211,7 +211,7 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: "/company/roster?invite=staff",
-    label: "スタッフを|招待",
+    label: "スタッフを招待",
     icon: (
       <>
         <circle cx="10" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8" />
@@ -221,7 +221,7 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: "/company/roster?tab=clients&add=1",
-    label: "依頼主を|追加",
+    label: "依頼主を追加",
     icon: (
       <>
         <path d="M4 21V5a1 1 0 011-1h9a1 1 0 011 1v16M15 10h4a1 1 0 011 1v10M3 21h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -231,7 +231,7 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: "/company/roster?tab=agencies&add=1",
-    label: "派遣会社を|追加",
+    label: "派遣会社を追加",
     icon: (
       <>
         <circle cx="7" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.8" />
@@ -242,7 +242,7 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: "/company/payroll",
-    label: "給与・|請求書",
+    label: "給与・請求書",
     icon: (
       <>
         <rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" strokeWidth="1.8" />
@@ -252,28 +252,15 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   },
 ];
 
-// ラベルは「|」の位置でだけ改行する（4列だと「スタッフを招 / 待」のように切れるため）
-function TileLabel({ label }: { label: string }) {
-  return (
-    <span className="[word-break:keep-all]">
-      {label.split("|").map((part, i) => (
-        <Fragment key={i}>
-          {i > 0 ? <wbr /> : null}
-          {part}
-        </Fragment>
-      ))}
-    </span>
-  );
-}
-
-const QUICK_ACTION_TILE =
-  "flex flex-col items-center gap-1.5 rounded-2xl border border-border bg-white px-1 py-3 text-center text-[11px] font-semibold leading-tight text-foreground hover:border-primary hover:text-primary sm:text-xs";
+// 横1列に並べ、入りきらない分は指で横にスクロールする（ダッシュボードの件数を上に見せるため小さく）
+const QUICK_ACTION_CHIP =
+  "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground hover:border-primary hover:text-primary";
 
 // ホームの中で開くもの（やることリスト・販促品）は、画面を移らずにその場で開く
 function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddPromo: () => void }) {
   const inPage: { label: string; onClick: () => void; icon: ReactNode }[] = [
     {
-      label: "やること|リスト作成",
+      label: "やることリスト作成",
       onClick: onAddTodo,
       icon: (
         <>
@@ -283,7 +270,7 @@ function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddP
       ),
     },
     {
-      label: "販促品を|登録",
+      label: "販促品を登録",
       onClick: onAddPromo,
       icon: (
         <>
@@ -295,22 +282,22 @@ function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddP
   ];
   return (
     <section aria-label="よく使う操作">
-      <h2 className="mb-2 text-sm font-semibold text-muted">よく使う操作</h2>
-      <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 sm:gap-3">
+      <h2 className="mb-1.5 text-xs font-semibold text-muted">よく使う操作</h2>
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden">
         {QUICK_ACTIONS.map((a) => (
-          <Link key={a.href} href={a.href} className={QUICK_ACTION_TILE}>
-            <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 text-primary" aria-hidden="true">
+          <Link key={a.href} href={a.href} className={QUICK_ACTION_CHIP}>
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0 text-primary" aria-hidden="true">
               {a.icon}
             </svg>
-            <TileLabel label={a.label} />
+            {a.label}
           </Link>
         ))}
         {inPage.map((a) => (
-          <button key={a.label} type="button" onClick={a.onClick} className={QUICK_ACTION_TILE}>
-            <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 text-primary" aria-hidden="true">
+          <button key={a.label} type="button" onClick={a.onClick} className={QUICK_ACTION_CHIP}>
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0 text-primary" aria-hidden="true">
               {a.icon}
             </svg>
-            <TileLabel label={a.label} />
+            {a.label}
           </button>
         ))}
       </div>
