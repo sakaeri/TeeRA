@@ -88,7 +88,7 @@ try {
 
   // --- 管理者側: 説明文と、チームマネージャーが「誰宛か」候補に出ること ---
   await admin.goto("http://localhost:3000/company");
-  await admin.click("text=＋やることリスト作成");
+  await admin.getByRole("button", { name: "やることリスト作成", exact: true }).click();
   await admin.waitForTimeout(200);
   const adminModalText = await admin.textContent("body");
   log(
@@ -114,7 +114,7 @@ try {
     managerBody.includes("配属先の対応をお願いします") && managerBody.includes("Aチームマネージャー宛"),
   );
 
-  await manager.click("text=＋やることリスト作成");
+  await manager.getByRole("button", { name: "やることリスト作成", exact: true }).click();
   await manager.waitForTimeout(200);
   const managerCreatedByValue = await manager.locator("input[disabled]").inputValue();
   log(

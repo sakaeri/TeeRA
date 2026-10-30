@@ -252,24 +252,111 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
   },
 ];
 
-function QuickActions() {
+// スマホで3つを1列に収めるための、少し詰めた薄いボタン
+const QUICK_ACTION_CHIP_COMPACT =
+  "flex min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-full border border-border bg-white px-1.5 py-2 text-[11px] font-semibold text-foreground hover:border-primary hover:text-primary";
+const QUICK_ACTION_CHIP =
+  "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground hover:border-primary hover:text-primary";
+
+// ホームの中で開くもの（やることリスト・販促品）は、画面を移らずにその場で開く
+function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddPromo: () => void }) {
+  const inPage: { label: string; onClick: () => void; icon: ReactNode }[] = [
+    {
+      label: "やることリスト作成",
+      onClick: onAddTodo,
+      icon: (
+        <>
+          <path d="M9 6h11M9 12h11M9 18h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          <path d="M3.5 6l1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      ),
+    },
+    {
+      label: "販促品を登録",
+      onClick: onAddPromo,
+      icon: (
+        <>
+          <rect x="3.5" y="9" width="17" height="11.5" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M3 9h18v-3H3zM12 6v14.5M12 6c-1.5-3-5-3.5-5-1s3.5 1 5 1zM12 6c1.5-3 5-3.5 5-1s-3.5 1-5 1z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+        </>
+      ),
+    },
+  ];
+  const [showAll, setShowAll] = useState(false);
+  const all: { label: string; icon: ReactNode; href?: string; onClick?: () => void }[] = [...QUICK_ACTIONS, ...inPage];
+  const icon = (node: ReactNode, size: string) => (
+    <svg viewBox="0 0 24 24" fill="none" className={`${size} shrink-0 text-primary`} aria-hidden="true">
+      {node}
+    </svg>
+  );
+  // hrefがあれば画面を移り、なければホームの中でその場で開く
+  const renderAction = (a: (typeof all)[number], className: string, iconSize: string, onDone?: () => void) =>
+    a.href ? (
+      <Link key={a.label} href={a.href} className={className} onClick={onDone}>
+        {icon(a.icon, iconSize)}
+        {a.label}
+      </Link>
+    ) : (
+      <button
+        key={a.label}
+        type="button"
+        onClick={() => {
+          onDone?.();
+          a.onClick?.();
+        }}
+        className={className}
+      >
+        {icon(a.icon, iconSize)}
+        {a.label}
+      </button>
+    );
+
   return (
     <section aria-label="よく使う操作">
-      <h2 className="mb-2 text-sm font-semibold text-muted">よく使う操作</h2>
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 sm:gap-3">
-        {QUICK_ACTIONS.map((a) => (
-          <Link
-            key={a.href}
-            href={a.href}
-            className="flex flex-col items-center gap-1.5 rounded-2xl border border-border bg-white px-2 py-3 text-center text-xs font-semibold text-foreground hover:border-primary hover:text-primary"
-          >
-            <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 text-primary" aria-hidden="true">
-              {a.icon}
-            </svg>
-            {a.label}
-          </Link>
-        ))}
+      <div className="mb-1.5 flex items-center justify-between">
+        <h2 className="text-xs font-semibold text-muted">よく使う操作</h2>
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="text-xs font-semibold text-primary hover:underline sm:hidden"
+        >
+          一覧で見る →
+        </button>
       </div>
+      {/* スマホは先頭の3つだけ（ダッシュボードの件数を上に見せるため薄く）。残りは「一覧で見る」から */}
+      <div className="grid grid-cols-3 gap-1.5 sm:hidden">
+        {all.slice(0, 3).map((a) => renderAction(a, QUICK_ACTION_CHIP_COMPACT, "h-3.5 w-3.5"))}
+      </div>
+      {/* PCは幅があるので全部並べる */}
+      <div className="hidden flex-wrap gap-2 sm:flex">{all.map((a) => renderAction(a, QUICK_ACTION_CHIP, "h-4 w-4"))}</div>
+
+      {showAll ? (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={() => setShowAll(false)}>
+          <div
+            role="dialog"
+            aria-label="よく使う操作の一覧"
+            className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-4 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="font-serif-jp text-lg font-bold text-primary">よく使う操作</h3>
+              <button type="button" onClick={() => setShowAll(false)} className="px-2 py-1 text-muted">
+                ✕
+              </button>
+            </div>
+            <div className="flex flex-col divide-y divide-border">
+              {all.map((a) =>
+                renderAction(
+                  a,
+                  "flex items-center gap-3 px-1 py-3 text-left text-sm font-semibold text-foreground hover:text-primary",
+                  "h-5 w-5",
+                  () => setShowAll(false),
+                ),
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -343,27 +430,9 @@ export function DashboardView({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="hidden font-serif-jp text-2xl font-bold sm:block">ダッシュボード</h1>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setShowPromoModal(true)}
-            className="flex-1 rounded-lg border border-primary bg-white px-4 py-2 text-sm font-semibold text-primary shadow-md transition hover:-translate-y-0.5 hover:shadow-lg sm:flex-none"
-          >
-            ＋販促品を登録
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowTodoForm(true)}
-            className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition hover:-translate-y-0.5 hover:shadow-lg sm:flex-none"
-          >
-            ＋やることリスト作成
-          </button>
-        </div>
-      </div>
+      <h1 className="hidden font-serif-jp text-2xl font-bold sm:block">ダッシュボード</h1>
 
-      <QuickActions />
+      <QuickActions onAddTodo={() => setShowTodoForm(true)} onAddPromo={() => setShowPromoModal(true)} />
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         {KPI_CARDS.map((card) => {

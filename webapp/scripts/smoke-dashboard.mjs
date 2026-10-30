@@ -41,7 +41,7 @@ try {
   await page.getByRole("link", { name: "ダッシュボード", exact: true }).click();
   await page.waitForURL("http://localhost:3000/company");
 
-  await page.click("text=＋やることリスト作成");
+  await page.getByRole("button", { name: "やることリスト作成", exact: true }).click();
   const createdByValue = await page.locator('input[disabled]').inputValue();
   log("誰が出したか shows the current admin's real name", createdByValue === "ダッシュボード管理者（自動入力）");
   // scoped to the 誰宛か <select> specifically — 一般スタッフ legitimately
