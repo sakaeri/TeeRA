@@ -31,8 +31,6 @@ try {
   await page.waitForURL("http://localhost:3000/company");
 
   const section = page.getByRole("region", { name: "よく使う操作" });
-  // 開いた直後は読み込み画面（ロゴの木）が先に出るので、本体の表示を待つ
-  await section.waitFor();
   const visible = (await section.locator("a:visible, button:visible").allInnerTexts()).map((l) => l.trim());
   log(
     "スマホでは見出しの「一覧で見る →」と先頭の3つ（シフト・募集・やることリスト）だけが並ぶ",

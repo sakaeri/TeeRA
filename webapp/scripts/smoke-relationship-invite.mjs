@@ -1,7 +1,6 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
-import { waitForPageReady } from "./_lib/pageReady.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -28,24 +27,19 @@ const staffOwnerEmail = `relinv-staffowner-${Date.now()}@example.com`;
 try {
   // --- setup: owner company ---
   await owner.goto("http://localhost:3000/register");
-  await waitForPageReady(owner);
   await owner.fill("#name", "招待元管理者");
   await owner.fill("#email", ownerEmail);
   await owner.click("button[type=submit]");
   await owner.waitForTimeout(400);
   await owner.goto(extractMagicLinkFromLog());
-  await waitForPageReady(owner);
   await owner.waitForURL("http://localhost:3000/register/company");
-  await waitForPageReady(owner);
   await owner.fill("#name", "招待元株式会社");
   await owner.click("button[type=submit]");
   await owner.waitForURL("http://localhost:3000/company");
-  await waitForPageReady(owner);
 
   // --- ① per-tab dedicated buttons; add-menu shows a "依頼主名簿 (i)" /
   // "派遣会社名簿 (i)" header, and clicking the (i) reveals the explanation ---
   await owner.goto("http://localhost:3000/company/roster");
-  await waitForPageReady(owner);
   await owner.click("text=依頼主一覧");
   await owner.waitForTimeout(200);
   let bodyText = await owner.textContent("body");
@@ -125,29 +119,24 @@ try {
 
   // --- full redemption flow: counterpart registers, creates own company, redeems ---
   await counterpart.goto(relationshipInviteUrl);
-  await waitForPageReady(counterpart);
   await counterpart.click("text=アカウントを作成して参加する");
   await counterpart.fill("#name", "招待先担当者");
   await counterpart.fill("#email", counterpartEmail);
   await counterpart.click("button[type=submit]");
   await counterpart.waitForTimeout(400);
   await counterpart.goto(extractMagicLinkFromLog());
-  await waitForPageReady(counterpart);
   await counterpart.waitForURL(/\/register\/company\?invite=/);
-  await waitForPageReady(counterpart);
   bodyText = await counterpart.textContent("body");
   log("registering with a CLIENT_UPGRADE invite routes to company creation first", bodyText.includes("事業所がありません"));
 
   await counterpart.fill("#name", "招待先株式会社");
   await counterpart.click("button[type=submit]");
   await counterpart.waitForURL(/\/invite\//);
-  await waitForPageReady(counterpart);
   bodyText = await counterpart.textContent("body");
   log("after creating company, lands back on the invite page", bodyText.includes("として招待を受け取る"));
 
   await counterpart.click("text=/として招待を受け取る/");
   await counterpart.waitForURL("http://localhost:3000/company/roster");
-  await waitForPageReady(counterpart);
   log("redemption redirects the counterpart to their own roster", counterpart.url().includes("/company/roster"));
 
   const relAfterRedeem = psql(
@@ -160,7 +149,6 @@ try {
 
   // --- owner's list now shows the real counterpart company name (not 仮) ---
   await owner.goto("http://localhost:3000/company/roster");
-  await waitForPageReady(owner);
   await owner.click("text=依頼主一覧");
   await owner.waitForTimeout(300);
   bodyText = await owner.textContent("body");
@@ -169,7 +157,6 @@ try {
 
   // --- STAFF role is blocked from redeeming a company-relationship invite ---
   await owner.goto("http://localhost:3000/company/roster");
-  await waitForPageReady(owner);
   await owner.click("text=派遣会社一覧");
   await owner.waitForTimeout(200);
   await owner.click("text=＋派遣会社を追加");
@@ -183,7 +170,6 @@ try {
 
   // register a fresh personal account, join owner's own company as STAFF via a staff invite, then try to redeem the agency-relationship invite
   await owner.goto("http://localhost:3000/company/roster");
-  await waitForPageReady(owner);
   await owner.click("text=＋スタッフを追加");
   await owner.click("text=本アカウントを招待");
   await owner.getByRole("button", { name: "招待URLを発行する" }).click();
@@ -194,22 +180,17 @@ try {
   const staffCtx = await browser.newContext();
   const staffPage = await staffCtx.newPage();
   await staffPage.goto(staffInviteUrl);
-  await waitForPageReady(staffPage);
   await staffPage.click("text=アカウントを作成して参加する");
   await staffPage.fill("#name", "招待元スタッフ");
   await staffPage.fill("#email", staffOwnerEmail);
   await staffPage.click("button[type=submit]");
   await staffPage.waitForTimeout(400);
   await staffPage.goto(extractMagicLinkFromLog());
-  await waitForPageReady(staffPage);
   await staffPage.waitForURL(/\/invite\//);
-  await waitForPageReady(staffPage);
   await staffPage.click("text=参加する");
   await staffPage.waitForURL("http://localhost:3000/staff");
-  await waitForPageReady(staffPage);
 
   await staffPage.goto(agencyInviteUrl);
-  await waitForPageReady(staffPage);
   bodyText = await staffPage.textContent("body");
   log(
     "STAFF member sees the block message when opening a company-relationship invite",
@@ -228,7 +209,6 @@ try {
   // client-only tab/card, while the client-direction proxy (created
   // earlier under 依頼主一覧) still shows both.
   await owner.goto("http://localhost:3000/company/roster");
-  await waitForPageReady(owner);
   await owner.click("text=派遣会社一覧");
   await owner.waitForTimeout(200);
   await owner.click("text=＋派遣会社を追加");

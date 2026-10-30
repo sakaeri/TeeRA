@@ -1,7 +1,6 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
-import { waitForPageReady } from "./_lib/pageReady.mjs";
 
 // 控除欄の修正を検証する:
 // ①先頭の0が消えずに残り続けるバグ（value制御+number inputの既知の癖）
@@ -40,19 +39,15 @@ const thisMonth = today.slice(0, 7);
 
 try {
   await admin.goto("http://localhost:3000/register");
-  await waitForPageReady(admin);
   await admin.fill("#name", "控除確認管理者");
   await admin.fill("#email", adminEmail);
   await admin.click("button[type=submit]");
   await admin.waitForTimeout(400);
   await admin.goto(extractMagicLinkFromLog());
-  await waitForPageReady(admin);
   await admin.waitForURL("http://localhost:3000/register/company");
-  await waitForPageReady(admin);
   await admin.fill("#name", "控除確認株式会社" + suffix);
   await admin.click("button[type=submit]");
   await admin.waitForURL("http://localhost:3000/company");
-  await waitForPageReady(admin);
 
   await admin.click("text=スタッフ名簿");
   await admin.click("text=＋スタッフを追加");
@@ -62,22 +57,17 @@ try {
   const inviteUrl = await admin.locator('input[readonly]').inputValue();
 
   await staff.goto(inviteUrl);
-  await waitForPageReady(staff);
   await staff.click("text=アカウントを作成して参加する");
   await staff.fill("#name", "控除確認スタッフ");
   await staff.fill("#email", staffEmail);
   await staff.click("button[type=submit]");
   await staff.waitForTimeout(400);
   await staff.goto(extractMagicLinkFromLog());
-  await waitForPageReady(staff);
   await staff.waitForURL(new RegExp("/invite/"));
-  await waitForPageReady(staff);
   await staff.click("text=参加する");
   await staff.waitForURL("http://localhost:3000/staff");
-  await waitForPageReady(staff);
 
   await admin.goto("http://localhost:3000/company/settings?tab=contracts");
-  await waitForPageReady(admin);
   await admin.getByRole("button", { name: "＋テンプレートを作成" }).click();
   await admin.getByText("業務内容", { exact: true }).locator("xpath=..").locator("input").fill("レジ業務");
   await admin.getByText("賃金", { exact: true }).locator("xpath=..").locator("input[type=number]").fill("1300");
@@ -98,7 +88,6 @@ try {
   psql(`update "ContractTemplate" set status='LOCKED' where id='${templateId}';`);
 
   await admin.goto("http://localhost:3000/company/calendar");
-  await waitForPageReady(admin);
   await admin.locator("button", { hasText: "＋" }).last().click();
   await admin.getByText("シフトを作成").click();
   const assignModal1 = admin.locator("div.fixed.inset-0.z-20").last();
@@ -116,7 +105,6 @@ try {
   const shiftId = psql(`select id from "Shift" where "staffUserId"='${payrollStaffUserId}' order by "createdAt" desc limit 1;`);
 
   await staff.goto("http://localhost:3000/staff/timecard");
-  await waitForPageReady(staff);
   await staff.getByRole("button", { name: "勤務開始" }).click();
   await staff.waitForTimeout(500);
   psql(`update "WorkReport" set "clockIn" = now() - interval '10 hours' where "shiftId"='${shiftId}';`);
@@ -126,13 +114,11 @@ try {
   await staff.waitForTimeout(600);
 
   await admin.goto("http://localhost:3000/company/settings?tab=workreports");
-  await waitForPageReady(admin);
   await admin.getByRole("button", { name: "承認する" }).click();
   await admin.waitForTimeout(600);
 
   const payrollUrl = `http://localhost:3000/company/payroll?month=${thisMonth}&staff=${payrollStaffUserId}`;
   await admin.goto(payrollUrl);
-  await waitForPageReady(admin);
   await admin.waitForTimeout(500);
   // 支給合計は 10h × 1300円 = 13000円 のはず
   let body = await admin.locator("body").innerText();
@@ -170,7 +156,6 @@ try {
 
   // ページを開き直しても率が再表示される
   await admin.goto(payrollUrl);
-  await waitForPageReady(admin);
   await admin.waitForTimeout(500);
   const insuranceRowAfterReload = admin.locator("div", { hasText: "雇用保険料" }).last();
   const rateInputAfterReload = insuranceRowAfterReload.locator('input[placeholder="率"]');
@@ -198,7 +183,6 @@ try {
   await rateInputToClear.blur();
   await admin.waitForTimeout(500);
   await admin.goto(payrollUrl);
-  await waitForPageReady(admin);
   await admin.waitForTimeout(500);
   const insuranceRowAfterClear = admin.locator("div", { hasText: "雇用保険料" }).last();
   const rateValueAfterClear = await insuranceRowAfterClear.locator('input[placeholder="率"]').inputValue();
@@ -212,7 +196,6 @@ try {
   await insuranceAmountInputAfterClear.blur();
   await admin.waitForTimeout(500);
   await admin.goto(payrollUrl);
-  await waitForPageReady(admin);
   await admin.waitForTimeout(500);
   const insuranceRowAfterOverride = admin.locator("div", { hasText: "雇用保険料" }).last();
   const amountValueAfterOverride = await insuranceRowAfterOverride.locator('input[type=number]').last().inputValue();

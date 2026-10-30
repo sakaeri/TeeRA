@@ -1,7 +1,6 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
-import { waitForPageReady } from "./_lib/pageReady.mjs";
 
 // シフト外の勤務（シフトが無いまま働いた日）をスタッフが報告できること、
 // 本部の承認待ちに「シフト外」として並び、通常の報告と同じく承認できること、
@@ -30,19 +29,15 @@ const yesterday = new Date(Date.now() + JST_OFFSET_MS - 24 * 60 * 60 * 1000).toI
 
 try {
   await admin.goto("http://localhost:3000/register");
-  await waitForPageReady(admin);
   await admin.fill("#name", "シフト外管理者");
   await admin.fill("#email", adminEmail);
   await admin.click("button[type=submit]");
   await admin.waitForTimeout(400);
   await admin.goto(extractMagicLinkFromLog());
-  await waitForPageReady(admin);
   await admin.waitForURL("http://localhost:3000/register/company");
-  await waitForPageReady(admin);
   await admin.fill("#name", "シフト外テスト株式会社");
   await admin.click("button[type=submit]");
   await admin.waitForURL("http://localhost:3000/company");
-  await waitForPageReady(admin);
   const companyId = psql(`select id from "Company" where name='シフト外テスト株式会社' order by "createdAt" desc limit 1;`);
 
   await admin.click("text=スタッフ名簿");
@@ -53,19 +48,15 @@ try {
   const inviteUrl = await admin.locator("input[readonly]").inputValue();
 
   await staff.goto(inviteUrl);
-  await waitForPageReady(staff);
   await staff.click("text=アカウントを作成して参加する");
   await staff.fill("#name", "シフト外スタッフ");
   await staff.fill("#email", staffEmail);
   await staff.click("button[type=submit]");
   await staff.waitForTimeout(400);
   await staff.goto(extractMagicLinkFromLog());
-  await waitForPageReady(staff);
   await staff.waitForURL(/\/invite\//);
-  await waitForPageReady(staff);
   await staff.click("text=参加する");
   await staff.waitForURL("http://localhost:3000/staff");
-  await waitForPageReady(staff);
   const staffUserId = psql(`select id from "User" where email='${staffEmail}';`);
 
   // 配属済みの依頼主（仮アカウント）を1つ用意し、勤務先として選べることを確認する
@@ -75,7 +66,6 @@ try {
   psql(`insert into "StaffPlacement" (id, "staffUserId", "companyRelationshipId", active, "createdAt") values (gen_random_uuid()::text, '${staffUserId}', '${relId}', true, now());`);
 
   await staff.goto("http://localhost:3000/staff/timecard");
-  await waitForPageReady(staff);
   await staff.getByRole("button", { name: "＋シフト外の勤務を報告する" }).click();
   const modal = staff.locator("div.fixed.inset-0.z-40").last();
   const workplaceOptions = await modal.locator("label", { hasText: "勤務先" }).locator("option").allTextContents();
@@ -101,7 +91,6 @@ try {
 
   // 本部の承認待ちに「シフト外」として出る（仮アカウントの依頼主なので自社が承認する）
   await admin.goto("http://localhost:3000/company/settings?tab=workreports");
-  await waitForPageReady(admin);
   const queueText = await admin.innerText("body");
   log("承認待ちに「シフト外」の印付きで並ぶ", queueText.includes("シフト外") && queueText.includes("シフト外スタッフ"));
   await admin.getByRole("button", { name: "承認する" }).click();
@@ -110,7 +99,6 @@ try {
 
   // 同じ時間帯にもう一度出そうとするとエラーになり、シフトも増えない
   await staff.goto("http://localhost:3000/staff/timecard");
-  await waitForPageReady(staff);
   await staff.getByRole("button", { name: "＋シフト外の勤務を報告する" }).click();
   const modal2 = staff.locator("div.fixed.inset-0.z-40").last();
   await modal2.locator("label", { hasText: "勤務日" }).locator("input").fill(yesterday);
