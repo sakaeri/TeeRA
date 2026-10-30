@@ -327,9 +327,13 @@ function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddP
     },
   ];
   const [showAll, setShowAll] = useState(false);
-  const all: { label: string; icon: ReactNode; href?: string; onClick?: () => void }[] = [
-    ...QUICK_ACTIONS,
-    ...inPage,
+  // やることリストは毎日使うので3つ目（スマホで最初から見える位置）に置く
+  const [todo, promo] = inPage;
+  const all: { label: string; shortLabel?: string; icon: ReactNode; href?: string; onClick?: () => void }[] = [
+    ...QUICK_ACTIONS.slice(0, 2),
+    { ...todo, shortLabel: "やることリスト" },
+    ...QUICK_ACTIONS.slice(2),
+    promo,
     QUICK_ACTION_LAST,
   ];
   const icon = (node: ReactNode, size: string) => (
@@ -338,11 +342,12 @@ function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddP
     </svg>
   );
   // hrefがあれば画面を移り、なければホームの中でその場で開く
-  const renderAction = (a: (typeof all)[number], className: string, iconSize: string, onDone?: () => void) =>
+  // short=trueの時は、スマホの3つ並びに収まる短い名前（あれば）を出す
+  const renderAction = (a: (typeof all)[number], className: string, iconSize: string, onDone?: () => void, short = false) =>
     a.href ? (
       <Link key={a.label} href={a.href} className={className} onClick={onDone}>
         {icon(a.icon, iconSize)}
-        {a.label}
+        {short ? (a.shortLabel ?? a.label) : a.label}
       </Link>
     ) : (
       <button
@@ -355,7 +360,7 @@ function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddP
         className={className}
       >
         {icon(a.icon, iconSize)}
-        {a.label}
+        {short ? (a.shortLabel ?? a.label) : a.label}
       </button>
     );
 
@@ -373,7 +378,7 @@ function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddP
       </div>
       {/* スマホは先頭の3つだけ（ダッシュボードの件数を上に見せるため薄く）。残りは「一覧で見る」から */}
       <div className="grid grid-cols-3 gap-1.5 sm:hidden">
-        {all.slice(0, 3).map((a) => renderAction(a, QUICK_ACTION_CHIP_COMPACT, "h-3.5 w-3.5"))}
+        {all.slice(0, 3).map((a) => renderAction(a, QUICK_ACTION_CHIP_COMPACT, "h-3.5 w-3.5", undefined, true))}
       </div>
       {/* PCは幅があるので全部並べる */}
       {/* PCは6個ずつ2段にそろえる（1つだけ2段目にはみ出さないように） */}

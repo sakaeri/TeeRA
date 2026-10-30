@@ -33,8 +33,8 @@ try {
   const section = page.getByRole("region", { name: "よく使う操作" });
   const visible = (await section.locator("a:visible, button:visible").allInnerTexts()).map((l) => l.trim());
   log(
-    "スマホでは見出しの「一覧で見る →」と先頭の3つだけが並ぶ",
-    JSON.stringify(visible) === JSON.stringify(["一覧で見る →", "シフトを作成", "募集を作成", "スタッフを招待"]),
+    "スマホでは見出しの「一覧で見る →」と先頭の3つ（シフト・募集・やることリスト）だけが並ぶ",
+    JSON.stringify(visible) === JSON.stringify(["一覧で見る →", "シフトを作成", "募集を作成", "やることリスト"]),
   );
   log(
     "ヘッダーの「＋販促品を登録」「＋やることリスト作成」は無くなった",
@@ -51,6 +51,7 @@ try {
       JSON.stringify([
         "シフトを作成",
         "募集を作成",
+        "やることリスト作成",
         "スタッフを招待",
         "依頼主を追加",
         "派遣会社を追加",
@@ -58,7 +59,6 @@ try {
         "シフトチームを作成",
         "本部メンバーを管理",
         "契約書の雛形を作成",
-        "やることリスト作成",
         "販促品を登録",
         "使い方マニュアル",
       ]),
