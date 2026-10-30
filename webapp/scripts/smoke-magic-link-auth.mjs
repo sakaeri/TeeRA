@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { waitForPageReady } from "./_lib/pageReady.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -29,6 +30,7 @@ const companyName = `マジックリンク確認株式会社${Date.now()}`;
 try {
   // --- 登録: 名前・メールのみ、パスワード欄が無い ---
   await page.goto("http://localhost:3000/register");
+  await waitForPageReady(page);
   const hasPasswordField = await page.locator("#password").count();
   log("登録フォームにパスワード欄が無い", hasPasswordField === 0);
 
@@ -44,12 +46,15 @@ try {
 
   const magicLinkUrl = extractMagicLinkFromLog();
   await page.goto(magicLinkUrl);
+  await waitForPageReady(page);
   await page.waitForURL("http://localhost:3000/register/company");
+  await waitForPageReady(page);
   log("確認後、emailVerified=trueになる", userRow() === "t|t");
 
   await page.fill("#name", companyName);
   await page.click("button[type=submit]");
   await page.waitForURL("http://localhost:3000/company");
+  await waitForPageReady(page);
   log("会社作成画面を経て/companyに入れる", page.url() === "http://localhost:3000/company");
 
   // --- 同じ確認リンクをもう一度踏んでも無効（ログアウトした状態で確認 —
@@ -58,24 +63,31 @@ try {
   await page.waitForTimeout(200);
   await page.click("text=ログアウト");
   await page.waitForURL("http://localhost:3000/login");
+  await waitForPageReady(page);
   await page.goto(magicLinkUrl);
+  await waitForPageReady(page);
   await page.waitForTimeout(500);
   log("使用済みのマジックリンクは無効になる", page.url() === "http://localhost:3000/login?magicLink=error");
 
   // 再ログインして以降のテストを続ける
   await page.goto("http://localhost:3000/login");
+  await waitForPageReady(page);
   await page.click("text=パスワードをお持ちでない方はこちら（メールでログイン）");
   await page.fill("#magicLinkEmail", email);
   await page.getByRole("button", { name: "ログイン用リンクを送信する" }).click();
   await page.waitForTimeout(600);
   await page.goto(extractMagicLinkFromLog());
+  await waitForPageReady(page);
   await page.waitForURL("http://localhost:3000/company");
+  await waitForPageReady(page);
 
   // --- アカウント設定: パスワード未設定の見た目 ---
   await page.goto("http://localhost:3000/company");
+  await waitForPageReady(page);
   await page.click('button[aria-label="プロフィールメニュー"]');
   await page.click('a[aria-label="アカウント設定"]');
   await page.waitForURL("http://localhost:3000/account");
+  await waitForPageReady(page);
   body = await page.textContent("body");
   log("パスワード未設定の間は「パスワードを設定する」セクションが出る", body.includes("パスワードを設定する"));
   log("パスワード未設定の間はメール変更フォームの代わりに案内文が出る", body.includes("メールアドレスを変更するには、先にパスワードを設定してください"));
@@ -89,10 +101,12 @@ try {
 
   // --- パスワード設定済みなら、ログイン用マジックリンクの代わりに案内メールが届く ---
   await page.goto("http://localhost:3000/company");
+  await waitForPageReady(page);
   await page.click('button[aria-label="プロフィールメニュー"]');
   await page.waitForTimeout(200);
   await page.click("text=ログアウト");
   await page.waitForURL("http://localhost:3000/login");
+  await waitForPageReady(page);
 
   await page.click("text=パスワードをお持ちでない方はこちら（メールでログイン）");
   await page.fill("#magicLinkEmail", email);
@@ -107,14 +121,17 @@ try {
 
   // --- パスワードでログインできる ---
   await page.goto("http://localhost:3000/login");
+  await waitForPageReady(page);
   await page.fill("#email", email);
   await page.fill("#password", "mypassword123");
   await page.click("button[type=submit]");
   await page.waitForURL("http://localhost:3000/company");
+  await waitForPageReady(page);
   log("設定したパスワードでログインできる", page.url() === "http://localhost:3000/company");
 
   // --- パスワードを削除してマジックリンクのみに戻す ---
   await page.goto("http://localhost:3000/account");
+  await waitForPageReady(page);
   await page.click("text=パスワードを削除してマジックリンクのみに戻す");
   await page.fill("#currentPasswordForRemove", "mypassword123");
   await page.getByRole("button", { name: "パスワードを削除する" }).click();
@@ -124,24 +141,30 @@ try {
 
   // --- パスワード削除後は、今度こそマジックリンクでログインできる ---
   await page.goto("http://localhost:3000/company");
+  await waitForPageReady(page);
   await page.click('button[aria-label="プロフィールメニュー"]');
   await page.waitForTimeout(200);
   await page.click("text=ログアウト");
   await page.waitForURL("http://localhost:3000/login");
+  await waitForPageReady(page);
   await page.click("text=パスワードをお持ちでない方はこちら（メールでログイン）");
   await page.fill("#magicLinkEmail", email);
   await page.getByRole("button", { name: "ログイン用リンクを送信する" }).click();
   await page.waitForTimeout(600);
   await page.goto(extractMagicLinkFromLog());
+  await waitForPageReady(page);
   await page.waitForURL("http://localhost:3000/company");
+  await waitForPageReady(page);
   log("パスワード削除後はマジックリンクでログインできる", page.url() === "http://localhost:3000/company");
 
   // --- 連投防止のクールダウン: 直後にもう一度申請しても新しいメールは送られない ---
   await page.goto("http://localhost:3000/company");
+  await waitForPageReady(page);
   await page.click('button[aria-label="プロフィールメニュー"]');
   await page.waitForTimeout(200);
   await page.click("text=ログアウト");
   await page.waitForURL("http://localhost:3000/login");
+  await waitForPageReady(page);
   await page.click("text=パスワードをお持ちでない方はこちら（メールでログイン）");
   await page.fill("#magicLinkEmail", email);
   await page.getByRole("button", { name: "ログイン用リンクを送信する" }).click();
@@ -150,6 +173,7 @@ try {
     `select count(*) from "AccountActionToken" t join "User" u on u.id=t."userId" where t.kind='MAGIC_LINK' and u.email='${email}' and t."usedAt" is null;`,
   );
   await page.goto("http://localhost:3000/login");
+  await waitForPageReady(page);
   await page.click("text=パスワードをお持ちでない方はこちら（メールでログイン）");
   await page.fill("#magicLinkEmail", email);
   await page.getByRole("button", { name: "ログイン用リンクを送信する" }).click();
@@ -161,6 +185,7 @@ try {
 
   // --- 存在しないメールアドレスでも同じ案内文（列挙対策） ---
   await page.goto("http://localhost:3000/login");
+  await waitForPageReady(page);
   await page.click("text=パスワードをお持ちでない方はこちら（メールでログイン）");
   await page.fill("#magicLinkEmail", `nonexistent-${Date.now()}@example.com`);
   await page.getByRole("button", { name: "ログイン用リンクを送信する" }).click();

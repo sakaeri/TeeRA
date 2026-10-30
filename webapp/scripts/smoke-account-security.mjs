@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { waitForPageReady } from "./_lib/pageReady.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -35,27 +36,33 @@ const companyName = `アカウント確認株式会社${Date.now()}`;
 
 try {
   await page.goto("http://localhost:3000/register");
+  await waitForPageReady(page);
   await page.fill("#name", "アカウント確認管理者");
   await page.fill("#email", email);
   await page.click("button[type=submit]");
   await page.waitForTimeout(400);
   await page.goto(extractMagicLinkFromLog());
+  await waitForPageReady(page);
   await page.waitForURL("http://localhost:3000/register/company");
+  await waitForPageReady(page);
   await page.fill("#name", companyName);
   await page.click("button[type=submit]");
   await page.waitForURL("http://localhost:3000/company");
+  await waitForPageReady(page);
 
   // --- ログイン画面に「パスワードをお忘れですか？」リンクがある ---
   await page.click('button[aria-label="プロフィールメニュー"]');
   await page.waitForTimeout(200);
   await page.click("text=ログアウト");
   await page.waitForURL("http://localhost:3000/login");
+  await waitForPageReady(page);
   let body = await page.textContent("body");
   log("ログイン画面に「パスワードをお忘れですか？」リンクがある", body.includes("パスワードをお忘れですか？"));
 
   // --- パスワードリセット: 存在するメールアドレス ---
   await page.click("text=パスワードをお忘れですか？");
   await page.waitForURL("http://localhost:3000/forgot-password");
+  await waitForPageReady(page);
   await page.fill("#email", email);
   await page.getByRole("button", { name: "再設定メールを送信する" }).click();
   await page.waitForTimeout(600);
@@ -74,6 +81,7 @@ try {
   // --- 存在しないメールアドレスでも同じ案内文（列挙対策） ---
   const nonexistentEmail = `nonexistent-${Date.now()}@example.com`;
   await page.goto("http://localhost:3000/forgot-password");
+  await waitForPageReady(page);
   await page.fill("#email", nonexistentEmail);
   await page.getByRole("button", { name: "再設定メールを送信する" }).click();
   await page.waitForTimeout(600);
@@ -86,6 +94,7 @@ try {
 
   // --- 無効なトークンでリセット画面を開くとエラーになる ---
   await page.goto("http://localhost:3000/reset-password/invalid-token-xyz");
+  await waitForPageReady(page);
   await page.fill("#password", "newpassword123");
   await page.getByRole("button", { name: "パスワードを変更する" }).click();
   await page.waitForTimeout(800);
@@ -94,9 +103,11 @@ try {
 
   // --- 有効なトークンでパスワードをリセット ---
   await page.goto(`http://localhost:3000/reset-password/${resetToken}`);
+  await waitForPageReady(page);
   await page.fill("#password", "newpassword123");
   await page.getByRole("button", { name: "パスワードを変更する" }).click();
   await page.waitForURL(/\/login\?reset=1/);
+  await waitForPageReady(page);
   body = await page.textContent("body");
   log("リセット後にログイン画面へ遷移し成功メッセージが出る", body.includes("パスワードを変更しました"));
 
@@ -113,10 +124,12 @@ try {
   await page.fill("#password", "newpassword123");
   await page.click("button[type=submit]");
   await page.waitForURL("http://localhost:3000/company");
+  await waitForPageReady(page);
   log("新パスワードでログインできる", page.url() === "http://localhost:3000/company");
 
   // 使用済みトークンは再利用できない
   await page.goto(`http://localhost:3000/reset-password/${resetToken}`);
+  await waitForPageReady(page);
   await page.fill("#password", "anotherpassword123");
   await page.getByRole("button", { name: "パスワードを変更する" }).click();
   await page.waitForTimeout(600);
@@ -125,9 +138,11 @@ try {
 
   // --- アカウント設定画面: プロフィールメニュー内の鉛筆アイコンから到達できる ---
   await page.goto("http://localhost:3000/company");
+  await waitForPageReady(page);
   await page.click('button[aria-label="プロフィールメニュー"]');
   await page.click('a[aria-label="アカウント設定"]');
   await page.waitForURL("http://localhost:3000/account");
+  await waitForPageReady(page);
   body = await page.textContent("body");
   log("アカウント設定画面に「パスワードを変更する」セクションがある", body.includes("パスワードを変更する"));
   log("アカウント設定画面に「メールアドレスを変更する」セクションがある", body.includes("メールアドレスを変更する"));
@@ -153,18 +168,22 @@ try {
 
   // ログアウトして新パスワードでログインできることを確認
   await page.goto("http://localhost:3000/company");
+  await waitForPageReady(page);
   await page.click('button[aria-label="プロフィールメニュー"]');
   await page.waitForTimeout(200);
   await page.click("text=ログアウト");
   await page.waitForURL("http://localhost:3000/login");
+  await waitForPageReady(page);
   await page.fill("#email", email);
   await page.fill("#password", "yetanotherpassword123");
   await page.click("button[type=submit]");
   await page.waitForURL("http://localhost:3000/company");
+  await waitForPageReady(page);
   log("ログイン中のパスワード変更後、新パスワードでログインできる", page.url() === "http://localhost:3000/company");
 
   // --- メールアドレス変更: 現パスワード誤り ---
   await page.goto("http://localhost:3000/account");
+  await waitForPageReady(page);
   const newEmail = `account-sec-new-${Date.now()}@example.com`;
   await page.fill("#newEmail", newEmail);
   await page.fill("#currentPasswordForEmail", "wrongpassword");
@@ -190,7 +209,9 @@ try {
 
   // --- 確認リンクをクリックして変更を確定 ---
   await page.goto(`http://localhost:3000/confirm-email-change/${confirmToken}`);
+  await waitForPageReady(page);
   await page.waitForURL(/\/account\?emailChange=success/);
+  await waitForPageReady(page);
   body = await page.textContent("body");
   log("確認後に成功メッセージが表示される", body.includes("メールアドレスの変更が完了しました"));
 
@@ -199,19 +220,24 @@ try {
 
   // 新メールアドレスでログインできる
   await page.goto("http://localhost:3000/company");
+  await waitForPageReady(page);
   await page.click('button[aria-label="プロフィールメニュー"]');
   await page.waitForTimeout(200);
   await page.click("text=ログアウト");
   await page.waitForURL("http://localhost:3000/login");
+  await waitForPageReady(page);
   await page.fill("#email", newEmail);
   await page.fill("#password", "yetanotherpassword123");
   await page.click("button[type=submit]");
   await page.waitForURL("http://localhost:3000/company");
+  await waitForPageReady(page);
   log("変更後の新しいメールアドレスでログインできる", page.url() === "http://localhost:3000/company");
 
   // 無効な確認トークンではエラー画面に遷移する
   await page.goto("http://localhost:3000/confirm-email-change/invalid-token-xyz");
+  await waitForPageReady(page);
   await page.waitForURL(/\/account\?emailChange=error/);
+  await waitForPageReady(page);
   body = await page.textContent("body");
   log("無効な確認トークンではエラーメッセージが表示される", body.includes("確認リンクが無効か"));
 

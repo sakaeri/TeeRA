@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { waitForPageReady } from "./_lib/pageReady.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -13,15 +14,19 @@ const email = `dash-admin-${Date.now()}@example.com`;
 
 try {
   await page.goto("http://localhost:3000/register");
+  await waitForPageReady(page);
   await page.fill("#name", "ダッシュボード管理者");
   await page.fill("#email", email);
   await page.click("button[type=submit]");
   await page.waitForTimeout(400);
   await page.goto(extractMagicLinkFromLog());
+  await waitForPageReady(page);
   await page.waitForURL("http://localhost:3000/register/company");
+  await waitForPageReady(page);
   await page.fill("#name", "ダッシュボードテスト株式会社");
   await page.click("button[type=submit]");
   await page.waitForURL("http://localhost:3000/company");
+  await waitForPageReady(page);
 
   let body = await page.textContent("body");
   log("KPI cards render with 0 counts initially", body.includes("欠員件数") && body.includes("未確定シフト"));
@@ -40,6 +45,7 @@ try {
 
   await page.getByRole("link", { name: "ダッシュボード", exact: true }).click();
   await page.waitForURL("http://localhost:3000/company");
+  await waitForPageReady(page);
 
   await page.getByRole("button", { name: "やることリスト作成", exact: true }).click();
   const createdByValue = await page.locator('input[disabled]').inputValue();
