@@ -252,6 +252,8 @@ export async function runShiftRequestDigest() {
     select: { id: true, name: true, notificationEmail: true },
   });
 
+  // メール・プッシュから開いたとき、ダッシュボードの「未確定シフト」の一覧を開いた状態にする
+  const digestUrl = "/company?open=unconfirmed";
   for (const company of companies) {
     const requests = await prisma.shiftRequest.findMany({
       where: { companyId: company.id, status: "PENDING" },
@@ -266,12 +268,12 @@ export async function runShiftRequestDigest() {
     // 個別に届ける（本部は全体件数だけ把握できればよく、関係ないチームの
     // 内訳で受信箱・プッシュが埋まらないようにする）。
     if (company.notificationEmail) {
-      await sendShiftRequestDigestEmail(company.notificationEmail, company.name, totalCount, absoluteUrl("/company"));
+      await sendShiftRequestDigestEmail(company.notificationEmail, company.name, totalCount, absoluteUrl(digestUrl));
     }
     await sendPushToUsers(await companyAdminUserIds(company.id), {
       title: "未確定のシフト希望があります",
       body: `${company.name}：${totalCount}件`,
-      url: "/company",
+      url: digestUrl,
     });
 
     const countByTeamId = new Map<string, number>();
@@ -284,7 +286,7 @@ export async function runShiftRequestDigest() {
       if (!team) continue;
       const label = `${company.name}（${team.name}）`;
       if (team.notificationEmail) {
-        await sendShiftRequestDigestEmail(team.notificationEmail, label, count, absoluteUrl("/company"));
+        await sendShiftRequestDigestEmail(team.notificationEmail, label, count, absoluteUrl(digestUrl));
       }
       // マネージャー/リーダーには、プッシュ通知を受け取れる端末があればプッシュで、
       // 無ければ本人のメールアドレスに送る（チームの通知メール未設定でも届くように）
@@ -298,7 +300,7 @@ export async function runShiftRequestDigest() {
       await sendPushToUsers([...pushIds], {
         title: "未確定のシフト希望があります",
         body: `${team.name}：${count}件`,
-        url: "/company",
+        url: digestUrl,
       });
       const mailTargets = await prisma.user.findMany({
         where: { id: { in: managerIds.filter((id) => !pushIds.has(id)) }, isProxy: false },
@@ -306,7 +308,7 @@ export async function runShiftRequestDigest() {
       });
       for (const user of mailTargets) {
         if (user.email === team.notificationEmail) continue;
-        await sendShiftRequestDigestEmail(user.email, label, count, absoluteUrl("/company"));
+        await sendShiftRequestDigestEmail(user.email, label, count, absoluteUrl(digestUrl));
       }
     }
   }

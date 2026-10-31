@@ -78,7 +78,9 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
       ? ("contracts" as const)
       : open === "paidLeave"
         ? ("paidLeave" as const)
-        : undefined;
+        : open === "unconfirmed"
+          ? ("unconfirmed" as const)
+          : undefined;
   const initialReportDetailId = open === "reports" ? reportId : undefined;
 
   return (

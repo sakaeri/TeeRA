@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type ReactNode } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import {
   createManualTodoAction,
@@ -469,6 +469,15 @@ export function DashboardView({
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [editingPromoItem, setEditingPromoItem] = useState<PromoItem | null>(null);
   const [openPopup, setOpenPopup] = useState<PopupKind | null>(initialOpenPopup ?? null);
+  // 通知メール・プッシュから「未確定シフト」を開いた状態で来たときの指定（?open=unconfirmed）は
+  // 一度開いたら消す（再読み込みで何度も開かないように）
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("open") === "unconfirmed") {
+      url.searchParams.delete("open");
+      window.history.replaceState(null, "", url);
+    }
+  }, []);
   const [reportDetail, setReportDetail] = useState<PendingReportEntry | null>(
     initialReportDetailId ? (pendingReportEntries.find((r) => r.id === initialReportDetailId) ?? null) : null,
   );
