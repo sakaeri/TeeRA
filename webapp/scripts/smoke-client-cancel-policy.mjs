@@ -295,7 +295,7 @@ try {
     historyText.includes("自社・自社都合テスト") && historyText.split("\n").some((l) => l.trim() === "自社都合"),
   );
   log("取り消しの行には時間を出さない", !historyText.includes("08:00〜16:00") && !historyText.includes("17:00〜20:00"));
-  await historyModal.getByRole("button", { name: "✕", exact: true }).click().catch(() => {});
+  await historyModal.getByRole("button", { name: "閉じる", exact: true }).click().catch(() => {});
 
   // 調整中も変更履歴に出る
   const heldShiftId = psql(
