@@ -92,7 +92,7 @@ try {
   const cell = page.locator(`button:has(> span:text-is("${d}"))`).first();
   const cellText = await cell.innerText();
   const workedTagClass = await cell.locator("span.rounded", { hasText: "出勤スタッフ" }).first().getAttribute("class");
-  log("出勤報告は濃い緑で、✓は付けない", (workedTagClass ?? "").includes("bg-emerald-600") && !cellText.includes("✓"));
+  log("出勤報告は薄い緑で、✓は付けない", (workedTagClass ?? "").includes("bg-emerald-100") && !cellText.includes("✓"));
   log("欠勤報告は「（欠勤）」", cellText.includes("欠勤スタッフ（欠勤）"));
   log("当日の勤務先キャンセル報告は「（取消）」", cellText.includes("当日取消スタッフ（取消）"));
   log("依頼主取消で休みになったものも「（取消）」で残る", cellText.includes("取消休みスタッフ（取消）"));
