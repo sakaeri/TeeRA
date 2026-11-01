@@ -1,4 +1,6 @@
 import "server-only";
+import { deleteNoteAttachmentFiles, validateNoteAttachments } from "@/lib/domain/noteAttachments";
+import { noteAttachmentView, type NoteAttachmentInput } from "@/lib/noteAttachments";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { reportDisplay } from "@/lib/workReportDisplay";
@@ -535,6 +537,7 @@ export async function getClientMonthDetail(params: {
       authorName: n.author.name,
       visibleToStaff: n.visibleToStaff,
       createdAt: n.createdAt.toISOString().slice(0, 10),
+      attachments: n.attachments.map(noteAttachmentView),
     })),
     workedHours,
     unapprovedCount,
@@ -593,7 +596,7 @@ export async function getClientMonthDetail(params: {
 export async function listRelationshipNotes(companyRelationshipId: string, companyId: string) {
   return prisma.relationshipNote.findMany({
     where: { companyRelationshipId, companyId },
-    include: { author: true },
+    include: { author: true, attachments: { orderBy: { createdAt: "asc" } } },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -604,9 +607,11 @@ export async function addRelationshipNote(params: {
   authorUserId: string;
   content: string;
   visibleToStaff: boolean;
+  attachments?: NoteAttachmentInput[];
 }) {
   const content = params.content.trim();
-  if (!content) throw new Error("empty_content");
+  const attachments = validateNoteAttachments(params.attachments);
+  if (!content && attachments.length === 0) throw new Error("empty_content");
   return prisma.relationshipNote.create({
     data: {
       companyRelationshipId: params.companyRelationshipId,
@@ -614,13 +619,16 @@ export async function addRelationshipNote(params: {
       authorUserId: params.authorUserId,
       content,
       visibleToStaff: params.visibleToStaff,
+      attachments: { create: attachments },
     },
   });
 }
 
 export async function deleteRelationshipNote(id: string, companyId: string) {
-  const note = await prisma.relationshipNote.findFirstOrThrow({ where: { id, companyId } });
-  return prisma.relationshipNote.delete({ where: { id: note.id } });
+  const note = await prisma.relationshipNote.findFirstOrThrow({ where: { id, companyId }, include: { attachments: true } });
+  const deleted = await prisma.relationshipNote.delete({ where: { id: note.id } });
+  await deleteNoteAttachmentFiles(note.attachments.map((a) => a.url));
+  return deleted;
 }
 
 // スタッフ本人向け: 共有ONの投稿だけを内容と日付のみで返す（投稿者名は
@@ -629,9 +637,15 @@ export async function deleteRelationshipNote(id: string, companyId: string) {
 export async function listStaffVisibleRelationshipNotes(companyRelationshipId: string, agencyCompanyId: string) {
   const notes = await prisma.relationshipNote.findMany({
     where: { companyRelationshipId, companyId: agencyCompanyId, visibleToStaff: true },
+    include: { attachments: { orderBy: { createdAt: "asc" } } },
     orderBy: { createdAt: "desc" },
   });
-  return notes.map((n) => ({ id: n.id, content: n.content, createdAt: n.createdAt.toISOString().slice(0, 10) }));
+  return notes.map((n) => ({
+    id: n.id,
+    content: n.content,
+    createdAt: n.createdAt.toISOString().slice(0, 10),
+    attachments: n.attachments.map(noteAttachmentView),
+  }));
 }
 
 // スタッフ本人が投稿する: 他のスタッフとの共有が前提のため常にvisibleToStaff
@@ -642,9 +656,11 @@ export async function addStaffRelationshipNote(params: {
   companyRelationshipId: string;
   staffUserId: string;
   content: string;
+  attachments?: NoteAttachmentInput[];
 }) {
   const content = params.content.trim();
-  if (!content) throw new Error("empty_content");
+  const attachments = validateNoteAttachments(params.attachments);
+  if (!content && attachments.length === 0) throw new Error("empty_content");
   const relationship = await prisma.companyRelationship.findFirstOrThrow({
     where: { id: params.companyRelationshipId, agencyCompanyId: { not: null } },
   });
@@ -659,6 +675,7 @@ export async function addStaffRelationshipNote(params: {
       authorUserId: params.staffUserId,
       content,
       visibleToStaff: true,
+      attachments: { create: attachments },
     },
   });
 }

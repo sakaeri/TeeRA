@@ -1,5 +1,7 @@
 "use client";
 
+import { NoteAttachmentList, NoteAttachmentPicker } from "@/components/NoteAttachments";
+import type { NoteAttachmentInput, NoteAttachmentView } from "@/lib/noteAttachments";
 import { useEffect, useState, useTransition } from "react";
 import { PdfLink } from "@/components/PdfLink";
 import { useRouter } from "next/navigation";
@@ -59,6 +61,7 @@ type RelationshipNote = {
   authorName: string;
   visibleToStaff: boolean;
   createdAt: string;
+  attachments: NoteAttachmentView[];
 };
 
 type Placement = {
@@ -155,6 +158,8 @@ export function ClientDetailPanel({
   const [showAgencyInviteModal, setShowAgencyInviteModal] = useState(false);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState("");
+  const [newNoteAttachments, setNewNoteAttachments] = useState<NoteAttachmentInput[]>([]);
+  const [noteUploading, setNoteUploading] = useState(false);
   const [newNoteVisibleToStaff, setNewNoteVisibleToStaff] = useState(false);
   const [deleteNoteConfirmTarget, setDeleteNoteConfirmTarget] = useState<RelationshipNote | null>(null);
   const [editingTeams, setEditingTeams] = useState(false);
@@ -900,7 +905,8 @@ export function ClientDetailPanel({
                             スタッフに共有中
                           </span>
                         ) : null}
-                        <p className="whitespace-pre-wrap">{n.content}</p>
+                        {n.content ? <p className="whitespace-pre-wrap">{n.content}</p> : null}
+                        <NoteAttachmentList attachments={n.attachments} />
                         <div className="mt-2 flex items-center justify-between text-xs text-muted">
                           <span>
                             {n.createdAt} {n.authorName}
@@ -1011,6 +1017,11 @@ export function ClientDetailPanel({
               placeholder="この取引先に関するメモを入力"
               className="w-full rounded-lg border border-border px-3 py-2 text-sm text-foreground"
             />
+            <NoteAttachmentPicker
+              value={newNoteAttachments}
+              onChange={setNewNoteAttachments}
+              onUploadingChange={setNoteUploading}
+            />
             {kind === "client" ? (
               <label className="mt-2 flex items-center gap-2 text-xs text-muted">
                 <input
@@ -1023,10 +1034,16 @@ export function ClientDetailPanel({
             ) : null}
             <button
               type="button"
-              disabled={pending || !newNoteContent.trim()}
+              disabled={pending || noteUploading || (!newNoteContent.trim() && newNoteAttachments.length === 0)}
               onClick={() =>
                 startTransition(async () => {
-                  await addRelationshipNoteAction(data.relationshipId, newNoteContent, newNoteVisibleToStaff);
+                  await addRelationshipNoteAction(
+                    data.relationshipId,
+                    newNoteContent,
+                    newNoteVisibleToStaff,
+                    newNoteAttachments,
+                  );
+                  setNewNoteAttachments([]);
                   setNewNoteContent("");
                   setNewNoteVisibleToStaff(false);
                   setShowNoteForm(false);

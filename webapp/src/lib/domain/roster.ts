@@ -1,4 +1,6 @@
 import "server-only";
+import { deleteNoteAttachmentFiles, validateNoteAttachments } from "@/lib/domain/noteAttachments";
+import { noteAttachmentView, type NoteAttachmentInput } from "@/lib/noteAttachments";
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
@@ -357,6 +359,7 @@ export async function getStaffMonthDetail(params: {
       content: n.content,
       authorName: n.author.name,
       createdAt: n.createdAt.toISOString().slice(0, 10),
+      attachments: n.attachments.map(noteAttachmentView),
     })),
     teams: teamMemberships.map((tm) => ({ teamId: tm.teamId, teamName: tm.team.name, role: tm.role })),
     monthlyHours: Math.round(hours * 10) / 10,
@@ -526,21 +529,36 @@ export async function getStaffMonthDetail(params: {
 export async function listStaffNotes(membershipId: string) {
   return prisma.staffNote.findMany({
     where: { membershipId },
-    include: { author: true },
+    include: { author: true, attachments: { orderBy: { createdAt: "asc" } } },
     orderBy: { createdAt: "desc" },
   });
 }
 
-export async function addStaffNote(params: { membershipId: string; authorUserId: string; content: string }) {
+// 画像・PDFを付けられる（5件まで）。添付があれば本文は空でもよい
+export async function addStaffNote(params: {
+  membershipId: string;
+  authorUserId: string;
+  content: string;
+  attachments?: NoteAttachmentInput[];
+}) {
   const content = params.content.trim();
-  if (!content) throw new Error("empty_content");
+  const attachments = validateNoteAttachments(params.attachments);
+  if (!content && attachments.length === 0) throw new Error("empty_content");
   return prisma.staffNote.create({
-    data: { membershipId: params.membershipId, authorUserId: params.authorUserId, content },
+    data: {
+      membershipId: params.membershipId,
+      authorUserId: params.authorUserId,
+      content,
+      attachments: { create: attachments },
+    },
   });
 }
 
 export async function deleteStaffNote(id: string) {
-  return prisma.staffNote.delete({ where: { id } });
+  const attachments = await prisma.noteAttachment.findMany({ where: { staffNoteId: id } });
+  const deleted = await prisma.staffNote.delete({ where: { id } });
+  await deleteNoteAttachmentFiles(attachments.map((a) => a.url));
+  return deleted;
 }
 
 // 社内メモ欄の先頭に出す「現在の」住所・電話番号。実体はUser.address/
