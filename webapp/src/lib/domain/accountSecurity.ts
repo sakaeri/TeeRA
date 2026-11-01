@@ -1,5 +1,5 @@
 import "server-only";
-import { randomBytes, createHash } from "node:crypto";
+import { randomBytes, randomInt, createHash, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import {
@@ -18,6 +18,7 @@ const PASSWORD_STEP_TTL_MS = 10 * 60 * 1000; // リンクを開いてからパ�
 const PASSWORD_STEP_VERIFIED_TTL_MS = 2 * 60 * 1000; // パスワード確認後、ログイン処理を終えるまでの猶予
 const MAX_PASSWORD_ATTEMPTS = 5; // これだけ続けて間違えたらロックする
 const PASSWORD_LOCK_MS = 15 * 60 * 1000;
+const MAX_LOGIN_CODE_ATTEMPTS = 5; // ログインコードをこれだけ間違えたら、そのコードは使えなくする
 const PASSWORD_RESET_DELAY_MS = 24 * 60 * 60 * 1000; // 「パスワードを忘れた」からの再設定が有効になるまで
 const RESEND_COOLDOWN_MS = 60 * 1000; // 同じ用途への連投防止（嫌がらせメール対策）
 
@@ -39,7 +40,14 @@ function absoluteUrl(path: string) {
 // 連投を防ぐ）。呼び出し側はこの有無に関わらず同じ成功表示をする。
 async function wasRecentlySent(userId: string, kind: "PASSWORD_RESET" | "EMAIL_CHANGE" | "MAGIC_LINK") {
   const recent = await prisma.accountActionToken.findFirst({
-    where: { userId, kind, usedAt: null, createdAt: { gt: new Date(Date.now() - RESEND_COOLDOWN_MS) } },
+    where: {
+      userId,
+      kind,
+      usedAt: null,
+      createdAt: { gt: new Date(Date.now() - RESEND_COOLDOWN_MS) },
+      // ログインコードを間違え続けて使えなくなったものは数えない（すぐ送り直せるように）
+      codeAttempts: { lt: MAX_LOGIN_CODE_ATTEMPTS },
+    },
   });
   return Boolean(recent);
 }
@@ -325,17 +333,80 @@ export async function sendLoginMagicLink(email: string, redirectTo?: string) {
   if (await wasRecentlySent(user.id, "MAGIC_LINK")) return;
 
   const token = generateToken();
+  const tokenHash = hashToken(token);
+  // ホーム画面に追加したアプリではメールのリンクがブラウザで開いてしまうため、
+  // 同じメールに6桁のコードも載せ、アプリではコードを入れてログインできるようにする
+  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   await prisma.accountActionToken.create({
     data: {
-      tokenHash: hashToken(token),
+      tokenHash,
       kind: "MAGIC_LINK",
       userId: user.id,
       redirectTo: redirectTo || null,
+      codeHash: hashLoginCode(code, tokenHash),
       expiresAt: new Date(Date.now() + LOGIN_MAGIC_LINK_TTL_MS),
     },
   });
 
-  await sendLoginMagicLinkEmail(user.email, user.name, absoluteUrl(`/magic-link/${token}`));
+  await sendLoginMagicLinkEmail(user.email, user.name, absoluteUrl(`/magic-link/${token}`), code);
+}
+
+const CODE_LOGIN_HANDOFF_TTL_MS = 2 * 60 * 1000;
+
+function hashLoginCode(code: string, tokenHash: string) {
+  return hashToken(`${code}:${tokenHash}`);
+}
+
+export type LoginCodeResult =
+  | { status: "ok"; magicLinkToken: string }
+  | { status: "wrong"; remaining: number }
+  | { status: "invalid" };
+
+// メールに届いた6桁のコードを確かめる。合っていれば、メールのリンクを開いたのと
+// 同じ扱いにするため、その場限りのリンク用トークンを作って返す（呼び出し側は
+// リンクと同じ処理でログイン・パスワード入力へ進める）。間違いが5回続いたら
+// そのコードは使えなくする。メールアドレスの有無は外に漏らさない。
+export async function verifyLoginCode(email: string, code: string): Promise<LoginCodeResult> {
+  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+  if (!user || !/^\d{6}$/.test(code)) return { status: "invalid" };
+  const record = await prisma.accountActionToken.findFirst({
+    where: {
+      userId: user.id,
+      kind: "MAGIC_LINK",
+      codeHash: { not: null },
+      usedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!record || !record.codeHash || record.codeAttempts >= MAX_LOGIN_CODE_ATTEMPTS) return { status: "invalid" };
+
+  const expected = Buffer.from(record.codeHash);
+  const actual = Buffer.from(hashLoginCode(code, record.tokenHash));
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+    const updated = await prisma.accountActionToken.update({
+      where: { id: record.id },
+      data: { codeAttempts: { increment: 1 } },
+    });
+    const remaining = MAX_LOGIN_CODE_ATTEMPTS - updated.codeAttempts;
+    return remaining > 0 ? { status: "wrong", remaining } : { status: "invalid" };
+  }
+
+  const handoff = generateToken();
+  await prisma.$transaction([
+    prisma.accountActionToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+    prisma.accountActionToken.create({
+      data: {
+        tokenHash: hashToken(handoff),
+        kind: "MAGIC_LINK",
+        userId: user.id,
+        redirectTo: record.redirectTo,
+        inviteToken: record.inviteToken,
+        expiresAt: new Date(Date.now() + CODE_LOGIN_HANDOFF_TTL_MS),
+      },
+    }),
+  ]);
+  return { status: "ok", magicLinkToken: handoff };
 }
 
 // auth.tsの"magic-link" Credentialsプロバイダからのみ呼ばれる —

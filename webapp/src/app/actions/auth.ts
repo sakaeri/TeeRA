@@ -26,6 +26,7 @@ import {
   peekPasswordStep,
   sendLoginNotification,
   cancelPasswordResetByToken,
+  verifyLoginCode,
 } from "@/lib/domain/accountSecurity";
 
 export type FormState =
@@ -69,6 +70,30 @@ export async function registerAction(
 // パスワードを設定している人は、ここではまだログインさせずにパスワード
 // 入力（2段階目）へ進める。
 export async function confirmMagicLinkAction(token: string) {
+  await completeMagicLinkLogin(token);
+}
+
+// ログイン画面で、メールに届いた6桁のコードを入れたとき（ホーム画面に追加した
+// アプリ用。リンクだとブラウザで開いてしまうため）。合っていればリンクを開いたのと
+// 同じ流れ（パスワードを設定している人はパスワード入力へ）に進む。
+export async function loginWithCodeAction(_state: FormState, formData: FormData): Promise<FormState> {
+  const email = formData.get("email");
+  const code = typeof formData.get("code") === "string" ? String(formData.get("code")).replace(/\s/g, "") : "";
+  if (typeof email !== "string" || !email) return { message: "メールアドレスを入力し直してください。" };
+  if (!/^\d{6}$/.test(code)) return { errors: { code: ["6桁の数字を入力してください。"] } };
+
+  const result = await verifyLoginCode(email, code);
+  if (result.status === "wrong") {
+    return { message: `コードが正しくありません（あと${result.remaining}回間違えると、このコードは使えなくなります）。` };
+  }
+  if (result.status === "invalid") {
+    return { message: "コードが無効か、有効期限（15分）が切れています。もう一度ログイン用のメールを受け取ってください。" };
+  }
+  return completeMagicLinkLogin(result.magicLinkToken);
+}
+
+// メールのリンク・ログインコードの共通の続き（ログイン、またはパスワード入力へ進む。必ず別の画面へ移る）
+async function completeMagicLinkLogin(token: string) {
   const peeked = await peekMagicLinkToken(token);
   if (!peeked) {
     redirect("/login?magicLink=error");
@@ -95,7 +120,7 @@ export async function confirmMagicLinkAction(token: string) {
   // 新規登録の確認（初めてのログイン）では知らせない
   if (wasVerified) await notifyLogin(userId);
 
-  await redirectAfterLogin({ userId, inviteToken, redirectTo });
+  return redirectAfterLogin({ userId, inviteToken, redirectTo });
 }
 
 // パスワード入力画面（2段階目）から呼ばれる

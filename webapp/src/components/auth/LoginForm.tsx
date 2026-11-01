@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
-import { requestLoginMagicLinkAction, type FormState } from "@/app/actions/auth";
+import { requestLoginMagicLinkAction, loginWithCodeAction, type FormState } from "@/app/actions/auth";
 
 export type LoginNotice = "passwordChanged" | "loggedOutAll" | "linkError";
 
@@ -21,16 +21,9 @@ export function LoginForm({ from, notice }: { from?: string; notice?: LoginNotic
     undefined,
   );
 
-  if (state?.message === "sent") {
-    return (
-      <div className="flex flex-col gap-4">
-        <p className="text-sm text-foreground/80">
-          ご入力いただいたメールアドレス宛にログイン用のリンクを送信しました（アカウントが登録されている場合）。メールのリンクを15分以内に開いてください。パスワードを設定している方は、続けてパスワードを入力します。
-        </p>
-        <p className="text-xs text-muted">メールが届かない場合は、迷惑メールフォルダもご確認ください。</p>
-      </div>
-    );
-  }
+  const [email, setEmail] = useState("");
+
+  if (state?.message === "sent") return <LoginCodeForm email={email} />;
 
   const noticeText = notice ? NOTICE_TEXT[notice] : null;
 
@@ -56,6 +49,8 @@ export function LoginForm({ from, notice }: { from?: string; notice?: LoginNotic
           type="email"
           required
           autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           className="rounded-lg border border-border bg-white px-3.5 py-2.5 text-sm outline-none focus:border-primary"
         />
         {state?.errors?.email ? <p className="text-xs text-red-600">{state.errors.email[0]}</p> : null}
@@ -66,11 +61,11 @@ export function LoginForm({ from, notice }: { from?: string; notice?: LoginNotic
         disabled={pending}
         className="mt-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
       >
-        {pending ? "送信中…" : "ログイン用リンクを送信する"}
+        {pending ? "送信中…" : "ログイン用のメールを送信する"}
       </button>
 
       <p className="text-xs text-muted">
-        メールに届くリンクからログインします。パスワードを設定している方は、リンクを開いた後にパスワードを入力します。
+        メールに届くコード（またはリンク）でログインします。パスワードを設定している方は、続けてパスワードを入力します。
       </p>
 
       <p className="mt-2 text-center text-sm text-muted">
@@ -79,6 +74,53 @@ export function LoginForm({ from, notice }: { from?: string; notice?: LoginNotic
           新規登録
         </Link>
       </p>
+    </form>
+  );
+}
+
+// メールを送った後。ホーム画面に追加したアプリではメールのリンクがブラウザで開いて
+// しまうため、メールに載っている6桁のコードをここに入れてログインする。
+function LoginCodeForm({ email }: { email: string }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(loginWithCodeAction, undefined);
+
+  return (
+    <form action={action} className="flex flex-col gap-4">
+      <input type="hidden" name="email" value={email} />
+      <p className="text-sm text-foreground/80">
+        <span className="font-semibold">{email}</span> 宛にログイン用のメールを送信しました（アカウントが登録されている場合）。メールに書かれている6桁のコードを入力してください。
+      </p>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="code" className="text-sm text-foreground/80">
+          ログインコード（6桁）
+        </label>
+        <input
+          id="code"
+          name="code"
+          type="text"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          pattern="[0-9 ]*"
+          maxLength={7}
+          required
+          autoFocus
+          className="rounded-lg border border-border bg-white px-3.5 py-2.5 text-center text-2xl tracking-[0.4em] outline-none focus:border-primary"
+        />
+        {state?.errors?.code ? <p className="text-xs text-red-600">{state.errors.code[0]}</p> : null}
+      </div>
+      {state?.message ? <p className="text-sm text-red-600">{state.message}</p> : null}
+      <button
+        type="submit"
+        disabled={pending}
+        className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+      >
+        {pending ? "確認中…" : "ログイン"}
+      </button>
+      <p className="text-xs text-muted">
+        メールのリンクを開いてもログインできます（パソコンなど、ブラウザで使っている場合）。コード・リンクとも15分間有効です。メールが届かない場合は、迷惑メールフォルダもご確認ください。
+      </p>
+      <button type="button" className="text-center text-sm text-primary underline" onClick={() => location.reload()}>
+        メールアドレスを入力し直す
+      </button>
     </form>
   );
 }

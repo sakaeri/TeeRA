@@ -11,7 +11,7 @@ export async function requestLoginLink(page, email) {
   await page.goto("http://localhost:3000/login");
   await page.fill("#email", email);
   await page.click("button[type=submit]");
-  await page.getByText("ログイン用のリンクを送信しました").waitFor();
+  await page.getByText("ログイン用のメールを送信しました").waitFor();
   const deadline = Date.now() + 10000;
   while (Date.now() < deadline) {
     const matches = [...readFileSync(DEV_LOG_PATH, "utf8").slice(logStart).matchAll(/\/magic-link\/([A-Za-z0-9_-]+)/g)];

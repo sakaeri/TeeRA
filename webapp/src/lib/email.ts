@@ -158,15 +158,18 @@ export async function sendRegistrationConfirmEmail(to: string, name: string, con
   );
 }
 
-export async function sendLoginMagicLinkEmail(to: string, name: string, loginUrl: string) {
+export async function sendLoginMagicLinkEmail(to: string, name: string, loginUrl: string, code: string) {
   await sendMail(
     to,
-    "【TeeRA】ログイン用リンク",
+    `【TeeRA】ログインコード ${code}`,
     emailLayout(
-      "ログイン用リンク",
+      "ログイン用のコードとリンク",
       `${greeting(name)}
-       <p style="margin:0;font-size:14px;line-height:1.6;">以下のボタンからログインできます（15分間有効・1回だけ使えます）。パスワードを設定している方は、続けてパスワードを入力してください。</p>
+       <p style="margin:0;font-size:14px;line-height:1.6;">ホーム画面に追加したアプリでログインする場合は、アプリの画面に次のコードを入力してください。</p>
+       <p style="margin:16px 0 0;text-align:center;font-size:30px;font-weight:bold;letter-spacing:0.3em;color:#0b3d2e;">${code}</p>
+       <p style="margin:20px 0 0;font-size:14px;line-height:1.6;">ブラウザ（パソコンなど）でログインする場合は、以下のボタンからもログインできます。</p>
        ${button(loginUrl, "ログインする")}
+       ${note("コード・リンクとも15分間有効で、1回だけ使えます。パスワードを設定している方は、続けてパスワードを入力してください。")}
        ${note("心当たりがない場合はこのメールを破棄してください。届かない場合は迷惑メールフォルダもご確認ください。")}`,
     ),
   );
