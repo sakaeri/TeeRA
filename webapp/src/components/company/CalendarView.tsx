@@ -547,7 +547,7 @@ export function CalendarView({
       >
         {cells.map((c, i) => {
           if (!c.dateStr) {
-            return <div key={i} className="h-full sm:h-[100px]" />;
+            return <div key={i} className="h-full sm:h-[116px]" />;
           }
           const dow = new Date(c.dateStr + "T00:00:00Z").getUTCDay();
           const dayShifts = shiftsByDate.get(c.dateStr) ?? [];
@@ -576,14 +576,14 @@ export function CalendarView({
               ? { kind: "solid", id: "client-order", label: `オーダー${dayClientOrders.length}`, className: "bg-sky-100 text-sky-900" }
               : null;
 
-          // Fixed row budget of 5 total: 募集中・オーダー (1 row each, only
+          // Fixed row budget of 6 total: 募集中・オーダー (1 row each, only
           // when there's something to show that day) — confirmed-shift
           // names get whatever's left, so a day with none of those can show
-          // up to 5 names instead of being capped regardless. シフト希望
+          // up to 6 names instead of being capped regardless. シフト希望
           // (休み・出勤希望とも)は月表示には出さず、下部の「シフト希望」欄
           // だけに出す。
           const reservedRows = (recruitTag ? 1 : 0) + (orderTag ? 1 : 0);
-          const confirmedSlotBudget = 5 - reservedRows;
+          const confirmedSlotBudget = 6 - reservedRows;
           const staffTags: TagEntry[] = [
             ...confirmedShifts.map((s) => ({ kind: "solid" as const, id: s.id, ...shiftTag(s, todayStr) })),
             // 依頼主取消で休みになったものは、稼働中のシフトの後ろに並べる
@@ -608,7 +608,7 @@ export function CalendarView({
               key={i}
               type="button"
               onClick={() => setSelectedDate(c.dateStr)}
-              className={`relative flex h-full flex-col items-stretch justify-start overflow-hidden rounded-lg rounded-tr-none p-1 text-left sm:h-[100px] sm:rounded-xl sm:rounded-tr-none sm:p-1.5 ${
+              className={`relative flex h-full flex-col items-stretch justify-start overflow-hidden rounded-lg rounded-tr-none px-0 py-1 text-left sm:h-[116px] sm:rounded-xl sm:rounded-tr-none sm:p-1.5 ${
                 isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "hover:bg-background"
               }`}
             >
@@ -621,7 +621,7 @@ export function CalendarView({
               {hasOverflow ? (
                 <span
                   title={`他${staffTags.length - confirmedSlotBudget}件`}
-                  className="absolute right-0 top-0 h-0 w-0 border-r-[14px] border-b-[14px] border-r-accent border-b-transparent"
+                  className="absolute right-0 top-0 h-0 w-0 border-r-[8px] border-b-[8px] border-r-accent border-b-transparent"
                 />
               ) : null}
               <div className="mt-px flex flex-col gap-[2px]">
@@ -650,7 +650,7 @@ export function CalendarView({
 
       {/* 画像共有用の非表示コンテンツ — PDF出力と同じ日別リスト構成にして、
           共有される「中身」が画像/PDFで一致するようにする（オンスクリーンの
-          月グリッドは1日5件までの表示に切り詰められるため、そのままキャプ
+          月グリッドは1日6件までの表示に切り詰められるため、そのままキャプ
           チャすると中身が食い違ってしまう）。 */}
       <div style={{ position: "fixed", top: 0, left: "-9999px" }} aria-hidden>
         <div ref={shareRef}>
