@@ -319,10 +319,31 @@ model StaffNote {
   authorUserId String
   createdAt    DateTime @default(now())
 
-  membership CompanyMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  author     User              @relation(fields: [authorUserId], references: [id])
+  membership  CompanyMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  author      User              @relation(fields: [authorUserId], references: [id])
+  attachments NoteAttachment[]
 
   @@index([membershipId])
+}
+
+// 社内メモ（StaffNote / RelationshipNote）の添付ファイル（画像・PDF）。1件のメモに5件まで。
+// 実体はVercel Blobにあり、urlはブラウザには渡さない — 見るときは
+// /api/note-attachments/[id] が権限を確かめてから中身を返す。
+model NoteAttachment {
+  id                 String   @id @default(cuid())
+  staffNoteId        String?
+  relationshipNoteId String?
+  url                String
+  fileName           String
+  contentType        String
+  size               Int
+  createdAt          DateTime @default(now())
+
+  staffNote        StaffNote?        @relation(fields: [staffNoteId], references: [id], onDelete: Cascade)
+  relationshipNote RelationshipNote? @relation(fields: [relationshipNoteId], references: [id], onDelete: Cascade)
+
+  @@index([staffNoteId])
+  @@index([relationshipNoteId])
 }
 
 enum TeamRole {
@@ -419,6 +440,7 @@ model RelationshipNote {
   companyRelationship CompanyRelationship @relation(fields: [companyRelationshipId], references: [id], onDelete: Cascade)
   company             Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   author              User                @relation(fields: [authorUserId], references: [id])
+  attachments         NoteAttachment[]
 
   @@index([companyRelationshipId, companyId])
 }

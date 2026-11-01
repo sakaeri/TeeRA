@@ -1,5 +1,7 @@
 "use client";
 
+import { NoteAttachmentList, NoteAttachmentPicker } from "@/components/NoteAttachments";
+import type { NoteAttachmentInput, NoteAttachmentView } from "@/lib/noteAttachments";
 import { useState, useTransition } from "react";
 import { consentContractAction } from "@/app/staff/contracts/actions";
 import {
@@ -69,7 +71,7 @@ type Workplace = {
   name: string;
   workLocation: string | null;
   emergencyContact: string | null;
-  notes: { id: string; content: string; createdAt: string }[];
+  notes: { id: string; content: string; createdAt: string; attachments: NoteAttachmentView[] }[];
 };
 
 type WizardStep = "review" | "id" | "bank" | "done";
@@ -184,6 +186,8 @@ export function StaffContractsView({
   const [consentError, setConsentError] = useState<string | null>(null);
   const [openWorkplaceId, setOpenWorkplaceId] = useState<string | null>(null);
   const [newNoteContent, setNewNoteContent] = useState("");
+  const [newNoteAttachments, setNewNoteAttachments] = useState<NoteAttachmentInput[]>([]);
+  const [noteUploading, setNoteUploading] = useState(false);
 
   // 同意アクションはrevalidatePathでこのページのサーバーデータを更新する
   // ため、pendingContractsのpropsはウィザードの途中でも変わりうる。ウィザ
@@ -290,10 +294,11 @@ export function StaffContractsView({
 
   function submitNewNote(workplaceCompanyRelationshipId: string) {
     const content = newNoteContent.trim();
-    if (!content) return;
+    if (!content && newNoteAttachments.length === 0) return;
     startTransition(async () => {
-      await addStaffRelationshipNoteAction(companyId, workplaceCompanyRelationshipId, content);
+      await addStaffRelationshipNoteAction(companyId, workplaceCompanyRelationshipId, content, newNoteAttachments);
       setNewNoteContent("");
+      setNewNoteAttachments([]);
     });
   }
 
@@ -658,6 +663,7 @@ export function StaffContractsView({
                 onClick={() => {
                   setOpenWorkplaceId(null);
                   setNewNoteContent("");
+                  setNewNoteAttachments([]);
                 }}
               >
                 <div
@@ -671,6 +677,8 @@ export function StaffContractsView({
                       onClick={() => {
                         setOpenWorkplaceId(null);
                         setNewNoteContent("");
+                        setNewNoteAttachments([]);
+                  setNewNoteAttachments([]);
                       }}
                       className="text-muted"
                     >
@@ -692,7 +700,8 @@ export function StaffContractsView({
                     <ul className="mb-3 flex flex-col gap-2">
                       {workplace.notes.map((n) => (
                         <li key={n.id} className="rounded-lg border border-border/60 p-3 text-sm">
-                          <p className="whitespace-pre-wrap">{n.content}</p>
+                          {n.content ? <p className="whitespace-pre-wrap">{n.content}</p> : null}
+                          <NoteAttachmentList attachments={n.attachments} />
                           <p className="mt-1 text-xs text-muted">{n.createdAt}</p>
                         </li>
                       ))}
@@ -706,9 +715,14 @@ export function StaffContractsView({
                         rows={2}
                         className="w-full resize-none rounded-lg border border-border px-3 py-2 text-sm"
                       />
+                      <NoteAttachmentPicker
+                        value={newNoteAttachments}
+                        onChange={setNewNoteAttachments}
+                        onUploadingChange={setNoteUploading}
+                      />
                       <button
                         type="button"
-                        disabled={pending || !newNoteContent.trim()}
+                        disabled={pending || noteUploading || (!newNoteContent.trim() && newNoteAttachments.length === 0)}
                         onClick={() => submitNewNote(workplace.companyRelationshipId)}
                         className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
                       >

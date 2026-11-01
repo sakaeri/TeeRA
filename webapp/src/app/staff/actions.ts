@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { NoteAttachmentInput } from "@/lib/noteAttachments";
 import { requireCompanyStaffRole } from "@/lib/auth/session";
 import { submitShiftRequest } from "@/lib/domain/shifts";
 import { applyToRecruitment } from "@/lib/domain/recruitment";
@@ -79,9 +80,14 @@ export async function updateMyAddressPhoneAction(
 
 // 勤務先の共有メモにスタッフ本人が投稿する。domain層のaddStaffRelationshipNote
 // が、その勤務先に有効な配属を持つ本人かどうかを再確認する。
-export async function addStaffRelationshipNoteAction(companyId: string, companyRelationshipId: string, content: string) {
+export async function addStaffRelationshipNoteAction(
+  companyId: string,
+  companyRelationshipId: string,
+  content: string,
+  attachments: NoteAttachmentInput[] = [],
+) {
   const { userId } = await requireCompanyStaffRole();
-  await addStaffRelationshipNote({ companyRelationshipId, staffUserId: userId, content });
+  await addStaffRelationshipNote({ companyRelationshipId, staffUserId: userId, content, attachments });
   revalidatePath(`/staff/contracts/${companyId}`);
 }
 

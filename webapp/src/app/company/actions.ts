@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { NoteAttachmentInput } from "@/lib/noteAttachments";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import {
   canManage,
@@ -612,11 +613,11 @@ async function assertCanManageTeamRoles(
   if (!targetInTeam) throw new Error("forbidden");
 }
 
-export async function addStaffNoteAction(membershipId: string, content: string) {
+export async function addStaffNoteAction(membershipId: string, content: string, attachments: NoteAttachmentInput[] = []) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
   await assertMembershipOwnedByCompany(membershipId, membership.companyId);
-  await addStaffNote({ membershipId, authorUserId: userId, content });
+  await addStaffNote({ membershipId, authorUserId: userId, content, attachments });
   revalidatePath("/company/roster");
 }
 
@@ -777,11 +778,23 @@ async function assertRelationshipAgencySide(companyRelationshipId: string, compa
 // 絞り込んでいる）。visibleToStaff=trueにすると、配属されているスタッフ
 // 本人にも見えるようになる（旧「配属先情報」を統合）。関係の当事者であれば
 // 双方向どちらからでも書き込める。
-export async function addRelationshipNoteAction(companyRelationshipId: string, content: string, visibleToStaff: boolean) {
+export async function addRelationshipNoteAction(
+  companyRelationshipId: string,
+  content: string,
+  visibleToStaff: boolean,
+  attachments: NoteAttachmentInput[] = [],
+) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
   await assertRelationshipParty(companyRelationshipId, membership.companyId);
-  await addRelationshipNote({ companyRelationshipId, companyId: membership.companyId, authorUserId: userId, content, visibleToStaff });
+  await addRelationshipNote({
+    companyRelationshipId,
+    companyId: membership.companyId,
+    authorUserId: userId,
+    content,
+    visibleToStaff,
+    attachments,
+  });
   revalidatePath("/company/roster");
 }
 

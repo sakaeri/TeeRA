@@ -1,5 +1,7 @@
 "use client";
 
+import { NoteAttachmentList, NoteAttachmentPicker } from "@/components/NoteAttachments";
+import type { NoteAttachmentInput, NoteAttachmentView } from "@/lib/noteAttachments";
 import { useEffect, useState, useTransition } from "react";
 import { WorkReportDetailModal } from "@/components/company/WorkReportDetailModal";
 import { useRouter } from "next/navigation";
@@ -59,6 +61,7 @@ type StaffNote = {
   content: string;
   authorName: string;
   createdAt: string;
+  attachments: NoteAttachmentView[];
 };
 
 type StaffMonthDetail = {
@@ -214,6 +217,8 @@ export function StaffDetailPanel({
   const [loadError, setLoadError] = useState(false);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState("");
+  const [newNoteAttachments, setNewNoteAttachments] = useState<NoteAttachmentInput[]>([]);
+  const [noteUploading, setNoteUploading] = useState(false);
   const [hireDateInput, setHireDateInput] = useState("");
   const [showGrantForm, setShowGrantForm] = useState(false);
   const [grantDaysInput, setGrantDaysInput] = useState("");
@@ -1147,7 +1152,8 @@ export function StaffDetailPanel({
                 <ul className="flex flex-col gap-2">
                   {data.staffNotes.map((n) => (
                     <li key={n.id} className="rounded-lg border border-border p-3 text-sm">
-                      <p className="whitespace-pre-wrap">{n.content}</p>
+                      {n.content ? <p className="whitespace-pre-wrap">{n.content}</p> : null}
+                      <NoteAttachmentList attachments={n.attachments} />
                       <div className="mt-2 flex items-center justify-between text-xs text-muted">
                         <span>
                           {n.createdAt} {n.authorName}
@@ -1223,12 +1229,18 @@ export function StaffDetailPanel({
               placeholder="このスタッフに関するメモを入力"
               className="w-full rounded-lg border border-border px-3 py-2 text-sm text-foreground"
             />
+            <NoteAttachmentPicker
+              value={newNoteAttachments}
+              onChange={setNewNoteAttachments}
+              onUploadingChange={setNoteUploading}
+            />
             <button
               type="button"
-              disabled={pending || !newNoteContent.trim()}
+              disabled={pending || noteUploading || (!newNoteContent.trim() && newNoteAttachments.length === 0)}
               onClick={() =>
                 startTransition(async () => {
-                  await addStaffNoteAction(data.membershipId, newNoteContent);
+                  await addStaffNoteAction(data.membershipId, newNoteContent, newNoteAttachments);
+                  setNewNoteAttachments([]);
                   setNewNoteContent("");
                   setShowNoteForm(false);
                   await refresh();
