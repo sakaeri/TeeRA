@@ -24,8 +24,27 @@ export function ResetPasswordForm({ token }: { token: string }) {
     );
   }
 
+  if (state?.message === "scheduled") {
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+          パスワードの再設定を受け付けました。安全のため、新しいパスワードは<strong>24時間後</strong>から使えるようになります。
+        </p>
+        <p className="text-sm text-foreground/80">
+          それまでは元のパスワードのままです。受け付けたことと取り消し方をメールでお知らせしました。
+        </p>
+        <Link href="/login" className="text-center text-sm text-primary underline">
+          ログイン画面へ
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <form action={action} className="flex flex-col gap-4">
+      <p className="text-xs text-muted">
+        安全のため、新しいパスワードは設定してから24時間後に使えるようになります（それまでは元のパスワードのままです）。
+      </p>
       <div className="flex flex-col gap-1">
         <label htmlFor="password" className="text-sm text-foreground/80">
           新しいパスワード

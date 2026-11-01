@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { loginViaEmail } from "./_lib/login.mjs";
 
 // スタッフ側のカレンダーに業務報告の状態が出ることを検証する：
 // ・月表示のタグが、未提出／承認待ち／承認済み／差戻し／欠勤で色分けされる
@@ -88,11 +89,7 @@ try {
   if (tomorrow.slice(0, 7) === thisMonth) cases.future = { date: tomorrow, id: shift(tomorrow, "明日の業務") };
 
   // --- スタッフとしてログイン ---
-  await staff.goto("http://localhost:3000/login");
-  await staff.fill("#email", staffEmail);
-  await staff.fill("#password", "password123");
-  await staff.click("button[type=submit]");
-  await staff.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 10000 });
+  await loginViaEmail(staff, staffEmail, "password123");
   const [y, m] = thisMonth.split("-").map(Number);
   await staff.goto(`http://localhost:3000/staff?y=${y}&m=${m}`);
   await staff.waitForTimeout(1000);

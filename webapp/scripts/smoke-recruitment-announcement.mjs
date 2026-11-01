@@ -2,6 +2,7 @@ import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { loginViaEmail } from "./_lib/login.mjs";
 
 // 募集の「追加のお知らせ」を検証する：
 // ・募集を出した会社が、作った後にお知らせを書き足せる
@@ -171,11 +172,7 @@ try {
   );
 
   // --- スタッフ側（派遣スタッフ：所属は派遣会社、募集は依頼主のもの）---
-  await staffPage.goto("http://localhost:3000/login");
-  await staffPage.fill("#email", agencyStaffEmail);
-  await staffPage.fill("#password", "password123");
-  await staffPage.click("button[type=submit]");
-  await staffPage.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 10000 });
+  await loginViaEmail(staffPage, agencyStaffEmail, "password123");
   await staffPage.goto(`http://localhost:3000/staff?y=${ty}&m=${tm}`);
   await staffPage.waitForTimeout(1000);
   const home = await staffPage.locator("main").innerText();

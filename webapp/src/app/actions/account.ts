@@ -1,6 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { signOut } from "@/auth";
 import { verifySession } from "@/lib/auth/session";
 import {
   ChangePasswordSchema,
@@ -14,6 +16,8 @@ import {
   confirmEmailChange,
   setInitialPassword,
   removePassword,
+  logoutAllDevices,
+  cancelPendingPasswordReset,
 } from "@/lib/domain/accountSecurity";
 import type { FormState } from "@/app/actions/auth";
 
@@ -48,7 +52,24 @@ export async function changePasswordAction(
     return { message: "現在のパスワードが正しくありません。" };
   }
 
-  return { message: "パスワードを変更しました。" };
+  // パスワードを変えると、この端末も含めてすべての端末がログアウトされる
+  await signOut({ redirect: false });
+  redirect("/login?passwordChanged=1");
+}
+
+// 「すべての端末からログアウト」（この端末も含む）
+export async function logoutAllDevicesAction() {
+  const { userId } = await verifySession();
+  await logoutAllDevices(userId);
+  await signOut({ redirect: false });
+  redirect("/login?loggedOutAll=1");
+}
+
+// 申し込み中のパスワード再設定（24時間後に有効になる予定のもの）を取り消す
+export async function cancelPendingPasswordResetAction() {
+  const { userId } = await verifySession();
+  await cancelPendingPasswordReset(userId);
+  revalidatePath("/account");
 }
 
 export async function requestEmailChangeAction(

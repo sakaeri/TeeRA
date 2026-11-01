@@ -7,11 +7,18 @@ import {
   sendEmailChangeConfirmation,
   sendRegistrationConfirmEmail,
   sendLoginMagicLinkEmail,
-  sendPasswordRequiredNoticeEmail,
+  sendLoginNotificationEmail,
+  sendPasswordResetScheduledEmail,
 } from "@/lib/email";
 
 const TOKEN_TTL_MS = 60 * 60 * 1000; // 1時間（パスワードリセット・メール変更確認）
-const MAGIC_LINK_TTL_MS = 24 * 60 * 60 * 1000; // 24時間（登録確認・ログイン用リンクはすぐ見るとは限らないため長め）
+const MAGIC_LINK_TTL_MS = 24 * 60 * 60 * 1000; // 24時間（登録確認のリンクはすぐ見るとは限らないため長め）
+const LOGIN_MAGIC_LINK_TTL_MS = 15 * 60 * 1000; // 15分（ログイン用のリンク。盗み見・転送されても使える時間を短くする）
+const PASSWORD_STEP_TTL_MS = 10 * 60 * 1000; // リンクを開いてからパスワードを入れるまでの猶予
+const PASSWORD_STEP_VERIFIED_TTL_MS = 2 * 60 * 1000; // パスワード確認後、ログイン処理を終えるまでの猶予
+const MAX_PASSWORD_ATTEMPTS = 5; // これだけ続けて間違えたらロックする
+const PASSWORD_LOCK_MS = 15 * 60 * 1000;
+const PASSWORD_RESET_DELAY_MS = 24 * 60 * 60 * 1000; // 「パスワードを忘れた」からの再設定が有効になるまで
 const RESEND_COOLDOWN_MS = 60 * 1000; // 同じ用途への連投防止（嫌がらせメール対策）
 
 function generateToken() {
@@ -57,7 +64,7 @@ export async function requestPasswordReset(email: string) {
   await sendPasswordResetEmail(user.email, user.name, absoluteUrl(`/reset-password/${token}`));
 }
 
-async function consumeToken(token: string, kind: "PASSWORD_RESET" | "EMAIL_CHANGE" | "MAGIC_LINK") {
+async function consumeToken(token: string, kind: "PASSWORD_RESET" | "EMAIL_CHANGE" | "MAGIC_LINK" | "PASSWORD_RESET_CANCEL") {
   const record = await prisma.accountActionToken.findUnique({ where: { tokenHash: hashToken(token) } });
   if (!record || record.kind !== kind || record.usedAt || record.expiresAt < new Date()) {
     throw new Error("invalid_or_expired_token");
@@ -65,15 +72,130 @@ async function consumeToken(token: string, kind: "PASSWORD_RESET" | "EMAIL_CHANG
   return record;
 }
 
+// 「パスワードを忘れた」からの再設定。すぐには切り替えず、24時間後に有効にする
+// （メールを乗っ取った人がパスワードを作り直しても、本人が気づいて取り消せるように）。
+// 受け付けたことと取り消しリンクをメールで知らせる。
 export async function resetPassword(token: string, newPassword: string) {
   const record = await consumeToken(token, "PASSWORD_RESET");
   if (!record.userId) throw new Error("invalid_or_expired_token");
   const passwordHash = await bcrypt.hash(newPassword, 12);
+  const effectiveAt = new Date(Date.now() + PASSWORD_RESET_DELAY_MS);
+  const cancelToken = generateToken();
 
+  const [user] = await prisma.$transaction([
+    prisma.user.update({
+      where: { id: record.userId },
+      data: { pendingPasswordHash: passwordHash, pendingPasswordEffectiveAt: effectiveAt },
+    }),
+    prisma.accountActionToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+    prisma.accountActionToken.create({
+      data: {
+        tokenHash: hashToken(cancelToken),
+        kind: "PASSWORD_RESET_CANCEL",
+        userId: record.userId,
+        expiresAt: effectiveAt,
+      },
+    }),
+  ]);
+
+  await sendPasswordResetScheduledEmail(user.email, user.name, {
+    effectiveAt: formatJstDateTime(effectiveAt),
+    cancelUrl: absoluteUrl(`/cancel-password-reset/${cancelToken}`),
+  });
+  return effectiveAt;
+}
+
+// メールの「再設定を取り消す」リンクから
+export async function cancelPasswordResetByToken(token: string) {
+  const record = await consumeToken(token, "PASSWORD_RESET_CANCEL");
+  if (!record.userId) throw new Error("invalid_or_expired_token");
   await prisma.$transaction([
-    prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
+    prisma.user.update({
+      where: { id: record.userId },
+      data: { pendingPasswordHash: null, pendingPasswordEffectiveAt: null },
+    }),
     prisma.accountActionToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
   ]);
+}
+
+// アカウント設定の「取り消す」ボタンから
+export async function cancelPendingPasswordReset(userId: string) {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { pendingPasswordHash: null, pendingPasswordEffectiveAt: null },
+  });
+}
+
+// 再設定の受け付けから24時間たっていれば、新しいパスワードに切り替える。
+// 切り替えたらほかの端末はログアウトさせる。
+async function applyDuePendingPassword(userId: string) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  if (!user.pendingPasswordHash || !user.pendingPasswordEffectiveAt || user.pendingPasswordEffectiveAt > new Date()) {
+    return user;
+  }
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash: user.pendingPasswordHash,
+      pendingPasswordHash: null,
+      pendingPasswordEffectiveAt: null,
+      failedPasswordAttempts: 0,
+      passwordLockedUntil: null,
+      sessionVersion: { increment: 1 },
+    },
+  });
+}
+
+// 「すべての端末からログアウト」。今の端末も含めてログアウトされる。
+export async function logoutAllDevices(userId: string) {
+  await prisma.user.update({ where: { id: userId }, data: { sessionVersion: { increment: 1 } } });
+}
+
+function formatJstDateTime(date: Date) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+// User-Agentから「iPhone（Safari）」のような大まかな端末名を作る（ログイン通知用）
+function describeDevice(userAgent: string | null) {
+  if (!userAgent) return "不明";
+  const os = /iPhone/.test(userAgent)
+    ? "iPhone"
+    : /iPad/.test(userAgent)
+      ? "iPad"
+      : /Android/.test(userAgent)
+        ? "Android"
+        : /Windows/.test(userAgent)
+          ? "Windows"
+          : /Mac OS X/.test(userAgent)
+            ? "Mac"
+            : "その他";
+  const browser = /Edg\//.test(userAgent)
+    ? "Edge"
+    : /CriOS|Chrome\//.test(userAgent)
+      ? "Chrome"
+      : /FxiOS|Firefox\//.test(userAgent)
+        ? "Firefox"
+        : /Safari\//.test(userAgent)
+          ? "Safari"
+          : "ブラウザ";
+  return `${os}（${browser}）`;
+}
+
+export async function sendLoginNotification(userId: string, userAgent: string | null) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return;
+  await sendLoginNotificationEmail(user.email, user.name, {
+    at: formatJstDateTime(new Date()),
+    device: describeDevice(userAgent),
+    accountUrl: absoluteUrl("/account"),
+  });
 }
 
 export async function changePassword(userId: string, currentPassword: string, newPassword: string) {
@@ -83,7 +205,11 @@ export async function changePassword(userId: string, currentPassword: string, ne
   if (!valid) throw new Error("incorrect_current_password");
 
   const passwordHash = await bcrypt.hash(newPassword, 12);
-  await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+  // パスワードを変えたら、今の端末も含めてすべての端末をログアウトさせる
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash, sessionVersion: { increment: 1 } },
+  });
 }
 
 // パスワード未設定の人が、アカウント設定から初めてパスワードを設定する
@@ -190,19 +316,12 @@ export async function sendRegistrationMagicLink(userId: string, inviteToken?: st
   await sendRegistrationConfirmEmail(user.email, user.name, absoluteUrl(`/magic-link/${token}`));
 }
 
-// ログイン用マジックリンクの申請。メールアドレスの存在有無・パスワード
-// 設定有無を外部に漏らさないよう、呼び出し側は常に同じ案内文を表示する
-// （中でパスワード設定済みの場合は実際にはリンクを送らず、代わりに
-// 「パスワードでログインしてください」という案内メールだけ送る）。
+// ログイン用マジックリンクの申請。メールアドレスの存在有無を外部に漏らさない
+// よう、呼び出し側は常に同じ案内文を表示する。
 export async function sendLoginMagicLink(email: string, redirectTo?: string) {
   const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
   if (!user) return;
-
-  if (user.passwordHash) {
-    await sendPasswordRequiredNoticeEmail(user.email, user.name);
-    return;
-  }
-
+  // パスワードを設定している人にもリンクを送る（パスワードはリンクを開いた後の2段階目で入れる）
   if (await wasRecentlySent(user.id, "MAGIC_LINK")) return;
 
   const token = generateToken();
@@ -212,7 +331,7 @@ export async function sendLoginMagicLink(email: string, redirectTo?: string) {
       kind: "MAGIC_LINK",
       userId: user.id,
       redirectTo: redirectTo || null,
-      expiresAt: new Date(Date.now() + MAGIC_LINK_TTL_MS),
+      expiresAt: new Date(Date.now() + LOGIN_MAGIC_LINK_TTL_MS),
     },
   });
 
@@ -225,6 +344,9 @@ export async function sendLoginMagicLink(email: string, redirectTo?: string) {
 export async function consumeMagicLinkForSignIn(token: string) {
   const record = await consumeToken(token, "MAGIC_LINK");
   if (!record.userId) throw new Error("invalid_or_expired_token");
+  // パスワードを設定している人は、リンクだけではログインさせない（2段階目を
+  // 飛ばして/api/auth/callback/magic-linkへ直接送られても通さない）
+  if (await needsPasswordStep(record.userId)) throw new Error("password_step_required");
 
   const [user] = await prisma.$transaction([
     prisma.user.update({ where: { id: record.userId }, data: { emailVerified: true } }),
@@ -240,5 +362,105 @@ export async function consumeMagicLinkForSignIn(token: string) {
 export async function peekMagicLinkToken(token: string) {
   const record = await prisma.accountActionToken.findUnique({ where: { tokenHash: hashToken(token) } });
   if (!record || record.kind !== "MAGIC_LINK" || !record.userId) return null;
+  return { userId: record.userId, inviteToken: record.inviteToken, redirectTo: record.redirectTo };
+}
+
+// --- パスワード（ログインの2段階目） ----------------------------------------
+
+// パスワードを設定している人は、メールのリンクを開いた後にパスワードも必要
+export async function needsPasswordStep(userId: string) {
+  const user = await applyDuePendingPassword(userId);
+  return Boolean(user.passwordHash);
+}
+
+// メールのリンクを使い切り、パスワード入力用の短時間だけ有効なトークンを作る
+// （ここではまだログインさせない）
+export async function startPasswordStep(magicLinkToken: string) {
+  const record = await consumeToken(magicLinkToken, "MAGIC_LINK");
+  if (!record.userId) throw new Error("invalid_or_expired_token");
+  const stepToken = generateToken();
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: record.userId }, data: { emailVerified: true } }),
+    prisma.accountActionToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+    prisma.accountActionToken.create({
+      data: {
+        tokenHash: hashToken(stepToken),
+        kind: "LOGIN_PASSWORD_STEP",
+        userId: record.userId,
+        inviteToken: record.inviteToken,
+        redirectTo: record.redirectTo,
+        expiresAt: new Date(Date.now() + PASSWORD_STEP_TTL_MS),
+      },
+    }),
+  ]);
+  return stepToken;
+}
+
+export type PasswordStepResult =
+  | { status: "ok" }
+  | { status: "wrong"; remaining: number }
+  | { status: "locked"; until: Date }
+  | { status: "expired" };
+
+// パスワードを確かめる。続けて間違えたらしばらくロックする。合っていれば
+// トークンに確認済みの印を付ける（実際のログインはconsumeVerifiedPasswordStepで行う）。
+export async function verifyPasswordStep(stepToken: string, password: string): Promise<PasswordStepResult> {
+  const record = await prisma.accountActionToken.findUnique({ where: { tokenHash: hashToken(stepToken) } });
+  if (!record || record.kind !== "LOGIN_PASSWORD_STEP" || record.usedAt || record.expiresAt < new Date() || !record.userId) {
+    return { status: "expired" };
+  }
+  const user = await applyDuePendingPassword(record.userId);
+  if (user.passwordLockedUntil && user.passwordLockedUntil > new Date()) {
+    return { status: "locked", until: user.passwordLockedUntil };
+  }
+  if (!user.passwordHash) return { status: "expired" };
+
+  const valid = await bcrypt.compare(password, user.passwordHash);
+  if (!valid) {
+    const attempts = user.failedPasswordAttempts + 1;
+    if (attempts >= MAX_PASSWORD_ATTEMPTS) {
+      const until = new Date(Date.now() + PASSWORD_LOCK_MS);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { failedPasswordAttempts: 0, passwordLockedUntil: until },
+      });
+      return { status: "locked", until };
+    }
+    await prisma.user.update({ where: { id: user.id }, data: { failedPasswordAttempts: attempts } });
+    return { status: "wrong", remaining: MAX_PASSWORD_ATTEMPTS - attempts };
+  }
+
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: user.id }, data: { failedPasswordAttempts: 0, passwordLockedUntil: null } }),
+    prisma.accountActionToken.update({ where: { id: record.id }, data: { verifiedAt: new Date() } }),
+  ]);
+  return { status: "ok" };
+}
+
+// auth.tsの"password-step"プロバイダからのみ呼ばれる。パスワード確認済みの
+// トークンだけを受け付けて使い切る（パスワード無しでここへ直接来ても通さない）。
+export async function consumeVerifiedPasswordStep(stepToken: string) {
+  const record = await prisma.accountActionToken.findUnique({ where: { tokenHash: hashToken(stepToken) } });
+  if (
+    !record ||
+    record.kind !== "LOGIN_PASSWORD_STEP" ||
+    record.usedAt ||
+    record.expiresAt < new Date() ||
+    !record.verifiedAt ||
+    record.verifiedAt.getTime() < Date.now() - PASSWORD_STEP_VERIFIED_TTL_MS ||
+    !record.userId
+  ) {
+    throw new Error("invalid_or_expired_token");
+  }
+  await prisma.accountActionToken.update({ where: { id: record.id }, data: { usedAt: new Date() } });
+  return prisma.user.findUniqueOrThrow({ where: { id: record.userId } });
+}
+
+// パスワード入力画面の表示と、ログイン後の行き先判定に使う
+export async function peekPasswordStep(stepToken: string) {
+  const record = await prisma.accountActionToken.findUnique({ where: { tokenHash: hashToken(stepToken) } });
+  if (!record || record.kind !== "LOGIN_PASSWORD_STEP" || record.usedAt || record.expiresAt < new Date() || !record.userId) {
+    return null;
+  }
   return { userId: record.userId, inviteToken: record.inviteToken, redirectTo: record.redirectTo };
 }

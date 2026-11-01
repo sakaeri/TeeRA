@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { loginViaEmail } from "./_lib/login.mjs";
 
 // スタッフのシフト希望申請で、日付を選ぶカレンダーの月を前後に切り替えられることを検証する：
 // ・開いた時はカレンダーで見ていた月
@@ -44,11 +45,7 @@ try {
   );
   psql(`insert into "CompanyMembership" (id, "userId", "companyId", role) values (gen_random_uuid()::text, '${staffId}', '${companyId}', 'STAFF');`);
 
-  await staff.goto("http://localhost:3000/login");
-  await staff.fill("#email", staffEmail);
-  await staff.fill("#password", "password123");
-  await staff.click("button[type=submit]");
-  await staff.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 10000 });
+  await loginViaEmail(staff, staffEmail, "password123");
 
   const now = new Date(Date.now() + 9 * 3600e3);
   const [y, m] = [now.getUTCFullYear(), now.getUTCMonth() + 1];

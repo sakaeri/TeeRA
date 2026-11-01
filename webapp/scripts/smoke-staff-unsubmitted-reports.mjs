@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { loginViaEmail } from "./_lib/login.mjs";
 
 // 打刻したのに業務報告が未提出のまま溜まる問題への対策を検証する：
 // ・タイムカードで「未提出の業務報告」を一番上にまとめ、今日のシフトと分ける
@@ -76,11 +77,7 @@ try {
   }
 
   // --- スタッフとしてログイン ---
-  await staff.goto("http://localhost:3000/login");
-  await staff.fill("#email", staffEmail);
-  await staff.fill("#password", "password123");
-  await staff.click("button[type=submit]");
-  await staff.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 10000 });
+  await loginViaEmail(staff, staffEmail, "password123");
 
   // --- ホームのポップアップ ---
   await staff.goto("http://localhost:3000/staff");

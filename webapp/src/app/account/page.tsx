@@ -26,6 +26,17 @@ export default async function AccountPage({
         userEmail={user.email}
         hasPassword={user.passwordHash !== null}
         emailChangeNotice={emailChangeNotice}
+        pendingPasswordEffectiveAt={
+          user.pendingPasswordEffectiveAt && user.pendingPasswordEffectiveAt > new Date()
+            ? new Intl.DateTimeFormat("ja-JP", {
+                timeZone: "Asia/Tokyo",
+                month: "numeric",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }).format(user.pendingPasswordEffectiveAt)
+            : undefined
+        }
       />
     </main>
   );
