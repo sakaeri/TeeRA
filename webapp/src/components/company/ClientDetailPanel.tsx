@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { PdfLink } from "@/components/PdfLink";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -623,17 +624,15 @@ export function ClientDetailPanel({
                     </div>
                   ) : null}
                   {kind === "agency" && data.isProxy ? (
-                    <a
+                    <PdfLink
                       href={`/api/agency-relationships/${relationshipId}/performance-pdf?y=${year}&m=${month}`}
-                      target="_blank"
-                      rel="noreferrer"
                       className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border p-3"
                     >
                       <p className="text-xs text-muted">実績PDF</p>
                       <span className="rounded-lg border border-primary px-3 py-1 text-xs font-semibold text-primary">
                         PDF出力
                       </span>
-                    </a>
+                    </PdfLink>
                   ) : null}
                 </div>
 

@@ -11,6 +11,7 @@ import { MonthNavBar } from "@/components/company/MonthNavBar";
 import { CreateRecordButton } from "@/components/company/CreateRecordButton";
 import { todayJstParts, earliestAllowedMonth, cutoffMonthString } from "@/lib/date";
 import Link from "next/link";
+import { PdfLink } from "@/components/PdfLink";
 
 function currentMonth() {
   const today = todayJstParts();
@@ -170,16 +171,15 @@ export default async function InvoicesPage({
               <p className="mb-1.5 text-xs text-muted">発行履歴</p>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                 {invoiceData.issues.map((i, index) => (
-                  <Link
+                  <PdfLink
                     key={i.id}
                     href={`/api/invoices/${invoiceData!.id}/pdf?issueId=${i.id}`}
-                    target="_blank"
                     // 最新の発行分（issuesはissuedAt降順）だけ目立たせ、
                     // 過去分は薄い色にして見分けやすくする。
                     className={index === 0 ? "font-semibold text-primary underline" : "text-muted underline"}
                   >
                     PDF ({new Date(i.issuedAt).toLocaleString("ja-JP")})
-                  </Link>
+                  </PdfLink>
                 ))}
               </div>
             </div>
@@ -229,12 +229,12 @@ export default async function InvoicesPage({
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-serif-jp text-lg font-bold text-primary">発行履歴</h2>
               {issuedInvoices.length > 0 ? (
-                <a
+                <PdfLink
                   href={`/api/invoices/bulk-pdf?month=${periodLabel}`}
                   className="rounded-lg border border-primary px-3 py-1.5 text-xs text-primary hover:bg-primary/5"
                 >
                   一括PDFダウンロード
-                </a>
+                </PdfLink>
               ) : null}
             </div>
             {issuedInvoices.length === 0 ? (
@@ -261,13 +261,12 @@ export default async function InvoicesPage({
                         {inv.companyRelationship.clientCompany?.name ?? inv.companyRelationship.proxyName}
                       </Link>
                       <span className="text-muted">{totals.total}円</span>
-                      <Link
+                      <PdfLink
                         href={`/api/invoices/${inv.id}/pdf?issueId=${latestIssue.id}`}
-                        target="_blank"
                         className="text-xs text-primary underline"
                       >
                         PDF（{new Date(latestIssue.issuedAt).toLocaleString("ja-JP")}）
-                      </Link>
+                      </PdfLink>
                     </li>
                   );
                 })}
