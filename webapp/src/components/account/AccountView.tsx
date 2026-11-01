@@ -6,6 +6,8 @@ import {
   requestEmailChangeAction,
   setInitialPasswordAction,
   removePasswordAction,
+  logoutAllDevicesAction,
+  cancelPendingPasswordResetAction,
 } from "@/app/actions/account";
 import type { FormState } from "@/app/actions/auth";
 import { PushNotificationToggle } from "@/components/account/PushNotificationToggle";
@@ -59,7 +61,7 @@ function ChangePasswordForm({ onRemoved }: { onRemoved: () => void }) {
             autoComplete="new-password"
             className="rounded-lg border border-border bg-white px-3.5 py-2.5 text-sm outline-none focus:border-primary"
           />
-          <p className="text-xs text-muted">8文字以上、英字と数字を含めてください。</p>
+          <p className="text-xs text-muted">8文字以上、英字と数字を含めてください。変更すると、この端末も含めてすべての端末からログアウトします。</p>
           {changeState?.errors?.newPassword ? (
             <p className="text-xs text-red-600">{changeState.errors.newPassword[0]}</p>
           ) : null}
@@ -84,7 +86,7 @@ function ChangePasswordForm({ onRemoved }: { onRemoved: () => void }) {
         {removeOpen ? (
           <form action={removeAction} className="flex flex-col gap-3">
             <p className="text-xs text-muted">
-              パスワードを削除すると、以後はログイン画面の「メールでログイン」からマジックリンクでのみログインできます。アカウントの安全性はメールの受信箱の管理状況に依存します。
+              パスワードを削除すると、メールのリンクだけでログインする状態に戻ります（リンクの後にパスワードを入れる2段階目が無くなります）。アカウントの安全性はメールの受信箱の管理状況だけに頼ることになります。
             </p>
             <div className="flex flex-col gap-1">
               <label htmlFor="currentPasswordForRemove" className="text-sm text-foreground/80">
@@ -149,7 +151,7 @@ function SetPasswordForm({ onSet }: { onSet: () => void }) {
   return (
     <form action={action} className="flex flex-col gap-4">
       <p className="text-xs text-muted">
-        現在はメールのログイン用リンクのみでログインできます。パスワードを設定すると、以後はメールアドレスとパスワードでログインできるようになります（削除していつでもマジックリンクのみの状態に戻せます）。
+        現在はメールのログイン用リンクだけでログインしています。パスワードを設定すると、ログインのたびにメールのリンクを開いた後、このパスワードも入れる2段階のログインになり、より安全になります（削除していつでもリンクだけの状態に戻せます）。
       </p>
       <div className="flex flex-col gap-1">
         <label htmlFor="newPassword" className="text-sm text-foreground/80">
@@ -250,11 +252,14 @@ export function AccountView({
   userEmail,
   hasPassword,
   emailChangeNotice,
+  pendingPasswordEffectiveAt,
 }: {
   userName: string;
   userEmail: string;
   hasPassword: boolean;
   emailChangeNotice?: "success" | "error";
+  // 「パスワードを忘れた」から申し込み中の再設定が有効になる日時（表示用）
+  pendingPasswordEffectiveAt?: string;
 }) {
   const [hasPasswordState, setHasPasswordState] = useState(hasPassword);
   // パスワードの設定/削除は、成功直後にこのセクションのフォーム自体が
@@ -287,6 +292,17 @@ export function AccountView({
         <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
           パスワードを削除しました。次回からはメールのログイン用リンクでログインできます。
         </p>
+      ) : null}
+
+      {pendingPasswordEffectiveAt ? (
+        <div className="flex flex-col gap-2 rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <p>パスワードの再設定を受け付けています。新しいパスワードは {pendingPasswordEffectiveAt} から使えるようになります。</p>
+          <form action={cancelPendingPasswordResetAction}>
+            <button type="submit" className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold">
+              再設定を取り消す
+            </button>
+          </form>
+        </div>
       ) : null}
 
       <section className="rounded-2xl border border-border bg-white/60 p-6">
@@ -323,6 +339,26 @@ export function AccountView({
             メールアドレスを変更するには、先にパスワードを設定してください。
           </p>
         )}
+      </section>
+
+      <section className="rounded-2xl border border-border bg-white/60 p-6">
+        <h2 className="mb-2 font-serif-jp text-lg font-bold text-primary">すべての端末からログアウト</h2>
+        <p className="mb-4 text-sm text-muted">
+          スマホをなくしたときや、身に覚えのないログインのお知らせが届いたときに使います。この端末も含めて、ログイン中のすべての端末がログアウトされます。
+        </p>
+        <form
+          action={logoutAllDevicesAction}
+          onSubmit={(e) => {
+            if (!confirm("すべての端末からログアウトしますか？（この端末もログアウトされます）")) e.preventDefault();
+          }}
+        >
+          <button
+            type="submit"
+            className="rounded-lg border border-red-300 bg-white px-4 py-2.5 text-sm font-semibold text-red-700"
+          >
+            すべての端末からログアウトする
+          </button>
+        </form>
       </section>
     </div>
   );

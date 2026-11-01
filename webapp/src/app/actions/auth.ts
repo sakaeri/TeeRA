@@ -1,13 +1,11 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { AuthError } from "next-auth";
 import { signIn, signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import {
   RegisterSchema,
-  LoginSchema,
   CreateCompanySchema,
   ForgotPasswordSchema,
   ResetPasswordSchema,
@@ -22,6 +20,12 @@ import {
   sendRegistrationMagicLink,
   sendLoginMagicLink,
   peekMagicLinkToken,
+  needsPasswordStep,
+  startPasswordStep,
+  verifyPasswordStep,
+  peekPasswordStep,
+  sendLoginNotification,
+  cancelPasswordResetByToken,
 } from "@/lib/domain/accountSecurity";
 
 export type FormState =
@@ -62,6 +66,8 @@ export async function registerAction(
 // 招待経由の登録だった場合は元の招待フローへ、それ以外は本人の所属状況
 // から行き先を判断する（会社未所属＝新規登録なら会社作成画面、既に
 // 所属済み＝ただのログインなら/homeへ、という形で用途を区別する）。
+// パスワードを設定している人は、ここではまだログインさせずにパスワード
+// 入力（2段階目）へ進める。
 export async function confirmMagicLinkAction(token: string) {
   const peeked = await peekMagicLinkToken(token);
   if (!peeked) {
@@ -69,12 +75,80 @@ export async function confirmMagicLinkAction(token: string) {
   }
   const { userId, inviteToken, redirectTo } = peeked;
 
+  if (await needsPasswordStep(userId)) {
+    let stepToken: string;
+    try {
+      stepToken = await startPasswordStep(token);
+    } catch {
+      redirect("/login?magicLink=error");
+    }
+    redirect(`/login/password/${stepToken}`);
+  }
+
+  const wasVerified = (await prisma.user.findUnique({ where: { id: userId }, select: { emailVerified: true } }))
+    ?.emailVerified;
   try {
     await signIn("magic-link", { token, redirect: false });
   } catch {
     redirect("/login?magicLink=error");
   }
+  // 新規登録の確認（初めてのログイン）では知らせない
+  if (wasVerified) await notifyLogin(userId);
 
+  await redirectAfterLogin({ userId, inviteToken, redirectTo });
+}
+
+// パスワード入力画面（2段階目）から呼ばれる
+export async function loginPasswordStepAction(
+  stepToken: string,
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const password = formData.get("password");
+  if (typeof password !== "string" || !password) {
+    return { errors: { password: ["パスワードを入力してください。"] } };
+  }
+  const peeked = await peekPasswordStep(stepToken);
+  if (!peeked) return { message: "expired" };
+
+  const result = await verifyPasswordStep(stepToken, password);
+  if (result.status === "expired") return { message: "expired" };
+  if (result.status === "locked") {
+    const minutes = Math.max(1, Math.ceil((result.until.getTime() - Date.now()) / 60000));
+    return { message: `パスワードを続けて間違えたため、ロックしています。${minutes}分後にもう一度お試しください。` };
+  }
+  if (result.status === "wrong") {
+    return { message: `パスワードが正しくありません（あと${result.remaining}回間違えると15分間ロックされます）。` };
+  }
+
+  try {
+    await signIn("password-step", { token: stepToken, redirect: false });
+  } catch {
+    return { message: "expired" };
+  }
+  await notifyLogin(peeked.userId);
+  await redirectAfterLogin(peeked);
+}
+
+// お知らせメールが送れなくても、ログイン自体は止めない
+async function notifyLogin(userId: string) {
+  try {
+    const userAgent = (await headers()).get("user-agent");
+    await sendLoginNotification(userId, userAgent);
+  } catch (error) {
+    console.error("[login-notification] 送信に失敗しました", error);
+  }
+}
+
+async function redirectAfterLogin({
+  userId,
+  inviteToken,
+  redirectTo,
+}: {
+  userId: string;
+  inviteToken: string | null;
+  redirectTo: string | null;
+}): Promise<never> {
   if (redirectTo) {
     redirect(redirectTo);
   }
@@ -97,8 +171,7 @@ export async function confirmMagicLinkAction(token: string) {
 }
 
 // ログイン画面の「メールでログインリンクを受け取る」用。メールアドレスの
-// 存在有無・パスワード設定有無を外に漏らさないため、常に同じ成功表示を
-// 返す（中でパスワード設定済みなら実際にはリンクを送らない）。
+// 存在有無を外に漏らさないため、常に同じ成功表示を返す。
 export async function requestLoginMagicLinkAction(
   _state: FormState,
   formData: FormData,
@@ -111,35 +184,6 @@ export async function requestLoginMagicLinkAction(
   const from = formData.get("from");
   await sendLoginMagicLink(parsed.data.email, typeof from === "string" && from.length > 0 ? from : undefined);
   return { message: "sent" };
-}
-
-export async function loginAction(
-  _state: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  const parsed = LoginSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
-  if (!parsed.success) {
-    return { errors: z_flatten(parsed) };
-  }
-
-  try {
-    await signIn("credentials", {
-      email: parsed.data.email.toLowerCase(),
-      password: parsed.data.password,
-      redirect: false,
-    });
-  } catch (error) {
-    if (error instanceof AuthError) {
-      return { message: "メールアドレスまたはパスワードが正しくありません。" };
-    }
-    throw error;
-  }
-
-  const from = formData.get("from");
-  redirect(typeof from === "string" && from.length > 0 ? from : "/home");
 }
 
 export async function logoutAction() {
@@ -179,7 +223,18 @@ export async function resetPasswordAction(
     return { message: "invalid_or_expired_token" };
   }
 
-  redirect("/login?reset=1");
+  // 新しいパスワードは24時間後に有効になる（それまでは元のパスワードのまま）
+  return { message: "scheduled" };
+}
+
+// メールの「再設定を取り消す」リンク先のボタンから
+export async function cancelPasswordResetAction(token: string): Promise<FormState> {
+  try {
+    await cancelPasswordResetByToken(token);
+  } catch {
+    return { message: "invalid_or_expired_token" };
+  }
+  return { message: "cancelled" };
 }
 
 // 「今どの会社として動いているか」を選び直す（複数社所属時の切替）。

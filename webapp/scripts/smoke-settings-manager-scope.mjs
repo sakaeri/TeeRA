@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { loginViaEmail } from "./_lib/login.mjs";
 
 // チームマネージャーが設定画面を開いたときの表示範囲を検証する：
 // ・会社情報は会社名・住所・電話番号だけ（口座・インボイス番号は出さない）
@@ -74,11 +75,7 @@ try {
   // --- マネージャーとしてログイン ---
   // パスワード "password123" のbcryptハッシュ（psqlはシェル経由なので$をエスケープ）
   psql(`update "User" set "passwordHash"='\\$2b\\$10\\$/mEEG3MjInUs/GTnDFsVM./2.GDR18u06dgvlLCPnc1Xz2kVQRLga' where id='${managerId}';`);
-  await manager.goto("http://localhost:3000/login");
-  await manager.fill("#email", `scope-amanager-${suffix}@example.com`);
-  await manager.fill("#password", "password123");
-  await manager.click("button[type=submit]");
-  await manager.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 10000 });
+  await loginViaEmail(manager, `scope-amanager-${suffix}@example.com`, "password123");
   await manager.goto("http://localhost:3000/company/settings");
   await manager.waitForTimeout(800);
   const body = await manager.locator("main").innerText();

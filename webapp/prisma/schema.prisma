@@ -18,19 +18,29 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id                    String   @id @default(cuid())
-  email                 String   @unique
-  passwordHash          String? // マジックリンク登録のみの人はnull — パスワードはアカウント設定から任意で設定/削除できる
-  emailVerified         Boolean  @default(false) // 登録確認のマジックリンクを踏んだかどうか（パスワード有無とは独立）
-  name                  String
-  isProxy               Boolean  @default(false) // 仮アカウント — placeholder person with no real login yet
-  address               String? // shipping address, entered at first promo redemption and reused after
-  phoneNumber           String?
-  postalCode            String? // same reuse pattern as address/phoneNumber
-  shippingRecipientName String? // お届け先氏名。アカウント名(name)とは別に持つ
+  id                         String    @id @default(cuid())
+  email                      String    @unique
+  passwordHash               String? // マジックリンク登録のみの人はnull — パスワードはアカウント設定から任意で設定/削除できる
+  emailVerified              Boolean   @default(false) // 登録確認のマジックリンクを踏んだかどうか（パスワード有無とは独立）
+  // ログイン中の端末を締め出すための番号。「すべての端末からログアウト」やパスワード変更で1増やすと、
+  // それより前にログインした端末はログアウトされる（ログイン時の番号をセッションに覚えている）。
+  sessionVersion             Int       @default(0)
+  // パスワード（ログインの2段階目）の連続失敗回数と、失敗が続いたときのロック期限
+  failedPasswordAttempts     Int       @default(0)
+  passwordLockedUntil        DateTime?
+  // 「パスワードを忘れた」からの再設定は、申し込みから24時間後に有効にする（メールを乗っ取られて
+  // パスワードを作り直されても、本人が気づいて取り消せるように）。有効になるまでは元のパスワードのまま。
+  pendingPasswordHash        String?
+  pendingPasswordEffectiveAt DateTime?
+  name                       String
+  isProxy                    Boolean   @default(false) // 仮アカウント — placeholder person with no real login yet
+  address                    String? // shipping address, entered at first promo redemption and reused after
+  phoneNumber                String?
+  postalCode                 String? // same reuse pattern as address/phoneNumber
+  shippingRecipientName      String? // お届け先氏名。アカウント名(name)とは別に持つ
   // — 家族宛て等、本人以外に送る場合もあるため name 自体は上書きしない。
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
   companyMemberships CompanyMembership[]
   teamMemberships    TeamMembership[]
@@ -61,9 +71,9 @@ model User {
   relationshipNotesAuthored           RelationshipNote[]
   paidLeaveEventsCreated              PaidLeaveEvent[]
   pushSubscriptions                   PushSubscription[]
+  recruitmentAnnouncements            RecruitmentAnnouncement[]     @relation("RecruitmentAnnouncementAuthor")
 
   @@index([email])
-  recruitmentAnnouncements RecruitmentAnnouncement[] @relation("RecruitmentAnnouncementAuthor")
 }
 
 // ブラウザのプッシュ通知購読（端末ごとに1行）。本人がログイン中のブラウザで
@@ -449,16 +459,16 @@ enum WageType {
 // バージョンが1つも無い状態＝シフト作成時に業務内容だけその場追加され、
 // 単価がまだ設定されていない状態を表す。
 model CompanyPlacementRate {
-  id                    String   @id @default(cuid())
-  companyId             String
-  companyRelationshipId String? // null = 自社（本社/支社）
-  taskName              String
-  createdAt             DateTime @default(now())
+  id                       String              @id @default(cuid())
+  companyId                String
+  companyRelationshipId    String? // null = 自社（本社/支社）
+  taskName                 String
+  createdAt                DateTime            @default(now())
   // 業務内容ごとのキャンセル規定（例外）。cancelRuleOverride=falseの間は
   // 下の項目は使わず、依頼主共通の規定（ClientCancelRule）に従う。
   // 締切は「勤務日のN日前のHH:MM（JST）」で表す（0日前＝勤務日当日）。
-  cancelRuleOverride       Boolean      @default(false)
-  cancelPolicy             CancelPolicy @default(FREE)
+  cancelRuleOverride       Boolean             @default(false)
+  cancelPolicy             CancelPolicy        @default(FREE)
   cancelDeadlineDaysBefore Int?
   cancelDeadlineTime       String?
   cancelFeeAmount          Int? // 1人あたりのキャンセル料（円）
@@ -518,13 +528,13 @@ enum CancelPolicy {
 // 依頼主がオーダーを取り消したことで取り消された（派遣元側の）シフトの記録。
 // キャンセル料がかかった場合はfeeAmountに入り、その月の請求書に明細として載る。
 model ShiftCancellation {
-  id                   String   @id @default(cuid())
-  shiftId              String   @unique
+  id                   String             @id @default(cuid())
+  shiftId              String             @unique
   cancelledByCompanyId String
   cancelledByUserId    String?
   source               CancellationSource @default(CLIENT_APP)
-  feeAmount            Int      @default(0)
-  createdAt            DateTime @default(now())
+  feeAmount            Int                @default(0)
+  createdAt            DateTime           @default(now())
 
   shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
 }
@@ -591,12 +601,12 @@ model StaffTaskRateVersion {
 // スタッフ向けのお知らせ（例：個別単価の変更・終了）。同意を求めるものでは
 // なく、既読管理のみの一方向の通知。
 model StaffNotice {
-  id          String    @id @default(cuid())
-  companyId   String
-  staffUserId String
-  message     String
-  readAt      DateTime?
-  createdAt   DateTime  @default(now())
+  id                        String    @id @default(cuid())
+  companyId                 String
+  staffUserId               String
+  message                   String
+  readAt                    DateTime?
+  createdAt                 DateTime  @default(now())
   // 募集の「追加のお知らせ」から作られたもの（お知らせを削除したら一緒に消す）
   recruitmentAnnouncementId String?
 
@@ -648,6 +658,8 @@ enum AccountActionTokenKind {
   EMAIL_CHANGE
   APPROVE_WORK_REPORT
   MAGIC_LINK
+  LOGIN_PASSWORD_STEP // メールのリンクの後、パスワードを入れる2段階目（短時間だけ有効）
+  PASSWORD_RESET_CANCEL // 申し込み中のパスワード再設定を取り消すリンク
 }
 
 // パスワードリセット・メールアドレス変更確認用の使い捨てトークン。
@@ -665,7 +677,8 @@ model AccountActionToken {
   newEmail     String? // EMAIL_CHANGE用 — 確定するまでUser.emailは変更しない
   workReportId String? // APPROVE_WORK_REPORT用
   inviteToken  String? // MAGIC_LINK用（登録確認） — 招待経由の登録で、確認後にどの招待へ進むか
-  redirectTo   String? // MAGIC_LINK用（ログイン） — パスワードログインのfromと同じ、ログイン後に戻る先
+  redirectTo   String? // MAGIC_LINK・LOGIN_PASSWORD_STEP用 — ログイン後に戻る先
+  verifiedAt   DateTime? // LOGIN_PASSWORD_STEP用 — パスワードが合っていることを確かめた時刻
   expiresAt    DateTime
   usedAt       DateTime?
   createdAt    DateTime               @default(now())
@@ -839,8 +852,8 @@ model PublicRecruitment {
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
-  company          Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  team             Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  company          Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  team             Team?                     @relation(fields: [teamId], references: [id], onDelete: SetNull)
   entries          RecruitmentEntry[]
   shifts           Shift[]
   teeLedgerEntries TeeLedgerEntry[]
@@ -907,37 +920,37 @@ enum ApprovalStatus {
 // Absence from this table for a past Shift = unreported, defaults to 0 hours
 // for payroll/invoicing (business logic, not a stored row) — chat24/27.
 model WorkReport {
-  id                String            @id @default(cuid())
-  shiftId           String            @unique
-  staffUserId       String
-  outcome           WorkReportOutcome
-  clockIn           DateTime?
-  clockOut          DateTime?
-  breakMinutes      Int               @default(0)
-  computedMinutes   Int               @default(0) // derived from clockIn/clockOut - breakMinutes
-  comment           String?
+  id                   String            @id @default(cuid())
+  shiftId              String            @unique
+  staffUserId          String
+  outcome              WorkReportOutcome
+  clockIn              DateTime?
+  clockOut             DateTime?
+  breakMinutes         Int               @default(0)
+  computedMinutes      Int               @default(0) // derived from clockIn/clockOut - breakMinutes
+  comment              String?
   // 提出時点で選び直した実際の業務内容。null=シフト作成時の予定
   // （shift.taskName）のまま。単価解決はこちらを優先し、無ければ
   // shift.taskNameにフォールバックする。
-  taskName          String?
+  taskName             String?
   // 出勤/退勤の打刻時点でこの行自体は作られ、outcome/approvalStatusも
   // 既定値(WORKED/PENDING)が入るため、それらだけでは「打刻しただけ」と
   // 「実際に業務報告を提出した」を区別できない。submitWorkReport()が
   // 呼ばれた時にのみセットされる、提出済みの唯一の目印。
-  submittedAt       DateTime?
+  submittedAt          DateTime?
   // 退勤から3時間たっても未提出のときに送るプッシュ通知の送信済み記録（1回だけ送る）
   submitReminderSentAt DateTime?
-  approvalStatus    ApprovalStatus    @default(PENDING)
-  approverUserId    String?
-  approvedAt        DateTime?
+  approvalStatus       ApprovalStatus    @default(PENDING)
+  approverUserId       String?
+  approvedAt           DateTime?
   // 差し戻し（REJECTED）の理由。企業が「差し戻す」時に必須で入力させる。
-  rejectionReason   String?
+  rejectionReason      String?
   // 差し戻し時に企業が打刻・休憩時間を手修正した場合の記録（誰が・いつ）。
   // NEEDS_CONFIRMATION状態のときのみ意味を持つ。
-  correctedByUserId String?
-  correctedAt       DateTime?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  correctedByUserId    String?
+  correctedAt          DateTime?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
   shift     Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
   staff     User  @relation("WorkReportStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
@@ -1043,46 +1056,46 @@ enum StaffContractStatus {
 }
 
 model StaffContract {
-  id                  String              @id @default(cuid())
-  templateId          String
-  staffUserId         String
-  wageAmountSnapshot  Int // wage amount at the moment of consent — a rate change invalidates consent (chat27 fix)
-  contractStartDate   DateTime?           @db.Date // snapshot at consent; independent per staff even when sharing a template
-  contractEndDate     DateTime?           @db.Date
-  consentedAt         DateTime?
-  status              StaffContractStatus @default(PENDING_CONSENT)
+  id                   String              @id @default(cuid())
+  templateId           String
+  staffUserId          String
+  wageAmountSnapshot   Int // wage amount at the moment of consent — a rate change invalidates consent (chat27 fix)
+  contractStartDate    DateTime?           @db.Date // snapshot at consent; independent per staff even when sharing a template
+  contractEndDate      DateTime?           @db.Date
+  consentedAt          DateTime?
+  status               StaffContractStatus @default(PENDING_CONSENT)
   // 「アップロードのみ」モード（既に書面で契約済みのスタッフ向け）で、本人の
   // デジタル同意を求める代わりに添付した署名済み書面のURL。この場合
   // status/consentedAtは生成と同時にACTIVE/現在時刻になる（通常フローの
   // PENDING_CONSENT→consentStaffContractは経由しない）。通常フローの契約には
   // 常にnull。
-  uploadedDocumentUrl String?
+  uploadedDocumentUrl  String?
   // 契約書の甲乙欄に載せる本人側の氏名・住所・電話番号。本部が常設で管理
   // するUser.address/phoneNumber（販促品の配送先と共用）とは別物とし、
   // この契約ごとのスナップショットとして持つ。通常フローは本人が同意する
   // 瞬間（consentStaffContract）に入力、アップロードのみ/仮アカウントなど
   // 本人の同意ステップを経ない契約は生成時に本部が入力する。未入力のまま
   // （古い契約や入力省略）のこともあるためすべて任意。
-  partyName           String?
-  partyAddress        String?
-  partyPhoneNumber    String?
+  partyName            String?
+  partyAddress         String?
+  partyPhoneNumber     String?
   // 同意の記録（本人が同意したことの証拠）。同意した時点の契約書の内容
   // （lib/contractDocument.tsのContractDocument）と、その内容＋同意日時の
   // SHA-256、同意した時の接続元・端末・ログイン中のアカウントのメール
   // アドレスを残す。控えのPDFは同意直後に本人のメールへ送る。
-  consentSnapshot       Json?
-  consentHash           String?
-  consentIp             String?
-  consentUserAgent      String?
-  consentEmail          String?
-  consentEmailVerified  Boolean?
-  consentCopySentAt     DateTime?
+  consentSnapshot      Json?
+  consentHash          String?
+  consentIp            String?
+  consentUserAgent     String?
+  consentEmail         String?
+  consentEmailVerified Boolean?
+  consentCopySentAt    DateTime?
   // 手動で「終了する」を押した際に本人へ通知した日（任意入力）。解雇予告・
   // 雇止め予告・フリーランス新法などの事前通知義務の確認補助として記録する
   // だけで、システム側で法律要件の充足を判定するものではない。
-  noticeGivenAt       DateTime?           @db.Date
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  noticeGivenAt        DateTime?           @db.Date
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
 
   template     ContractTemplate           @relation(fields: [templateId], references: [id], onDelete: Cascade)
   staff        User                       @relation(fields: [staffUserId], references: [id], onDelete: Cascade)

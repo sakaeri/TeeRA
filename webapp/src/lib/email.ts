@@ -165,22 +165,40 @@ export async function sendLoginMagicLinkEmail(to: string, name: string, loginUrl
     emailLayout(
       "ログイン用リンク",
       `${greeting(name)}
-       <p style="margin:0;font-size:14px;line-height:1.6;">以下のボタンからログインできます（24時間有効）。</p>
+       <p style="margin:0;font-size:14px;line-height:1.6;">以下のボタンからログインできます（15分間有効・1回だけ使えます）。パスワードを設定している方は、続けてパスワードを入力してください。</p>
        ${button(loginUrl, "ログインする")}
        ${note("心当たりがない場合はこのメールを破棄してください。届かない場合は迷惑メールフォルダもご確認ください。")}`,
     ),
   );
 }
 
-export async function sendPasswordRequiredNoticeEmail(to: string, name: string) {
+// ログインがあったことを本人に知らせる（身に覚えのないログインにすぐ気づけるように）
+export async function sendLoginNotificationEmail(to: string, name: string, params: { at: string; device: string; accountUrl: string }) {
   await sendMail(
     to,
-    "【TeeRA】ログインにはパスワードが必要です",
+    "【TeeRA】ログインがありました",
     emailLayout(
-      "ログインにはパスワードが必要です",
+      "ログインがありました",
       `${greeting(name)}
-       <p style="margin:0;font-size:14px;line-height:1.6;">このアカウントはパスワードが設定されているため、ログイン画面でメールアドレスとパスワードを入力してログインしてください。</p>
-       ${note("パスワードをお忘れの場合は、ログイン画面の「パスワードをお忘れですか？」からリセットできます。")}`,
+       <p style="margin:0;font-size:14px;line-height:1.6;">あなたのアカウントにログインがありました。</p>
+       <p style="margin:12px 0 0;font-size:14px;line-height:1.6;">日時：${params.at}<br>端末：${params.device}</p>
+       ${button(params.accountUrl, "アカウント設定を開く")}
+       ${note("ご自身のログインであれば対応は不要です。心当たりがない場合は、アカウント設定の「すべての端末からログアウト」を押し、メールのパスワードも変更してください。")}`,
+    ),
+  );
+}
+
+// 「パスワードを忘れた」からの再設定を受け付けたことと、取り消し方を知らせる
+export async function sendPasswordResetScheduledEmail(to: string, name: string, params: { effectiveAt: string; cancelUrl: string }) {
+  await sendMail(
+    to,
+    "【TeeRA】パスワードの再設定を受け付けました",
+    emailLayout(
+      "パスワードの再設定を受け付けました",
+      `${greeting(name)}
+       <p style="margin:0;font-size:14px;line-height:1.6;">新しいパスワードは <strong>${params.effectiveAt}</strong> から使えるようになります。安全のため、受け付けから24時間後に切り替わります（それまでは元のパスワードのままです）。</p>
+       ${button(params.cancelUrl, "再設定を取り消す")}
+       ${note("ご自身で申し込んだ場合は対応は不要です。心当たりがない場合は、すぐに上のボタンで取り消し、メールのパスワードも変更してください。")}`,
     ),
   );
 }

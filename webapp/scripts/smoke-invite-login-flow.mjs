@@ -75,10 +75,8 @@ try {
   bodyText = await staff.textContent("body");
   log("ログイン画面に遷移する", bodyText.includes("ログイン"));
 
-  // このスタッフはマジックリンク登録のみでパスワード未設定なので、
-  // 「パスワードをお持ちでない方はこちら」からメールでログインする。
-  await staff.click("text=パスワードをお持ちでない方はこちら（メールでログイン）");
-  await staff.fill("#magicLinkEmail", staffEmail);
+  // ログイン画面からメールのリンクでログインする（このスタッフはパスワード未設定）。
+  await staff.fill("#email", staffEmail);
   await staff.getByRole("button", { name: "ログイン用リンクを送信する" }).click();
   await staff.waitForTimeout(400);
   await staff.goto(extractMagicLinkFromLog());

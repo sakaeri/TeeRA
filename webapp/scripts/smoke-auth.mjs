@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { loginViaEmail } from "./_lib/login.mjs";
 
 const browser = await chromium.launch({
   executablePath: "/opt/pw-browsers/chromium",
@@ -50,9 +51,7 @@ try {
   await page.waitForURL("http://localhost:3000/login", { timeout: 10000 });
   console.log("after logout:", page.url());
 
-  await page.fill("#email", email);
-  await page.fill("#password", "password123");
-  await page.click("button[type=submit]");
+  await loginViaEmail(page, email, "password123");
   await page.waitForURL("http://localhost:3000/company", { timeout: 10000 });
   console.log("after re-login:", page.url());
   await shot("relogin-company");
