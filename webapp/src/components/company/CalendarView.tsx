@@ -902,10 +902,9 @@ function DayDetailModal({
       }}
     >
       <div className="max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-4 shadow-lg sm:p-6">
-        {/* ✕はいつも右上。祝日名などで日付が長いときは「＋シフト」だけが下の行に回る */}
+        {/* 1行目は日付と✕（✕はいつも右上）。「＋シフト」は下のタブの行の右端に固定 */}
         <div className="mb-4 flex items-start justify-between gap-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={() => shift(-1)}
@@ -928,23 +927,14 @@ function DayDetailModal({
               </svg>
             </button>
           </div>
-            {!isPastDay ? (
-              <button
-                type="button"
-                onClick={onCreateShift}
-                className="shrink-0 whitespace-nowrap rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary"
-              >
-                <span className="sm:hidden">＋シフト</span>
-                <span className="hidden sm:inline">＋シフトを作成</span>
-              </button>
-            ) : null}
-          </div>
           <button type="button" onClick={onClose} aria-label="閉じる" className="flex h-9 shrink-0 items-center text-muted">
             ✕
           </button>
         </div>
 
-        <div className="mb-4 flex gap-4 border-b border-border text-sm">
+        <div className="mb-4 flex items-center gap-2 border-b border-border text-sm">
+          {/* タブが多い日は横にスクロール（「＋シフト」は右端に残す） */}
+          <div className="flex min-w-0 gap-4 overflow-x-auto whitespace-nowrap">
           <button
             type="button"
             onClick={() => setTab("shifts")}
@@ -971,6 +961,17 @@ function DayDetailModal({
               {!isPastDay && remaining > 0 ? (
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">残り{remaining}名</span>
               ) : null}
+            </button>
+          ) : null}
+          </div>
+          {!isPastDay ? (
+            <button
+              type="button"
+              onClick={onCreateShift}
+              className="mb-1 ml-auto shrink-0 whitespace-nowrap rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary"
+            >
+              <span className="sm:hidden">＋シフト</span>
+              <span className="hidden sm:inline">＋シフトを作成</span>
             </button>
           ) : null}
         </div>
