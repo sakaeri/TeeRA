@@ -4,6 +4,7 @@ import { listPendingReportsForCompany } from "@/lib/domain/workReports";
 import { listStaffWithSummary } from "@/lib/domain/roster";
 import { listDuePaidLeaveGrants } from "@/lib/domain/paidLeave";
 import { todayJst } from "@/lib/date";
+import { listStaffMissingDocuments } from "@/lib/domain/requiredDocuments";
 
 // 仮アカウント（isProxy）は本人ログインができず自己サービスの同意フローに
 // 乗れない一時的なプレースホルダーなので、本アカウント連携されるまで
@@ -63,6 +64,7 @@ export async function loadDashboardData(companyId: string) {
     expiringContractStaff,
     duePaidLeaveGrants,
     heldShifts,
+    missingDocumentStaff,
   ] = await Promise.all([
       // 日付が過ぎた募集はもう応募のしようがないので、埋まらないまま残って
       // いても欠員件数・やることリストからは対象外にする（過去日は消えて
@@ -83,6 +85,8 @@ export async function loadDashboardData(companyId: string) {
         include: { staff: true, companyRelationship: { include: { clientCompany: true } } },
         orderBy: { date: "asc" },
       }),
+      // 会社が必須にしている身分証・振込先をまだ出していないスタッフ
+      listStaffMissingDocuments(companyId),
     ]);
 
   // 希望日が複数（datesは配列）あり得るため、1件でも今日以降の希望日が
@@ -99,6 +103,7 @@ export async function loadDashboardData(companyId: string) {
     expiringContractStaff,
     duePaidLeaveGrants,
     heldShifts,
+    missingDocumentStaff,
   };
 }
 
@@ -124,11 +129,12 @@ export async function scopeDashboardDataToTeams(data: DashboardData, teamIds: st
     expiringContractStaff: data.expiringContractStaff.filter((s) => members.has(s.staffUserId)),
     duePaidLeaveGrants: data.duePaidLeaveGrants.filter((g) => members.has(g.staffUserId)),
     heldShifts: data.heldShifts.filter((s) => inTeam(s.teamId) || members.has(s.staffUserId)),
+    missingDocumentStaff: data.missingDocumentStaff.filter((s) => members.has(s.userId)),
   };
 }
 
 // アプリのアイコンに出す数字のうち、ダッシュボードの「対応が必要な件数」の合計
-// （欠員・未確定シフト・業務報告未承認・契約書未確認・契約満了間近・有給付与予定）。
+// （欠員・未確定シフト・業務報告未承認・契約書未確認・契約満了間近・有給付与予定・書類未提出）。
 // やることリストや販促品は含めない。
 export function countDashboardAttention(data: DashboardData) {
   const kpis = computeKpis(data, 0, 0);
@@ -138,7 +144,8 @@ export function countDashboardAttention(data: DashboardData) {
     kpis.pendingReportCount +
     kpis.pendingContractCount +
     kpis.expiringContractCount +
-    kpis.duePaidLeaveGrantCount
+    kpis.duePaidLeaveGrantCount +
+    kpis.missingDocumentCount
   );
 }
 type PendingShipment = { id: string; promoItem: { name: string }; staff: { name: string } };
@@ -162,6 +169,7 @@ export function computeKpis(
     pendingContractCount: data.pendingContractStaff.length,
     expiringContractCount: data.expiringContractStaff.length,
     duePaidLeaveGrantCount: data.duePaidLeaveGrants.length,
+    missingDocumentCount: data.missingDocumentStaff.length,
     promoItemCount,
     pendingShipmentCount,
   };

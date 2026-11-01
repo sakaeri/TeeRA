@@ -123,6 +123,8 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
           actualWorkMinutes: t.actualWorkMinutes,
           breakMinutes: t.breakMinutes,
           hasOvertime: t.hasOvertime,
+          requireIdDocument: t.requireIdDocument,
+          requireBankInfo: t.requireBankInfo,
           overtimeNote: t.overtimeNote,
           fixedWeekdays: t.fixedWeekdays,
           shiftPatternNote: t.shiftPatternNote,

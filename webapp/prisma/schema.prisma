@@ -1019,6 +1019,10 @@ model ContractTemplate {
   actualWorkMinutes     Int?
   breakMinutes          Int?
   hasOvertime           Boolean                @default(false)
+  // この契約で、スタッフに身分証（両面）・振込先の提出を必須にするか。必須の書類が出るまで
+  // 同意できず、スタッフのホーム・ダッシュボードに未提出として出る（手渡しで払う契約などは外す）
+  requireIdDocument     Boolean                @default(true)
+  requireBankInfo       Boolean                @default(true)
   overtimeNote          String?
   fixedWeekdays         Int[]                  @default([]) // 0=Sun..6=Sat, for scheduleType=FIXED
   shiftPatternNote      String? // e.g. "4勤2休", for scheduleType=SHIFT

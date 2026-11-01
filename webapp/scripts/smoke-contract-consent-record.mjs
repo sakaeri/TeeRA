@@ -3,6 +3,14 @@ import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
+// 身分証・振込先の必須化（既定でオン）とは関係ない確認なので、この確認で作った会社では必須を外す
+// （外すと、以前と同じく「契約内容の確認 → 身分証 → 振込先」の順になる）
+function disableRequiredDocuments() {
+  execSync(
+    `PGPASSWORD=postgres psql -h localhost -U postgres -d teera -c "update \\"ContractTemplate\\" set \\"requireIdDocument\\"=false, \\"requireBankInfo\\"=false where \\"createdAt\\" > now() - interval '30 minutes';"`,
+  );
+}
+
 // 雇用契約書の「同意の記録」を検証する：
 // ・同意した時点の内容・ハッシュ・接続元IP・端末・アカウントのメールアドレスが残る
 // ・ハッシュは保存した内容と同意日時から計算し直せる（改ざんの検証ができる）
@@ -106,6 +114,7 @@ try {
   const contractId = psql(`select id from "StaffContract" where "staffUserId"='${staffUserId}';`);
 
   // --- スタッフが全文を確認して同意する ---
+  disableRequiredDocuments();
   await staff.goto(`http://localhost:3000/staff/contracts/${companyId}`);
   await staff.waitForTimeout(500);
   await staff.getByRole("button", { name: "契約書の全文を確認する" }).click();

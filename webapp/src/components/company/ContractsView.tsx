@@ -29,6 +29,8 @@ export type Template = {
   breakMinutes: number | null;
   hasOvertime: boolean;
   overtimeNote: string | null;
+  requireIdDocument: boolean;
+  requireBankInfo: boolean;
   fixedWeekdays: number[];
   shiftPatternNote: string | null;
   restNote: string | null;
@@ -887,6 +889,9 @@ export function TemplateModal({
   );
   const [hasOvertime, setHasOvertime] = useState(editingTemplate?.hasOvertime ?? false);
   const [overtimeNote, setOvertimeNote] = useState(editingTemplate?.overtimeNote ?? "");
+  // スタッフが同意する前に出してもらう書類（新しく作るときはどちらも必須）
+  const [requireIdDocument, setRequireIdDocument] = useState(editingTemplate?.requireIdDocument ?? true);
+  const [requireBankInfo, setRequireBankInfo] = useState(editingTemplate?.requireBankInfo ?? true);
   const [fixedWeekdays, setFixedWeekdays] = useState<number[]>(editingTemplate?.fixedWeekdays ?? []);
   const [shiftPatternNote, setShiftPatternNote] = useState(editingTemplate?.shiftPatternNote ?? "");
   const [restNote, setRestNote] = useState(editingTemplate?.restNote ?? "");
@@ -955,6 +960,8 @@ export function TemplateModal({
       breakMinutes: scheduleType === "FIXED" && breakMinutes ? Number(breakMinutes) : undefined,
       hasOvertime,
       overtimeNote: hasOvertime ? overtimeNote || undefined : undefined,
+      requireIdDocument,
+      requireBankInfo,
       fixedWeekdays: scheduleType === "FIXED" ? fixedWeekdays : [],
       shiftPatternNote: scheduleType === "SHIFT" ? shiftPatternNote || undefined : undefined,
       restNote: restNote || undefined,
@@ -1458,6 +1465,35 @@ export function TemplateModal({
             </Row>
           ) : null}
         </div>
+
+        {!preview && !readOnly ? (
+          <div className="mt-6 rounded-lg border border-border/60 p-4">
+            <p className="mb-1 text-sm font-semibold text-primary">スタッフの提出書類</p>
+            <p className="mb-3 text-xs text-muted">
+              チェックした書類は、スタッフが出すまでこの契約書に同意できません（契約書の本文には載りません）。
+            </p>
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={requireIdDocument}
+                  onChange={(e) => setRequireIdDocument(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                身分証（両面）の提出を必須にする
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={requireBankInfo}
+                  onChange={(e) => setRequireBankInfo(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                振込先の登録を必須にする
+              </label>
+            </div>
+          </div>
+        ) : null}
 
         {consentForm ? (
           <div className="mt-6 rounded-lg border border-primary/40 bg-primary/5 p-4">

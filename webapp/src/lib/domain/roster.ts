@@ -454,6 +454,8 @@ export async function getStaffMonthDetail(params: {
           actualWorkMinutes: c.template.actualWorkMinutes,
           breakMinutes: c.template.breakMinutes,
           hasOvertime: c.template.hasOvertime,
+          requireIdDocument: c.template.requireIdDocument,
+          requireBankInfo: c.template.requireBankInfo,
           overtimeNote: c.template.overtimeNote,
           fixedWeekdays: c.template.fixedWeekdays,
           shiftPatternNote: c.template.shiftPatternNote,

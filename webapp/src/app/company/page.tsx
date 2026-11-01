@@ -141,6 +141,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
         pendingContractStaff={pendingContractStaff}
         expiringContractStaff={expiringContractStaff}
         duePaidLeaveGrants={duePaidLeaveGrants}
+        missingDocumentStaff={dashboardData.missingDocumentStaff}
         companyName={company.name}
         contractClients={clients.map((c) => ({
           id: c.id,
@@ -165,6 +166,8 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
             actualWorkMinutes: t.actualWorkMinutes,
             breakMinutes: t.breakMinutes,
             hasOvertime: t.hasOvertime,
+            requireIdDocument: t.requireIdDocument,
+            requireBankInfo: t.requireBankInfo,
             overtimeNote: t.overtimeNote,
             fixedWeekdays: t.fixedWeekdays,
             shiftPatternNote: t.shiftPatternNote,

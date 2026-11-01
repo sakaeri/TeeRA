@@ -59,6 +59,8 @@ type ContractTemplate = {
   breakMinutes: number | null;
   hasOvertime: boolean;
   overtimeNote: string | null;
+  requireIdDocument: boolean;
+  requireBankInfo: boolean;
   fixedWeekdays: number[];
   shiftPatternNote: string | null;
   restNote: string | null;
