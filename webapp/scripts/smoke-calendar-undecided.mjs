@@ -46,8 +46,23 @@ try {
       `insert into "Shift" (id, "companyId", "staffUserId", source, "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
         `values (gen_random_uuid()::text, '${companyId}', '${userId}', 'INHOUSE', '確認', '${day}', ${undecided ? "null, null" : "'09:00', '17:00'"}, false, ${undecided}, 'CONFIRMED', 'ASSIGN', now(), now());`,
     );
+  // 並び順の確認用に、わざとバラバラの順で作る
+  const lateId = staffId("時間ありスタッフ");
+  shift(lateId, false); // 09:00
+  const earlyId = staffId("朝スタッフ");
+  psql(
+    `insert into "Shift" (id, "companyId", "staffUserId", source, "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', '${earlyId}', 'INHOUSE', '確認', '${day}', '07:00', '15:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now());`,
+  );
   shift(staffId("未定スタッフ"), true);
-  shift(staffId("時間ありスタッフ"), false);
+  const reportedId = staffId("報告済みスタッフ");
+  const reportedShiftId = psql(
+    `insert into "Shift" (id, "companyId", "staffUserId", source, "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', '${reportedId}', 'INHOUSE', '確認', '${day}', '10:00', '18:00', false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id;`,
+  );
+  psql(
+    `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "approvalStatus", "computedMinutes", "breakMinutes", "submittedAt", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${reportedShiftId}', '${reportedId}', 'WORKED', 'PENDING', 480, 60, now(), now(), now());`,
+  );
 
   await page.goto(`http://localhost:3000/company/calendar?y=${y}&m=${m}`);
   await page.waitForTimeout(800);
@@ -56,6 +71,13 @@ try {
   const timedClass = await cell.locator("span.rounded", { hasText: "時間ありスタッフ" }).first().getAttribute("class");
   log("出勤時間が未定のシフトは濃い緑", (undecidedClass ?? "").includes("bg-emerald-700"));
   log("時間が入ったシフトは白地に緑の枠", (timedClass ?? "").includes("bg-white") && (timedClass ?? "").includes("ring-emerald-500"));
+
+  const order = (await cell.locator("span.rounded").allInnerTexts()).map((t) => t.trim());
+  log(
+    "並び順は 報告済み → 時間未定 → 時間の早い順",
+    JSON.stringify(order.filter((t) => t.endsWith("スタッフ"))) ===
+      JSON.stringify(["報告済みスタッフ", "未定スタッフ", "朝スタッフ", "時間ありスタッフ"]),
+  );
 
   await cell.click();
   await page.waitForTimeout(500);
