@@ -18,6 +18,7 @@ export type ShiftRow = {
   clockInTime: string | null;
   clockOutTime: string | null;
   breakMinutes: number;
+  comment: string | null;
   outcome: string | null;
   approvalStatus: string | null;
   rejectionReason: string | null;

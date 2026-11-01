@@ -62,6 +62,7 @@ export default async function StaffTimecardPage() {
           clockInTime: s.workReport?.clockIn ? formatJstTime(s.workReport.clockIn) : null,
           clockOutTime: s.workReport?.clockOut ? formatJstTime(s.workReport.clockOut) : null,
           breakMinutes: s.workReport?.breakMinutes ?? 0,
+          comment: s.workReport?.comment ?? null,
           outcome: s.workReport?.outcome ?? null,
           approvalStatus: s.workReport?.approvalStatus ?? null,
           rejectionReason: s.workReport?.rejectionReason ?? null,

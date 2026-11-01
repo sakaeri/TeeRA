@@ -67,6 +67,56 @@ export async function clockOut(params: { shiftId: string; staffUserId: string })
   });
 }
 
+// 勤務中（出勤後・提出前）に入れておいた休憩・業務内容・コメントと、押し間違えた
+// 出勤時刻の手修正を保存する（まだ提出はしない）。退勤の確認画面で提出する。
+export async function saveWorkReportDraft(params: {
+  shiftId: string;
+  staffUserId: string;
+  breakMinutes?: number;
+  taskName?: string | null;
+  comment?: string | null;
+  clockInTime?: string;
+}) {
+  const report = await prisma.workReport.findUnique({ where: { shiftId: params.shiftId } });
+  if (!report || report.staffUserId !== params.staffUserId || !report.clockIn || report.submittedAt) {
+    throw new Error("not_in_progress");
+  }
+  return prisma.workReport.update({
+    where: { shiftId: params.shiftId },
+    data: {
+      ...(params.breakMinutes !== undefined ? { breakMinutes: Math.max(0, Math.round(params.breakMinutes)) } : {}),
+      ...(params.taskName !== undefined ? { taskName: params.taskName || null } : {}),
+      ...(params.comment !== undefined ? { comment: params.comment || null } : {}),
+      ...(params.clockInTime ? { clockIn: withJstTime(report.clockIn, params.clockInTime) } : {}),
+    },
+  });
+}
+
+// 「勤務終了」を押したとき：退勤を記録し、勤務中に入れておいた休憩・業務内容・
+// コメントでそのまま業務報告を提出する（以前は退勤の後に別途「提出」が必要で、
+// 退勤を押しただけで終わったと思って提出し忘れることが多かった）。
+// 提出後も承認されるまでは、本人が時刻・休憩などを直して出し直せる。
+export async function clockOutAndSubmit(params: {
+  shiftId: string;
+  staffUserId: string;
+  // 画面に入っている最新の値（自動保存が間に合っていなくても、これで提出する）
+  breakMinutes?: number;
+  taskName?: string | null;
+  comment?: string | null;
+  clockInTime?: string;
+}) {
+  await saveWorkReportDraft(params);
+  const report = await clockOut(params);
+  return submitWorkReport({
+    shiftId: params.shiftId,
+    staffUserId: params.staffUserId,
+    outcome: "WORKED",
+    breakMinutes: report.breakMinutes,
+    taskName: report.taskName ?? undefined,
+    comment: report.comment ?? undefined,
+  });
+}
+
 // 業務報告を提出する — the three outcomes (出勤した / 欠勤 / 勤務先からのキャンセル)
 // all route through this one flow into the same approval queue (chat24)。
 // breakMinutesはWORKEDの時だけ意味を持ち、ここで最終確定してcomputedMinutes
@@ -85,6 +135,8 @@ export async function submitWorkReport(params: {
   clockOutTime?: string;
 }) {
   const existing = await prisma.workReport.findUnique({ where: { shiftId: params.shiftId } });
+  // 承認済みのものは本人からは直せない（直す場合は会社側の修正・差し戻しで）
+  if (existing?.submittedAt && existing.approvalStatus === "APPROVED") throw new Error("already_approved");
 
   if (params.outcome === "WORKED") {
     const shift = await prisma.shift.findUniqueOrThrow({ where: { id: params.shiftId } });

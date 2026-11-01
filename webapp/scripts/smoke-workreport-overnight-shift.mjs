@@ -90,21 +90,14 @@ try {
   let staffBody = await staff.textContent("body");
   log("出勤時刻が23:59と表示される", staffBody.includes("23:59"));
 
+  // 「勤務終了」で退勤と同時に提出される（深夜またぎでもエラーにならない）
   await staff.getByRole("button", { name: "勤務終了" }).click();
-  await staff.waitForTimeout(600);
+  await staff.getByText("業務報告を提出しました").first().waitFor({ timeout: 15000 });
   staffBody = await staff.textContent("body");
-  log("退勤後、提出ボタンが表示される", staffBody.includes("業務報告を提出する"));
   log(
     "「退勤時刻が出勤時刻より前」の警告は出ない（深夜またぎは無効な範囲ではない）",
-    !staffBody.includes("退勤時刻が出勤時刻より前になっています"),
+    !staffBody.includes("退勤時刻が出勤時刻より前になっています") && !staffBody.includes("提出できませんでした"),
   );
-
-  const submitButton = staff.getByRole("button", { name: "業務報告を提出する" });
-  log("提出ボタンが無効化されていない（クリックできる）", await submitButton.isEnabled());
-
-  await submitButton.click();
-  await staff.waitForTimeout(800);
-  staffBody = await staff.textContent("body");
   log("深夜またぎシフトの業務報告が提出できる（承認待ちになる）", staffBody.includes("承認待ち"));
 
   const computedMinutes = psql(

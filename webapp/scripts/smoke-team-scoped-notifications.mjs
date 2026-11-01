@@ -162,10 +162,10 @@ try {
     psql(`update "WorkReport" set "clockIn" = now() - interval '8 hours' where "staffUserId"='${staffUserId}';`);
     await page.reload();
     await page.waitForTimeout(400);
-    await page.getByRole("button", { name: "勤務終了" }).click();
-    await page.waitForTimeout(400);
     const logStart = readFileSync(DEV_LOG_PATH, "utf8").length;
-    await page.getByRole("button", { name: "業務報告を提出する" }).click();
+    // 「勤務終了」を押すと、退勤と同時に業務報告が提出される
+    await page.getByRole("button", { name: "勤務終了" }).click();
+    await page.getByText("業務報告を提出しました").first().waitFor({ timeout: 15000 });
     await page.waitForTimeout(800);
     return readServerLogSince(logStart);
   }

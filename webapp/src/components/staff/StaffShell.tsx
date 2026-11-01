@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Toaster } from "@/components/Toast";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { logoutAction } from "@/app/actions/auth";
@@ -238,6 +239,7 @@ export function StaffShell({
       </nav>
 
       <div className="flex flex-1 flex-col bg-background">{children}</div>
+      <Toaster />
     </div>
   );
 }

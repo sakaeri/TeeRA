@@ -111,9 +111,9 @@ try {
   await staff.getByRole("button", { name: "勤務開始" }).click();
   await staff.waitForTimeout(400);
   psql(`update "WorkReport" set "clockIn" = now() - interval '6 hours' where "shiftId"='${shiftId}';`);
+  // 「勤務終了」を押すと、退勤と同時に業務報告が提出される
   await staff.getByRole("button", { name: "勤務終了" }).click();
-  await staff.waitForTimeout(400);
-  await staff.getByRole("button", { name: "業務報告を提出する" }).click();
+  await staff.getByText("業務報告を提出しました").first().waitFor({ timeout: 15000 });
   await staff.waitForTimeout(600);
 
   await admin.goto("http://localhost:3000/company/settings?tab=workreports");
