@@ -94,7 +94,7 @@ try {
     historyText.includes("自社・通常業務") && historyText.includes("自社都合") && !historyText.includes("09:00〜18:00"),
   );
   log("変更履歴にキャンセル済みも表示される", historyText.includes("キャンセル済み"));
-  await dayModal.getByRole("button", { name: "✕", exact: true }).click();
+  await dayModal.getByRole("button", { name: "閉じる", exact: true }).click();
   await page.waitForTimeout(200);
 
   // --- ②日別詳細モーダルの＞で月をまたぐと、翌月の実データが表示されるか ---

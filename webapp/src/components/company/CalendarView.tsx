@@ -118,6 +118,24 @@ function shiftTag(s: ShiftRow, todayStr: string): { label: string; mobileLabel: 
   return tag("", "bg-white text-emerald-900 ring-1 ring-inset ring-emerald-500");
 }
 
+// 1日のシフトの並び順（月表示のマスと日付の詳細で共通）：報告済み → 出勤時間が未定 →
+// 調整中 → 時間が入ったもの（始まりの早い順）。同じグループの中は名前順。
+function dayShiftGroup(s: ShiftRow) {
+  if (s.outcome) return 0;
+  if (s.status === "ON_HOLD") return 2;
+  if (s.isUndecided || s.isAllDay) return 1;
+  return 3;
+}
+function compareDayShifts(a: ShiftRow, b: ShiftRow) {
+  const group = dayShiftGroup(a) - dayShiftGroup(b);
+  if (group !== 0) return group;
+  if (dayShiftGroup(a) === 3) {
+    const time = (a.startTime ?? "").localeCompare(b.startTime ?? "");
+    if (time !== 0) return time;
+  }
+  return a.staffName.localeCompare(b.staffName, "ja");
+}
+
 // 依頼主に取り消され、振り替えられずに休みになったシフト（同じ日に同じ
 // スタッフの別のシフトがあれば振り替え済みなので出さない）。
 function clientCancelledLeftOff(history: ShiftHistoryRow[], activeShifts: ShiftRow[]) {
@@ -340,6 +358,7 @@ export function CalendarView({
       if (!map.has(s.date)) map.set(s.date, []);
       map.get(s.date)!.push(s);
     }
+    for (const list of map.values()) list.sort(compareDayShifts);
     return map;
   }, [shifts]);
 
