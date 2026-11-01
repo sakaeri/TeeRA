@@ -6,7 +6,7 @@ import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 // （外すと、以前と同じく「契約内容の確認 → 身分証 → 振込先」の順になる）
 function disableRequiredDocuments() {
   execSync(
-    `PGPASSWORD=postgres psql -h localhost -U postgres -d teera -c "update \\"Company\\" set \\"requireIdDocument\\"=false, \\"requireBankInfo\\"=false where \\"createdAt\\" > now() - interval '30 minutes';"`,
+    `PGPASSWORD=postgres psql -h localhost -U postgres -d teera -c "update \\"ContractTemplate\\" set \\"requireIdDocument\\"=false, \\"requireBankInfo\\"=false where \\"createdAt\\" > now() - interval '30 minutes';"`,
   );
 }
 

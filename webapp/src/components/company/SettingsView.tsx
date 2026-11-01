@@ -11,7 +11,6 @@ import {
   updateCompanyBankInfoAction,
   updateCompanySealAction,
   updateCompanySealOpacityAction,
-  updateCompanyRequiredDocumentsAction,
   setMemberCanWorkShiftsAction,
   removeCompanyMemberRoleAction,
   inviteCompanyAdminAction,
@@ -60,6 +59,8 @@ type ContractTemplate = {
   breakMinutes: number | null;
   hasOvertime: boolean;
   overtimeNote: string | null;
+  requireIdDocument: boolean;
+  requireBankInfo: boolean;
   fixedWeekdays: number[];
   shiftPatternNote: string | null;
   restNote: string | null;
@@ -109,8 +110,6 @@ export function SettingsView({
   address,
   phoneNumber,
   notificationEmail,
-  requireIdDocument,
-  requireBankInfo,
   bankName,
   branchName,
   accountType,
@@ -136,8 +135,6 @@ export function SettingsView({
   address: string;
   phoneNumber: string;
   notificationEmail: string;
-  requireIdDocument: boolean;
-  requireBankInfo: boolean;
   bankName: string;
   branchName: string;
   accountType: string;
@@ -212,7 +209,6 @@ export function SettingsView({
             accountHolderName={accountHolderName}
           />
           <SealSection companyName={companyName} sealImageDataUrl={sealImageDataUrl} sealOpacity={sealOpacity} />
-          <RequiredDocumentsSection requireIdDocument={requireIdDocument} requireBankInfo={requireBankInfo} />
           <div id="admins" className="scroll-mt-24">
             <AdminsSection admins={admins} staff={staff} />
           </div>
@@ -773,56 +769,6 @@ const SEAL_OPACITY_OPTIONS = [
   { value: 45, label: "標準" },
   { value: 70, label: "濃いめ" },
 ];
-
-// スタッフに出してもらう書類（身分証・振込先）を必須にするか。必須の間は、出すまで
-// 契約書に同意できず、スタッフのホームとダッシュボードの「書類未提出」に出る
-function RequiredDocumentsSection({
-  requireIdDocument,
-  requireBankInfo,
-}: {
-  requireIdDocument: boolean;
-  requireBankInfo: boolean;
-}) {
-  const [pending, startTransition] = useTransition();
-  const [value, setValue] = useState({ requireIdDocument, requireBankInfo });
-  const [error, setError] = useState<string | null>(null);
-
-  function toggle(key: "requireIdDocument" | "requireBankInfo") {
-    const next = { ...value, [key]: !value[key] };
-    setValue(next);
-    setError(null);
-    startTransition(async () => {
-      try {
-        await updateCompanyRequiredDocumentsAction(next);
-      } catch {
-        setValue(value);
-        setError("保存できませんでした。");
-      }
-    });
-  }
-
-  return (
-    <SectionCard title="スタッフの提出書類">
-      <p className="mb-3 text-xs text-muted">
-        必須にした書類は、スタッフが出すまで契約書に同意できません。未提出の間は、スタッフのホームとダッシュボードの「書類未提出」に表示されます。
-      </p>
-      <div className="flex flex-col gap-2">
-        {(
-          [
-            ["requireIdDocument", "身分証（両面）の提出を必須にする"],
-            ["requireBankInfo", "振込先の登録を必須にする"],
-          ] as const
-        ).map(([key, label]) => (
-          <label key={key} className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={value[key]} disabled={pending} onChange={() => toggle(key)} className="h-4 w-4" />
-            {label}
-          </label>
-        ))}
-      </div>
-      {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
-    </SectionCard>
-  );
-}
 
 function SealSection({
   companyName,

@@ -129,6 +129,8 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
       actualWorkMinutes: c.template.actualWorkMinutes,
       breakMinutes: c.template.breakMinutes,
       hasOvertime: c.template.hasOvertime,
+      requireIdDocument: c.template.requireIdDocument,
+      requireBankInfo: c.template.requireBankInfo,
       overtimeNote: c.template.overtimeNote,
       fixedWeekdays: c.template.fixedWeekdays,
       shiftPatternNote: c.template.shiftPatternNote,
@@ -181,9 +183,9 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
           id: c.id,
           title: contractDisplayTitle(c.template.employmentType, c.template.jobDescription),
           templateDetail: buildTemplateDetail(c),
+          requireIdDocument: c.template.requireIdDocument,
+          requireBankInfo: c.template.requireBankInfo,
         }))}
-        requireIdDocument={company.requireIdDocument}
-        requireBankInfo={company.requireBankInfo}
         idDocumentFrontUrl={myMembership.idDocumentFrontUrl}
         idDocumentBackUrl={myMembership.idDocumentBackUrl}
         bankInfo={{

@@ -462,19 +462,6 @@ export async function updateCompanyNotificationEmailAction(notificationEmail: st
   revalidatePath("/company/settings");
 }
 
-// スタッフに身分証・振込先の提出を必須にするか（会社の設定）
-export async function updateCompanyRequiredDocumentsAction(input: { requireIdDocument: boolean; requireBankInfo: boolean }) {
-  const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
-
-  await prisma.company.update({
-    where: { id: membership.companyId },
-    data: { requireIdDocument: input.requireIdDocument, requireBankInfo: input.requireBankInfo },
-  });
-  revalidatePath("/company/settings");
-  revalidatePath("/company");
-}
-
 // 請求書の電子印（社印）。nullで削除。画像はブラウザ側で白背景を透過・縮小
 // したPNGのdata URLで受け取る。
 const MAX_SEAL_DATA_URL_LENGTH = 400_000;

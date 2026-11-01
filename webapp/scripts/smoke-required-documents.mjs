@@ -2,11 +2,12 @@ import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
-// 身分証・振込先の提出を必須にする（会社の設定。既定でオン）：
+// 身分証・振込先の提出を必須にする（契約書テンプレートごとの設定。既定でオン）：
 // ・未提出のスタッフは、ホームに「登録してください」が出て、アイコンの数字にも数える
 // ・本部のダッシュボードに「書類未提出」とその一覧が出る
 // ・契約書の手続きは、必須の書類が先（身分証→振込先→契約内容の確認・同意）
-// ・設定で必須を外すと、未提出として出なくなる
+// ・テンプレートの編集で必須を外すと、未提出として出なくなる
+// ・契約書がまだないスタッフには、お願いを出さない
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -39,7 +40,6 @@ try {
   await admin.click("button[type=submit]");
   await admin.waitForURL("http://localhost:3000/company");
   const companyId = psql(`select id from "Company" where name='${companyName}';`);
-  log("既定では身分証・振込先とも必須", psql(`select "requireIdDocument" || '|' || "requireBankInfo" from "Company" where id='${companyId}';`) === "true|true");
 
   // スタッフを招待して参加させる
   await admin.goto("http://localhost:3000/company/roster");
@@ -62,12 +62,24 @@ try {
 
   // 同意待ちの契約書を用意する
   await admin.goto("http://localhost:3000/company/settings?tab=contracts");
+  // 契約書がまだないうちは、お願いは出さない
+  await staff.goto("http://localhost:3000/staff");
+  await staff.waitForTimeout(800);
+  log("契約書がまだないスタッフには、ホームに登録のお願いを出さない", (await staff.getByText("を登録してください").count()) === 0);
+
+  await admin.goto("http://localhost:3000/company/settings?tab=contracts");
   await admin.getByRole("button", { name: "＋テンプレートを作成" }).click();
+  log(
+    "テンプレート作成画面に必須のチェックがあり、既定はどちらもオン",
+    (await admin.getByLabel("身分証（両面）の提出を必須にする").isChecked()) &&
+      (await admin.getByLabel("振込先の登録を必須にする").isChecked()),
+  );
   await admin.getByText("業務内容", { exact: true }).locator("xpath=..").locator("input").fill("受付業務");
   await admin.getByText("賃金", { exact: true }).locator("xpath=..").locator("input[type=number]").fill("1200");
   await admin.getByRole("button", { name: "テンプレートを生成" }).click();
   await admin.waitForTimeout(600);
   const templateId = psql(`select id from "ContractTemplate" where "companyId"='${companyId}' order by "createdAt" desc limit 1;`);
+  log("作ったテンプレートは身分証・振込先とも必須", psql(`select "requireIdDocument" || '|' || "requireBankInfo" from "ContractTemplate" where id='${templateId}';`) === "true|true");
   psql(
     `insert into "StaffContract" (id, "templateId", "staffUserId", "wageAmountSnapshot", status, "createdAt", "updatedAt") values (gen_random_uuid()::text, '${templateId}', '${staffUserId}', 1200, 'PENDING_CONSENT', now(), now());`,
   );
@@ -121,14 +133,21 @@ try {
   log("書類がそろうとホームの登録のお願いは消える", (await staff.getByText("を登録してください").count()) === 0);
   log("アイコンの数字も0になる", (await badge(staff)) === 0);
 
-  // --- 設定で必須を外すと、未提出として出ない ---
+  // --- テンプレートで必須を外すと、未提出として出ない ---
+  // （このテンプレートは同意済みで使用中なので、編集すると複製ができる。新しい契約書をその複製で用意する）
   psql(`update "CompanyMembership" set "idDocumentFrontUrl"=null, "idDocumentBackUrl"=null, "bankName"=null where "userId"='${staffUserId}' and "companyId"='${companyId}';`);
-  await admin.goto("http://localhost:3000/company/settings?tab=basic");
+  psql(`update "StaffContract" set status='ENDED' where "staffUserId"='${staffUserId}';`);
+  psql(`update "ContractTemplate" set status='ACTIVE' where id='${templateId}';`);
+  await admin.goto("http://localhost:3000/company/settings?tab=contracts");
+  await admin.getByRole("button", { name: "編集", exact: true }).first().click();
   await admin.getByLabel("身分証（両面）の提出を必須にする").uncheck();
-  await admin.waitForTimeout(600);
   await admin.getByLabel("振込先の登録を必須にする").uncheck();
+  await admin.getByRole("button", { name: "更新する" }).click();
   await admin.waitForTimeout(800);
-  log("設定画面で必須を外せる", psql(`select "requireIdDocument" || '|' || "requireBankInfo" from "Company" where id='${companyId}';`) === "false|false");
+  log("テンプレートの編集で必須を外せる", psql(`select "requireIdDocument" || '|' || "requireBankInfo" from "ContractTemplate" where id='${templateId}';`) === "false|false");
+  psql(
+    `insert into "StaffContract" (id, "templateId", "staffUserId", "wageAmountSnapshot", status, "createdAt", "updatedAt") values (gen_random_uuid()::text, '${templateId}', '${staffUserId}', 1200, 'PENDING_CONSENT', now(), now());`,
+  );
   await staff.goto("http://localhost:3000/staff");
   await staff.waitForTimeout(500);
   log("必須でなければ、未提出でもホームに出ない", (await staff.getByText("を登録してください").count()) === 0);

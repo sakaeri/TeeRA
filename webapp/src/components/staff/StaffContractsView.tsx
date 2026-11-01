@@ -39,7 +39,14 @@ type BankInfo = {
   accountHolderName: string;
 };
 
-type PendingContract = { id: string; title: string; templateDetail: Template };
+// requireIdDocument/requireBankInfo：この契約書（テンプレート）で、同意の前に書類の提出を必須にしているか
+type PendingContract = {
+  id: string;
+  title: string;
+  templateDetail: Template;
+  requireIdDocument: boolean;
+  requireBankInfo: boolean;
+};
 
 type TaskRate = {
   id: string;
@@ -67,7 +74,7 @@ type Workplace = {
 
 type WizardStep = "review" | "id" | "bank" | "done";
 
-// 手続きの順番：会社が必須にしている書類（未提出のもの）→ 契約内容の確認・同意 →
+// 手続きの順番：契約書で必須にしている書類（未提出のもの）→ 契約内容の確認・同意 →
 // 必須ではない書類（未提出のもの・任意）→ 完了
 function buildWizardSteps(p: {
   idDocumentFrontUrl: string | null;
@@ -112,8 +119,6 @@ export function StaffContractsView({
   idDocumentFrontUrl,
   idDocumentBackUrl,
   bankInfo,
-  requireIdDocument,
-  requireBankInfo,
   currentAddress,
   currentPhoneNumber,
   baseWage,
@@ -144,9 +149,6 @@ export function StaffContractsView({
   idDocumentFrontUrl: string | null;
   idDocumentBackUrl: string | null;
   bankInfo: BankInfo;
-  // 会社が必須にしている書類は、契約書に同意する前に出してもらう
-  requireIdDocument: boolean;
-  requireBankInfo: boolean;
   baseWage: BaseWage | null;
   taskRates: TaskRate[];
   workplaces: Workplace[];
@@ -191,7 +193,13 @@ export function StaffContractsView({
   const [queueIndex, setQueueIndex] = useState(0);
   const activePending = queue[queueIndex] ?? null;
   const [wizardSteps, setWizardSteps] = useState<WizardStep[]>(() =>
-    buildWizardSteps({ idDocumentFrontUrl, idDocumentBackUrl, bankInfo, requireIdDocument, requireBankInfo }),
+    buildWizardSteps({
+      idDocumentFrontUrl,
+      idDocumentBackUrl,
+      bankInfo,
+      requireIdDocument: pendingContracts[0]?.requireIdDocument ?? false,
+      requireBankInfo: pendingContracts[0]?.requireBankInfo ?? false,
+    }),
   );
   const [wizardIndex, setWizardIndex] = useState(0);
   const wizardStep: WizardStep = wizardSteps[wizardIndex] ?? "done";
@@ -214,7 +222,8 @@ export function StaffContractsView({
   const canonicalOrder: WizardStep[] =
     wizardSteps[0] === "review" ? ["review", "id", "bank", "done"] : ["id", "bank", "review", "done"];
   const stepNumber = ["①", "②", "③", "④"][canonicalOrder.indexOf(wizardStep)] ?? "";
-  const stepIsRequired = (step: "id" | "bank") => (step === "id" ? requireIdDocument : requireBankInfo);
+  const stepIsRequired = (step: "id" | "bank") =>
+    step === "id" ? !!activePending?.requireIdDocument : !!activePending?.requireBankInfo;
 
   function handleConsent(party: { name: string; address: string; phoneNumber: string }) {
     if (!activePending) return;
@@ -261,10 +270,21 @@ export function StaffContractsView({
     });
   }
 
-  // 次の契約書へ。書類は出し終わっているので、次からは確認・同意だけになる
+  // 次の契約書へ。その契約書で必須の書類がまだなら先に出してもらい、済んでいれば確認・同意だけ
+  // （任意の書類はひとつ前の契約書で案内済みなので、もう一度は出さない）
   function finishWizard() {
+    const next = queue[queueIndex + 1];
     setQueueIndex((i) => i + 1);
-    setWizardSteps(["review", "done"]);
+    const steps = next
+      ? buildWizardSteps({
+          idDocumentFrontUrl: frontUrl || null,
+          idDocumentBackUrl: backUrl || null,
+          bankInfo: { ...bankInfo, bankName, accountNumber, accountHolderName },
+          requireIdDocument: next.requireIdDocument,
+          requireBankInfo: next.requireBankInfo,
+        }).filter((step, i, all) => step === "done" || i < all.indexOf("review") + 1)
+      : (["done"] as WizardStep[]);
+    setWizardSteps(steps);
     setWizardIndex(0);
   }
 
