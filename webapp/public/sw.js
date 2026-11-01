@@ -7,13 +7,31 @@ self.addEventListener("push", (event) => {
   }
   const title = data.title || "TeeRA";
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body: data.body || "",
-      icon: "/favicon.ico",
-      data: { url: data.url || "/" },
-    }),
+    Promise.all([
+      self.registration.showNotification(title, {
+        body: data.body || "",
+        icon: "/favicon.ico",
+        data: { url: data.url || "/" },
+      }),
+      refreshAppBadge(),
+    ]),
   );
 });
+
+// アプリのアイコンの数字（対応が必要な件数）を最新にする。プッシュが届いたとき
+// （アプリを開いていないとき）に、数字も一緒に増えるようにする。
+async function refreshAppBadge() {
+  if (!self.navigator.setAppBadge) return;
+  try {
+    const res = await fetch("/api/app-badge", { credentials: "same-origin", cache: "no-store" });
+    if (!res.ok) return;
+    const { count } = await res.json();
+    if (count > 0) await self.navigator.setAppBadge(count);
+    else await self.navigator.clearAppBadge();
+  } catch {
+    // 数字が更新できなくても通知自体は出す
+  }
+}
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
