@@ -255,9 +255,10 @@ export async function runShiftRequestDigest() {
   // メール・プッシュから開いたとき、ダッシュボードの「未確定シフト」の一覧を開いた状態にする
   const digestUrl = "/company?open=unconfirmed";
   for (const company of companies) {
+    // ダッシュボードの「未確定シフト」と同じく、出勤希望だけを数える
     const requests = await prisma.shiftRequest.findMany({
-      where: { companyId: company.id, status: "PENDING" },
-      select: { teamId: true, dates: true },
+      where: { companyId: company.id, status: "PENDING", desire: "WORK" },
+      select: { staffUserId: true, dates: true },
     });
     const pending = requests.filter((r) => r.dates.some((d) => d >= today));
     const totalCount = pending.length;
@@ -276,10 +277,20 @@ export async function runShiftRequestDigest() {
       url: digestUrl,
     });
 
+    // チームは、希望を出した時点ではなく今そのスタッフが入っているチームで決める
+    // （チームを移ったスタッフの分が前のチームに届かないように）。複数のチームに
+    // 入っていれば、それぞれのチームに数える。
+    const staffTeams = await prisma.teamMembership.findMany({
+      where: { userId: { in: [...new Set(pending.map((r) => r.staffUserId))] }, team: { companyId: company.id } },
+      select: { userId: true, teamId: true },
+    });
+    const teamIdsByStaff = new Map<string, string[]>();
+    for (const m of staffTeams) teamIdsByStaff.set(m.userId, [...(teamIdsByStaff.get(m.userId) ?? []), m.teamId]);
     const countByTeamId = new Map<string, number>();
     for (const r of pending) {
-      if (!r.teamId) continue;
-      countByTeamId.set(r.teamId, (countByTeamId.get(r.teamId) ?? 0) + 1);
+      for (const teamId of new Set(teamIdsByStaff.get(r.staffUserId) ?? [])) {
+        countByTeamId.set(teamId, (countByTeamId.get(teamId) ?? 0) + 1);
+      }
     }
     for (const [teamId, count] of countByTeamId) {
       const team = await prisma.team.findUnique({ where: { id: teamId }, select: { name: true, notificationEmail: true } });

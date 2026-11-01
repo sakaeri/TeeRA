@@ -110,8 +110,9 @@ export async function loadDashboardData(companyId: string) {
 export type DashboardData = Awaited<ReturnType<typeof loadDashboardData>>;
 
 // チームのマネージャー/リーダーには、自分のチームの分だけを見せる（本部の
-// 管理者/編集者は会社全体）。チームの判定は、シフト・募集・シフト希望に付いた
-// チーム、またはそのスタッフがチームのメンバーかどうかで行う。
+// 管理者/編集者は会社全体）。チームの判定は、シフト・募集に付いたチーム、
+// またはそのスタッフがチームのメンバーかどうかで行う。シフト希望は、出した時点の
+// チームではなく今のチームで判定する（チームを移ったスタッフの分が前のチームに残らないように）。
 export async function scopeDashboardDataToTeams(data: DashboardData, teamIds: string[]): Promise<DashboardData> {
   const teams = new Set(teamIds);
   const members = new Set(
@@ -123,7 +124,7 @@ export async function scopeDashboardDataToTeams(data: DashboardData, teamIds: st
   return {
     ...data,
     shortageRecruitments: data.shortageRecruitments.filter((r) => inTeam(r.teamId)),
-    shiftRequests: data.shiftRequests.filter((r) => inTeam(r.teamId) || members.has(r.staffUserId)),
+    shiftRequests: data.shiftRequests.filter((r) => members.has(r.staffUserId)),
     pendingReports: data.pendingReports.filter((r) => inTeam(r.shift.teamId) || members.has(r.staffUserId)),
     pendingContractStaff: data.pendingContractStaff.filter((s) => members.has(s.userId)),
     expiringContractStaff: data.expiringContractStaff.filter((s) => members.has(s.staffUserId)),
