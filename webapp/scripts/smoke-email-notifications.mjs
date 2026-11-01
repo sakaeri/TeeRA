@@ -105,10 +105,10 @@ try {
   psql(`update "WorkReport" set "clockIn" = now() - interval '8 hours' where "staffUserId"='${staffUserId}';`);
   await staff.reload();
   await staff.waitForTimeout(400);
-  await staff.getByRole("button", { name: "勤務終了" }).click();
-  await staff.waitForTimeout(500);
   const logSizeBeforeSubmit = readFileSync(DEV_LOG_PATH, "utf8").length;
-  await staff.getByRole("button", { name: "業務報告を提出する" }).click();
+  // 「勤務終了」を押すと、退勤と同時に業務報告が提出される
+  await staff.getByRole("button", { name: "勤務終了" }).click();
+  await staff.getByText("業務報告を提出しました").first().waitFor({ timeout: 15000 });
   await staff.waitForTimeout(800);
 
   // ① 提出でメール（fallbackログ）が飛び、承認トークンが作られる

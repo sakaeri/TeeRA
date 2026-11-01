@@ -102,15 +102,32 @@ try {
   await staff.reload();
   await staff.waitForTimeout(400);
 
+  // 勤務中に休憩を入れておき、「勤務終了」で退勤と同時に提出される
+  await staff.getByRole("button", { name: "60分" }).click();
+  await staff.waitForTimeout(400);
+  log(
+    "勤務中に入れた休憩がその場で保存される",
+    psql(`select "breakMinutes" from "WorkReport" where "staffUserId"='${staffUserId}';`) === "60",
+  );
   await staff.getByRole("button", { name: "勤務終了" }).click();
-  await staff.waitForTimeout(600);
+  await staff.getByText("業務報告を提出しました").first().waitFor({ timeout: 15000 });
+  await staff.getByRole("button", { name: "修正する" }).waitFor({ timeout: 15000 });
   staffBody = await staff.textContent("body");
-  log("shows submit button after clock-out", staffBody.includes("業務報告を提出する"));
+  log("「勤務終了」だけで提出され、承認待ちになる（今日のシフトに残り、修正ボタンが見える）", staffBody.includes("承認待ち"));
+  log(
+    "提出された報告に休憩60分が入っている",
+    psql(`select "breakMinutes" || '|' || ("submittedAt" is not null) from "WorkReport" where "staffUserId"='${staffUserId}';`) === "60|true",
+  );
 
-  await staff.getByRole("button", { name: "業務報告を提出する" }).click();
-  await staff.waitForTimeout(800);
-  staffBody = await staff.textContent("body");
-  log("shows 承認待ち after submit", staffBody.includes("承認待ち"));
+  // 承認されるまでは修正できる（会社への通知は重ねて送らない）
+  await staff.getByRole("button", { name: "修正する" }).click();
+  await staff.getByRole("button", { name: "45分" }).click();
+  await staff.getByRole("button", { name: "修正して提出する" }).click();
+  await staff.getByText("業務報告を修正しました").first().waitFor({ timeout: 15000 });
+  log(
+    "承認前なら休憩を直して出し直せる",
+    psql(`select "breakMinutes" from "WorkReport" where "staffUserId"='${staffUserId}';`) === "45",
+  );
 
   // admin: approve
   await admin.goto("http://localhost:3000/company/settings?tab=workreports");

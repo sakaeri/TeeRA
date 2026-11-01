@@ -116,12 +116,10 @@ try {
   psql(`update "WorkReport" set "clockIn" = now() - interval '8 hours' where "shiftId"='${shiftId}';`);
   await staff.reload();
   await staff.waitForTimeout(400);
-  await staff.getByRole("button", { name: "勤務終了" }).click();
-  await staff.waitForTimeout(200);
-
+  // 勤務中に業務内容を選んでおき、「勤務終了」で退勤と同時に提出する
   const beforeReport = psql(`select "taskName" from "WorkReport" where "shiftId"='${shiftId}';`);
   const taskNameLabel = staff.locator("label", { hasText: "業務内容" });
-  log("業務報告フォームに業務内容の選択欄が表示される", (await taskNameLabel.count()) > 0);
+  log("勤務中の画面に業務内容の選択欄が表示される", (await taskNameLabel.count()) > 0);
 
   // pick "キャディ業務" from the picker (already known company-wide from the rate registration above)
   const picker = taskNameLabel.locator("select");
@@ -130,8 +128,8 @@ try {
   if (hasPicker) {
     await picker.selectOption({ label: "キャディ業務" });
   }
-  await staff.getByRole("button", { name: "業務報告を提出する" }).click();
-  await staff.waitForTimeout(500);
+  await staff.getByRole("button", { name: "勤務終了" }).click();
+  await staff.getByText("業務報告を提出しました").first().waitFor({ timeout: 15000 });
 
   const reportTaskName = psql(`select "taskName" from "WorkReport" where "shiftId"='${shiftId}';`);
   log("WorkReport.taskNameに選び直した業務内容が保存される", reportTaskName === "キャディ業務");

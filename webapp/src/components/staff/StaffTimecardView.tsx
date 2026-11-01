@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import {
   clockInAction,
-  clockOutAction,
+  clockOutAndSubmitAction,
+  saveWorkReportDraftAction,
   submitWorkReportAction,
   confirmCorrectedWorkReportAction,
   disputeCorrectedWorkReportAction,
@@ -12,6 +13,7 @@ import { isDone, type ShiftRow } from "@/lib/staffShiftStatus";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { todayJst } from "@/lib/date";
 import { UnscheduledReportButton, type UnscheduledCompanyOption } from "@/components/staff/UnscheduledReportForm";
+import { showToast } from "@/components/Toast";
 
 export type { ShiftRow };
 export { isDone };
@@ -54,7 +56,12 @@ export function StaffTimecardView({
   // まとめ、今日これから勤務するシフトとは分ける — 以前は日付の新しい順に
   // 混ざって並んでいたため、今日のシフトの下に未提出の過去分が埋もれていた。
   const unsubmitted = actionable.filter(needsReportNow);
-  const upcomingToday = actionable.filter((s) => !needsReportNow(s));
+  // 今日提出した承認待ちの報告は「今日のシフト」に残す（提出できたことと、承認前なら
+  // 「修正する」から直せることが見えるように。閉じた「過去の報告」に入ると見えなくなる）
+  const today = todayJst();
+  const isTodaySubmitted = (s: ShiftRow) => s.date === today && s.approvalStatus === "PENDING" && isDone(s);
+  const upcomingToday = [...actionable.filter((s) => !needsReportNow(s)), ...done.filter(isTodaySubmitted)];
+  const pastDone = done.filter((s) => !isTodaySubmitted(s));
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,13 +94,13 @@ export function StaffTimecardView({
 
       <UnscheduledReportButton companies={unscheduledCompanies} knownTaskNamesByCompany={knownTaskNamesByCompany} />
 
-      {done.length > 0 ? (
+      {pastDone.length > 0 ? (
         <details className="rounded-2xl bg-white/70 p-4 shadow-sm ring-1 ring-black/5">
           <summary className="cursor-pointer text-sm font-semibold text-muted">
-            過去の報告（{done.length}件）
+            過去の報告（{pastDone.length}件）
           </summary>
           <ul className="mt-3 flex flex-col gap-4">
-            {done.map((s) => (
+            {pastDone.map((s) => (
               <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} />
             ))}
           </ul>
@@ -117,13 +124,15 @@ export function needsReportNow(shift: ShiftRow) {
 
 export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTaskNames: string[] }) {
   const [pending, startTransition] = useTransition();
-  const [comment, setComment] = useState("");
+  const [comment, setComment] = useState(shift.comment ?? "");
   const [taskName, setTaskName] = useState(shift.taskName ?? "");
   const [taskNameMode, setTaskNameMode] = useState<"pick" | "custom">(
     knownTaskNames.length > 0 ? "pick" : "custom",
   );
   const [error, setError] = useState<string | null>(null);
-  const [breakMinutes, setBreakMinutes] = useState("0");
+  const [breakMinutes, setBreakMinutes] = useState(String(shift.breakMinutes ?? 0));
+  // 提出済み（承認待ち）の内容を本人が直すとき
+  const [editing, setEditing] = useState(false);
   const [confirmOutcome, setConfirmOutcome] = useState<"ABSENT" | "CANCELLED_BY_EMPLOYER" | null>(null);
   // 打刻時刻は自動記録だが、押し忘れ・押し間違いを本人が直せるよう提出前
   // に限り手修正を許す（承認/差し戻しという既存のチェックが最終的な歯止め
@@ -206,6 +215,115 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
     shift.approvalStatus !== "REJECTED" &&
     (Boolean(shift.clockOut) || isPastShift);
 
+  // 勤務中（出勤済み・まだ勤務終了していない今日のシフト）
+  const inProgress = Boolean(shift.clockIn) && !shift.clockOut && !isPastShift && !submitted && !finalized;
+
+  // 勤務中に入れた内容をその場で保存する（再読み込みしても残るように）。
+  // 提出は「勤務終了」で、そのとき画面の値も一緒に送るので、ここが間に合わなくても困らない。
+  function saveDraft(patch: { breakMinutes?: number; taskName?: string | null; comment?: string | null; clockInTime?: string }) {
+    if (!inProgress) return;
+    saveWorkReportDraftAction({ shiftId: shift.id, ...patch }).catch(() =>
+      setError("保存できませんでした。電波の良いところでもう一度お試しください。"),
+    );
+  }
+
+  const breakInput = (
+    <div>
+      <p className="mb-1 text-xs text-muted">休憩時間</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {BREAK_MINUTE_PRESETS.map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => {
+              setBreakMinutes(String(m));
+              saveDraft({ breakMinutes: m });
+            }}
+            className={`rounded-full border px-2.5 py-1 text-xs ${
+              Number(breakMinutes) === m
+                ? "border-primary bg-primary/10 font-semibold text-primary"
+                : "border-border text-foreground"
+            }`}
+          >
+            {m}分
+          </button>
+        ))}
+        <input
+          type="number"
+          min="0"
+          value={breakMinutes}
+          onChange={(e) => setBreakMinutes(e.target.value)}
+          onBlur={() => saveDraft({ breakMinutes: Number(breakMinutes) || 0 })}
+          className="w-16 rounded-lg border border-border px-2 py-1 text-xs"
+        />
+        <span className="text-xs text-muted">分</span>
+      </div>
+    </div>
+  );
+
+  const taskNameInput = (
+    <label className="flex flex-col gap-0.5 text-xs">
+      <span className="text-muted">業務内容</span>
+      {taskNameMode === "pick" ? (
+        <select
+          value={taskName}
+          onChange={(e) => {
+            if (e.target.value === NEW_TASK_NAME_SENTINEL) {
+              setTaskNameMode("custom");
+              setTaskName("");
+            } else {
+              setTaskName(e.target.value);
+              saveDraft({ taskName: e.target.value || null });
+            }
+          }}
+          className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+        >
+          <option value="">未選択</option>
+          {knownTaskNames.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+          <option value={NEW_TASK_NAME_SENTINEL}>＋ 新しい業務内容を追加する</option>
+        </select>
+      ) : (
+        <div className="flex flex-col gap-1">
+          <input
+            type="text"
+            value={taskName}
+            onChange={(e) => setTaskName(e.target.value)}
+            onBlur={() => saveDraft({ taskName: taskName.trim() || null })}
+            placeholder="業務内容（例：キャディ業務）"
+            className="rounded-lg border border-border px-3 py-2 text-sm"
+          />
+          {knownTaskNames.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => {
+                setTaskNameMode("pick");
+                setTaskName(shift.taskName ?? "");
+              }}
+              className="self-start text-xs text-muted hover:text-primary"
+            >
+              ← 既存の業務内容から選ぶ
+            </button>
+          ) : null}
+        </div>
+      )}
+    </label>
+  );
+
+  const commentInput = (
+    <textarea
+      value={comment}
+      onChange={(e) => setComment(e.target.value)}
+      onBlur={() => saveDraft({ comment: comment || null })}
+      placeholder="コメント（任意）"
+      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+      rows={2}
+    />
+  );
+
   return (
     <li
       id={`shift-${shift.id}`}
@@ -284,43 +402,86 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
         <p className="text-sm text-muted">
           {shift.outcome === "ABSENT" ? "欠勤として報告済みです。" : "勤務先からのキャンセルとして報告済みです。"}
         </p>
-      ) : submitted ? (
+      ) : submitted && !editing ? (
         <>
           {shift.taskName ? <p className="mb-1 text-sm text-muted">{shift.taskName}</p> : null}
           <p className="text-sm text-muted">
             {shift.clockInTime ?? "--:--"}〜{shift.clockOutTime ?? "--:--"}（実働{" "}
             {(shift.computedMinutes / 60).toFixed(1)} 時間／休憩{shift.breakMinutes}分）
           </p>
+          {shift.approvalStatus === "PENDING" ? (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-emerald-50 px-3 py-2">
+              <p className="text-sm font-semibold text-emerald-800">✓ 業務報告を提出しました</p>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="rounded-lg border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-800"
+              >
+                修正する
+              </button>
+              <p className="w-full text-xs text-emerald-800/80">承認されるまでは、時刻や休憩を修正できます。</p>
+            </div>
+          ) : null}
         </>
       ) : (
         <>
           {!(shift.clockIn && shift.clockOut) && !isPastShift ? (
-            <div className="flex gap-2">
+            !shift.clockIn ? (
               <button
                 type="button"
-                disabled={pending || Boolean(shift.clockIn)}
+                disabled={pending}
                 onClick={() => startTransition(() => clockInAction(shift.id))}
-                className={`flex-1 rounded-lg px-4 py-1.5 text-sm font-semibold disabled:cursor-default ${
-                  shift.clockIn
-                    ? "border border-border bg-background text-muted"
-                    : "bg-primary text-primary-foreground disabled:opacity-60"
-                }`}
+                className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-60"
               >
-                {shift.clockInTime ?? "勤務開始"}
+                {pending ? "記録中…" : "勤務開始"}
               </button>
-              <button
-                type="button"
-                disabled={pending || !shift.clockIn || Boolean(shift.clockOut)}
-                onClick={() => startTransition(() => clockOutAction(shift.id))}
-                className={`flex-1 rounded-lg px-4 py-1.5 text-sm font-semibold disabled:cursor-default ${
-                  shift.clockIn && !shift.clockOut
-                    ? "bg-primary text-primary-foreground disabled:opacity-60"
-                    : "border border-border bg-background text-muted"
-                }`}
-              >
-                {shift.clockOutTime ?? "勤務終了"}
-              </button>
-            </div>
+            ) : (
+              // 勤務中：休憩などは働いている間にいつでも入れておける。「勤務終了」で提出まで済む
+              <div className="flex flex-col gap-3">
+                <p className="text-sm font-semibold text-primary">勤務中</p>
+                <label className="flex flex-col gap-0.5 text-xs">
+                  <span className="text-muted">出勤時刻（押し間違えたら直せます）</span>
+                  <input
+                    type="time"
+                    value={clockInEdit}
+                    onChange={(e) => setClockInEdit(e.target.value)}
+                    onBlur={() => {
+                      if (clockInEdit && clockInEdit !== shift.clockInTime) saveDraft({ clockInTime: clockInEdit });
+                    }}
+                    className="w-32 rounded-lg border border-border px-2 py-2 text-sm text-foreground"
+                  />
+                </label>
+                {breakInput}
+                {taskNameInput}
+                {commentInput}
+                {error ? <p className="text-xs text-red-600">{error}</p> : null}
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      setError(null);
+                      try {
+                        await clockOutAndSubmitAction({
+                          shiftId: shift.id,
+                          breakMinutes: Number(breakMinutes) || 0,
+                          taskName: taskName.trim() || null,
+                          comment: comment || null,
+                          // 本人が直したときだけ送る（画面を開いたままの間に別の所で直された時刻を古い値で上書きしない）
+                          clockInTime: clockInEdit && clockInEdit !== shift.clockInTime ? clockInEdit : undefined,
+                        });
+                        showToast("勤務終了・業務報告を提出しました ✓");
+                      } catch {
+                        setError("提出できませんでした。電波の良いところでもう一度「勤務終了」を押してください。");
+                      }
+                    })
+                  }
+                  className="w-full rounded-lg bg-primary px-4 py-3 text-sm font-bold text-primary-foreground disabled:opacity-60"
+                >
+                  {pending ? "送信中…" : "勤務終了（業務報告を提出）"}
+                </button>
+              </div>
+            )
           ) : (
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-end gap-2">
@@ -348,91 +509,13 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
                   ? "実際に勤務した時刻を入力してください。"
                   : "押し忘れ・押し間違いがあれば時刻を修正できます。"}
               </p>
-              <div>
-                <p className="mb-1 text-xs text-muted">休憩時間</p>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {BREAK_MINUTE_PRESETS.map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setBreakMinutes(String(m))}
-                      className={`rounded-full border px-2.5 py-1 text-xs ${
-                        Number(breakMinutes) === m
-                          ? "border-primary bg-primary/10 font-semibold text-primary"
-                          : "border-border text-foreground"
-                      }`}
-                    >
-                      {m}分
-                    </button>
-                  ))}
-                  <input
-                    type="number"
-                    min="0"
-                    value={breakMinutes}
-                    onChange={(e) => setBreakMinutes(e.target.value)}
-                    className="w-16 rounded-lg border border-border px-2 py-1 text-xs"
-                  />
-                  <span className="text-xs text-muted">分</span>
-                </div>
-              </div>
+              {breakInput}
               <p className="text-sm font-semibold text-foreground">実働 {(liveComputedMinutes / 60).toFixed(1)} 時間</p>
               {hasInvalidTimeRange ? (
                 <p className="text-xs text-red-600">退勤時刻が出勤時刻より前になっています。時刻を見直してください。</p>
               ) : null}
-              <label className="flex flex-col gap-0.5 text-xs">
-                <span className="text-muted">業務内容</span>
-                {taskNameMode === "pick" ? (
-                  <select
-                    value={taskName}
-                    onChange={(e) => {
-                      if (e.target.value === NEW_TASK_NAME_SENTINEL) {
-                        setTaskNameMode("custom");
-                        setTaskName("");
-                      } else {
-                        setTaskName(e.target.value);
-                      }
-                    }}
-                    className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
-                  >
-                    <option value="">未選択</option>
-                    {knownTaskNames.map((name) => (
-                      <option key={name} value={name}>
-                        {name}
-                      </option>
-                    ))}
-                    <option value={NEW_TASK_NAME_SENTINEL}>＋ 新しい業務内容を追加する</option>
-                  </select>
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    <input
-                      type="text"
-                      value={taskName}
-                      onChange={(e) => setTaskName(e.target.value)}
-                      placeholder="業務内容（例：キャディ業務）"
-                      className="rounded-lg border border-border px-3 py-2 text-sm"
-                    />
-                    {knownTaskNames.length > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTaskNameMode("pick");
-                          setTaskName(shift.taskName ?? "");
-                        }}
-                        className="self-start text-xs text-muted hover:text-primary"
-                      >
-                        ← 既存の業務内容から選ぶ
-                      </button>
-                    ) : null}
-                  </div>
-                )}
-              </label>
-              <textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="コメント（任意）"
-                className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-                rows={2}
-              />
+              {taskNameInput}
+              {commentInput}
               {error ? <p className="text-xs text-red-600">{error}</p> : null}
               <button
                 type="button"
@@ -449,6 +532,8 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
                         clockInTime: clockInEdit,
                         clockOutTime: clockOutEdit,
                       });
+                      showToast(editing ? "業務報告を修正しました ✓" : "業務報告を提出しました ✓");
+                      setEditing(false);
                     } catch {
                       setError("提出に失敗しました。");
                     }
@@ -456,8 +541,13 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
                 }
                 className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-60"
               >
-                業務報告を提出する
+                {editing ? "修正して提出する" : "業務報告を提出する"}
               </button>
+              {editing ? (
+                <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted underline">
+                  修正をやめる
+                </button>
+              ) : null}
             </div>
           )}
 

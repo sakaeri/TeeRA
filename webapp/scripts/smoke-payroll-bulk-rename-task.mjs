@@ -106,10 +106,10 @@ try {
   await staff.getByRole("button", { name: "勤務開始" }).click();
   await staff.waitForTimeout(500);
   psql(`update "WorkReport" set "clockIn" = now() - interval '8 hours' where "shiftId"='${shiftId}';`);
-  await staff.getByRole("button", { name: "勤務終了" }).click();
-  await staff.waitForTimeout(500);
   // 業務報告は特に選び直さず（デフォルトのままシフト予定の「キャディ」で）提出する
-  await staff.getByRole("button", { name: "業務報告を提出する" }).click();
+  // 「勤務終了」を押すと、退勤と同時に業務報告が提出される
+  await staff.getByRole("button", { name: "勤務終了" }).click();
+  await staff.getByText("業務報告を提出しました").first().waitFor({ timeout: 15000 });
   await staff.waitForTimeout(600);
 
   const reportTaskName = psql(`select "taskName" from "WorkReport" where "shiftId"='${shiftId}';`);

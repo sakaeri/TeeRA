@@ -8,6 +8,8 @@ import {
   clockIn,
   clockOut,
   submitWorkReport,
+  saveWorkReportDraft,
+  clockOutAndSubmit,
   submitUnscheduledWorkReport,
   confirmCorrectedWorkReport,
   disputeCorrectedWorkReport,
@@ -99,6 +101,19 @@ export async function clockOutAction(shiftId: string) {
   revalidatePath("/staff");
 }
 
+// 勤務中に入れた休憩・業務内容・コメント・出勤時刻の修正を保存する（提出はしない）
+export async function saveWorkReportDraftAction(input: {
+  shiftId: string;
+  breakMinutes?: number;
+  taskName?: string | null;
+  comment?: string | null;
+  clockInTime?: string;
+}) {
+  const { userId } = await requireCompanyStaffRole();
+  await assertOwnShift(input.shiftId, userId);
+  await saveWorkReportDraft({ ...input, staffUserId: userId });
+}
+
 export async function submitWorkReportAction(input: {
   shiftId: string;
   outcome: "WORKED" | "ABSENT" | "CANCELLED_BY_EMPLOYER";
@@ -110,6 +125,11 @@ export async function submitWorkReportAction(input: {
 }) {
   const { userId } = await requireCompanyStaffRole();
   await assertOwnShift(input.shiftId, userId);
+  // 提出済み（承認待ち）のものを本人が直して出し直したときは、会社への通知を重ねて送らない
+  const alreadySubmitted = Boolean(
+    (await prisma.workReport.findUnique({ where: { shiftId: input.shiftId }, select: { submittedAt: true } }))
+      ?.submittedAt,
+  );
   const report = await submitWorkReport({
     shiftId: input.shiftId,
     staffUserId: userId,
@@ -122,6 +142,26 @@ export async function submitWorkReportAction(input: {
   });
   // 通知メールの失敗で、提出済みの業務報告自体が失敗したかのように
   // 利用者に見えてしまわないよう、ここだけ独立してcatchする。
+  if (!alreadySubmitted) {
+    await notifyCompanyOfWorkReportSubmission(report.id).catch((err) =>
+      console.error("[email] work report submitted notify failed", err),
+    );
+  }
+  revalidatePath("/staff/timecard");
+  revalidatePath("/staff");
+}
+
+// 「勤務終了」：退勤と同時に業務報告を提出する
+export async function clockOutAndSubmitAction(input: {
+  shiftId: string;
+  breakMinutes?: number;
+  taskName?: string | null;
+  comment?: string | null;
+  clockInTime?: string;
+}) {
+  const { userId } = await requireCompanyStaffRole();
+  await assertOwnShift(input.shiftId, userId);
+  const report = await clockOutAndSubmit({ ...input, staffUserId: userId });
   await notifyCompanyOfWorkReportSubmission(report.id).catch((err) =>
     console.error("[email] work report submitted notify failed", err),
   );
