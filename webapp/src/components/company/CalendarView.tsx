@@ -99,6 +99,8 @@ function shortStaffName(name: string) {
 }
 
 // 月表示のスタッフ名タグ。状態は色で示し、欠勤・取消・調整中は名前の後ろにも書く。
+// 色の濃さ＝まだ対応が残っているか：出勤時間が未定（連絡がまだ）は濃い緑で一番目立たせ、
+// 時間が入ったら白地に緑の枠、勤務が終わって報告が出たら薄い緑で塗る。
 function shiftTag(s: ShiftRow, todayStr: string): { label: string; mobileLabel: string; className: string } {
   const tag = (suffix: string, className: string) => ({
     label: `${s.staffName}${suffix}`,
@@ -108,10 +110,12 @@ function shiftTag(s: ShiftRow, todayStr: string): { label: string; mobileLabel: 
   if (s.status === "ON_HOLD") return tag("（調整中）", "bg-red-100 text-red-800");
   if (s.outcome === "ABSENT") return tag("（欠勤）", "bg-orange-100 text-orange-800");
   if (s.outcome === "CANCELLED_BY_EMPLOYER") return tag("（取消）", CANCELLED_TAG_CLASS);
-  if (s.outcome === "WORKED") return tag("", "bg-emerald-600 text-white");
+  if (s.outcome === "WORKED") return tag("", "bg-emerald-100 text-emerald-900");
   // 過去日なのに業務報告が出ていない（報告漏れ）
-  if (s.date < todayStr) return tag("", "bg-emerald-100 text-emerald-900 ring-1 ring-inset ring-red-400");
-  return tag("", "bg-emerald-100 text-emerald-900");
+  if (s.date < todayStr) return tag("", "bg-white text-emerald-900 ring-1 ring-inset ring-red-400");
+  // 出勤時間がまだ入っていない（終日で作った古いシフトも時間なしとして同じ扱い）
+  if (s.isUndecided || s.isAllDay) return tag("", "bg-emerald-700 text-white");
+  return tag("", "bg-white text-emerald-900 ring-1 ring-inset ring-emerald-500");
 }
 
 // 依頼主に取り消され、振り替えられずに休みになったシフト（同じ日に同じ
