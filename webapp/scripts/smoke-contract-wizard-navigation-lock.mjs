@@ -1,5 +1,14 @@
+import { execSync } from "node:child_process";
 import { chromium } from "playwright-core";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+
+// 身分証・振込先の必須化（既定でオン）とは関係ない確認なので、この確認で作った会社では必須を外す
+// （外すと、以前と同じく「契約内容の確認 → 身分証 → 振込先」の順になる）
+function disableRequiredDocuments() {
+  execSync(
+    `PGPASSWORD=postgres psql -h localhost -U postgres -d teera -c "update \\"Company\\" set \\"requireIdDocument\\"=false, \\"requireBankInfo\\"=false where \\"createdAt\\" > now() - interval '30 minutes';"`,
+  );
+}
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -82,6 +91,7 @@ try {
   log("募集一覧への直接遷移も戻される", staff.url().includes("/staff/contracts"));
 
   // ナビのリンクをクリックしても遷移しない
+  disableRequiredDocuments();
   await staff.goto("http://localhost:3000/staff/contracts");
   await staff.waitForTimeout(500);
   await staff.getByRole("link", { name: "タイムカード" }).click({ force: true }).catch(() => {});

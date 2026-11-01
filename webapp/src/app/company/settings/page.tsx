@@ -80,6 +80,8 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
         // 以下は本部の管理者/編集者だけに渡す
         invoiceRegistrationNumber={isCompanyAdmin ? (company.invoiceRegistrationNumber ?? "") : ""}
         notificationEmail={isCompanyAdmin ? (company.notificationEmail ?? "") : ""}
+        requireIdDocument={company.requireIdDocument}
+        requireBankInfo={company.requireBankInfo}
         bankName={isCompanyAdmin ? (company.bankName ?? "") : ""}
         branchName={isCompanyAdmin ? (company.branchName ?? "") : ""}
         accountType={isCompanyAdmin ? (company.accountType ?? "") : ""}

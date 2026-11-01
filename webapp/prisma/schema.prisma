@@ -131,6 +131,10 @@ model Company {
   accountHolderName         String?
   agencyEnabled             Boolean  @default(false) // 他社へスタッフを派遣する (companyModules.agency)
   dispatchEnabled           Boolean  @default(false) // 派遣会社と連携する (companyModules.dispatch)
+  // スタッフに身分証（両面）・振込先の提出を必須にするか。必須の間は、出すまで契約書に
+  // 同意できず、スタッフのホーム・ダッシュボードに未提出として出る（手渡しで払う会社などは切れる）
+  requireIdDocument         Boolean  @default(true)
+  requireBankInfo           Boolean  @default(true)
   invoiceRegistrationNumber String? // インボイス（適格請求書発行事業者）登録番号
   teeBalance                Int      @default(0) // cached; must always equal sum(TeeLedgerEntry.amount) — see wallet.ts
   planTier                  PlanTier @default(FREE) // cached; source of truth is StripeSubscription (mirrors teeBalance/TeeLedgerEntry split)

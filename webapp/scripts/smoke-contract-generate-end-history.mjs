@@ -2,6 +2,14 @@ import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
+// 身分証・振込先の必須化（既定でオン）とは関係ない確認なので、この確認で作った会社では必須を外す
+// （外すと、以前と同じく「契約内容の確認 → 身分証 → 振込先」の順になる）
+function disableRequiredDocuments() {
+  execSync(
+    `PGPASSWORD=postgres psql -h localhost -U postgres -d teera -c "update \\"Company\\" set \\"requireIdDocument\\"=false, \\"requireBankInfo\\"=false where \\"createdAt\\" > now() - interval '30 minutes';"`,
+  );
+}
+
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
   if (!ok) process.exitCode = 1;
@@ -169,6 +177,7 @@ try {
 
   // 本人が同意して初めてACTIVEになる（全文を確認した末尾で氏名・住所・
   // 電話番号を入力してから同意するフローに変更済み）
+  disableRequiredDocuments();
   await staff.goto(`http://localhost:3000/staff/contracts/${companyId}`);
   await staff.waitForTimeout(500);
   await staff.getByRole("button", { name: "契約書の全文を確認する" }).click();

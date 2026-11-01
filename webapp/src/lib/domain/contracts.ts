@@ -1,4 +1,5 @@
 import "server-only";
+import { missingRequiredDocuments } from "@/lib/requiredDocuments";
 import { prisma } from "@/lib/prisma";
 import { todayJst } from "@/lib/date";
 import { buildContractDocument, hashContractConsent } from "@/lib/contractDocument";
@@ -302,6 +303,13 @@ export async function consentStaffContract(params: {
     where: { id: params.staffContractId, staffUserId: params.staffUserId, status: "PENDING_CONSENT" },
     include: { template: { include: { company: true } }, staff: true },
   });
+  // 会社が必須にしている身分証・振込先が出るまでは同意できない
+  const membership = await prisma.companyMembership.findUnique({
+    where: { userId_companyId: { userId: params.staffUserId, companyId: contract.template.companyId } },
+  });
+  if (membership && missingRequiredDocuments(membership, contract.template.company).length > 0) {
+    throw new Error("documents_required");
+  }
   const consentedAt = new Date();
   // 同意した時点の契約書の内容をそのまま残し、内容＋同意日時のハッシュを取る
   const document = buildContractDocument({

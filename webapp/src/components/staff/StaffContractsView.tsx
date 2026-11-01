@@ -67,6 +67,27 @@ type Workplace = {
 
 type WizardStep = "review" | "id" | "bank" | "done";
 
+// 手続きの順番：会社が必須にしている書類（未提出のもの）→ 契約内容の確認・同意 →
+// 必須ではない書類（未提出のもの・任意）→ 完了
+function buildWizardSteps(p: {
+  idDocumentFrontUrl: string | null;
+  idDocumentBackUrl: string | null;
+  bankInfo: BankInfo;
+  requireIdDocument: boolean;
+  requireBankInfo: boolean;
+}): WizardStep[] {
+  const idMissing = !(p.idDocumentFrontUrl && p.idDocumentBackUrl);
+  const bankMissing = !(p.bankInfo.bankName.trim() && p.bankInfo.accountNumber.trim() && p.bankInfo.accountHolderName.trim());
+  const steps: WizardStep[] = [];
+  if (p.requireIdDocument && idMissing) steps.push("id");
+  if (p.requireBankInfo && bankMissing) steps.push("bank");
+  steps.push("review");
+  if (!p.requireIdDocument && idMissing) steps.push("id");
+  if (!p.requireBankInfo && bankMissing) steps.push("bank");
+  steps.push("done");
+  return steps;
+}
+
 // 業務内容単価を勤務先ごとにグループ化する（同じ勤務先でも業務内容ごとに
 // 単価が違うことがあるため、勤務先→業務内容の階層で見せる）。同名の勤務先
 // （表示ラベルの偶然の一致）を誤って一つにまとめないよう、companyRelationshipId
@@ -91,6 +112,8 @@ export function StaffContractsView({
   idDocumentFrontUrl,
   idDocumentBackUrl,
   bankInfo,
+  requireIdDocument,
+  requireBankInfo,
   currentAddress,
   currentPhoneNumber,
   baseWage,
@@ -121,6 +144,9 @@ export function StaffContractsView({
   idDocumentFrontUrl: string | null;
   idDocumentBackUrl: string | null;
   bankInfo: BankInfo;
+  // 会社が必須にしている書類は、契約書に同意する前に出してもらう
+  requireIdDocument: boolean;
+  requireBankInfo: boolean;
   baseWage: BaseWage | null;
   taskRates: TaskRate[];
   workplaces: Workplace[];
@@ -164,7 +190,11 @@ export function StaffContractsView({
   const [queue] = useState(() => pendingContracts);
   const [queueIndex, setQueueIndex] = useState(0);
   const activePending = queue[queueIndex] ?? null;
-  const [wizardStep, setWizardStep] = useState<WizardStep>("review");
+  const [wizardSteps, setWizardSteps] = useState<WizardStep[]>(() =>
+    buildWizardSteps({ idDocumentFrontUrl, idDocumentBackUrl, bankInfo, requireIdDocument, requireBankInfo }),
+  );
+  const [wizardIndex, setWizardIndex] = useState(0);
+  const wizardStep: WizardStep = wizardSteps[wizardIndex] ?? "done";
   const [showDetail, setShowDetail] = useState(false);
 
   const currentContracts = myContracts.filter((c) => c.status !== "ENDED");
@@ -176,11 +206,15 @@ export function StaffContractsView({
   function bankComplete() {
     return bankName.trim() !== "" && accountNumber.trim() !== "" && accountHolderName.trim() !== "";
   }
-  function nextStepAfter(current: "review" | "id" | "bank"): WizardStep {
-    if (current === "review" && !idComplete()) return "id";
-    if (current !== "bank" && !bankComplete()) return "bank";
-    return "done";
+  function goNextStep() {
+    setWizardIndex((i) => i + 1);
   }
+  // 番号は手続きの並び順で固定（必須の書類が先：①身分証 ②振込先 ③確認 ④完了／
+  // それ以外：①確認 ②身分証 ③振込先 ④完了）。済んでいて飛ばした手順の番号は欠番のまま
+  const canonicalOrder: WizardStep[] =
+    wizardSteps[0] === "review" ? ["review", "id", "bank", "done"] : ["id", "bank", "review", "done"];
+  const stepNumber = ["①", "②", "③", "④"][canonicalOrder.indexOf(wizardStep)] ?? "";
+  const stepIsRequired = (step: "id" | "bank") => (step === "id" ? requireIdDocument : requireBankInfo);
 
   function handleConsent(party: { name: string; address: string; phoneNumber: string }) {
     if (!activePending) return;
@@ -191,7 +225,7 @@ export function StaffContractsView({
       try {
         await consentContractAction(id, companyId, party);
         setShowDetail(false);
-        setWizardStep(nextStepAfter("review"));
+        goNextStep();
       } catch {
         setConsentError("同意できませんでした。もう一度お試しください。");
       } finally {
@@ -211,7 +245,7 @@ export function StaffContractsView({
     startTransition(async () => {
       await updateMyBankInfoAction(companyId, { bankName, branchName, accountType, accountNumber, accountHolderName });
       if (advance) {
-        setWizardStep("done");
+        goNextStep();
       } else {
         setSaved(true);
         setBankEditing(false);
@@ -227,9 +261,11 @@ export function StaffContractsView({
     });
   }
 
+  // 次の契約書へ。書類は出し終わっているので、次からは確認・同意だけになる
   function finishWizard() {
     setQueueIndex((i) => i + 1);
-    setWizardStep("review");
+    setWizardSteps(["review", "done"]);
+    setWizardIndex(0);
   }
 
   function submitNewNote(workplaceCompanyRelationshipId: string) {
@@ -247,13 +283,14 @@ export function StaffContractsView({
         <section className="rounded-2xl border-2 border-primary bg-white p-6">
           <p className="mb-1 text-xs font-semibold text-primary">新しい契約書があります</p>
           <h2 className="mb-4 font-serif-jp text-lg font-bold text-primary">
+            {stepNumber}{" "}
             {wizardStep === "review"
-              ? "① 契約内容を確認"
+              ? "契約内容を確認"
               : wizardStep === "id"
-                ? "② 本人確認書類を提出"
+                ? "本人確認書類を提出"
                 : wizardStep === "bank"
-                  ? "③ 振込先情報を入力"
-                  : "④ 完了"}
+                  ? "振込先情報を入力"
+                  : "完了"}
           </h2>
 
           {wizardStep === "review" ? (
@@ -280,7 +317,10 @@ export function StaffContractsView({
 
           {wizardStep === "id" ? (
             <div className="flex flex-col gap-3">
-              <p className="text-xs text-muted">運転免許証など、両面の写真を提出してください。</p>
+              <p className="text-xs text-muted">
+                運転免許証など、両面の写真を提出してください。
+                {stepIsRequired("id") ? `${companyName}では、契約書に同意する前に提出が必要です。` : ""}
+              </p>
               <div className="flex gap-6">
                 <div className="w-40">
                   <ImageDropzone label="表面" required imageUrl={frontUrl} onChange={(url) => uploadIdDocument("front", url)} />
@@ -292,7 +332,7 @@ export function StaffContractsView({
               <button
                 type="button"
                 disabled={!idComplete()}
-                onClick={() => setWizardStep(nextStepAfter("id"))}
+                onClick={goNextStep}
                 className="mt-2 self-start rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
               >
                 次へ
@@ -302,6 +342,9 @@ export function StaffContractsView({
 
           {wizardStep === "bank" ? (
             <div className="flex flex-col gap-3">
+              {stepIsRequired("bank") ? (
+                <p className="text-xs text-muted">{companyName}では、契約書に同意する前に振込先の登録が必要です。</p>
+              ) : null}
               <label className="flex flex-col gap-1 text-xs">
                 <span className="text-muted">銀行名</span>
                 <input

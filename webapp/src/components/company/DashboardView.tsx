@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { PdfLink } from "@/components/PdfLink";
 import Link from "next/link";
+import { REQUIRED_DOCUMENT_LABEL, type RequiredDocument } from "@/lib/requiredDocuments";
 import {
   createManualTodoAction,
   resolveTodoAction,
@@ -51,6 +52,7 @@ type Kpis = {
   pendingContractCount: number;
   expiringContractCount: number;
   duePaidLeaveGrantCount: number;
+  missingDocumentCount: number;
   promoItemCount: number;
   pendingShipmentCount: number;
 };
@@ -153,7 +155,7 @@ type PromoOrder = {
 
 type DashboardTab = "active" | "resolved" | "promoList" | "promoOrders";
 
-type PopupKind = "shortage" | "unconfirmed" | "reports" | "contracts" | "paidLeave";
+type PopupKind = "shortage" | "unconfirmed" | "reports" | "contracts" | "paidLeave" | "documents";
 
 // 「契約満了間近」はダッシュボードの升目のバランスが悪くなる（7枚で3列
 // グリッドの最終行が1枚だけ余る）ため独立カードにせず、「契約書未確認」
@@ -164,6 +166,7 @@ const KPI_CARDS: { key: keyof Kpis; label: string; href?: string; tab?: Dashboar
   { key: "pendingReportCount", label: "業務報告未承認", popup: "reports" },
   { key: "pendingContractCount", label: "契約書未確認", popup: "contracts", extraKey: "expiringContractCount" },
   { key: "duePaidLeaveGrantCount", label: "有給付与予定", popup: "paidLeave" },
+  { key: "missingDocumentCount", label: "書類未提出", popup: "documents" },
   { key: "pendingShipmentCount", label: "発送待ち", tab: "promoOrders" },
 ];
 
@@ -434,6 +437,7 @@ export function DashboardView({
   pendingContractStaff,
   expiringContractStaff,
   duePaidLeaveGrants,
+  missingDocumentStaff,
   contractTemplates,
   uploadOnlyTemplates,
   companyName,
@@ -457,6 +461,7 @@ export function DashboardView({
   pendingContractStaff: PendingContractStaff[];
   expiringContractStaff: ExpiringContractStaff[];
   duePaidLeaveGrants: DuePaidLeaveGrant[];
+  missingDocumentStaff: MissingDocumentStaff[];
   contractTemplates: ContractTemplate[];
   uploadOnlyTemplates: UploadOnlyTemplate[];
   companyName: string;
@@ -586,6 +591,9 @@ export function DashboardView({
       ) : null}
       {openPopup === "paidLeave" ? (
         <DuePaidLeaveGrantsPopup entries={duePaidLeaveGrants} onClose={() => setOpenPopup(null)} />
+      ) : null}
+      {openPopup === "documents" ? (
+        <MissingDocumentsPopup entries={missingDocumentStaff} onClose={() => setOpenPopup(null)} />
       ) : null}
       {generateTarget && !generateMode ? (
         <GenerateOrUploadChoiceModal
@@ -1289,6 +1297,36 @@ function DuePaidLeaveGrantsPopup({ entries, onClose }: { entries: DuePaidLeaveGr
         </div>
       ))}
       {visibleEntries.length === 0 ? <p className="text-center text-muted">付与予定のスタッフはいません。</p> : null}
+    </PopupShell>
+  );
+}
+
+type MissingDocumentStaff = { userId: string; name: string; missing: RequiredDocument[] };
+
+// 会社が必須にしている身分証・振込先をまだ出していないスタッフ（スタッフ本人にはホームで
+// 登録を促している。会社側でスタッフ詳細から代わりに登録することもできる）
+function MissingDocumentsPopup({ entries, onClose }: { entries: MissingDocumentStaff[]; onClose: () => void }) {
+  return (
+    <PopupShell title="書類未提出" subtitle="身分証・振込先がまだ登録されていないスタッフです" onClose={onClose}>
+      {entries.map((e) => (
+        <div key={e.userId} className="flex items-center justify-between gap-2 rounded-xl border border-border/60 p-4 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-medium">{e.name}</p>
+            {e.missing.map((m) => (
+              <span key={m} className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                {REQUIRED_DOCUMENT_LABEL[m]}
+              </span>
+            ))}
+          </div>
+          <Link
+            href={`/company/roster?staff=${e.userId}`}
+            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+          >
+            確認する
+          </Link>
+        </div>
+      ))}
+      {entries.length === 0 ? <p className="text-center text-muted">未提出のスタッフはいません。</p> : null}
     </PopupShell>
   );
 }

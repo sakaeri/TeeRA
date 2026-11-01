@@ -6,6 +6,8 @@ import { listStaffNotices } from "@/lib/domain/notices";
 import { todayJst, todayJstParts } from "@/lib/date";
 import { StaffCalendarView } from "@/components/staff/StaffCalendarView";
 import { StaffNoticesSection } from "@/components/staff/StaffNoticesSection";
+import { RequiredDocumentsBanner } from "@/components/staff/RequiredDocumentsBanner";
+import { listMyMissingDocuments } from "@/lib/domain/requiredDocuments";
 import { TodayShiftPopup } from "@/components/staff/TodayShiftPopup";
 import { isDone } from "@/lib/staffShiftStatus";
 import { reportDisplay } from "@/lib/workReportDisplay";
@@ -32,12 +34,13 @@ export default async function StaffHomePage({
   const myMemberships = await listMyMemberships(userId);
   const companyIds = myMemberships.map((m) => m.companyId);
 
-  const [shifts, pendingRequests, notices, shiftsNeedingReport, knownTaskNamesByCompany] = await Promise.all([
+  const [shifts, pendingRequests, notices, shiftsNeedingReport, knownTaskNamesByCompany, missingDocuments] = await Promise.all([
     listStaffShiftsForMonth({ staffUserId: userId, companyIds, year, month }),
     listOwnPendingShiftRequests({ staffUserId: userId, companyIds }),
     listStaffNotices(userId, membership.companyId, companyIds),
     listOwnShiftsNeedingReport(userId, companyIds),
     Promise.all(companyIds.map((id) => listKnownTaskNames(id))),
+    listMyMissingDocuments(userId),
   ]);
   const unreadNotices = notices.filter((n) => !n.readAt);
   const knownTaskNames = Object.fromEntries(companyIds.map((id, i) => [id, knownTaskNamesByCompany[i]]));
@@ -97,6 +100,7 @@ export default async function StaffHomePage({
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col bg-white px-1 pb-24 pt-2 sm:block sm:bg-transparent sm:px-6 sm:py-10">
+      <RequiredDocumentsBanner items={missingDocuments} />
       <StaffNoticesSection
         notices={unreadNotices.map((n) => ({ id: n.id, message: n.message, createdAt: n.createdAt.toISOString() }))}
       />

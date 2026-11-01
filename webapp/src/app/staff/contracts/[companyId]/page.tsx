@@ -182,6 +182,8 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
           title: contractDisplayTitle(c.template.employmentType, c.template.jobDescription),
           templateDetail: buildTemplateDetail(c),
         }))}
+        requireIdDocument={company.requireIdDocument}
+        requireBankInfo={company.requireBankInfo}
         idDocumentFrontUrl={myMembership.idDocumentFrontUrl}
         idDocumentBackUrl={myMembership.idDocumentBackUrl}
         bankInfo={{
