@@ -1213,10 +1213,12 @@ function PendingContractPopup({
   return (
     <PopupShell title="契約書未確認" subtitle="未締結・まもなく満了する契約と、身分証・振込先が未提出のスタッフです" onClose={onClose}>
       {staff.map((s) => (
-        <div key={s.userId} className="flex items-center justify-between rounded-xl border border-border/60 p-4 text-sm">
-          <div className="flex items-center gap-2">
+        <div key={s.userId} className="flex items-center justify-between gap-2 rounded-xl border border-border/60 p-4 text-sm">
+          <div className="min-w-0">
             <p className="font-medium">{s.name}</p>
-            <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs text-rose-800">未送付</span>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              <span className="whitespace-nowrap rounded-full bg-rose-100 px-2 py-0.5 text-xs text-rose-800">未送付</span>
+            </div>
           </div>
           <button
             type="button"
@@ -1228,15 +1230,15 @@ function PendingContractPopup({
         </div>
       ))}
       {expiringEntries.map((e) => (
-        <div key={e.staffContractId} className="flex items-center justify-between rounded-xl border border-border/60 p-4 text-sm">
-          <div>
-            <div className="flex items-center gap-2">
-              <p className="font-medium">{e.staffName}</p>
-              <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs text-orange-800">
+        <div key={e.staffContractId} className="flex items-center justify-between gap-2 rounded-xl border border-border/60 p-4 text-sm">
+          <div className="min-w-0">
+            <p className="font-medium">{e.staffName}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span className="whitespace-nowrap rounded-full bg-orange-100 px-2 py-0.5 text-xs text-orange-800">
                 {e.contractEndDate}まで
               </span>
+              <span className="text-xs text-muted">{e.contractTitle}</span>
             </div>
-            <p className="mt-0.5 text-xs text-muted">{e.contractTitle}</p>
           </div>
           <Link
             href={`/company/roster?staff=${e.staffUserId}&tab=contracts`}
@@ -1250,13 +1252,16 @@ function PendingContractPopup({
           会社側でスタッフ詳細から代わりに登録することもできる） */}
       {missingDocumentEntries.map((e) => (
         <div key={`doc-${e.userId}`} className="flex items-center justify-between gap-2 rounded-xl border border-border/60 p-4 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
+          {/* 名前の行と札の行に分ける（札が途中で折り返して不揃いにならないように） */}
+          <div className="min-w-0">
             <p className="font-medium">{e.name}</p>
-            {e.missing.map((m) => (
-              <span key={m} className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
-                {REQUIRED_DOCUMENT_LABEL[m]}未提出
-              </span>
-            ))}
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {e.missing.map((m) => (
+                <span key={m} className="whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                  {REQUIRED_DOCUMENT_LABEL[m]}未提出
+                </span>
+              ))}
+            </div>
           </div>
           <Link
             href={`/company/roster?staff=${e.userId}`}
