@@ -170,7 +170,11 @@ export function computeKpis(
     pendingContractCount: data.pendingContractStaff.length,
     expiringContractCount: data.expiringContractStaff.length,
     duePaidLeaveGrantCount: data.duePaidLeaveGrants.length,
-    missingDocumentCount: data.missingDocumentStaff.length,
+    // 「契約書未確認」のカードに合算するため、契約書の同意待ちと重なるスタッフは数えない
+    // （同じ人を2回数えないように）
+    missingDocumentCount: data.missingDocumentStaff.filter(
+      (s) => !data.pendingContractStaff.some((p) => p.userId === s.userId),
+    ).length,
     promoItemCount,
     pendingShipmentCount,
   };

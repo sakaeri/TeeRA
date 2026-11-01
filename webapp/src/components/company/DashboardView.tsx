@@ -155,18 +155,17 @@ type PromoOrder = {
 
 type DashboardTab = "active" | "resolved" | "promoList" | "promoOrders";
 
-type PopupKind = "shortage" | "unconfirmed" | "reports" | "contracts" | "paidLeave" | "documents";
+type PopupKind = "shortage" | "unconfirmed" | "reports" | "contracts" | "paidLeave";
 
-// 「契約満了間近」はダッシュボードの升目のバランスが悪くなる（7枚で3列
-// グリッドの最終行が1枚だけ余る）ため独立カードにせず、「契約書未確認」
-// のカードにextraKeyとして合算表示し、ポップアップも1つにまとめている。
-const KPI_CARDS: { key: keyof Kpis; label: string; href?: string; tab?: DashboardTab; popup?: PopupKind; extraKey?: keyof Kpis }[] = [
+// 「契約満了間近」「書類未提出」はダッシュボードの升目のバランスが悪くなる（7枚以上で
+// 3列グリッドの最終行が余る）ため独立カードにせず、「契約書未確認」のカードに
+// extraKeysとして合算表示し、ポップアップも1つにまとめている。
+const KPI_CARDS: { key: keyof Kpis; label: string; href?: string; tab?: DashboardTab; popup?: PopupKind; extraKeys?: (keyof Kpis)[] }[] = [
   { key: "shortageCount", label: "欠員件数", popup: "shortage" },
   { key: "unconfirmedShiftCount", label: "未確定シフト", popup: "unconfirmed" },
   { key: "pendingReportCount", label: "業務報告未承認", popup: "reports" },
-  { key: "pendingContractCount", label: "契約書未確認", popup: "contracts", extraKey: "expiringContractCount" },
+  { key: "pendingContractCount", label: "契約書未確認", popup: "contracts", extraKeys: ["expiringContractCount", "missingDocumentCount"] },
   { key: "duePaidLeaveGrantCount", label: "有給付与予定", popup: "paidLeave" },
-  { key: "missingDocumentCount", label: "書類未提出", popup: "documents" },
   { key: "pendingShipmentCount", label: "発送待ち", tab: "promoOrders" },
 ];
 
@@ -505,7 +504,7 @@ export function DashboardView({
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         {KPI_CARDS.map((card) => {
-          const count = kpis[card.key] + (card.extraKey ? kpis[card.extraKey] : 0);
+          const count = kpis[card.key] + (card.extraKeys ?? []).reduce((n, k) => n + kpis[k], 0);
           return card.tab || card.popup ? (
             <button
               key={card.key}
@@ -582,6 +581,7 @@ export function DashboardView({
         <PendingContractPopup
           staff={pendingContractStaff}
           expiringEntries={expiringContractStaff}
+          missingDocumentEntries={missingDocumentStaff}
           onSelect={(staff) => {
             setOpenPopup(null);
             setGenerateTarget(staff);
@@ -591,9 +591,6 @@ export function DashboardView({
       ) : null}
       {openPopup === "paidLeave" ? (
         <DuePaidLeaveGrantsPopup entries={duePaidLeaveGrants} onClose={() => setOpenPopup(null)} />
-      ) : null}
-      {openPopup === "documents" ? (
-        <MissingDocumentsPopup entries={missingDocumentStaff} onClose={() => setOpenPopup(null)} />
       ) : null}
       {generateTarget && !generateMode ? (
         <GenerateOrUploadChoiceModal
@@ -1197,22 +1194,24 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
   );
 }
 
-// 「契約書未確認」と「契約満了間近」は元は別々のポップアップだったが、
+// 「契約書未確認」「契約満了間近」「書類未提出」は元は別々のポップアップだったが、
 // ダッシュボードのカードを1枚に統合したのに合わせてポップアップも1つに
 // まとめている（各項目は元のバッジで種別が分かるようにしてある）。
 function PendingContractPopup({
   staff,
   expiringEntries,
+  missingDocumentEntries,
   onSelect,
   onClose,
 }: {
   staff: PendingContractStaff[];
   expiringEntries: ExpiringContractStaff[];
+  missingDocumentEntries: MissingDocumentStaff[];
   onSelect: (staff: PendingContractStaff) => void;
   onClose: () => void;
 }) {
   return (
-    <PopupShell title="契約書未確認" subtitle="未締結・まもなく満了する契約です" onClose={onClose}>
+    <PopupShell title="契約書未確認" subtitle="未締結・まもなく満了する契約と、身分証・振込先が未提出のスタッフです" onClose={onClose}>
       {staff.map((s) => (
         <div key={s.userId} className="flex items-center justify-between rounded-xl border border-border/60 p-4 text-sm">
           <div className="flex items-center gap-2">
@@ -1247,8 +1246,28 @@ function PendingContractPopup({
           </Link>
         </div>
       ))}
-      {staff.length === 0 && expiringEntries.length === 0 ? (
-        <p className="text-center text-muted">対応が必要な契約はありません。</p>
+      {/* 会社が必須にしている身分証・振込先をまだ出していないスタッフ（本人にはホームで登録を促している。
+          会社側でスタッフ詳細から代わりに登録することもできる） */}
+      {missingDocumentEntries.map((e) => (
+        <div key={`doc-${e.userId}`} className="flex items-center justify-between gap-2 rounded-xl border border-border/60 p-4 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-medium">{e.name}</p>
+            {e.missing.map((m) => (
+              <span key={m} className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                {REQUIRED_DOCUMENT_LABEL[m]}未提出
+              </span>
+            ))}
+          </div>
+          <Link
+            href={`/company/roster?staff=${e.userId}`}
+            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+          >
+            確認する
+          </Link>
+        </div>
+      ))}
+      {staff.length === 0 && expiringEntries.length === 0 && missingDocumentEntries.length === 0 ? (
+        <p className="text-center text-muted">対応が必要な契約・書類はありません。</p>
       ) : null}
     </PopupShell>
   );
@@ -1302,34 +1321,6 @@ function DuePaidLeaveGrantsPopup({ entries, onClose }: { entries: DuePaidLeaveGr
 }
 
 type MissingDocumentStaff = { userId: string; name: string; missing: RequiredDocument[] };
-
-// 会社が必須にしている身分証・振込先をまだ出していないスタッフ（スタッフ本人にはホームで
-// 登録を促している。会社側でスタッフ詳細から代わりに登録することもできる）
-function MissingDocumentsPopup({ entries, onClose }: { entries: MissingDocumentStaff[]; onClose: () => void }) {
-  return (
-    <PopupShell title="書類未提出" subtitle="身分証・振込先がまだ登録されていないスタッフです" onClose={onClose}>
-      {entries.map((e) => (
-        <div key={e.userId} className="flex items-center justify-between gap-2 rounded-xl border border-border/60 p-4 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="font-medium">{e.name}</p>
-            {e.missing.map((m) => (
-              <span key={m} className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
-                {REQUIRED_DOCUMENT_LABEL[m]}
-              </span>
-            ))}
-          </div>
-          <Link
-            href={`/company/roster?staff=${e.userId}`}
-            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
-          >
-            確認する
-          </Link>
-        </div>
-      ))}
-      {entries.length === 0 ? <p className="text-center text-muted">未提出のスタッフはいません。</p> : null}
-    </PopupShell>
-  );
-}
 
 function TodoSection({
   tab,

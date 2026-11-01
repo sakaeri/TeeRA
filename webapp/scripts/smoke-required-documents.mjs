@@ -4,7 +4,7 @@ import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 // 身分証・振込先の提出を必須にする（契約書テンプレートごとの設定。既定でオン）：
 // ・未提出のスタッフは、ホームに「登録してください」が出て、アイコンの数字にも数える
-// ・本部のダッシュボードに「書類未提出」とその一覧が出る
+// ・本部のダッシュボードの「契約書未確認」のカードに合算され、その一覧に未提出の書類が出る
 // ・契約書の手続きは、必須の書類が先（身分証→振込先→契約内容の確認・同意）
 // ・テンプレートの編集で必須を外すと、未提出として出なくなる
 // ・契約書がまだないスタッフには、お願いを出さない
@@ -91,14 +91,23 @@ try {
   log("スタッフのホームに「身分証・振込先を登録してください」が出る", await banner.isVisible());
   log("アイコンの数字に未提出の書類も数える（契約書1＋身分証1＋振込先1）", (await badge(staff)) === 3);
 
-  // --- 本部：ダッシュボードに書類未提出 ---
+  // --- 本部：ダッシュボードの「契約書未確認」に合算 ---
   await admin.goto("http://localhost:3000/company");
-  const card = admin.locator("button", { hasText: "書類未提出" }).first();
+  log("「書類未提出」のカードは無い（6枚のまま）", (await admin.locator("button", { hasText: "書類未提出" }).count()) === 0);
+  const card = admin.locator("button", { hasText: "契約書未確認" }).first();
   await card.waitFor();
-  log("ダッシュボードに「書類未提出 1件」", (await card.innerText()).replace(/\s/g, "").includes("書類未提出1"));
+  log(
+    "同意待ちと書類未提出が同じ人なら、カードの数字は1人として数える",
+    (await card.innerText()).replace(/\s/g, "").includes("契約書未確認1"),
+  );
   await card.click();
-  const popup = admin.locator("div.fixed.inset-0", { hasText: "身分証・振込先がまだ登録されていないスタッフです" }).last();
-  log("一覧に名前と足りない書類が出る", (await popup.innerText()).includes("書類スタッフ") && (await popup.innerText()).includes("振込先"));
+  const popup = admin.locator("div.fixed.inset-0", { hasText: "身分証・振込先が未提出のスタッフです" }).last();
+  await popup.waitFor();
+  const popupText = await popup.innerText();
+  log(
+    "一覧に名前と足りない書類が出る",
+    popupText.includes("書類スタッフ") && popupText.includes("身分証未提出") && popupText.includes("振込先未提出"),
+  );
 
   // --- スタッフ：契約書の手続きは身分証→振込先→確認の順 ---
   await staff.goto(`http://localhost:3000/staff/contracts/${companyId}`);
@@ -152,9 +161,12 @@ try {
   await staff.waitForTimeout(500);
   log("必須でなければ、未提出でもホームに出ない", (await staff.getByText("を登録してください").count()) === 0);
   await admin.goto("http://localhost:3000/company");
-  const card2 = admin.locator("button", { hasText: "書類未提出" }).first();
+  const card2 = admin.locator("button", { hasText: "契約書未確認" }).first();
   await card2.waitFor();
-  log("必須でなければ、ダッシュボードも0件", (await card2.innerText()).replace(/\s/g, "").includes("書類未提出0"));
+  await card2.click();
+  const popup2 = admin.locator("div.fixed.inset-0", { hasText: "身分証・振込先が未提出のスタッフです" }).last();
+  await popup2.waitFor();
+  log("必須でなければ、ダッシュボードの一覧にも未提出の書類は出ない", !(await popup2.innerText()).includes("身分証未提出"));
 } catch (e) {
   console.error(e);
   process.exitCode = 1;
