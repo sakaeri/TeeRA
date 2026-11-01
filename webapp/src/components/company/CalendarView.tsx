@@ -902,7 +902,9 @@ function DayDetailModal({
       }}
     >
       <div className="max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-4 shadow-lg sm:p-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        {/* ✕はいつも右上。祝日名などで日付が長いときは「＋シフト」だけが下の行に回る */}
+        <div className="mb-4 flex items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -926,7 +928,6 @@ function DayDetailModal({
               </svg>
             </button>
           </div>
-          <div className="flex items-center gap-3">
             {!isPastDay ? (
               <button
                 type="button"
@@ -937,10 +938,10 @@ function DayDetailModal({
                 <span className="hidden sm:inline">＋シフトを作成</span>
               </button>
             ) : null}
-            <button type="button" onClick={onClose} className="text-muted">
-              ✕
-            </button>
           </div>
+          <button type="button" onClick={onClose} aria-label="閉じる" className="flex h-9 shrink-0 items-center text-muted">
+            ✕
+          </button>
         </div>
 
         <div className="mb-4 flex gap-4 border-b border-border text-sm">

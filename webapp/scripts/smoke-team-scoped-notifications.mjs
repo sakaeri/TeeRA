@@ -179,6 +179,14 @@ try {
   log("チームB（通知先未設定）の提出はチームAのメアドには届かない", !logB.includes(teamANotifyEmail));
 
   // --- シフト希望ダイジェスト: 本部は全体集計、チームAは個別件数 ---
+  // チームは「今そのスタッフが入っているチーム」で決まる
+  psql(`insert into "TeamMembership" (id, "teamId", "userId", role) values (gen_random_uuid()::text, '${teamAId}', '${staffAUserId}', 'TEAM_MEMBER');`);
+  psql(`insert into "TeamMembership" (id, "teamId", "userId", role) values (gen_random_uuid()::text, '${teamBId}', '${staffBUserId}', 'TEAM_MEMBER');`);
+  // 休み希望は「未確定シフト」に数えない
+  psql(
+    `insert into "ShiftRequest" (id, "staffUserId", "companyId", "teamId", desire, dates, status) ` +
+      `values (gen_random_uuid()::text, '${staffAUserId}', '${companyId}', '${teamAId}', 'OFF', ARRAY[current_date + 4]::date[], 'PENDING');`,
+  );
   psql(
     `insert into "ShiftRequest" (id, "staffUserId", "companyId", "teamId", desire, dates, status) ` +
       `values (gen_random_uuid()::text, '${staffAUserId}', '${companyId}', '${teamAId}', 'WORK', ARRAY[current_date + 3]::date[], 'PENDING');`,
@@ -214,6 +222,16 @@ try {
     "チームB（通知先メアドなし）のマネージャーには、プッシュの端末が無いので本人のメールに届く",
     digestLog.includes(teamBManagerEmail),
   );
+
+  // --- チームを移ったスタッフの分は、新しいチームに届く（希望を出した時点のチームには届かない）---
+  psql(`update "TeamMembership" set "teamId"='${teamBId}' where "userId"='${staffAUserId}' and "teamId"='${teamAId}';`);
+  const movedLogStart = readFileSync(DEV_LOG_PATH, "utf8").length;
+  await callCron("shift-request-digest");
+  await new Promise((r) => setTimeout(r, 600));
+  const movedLog = readServerLogSince(movedLogStart);
+  log("チームAから移ったスタッフの分は、チームAには届かない", !movedLog.includes(teamANotifyEmail));
+  const teamBManagerPart = movedLog.slice(movedLog.indexOf(teamBManagerEmail));
+  log("移った先のチームBには2件で届く", movedLog.includes(teamBManagerEmail) && teamBManagerPart.includes("2件"));
 
   console.log(process.exitCode ? "TEAM-SCOPED NOTIFICATIONS SMOKE TEST HAD FAILURES" : "TEAM-SCOPED NOTIFICATIONS SMOKE TEST PASSED");
 } catch (err) {
