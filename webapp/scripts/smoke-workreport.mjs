@@ -111,11 +111,12 @@ try {
   );
   await staff.getByRole("button", { name: "勤務終了" }).click();
   await staff.getByText("業務報告を提出しました").first().waitFor({ timeout: 15000 });
+  await staff.getByRole("button", { name: "修正する" }).waitFor({ timeout: 15000 });
   staffBody = await staff.textContent("body");
-  log("「勤務終了」だけで提出され、承認待ちになる", staffBody.includes("承認待ち"));
+  log("「勤務終了」だけで提出され、承認待ちになる（今日のシフトに残り、修正ボタンが見える）", staffBody.includes("承認待ち"));
   log(
     "提出された報告に休憩60分が入っている",
-    psql(`select "breakMinutes" || '|' || ("submittedAt" is not null) from "WorkReport" where "staffUserId"='${staffUserId}';`) === "60|t",
+    psql(`select "breakMinutes" || '|' || ("submittedAt" is not null) from "WorkReport" where "staffUserId"='${staffUserId}';`) === "60|true",
   );
 
   // 承認されるまでは修正できる（会社への通知は重ねて送らない）

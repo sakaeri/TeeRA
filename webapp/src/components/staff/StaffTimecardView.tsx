@@ -56,7 +56,12 @@ export function StaffTimecardView({
   // まとめ、今日これから勤務するシフトとは分ける — 以前は日付の新しい順に
   // 混ざって並んでいたため、今日のシフトの下に未提出の過去分が埋もれていた。
   const unsubmitted = actionable.filter(needsReportNow);
-  const upcomingToday = actionable.filter((s) => !needsReportNow(s));
+  // 今日提出した承認待ちの報告は「今日のシフト」に残す（提出できたことと、承認前なら
+  // 「修正する」から直せることが見えるように。閉じた「過去の報告」に入ると見えなくなる）
+  const today = todayJst();
+  const isTodaySubmitted = (s: ShiftRow) => s.date === today && s.approvalStatus === "PENDING" && isDone(s);
+  const upcomingToday = [...actionable.filter((s) => !needsReportNow(s)), ...done.filter(isTodaySubmitted)];
+  const pastDone = done.filter((s) => !isTodaySubmitted(s));
 
   return (
     <div className="flex flex-col gap-6">
@@ -89,13 +94,13 @@ export function StaffTimecardView({
 
       <UnscheduledReportButton companies={unscheduledCompanies} knownTaskNamesByCompany={knownTaskNamesByCompany} />
 
-      {done.length > 0 ? (
+      {pastDone.length > 0 ? (
         <details className="rounded-2xl bg-white/70 p-4 shadow-sm ring-1 ring-black/5">
           <summary className="cursor-pointer text-sm font-semibold text-muted">
-            過去の報告（{done.length}件）
+            過去の報告（{pastDone.length}件）
           </summary>
           <ul className="mt-3 flex flex-col gap-4">
-            {done.map((s) => (
+            {pastDone.map((s) => (
               <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} />
             ))}
           </ul>

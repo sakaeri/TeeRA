@@ -93,6 +93,7 @@ try {
   // 「勤務終了」で退勤と同時に提出される（深夜またぎでもエラーにならない）
   await staff.getByRole("button", { name: "勤務終了" }).click();
   await staff.getByText("業務報告を提出しました").first().waitFor({ timeout: 15000 });
+  await staff.getByText("承認待ち").first().waitFor({ timeout: 15000 }).catch(() => {});
   staffBody = await staff.textContent("body");
   log(
     "「退勤時刻が出勤時刻より前」の警告は出ない（深夜またぎは無効な範囲ではない）",
