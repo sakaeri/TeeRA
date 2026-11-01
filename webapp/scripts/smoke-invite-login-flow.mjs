@@ -77,7 +77,7 @@ try {
 
   // ログイン画面からメールのリンクでログインする（このスタッフはパスワード未設定）。
   await staff.fill("#email", staffEmail);
-  await staff.getByRole("button", { name: "ログイン用リンクを送信する" }).click();
+  await staff.getByRole("button", { name: "ログイン用のメールを送信する" }).click();
   await staff.waitForTimeout(400);
   await staff.goto(extractMagicLinkFromLog());
   await staff.waitForURL(`http://localhost:3000/invite/${token}`, { timeout: 10000 });

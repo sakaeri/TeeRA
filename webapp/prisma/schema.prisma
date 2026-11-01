@@ -679,6 +679,10 @@ model AccountActionToken {
   inviteToken  String? // MAGIC_LINK用（登録確認） — 招待経由の登録で、確認後にどの招待へ進むか
   redirectTo   String? // MAGIC_LINK・LOGIN_PASSWORD_STEP用 — ログイン後に戻る先
   verifiedAt   DateTime? // LOGIN_PASSWORD_STEP用 — パスワードが合っていることを確かめた時刻
+  // MAGIC_LINK（ログイン）用 — メールに一緒に載せる6桁のログインコード（ハッシュ）と、間違えた回数。
+  // ホーム画面に追加したアプリではメールのリンクがブラウザで開いてしまうので、アプリではコードを入れる。
+  codeHash     String?
+  codeAttempts Int                    @default(0)
   expiresAt    DateTime
   usedAt       DateTime?
   createdAt    DateTime               @default(now())
