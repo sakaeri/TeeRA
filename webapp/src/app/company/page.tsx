@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
-import { isLeaderOnly } from "@/lib/auth/permissions";
+import { isCompanyScopeAdmin, isLeaderOnly, myManagedOrLedTeamIds } from "@/lib/auth/permissions";
 import {
   loadDashboardData,
+  scopeDashboardDataToTeams,
   computeKpis,
   computeAutoTodoItems,
   computeShortageEntries,
@@ -34,7 +35,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
   const reportId = typeof sp.reportId === "string" ? sp.reportId : undefined;
 
   const [
-    dashboardData,
+    companyDashboardData,
     openTodos,
     resolvedTodos,
     audience,
@@ -56,6 +57,10 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
   ]);
 
   const clients = company.agencyEnabled ? await listClients(membership.companyId) : [];
+  // チームのマネージャーには自分のチームの分だけ（アプリのアイコンの数字と同じ数え方）
+  const dashboardData = isCompanyScopeAdmin(membership)
+    ? companyDashboardData
+    : await scopeDashboardDataToTeams(companyDashboardData, myManagedOrLedTeamIds(membership));
 
   // derived from the redemptions/promoItems already fetched above instead of
   // running their own separate COUNT/findMany queries for the same rows

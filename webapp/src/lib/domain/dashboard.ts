@@ -103,6 +103,44 @@ export async function loadDashboardData(companyId: string) {
 }
 
 export type DashboardData = Awaited<ReturnType<typeof loadDashboardData>>;
+
+// チームのマネージャー/リーダーには、自分のチームの分だけを見せる（本部の
+// 管理者/編集者は会社全体）。チームの判定は、シフト・募集・シフト希望に付いた
+// チーム、またはそのスタッフがチームのメンバーかどうかで行う。
+export async function scopeDashboardDataToTeams(data: DashboardData, teamIds: string[]): Promise<DashboardData> {
+  const teams = new Set(teamIds);
+  const members = new Set(
+    (
+      await prisma.teamMembership.findMany({ where: { teamId: { in: teamIds } }, select: { userId: true } })
+    ).map((m) => m.userId),
+  );
+  const inTeam = (teamId: string | null | undefined) => Boolean(teamId && teams.has(teamId));
+  return {
+    ...data,
+    shortageRecruitments: data.shortageRecruitments.filter((r) => inTeam(r.teamId)),
+    shiftRequests: data.shiftRequests.filter((r) => inTeam(r.teamId) || members.has(r.staffUserId)),
+    pendingReports: data.pendingReports.filter((r) => inTeam(r.shift.teamId) || members.has(r.staffUserId)),
+    pendingContractStaff: data.pendingContractStaff.filter((s) => members.has(s.userId)),
+    expiringContractStaff: data.expiringContractStaff.filter((s) => members.has(s.staffUserId)),
+    duePaidLeaveGrants: data.duePaidLeaveGrants.filter((g) => members.has(g.staffUserId)),
+    heldShifts: data.heldShifts.filter((s) => inTeam(s.teamId) || members.has(s.staffUserId)),
+  };
+}
+
+// アプリのアイコンに出す数字のうち、ダッシュボードの「対応が必要な件数」の合計
+// （欠員・未確定シフト・業務報告未承認・契約書未確認・契約満了間近・有給付与予定）。
+// やることリストや販促品は含めない。
+export function countDashboardAttention(data: DashboardData) {
+  const kpis = computeKpis(data, 0, 0);
+  return (
+    kpis.shortageCount +
+    kpis.unconfirmedShiftCount +
+    kpis.pendingReportCount +
+    kpis.pendingContractCount +
+    kpis.expiringContractCount +
+    kpis.duePaidLeaveGrantCount
+  );
+}
 type PendingShipment = { id: string; promoItem: { name: string }; staff: { name: string } };
 
 export function computeKpis(

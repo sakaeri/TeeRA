@@ -32,6 +32,40 @@ export function ServiceWorkerSetup() {
     navigator.serviceWorker.controller?.postMessage({ type: "clear-pages" });
   }, [pathname]);
 
+  // アプリのアイコンの数字（対応が必要な件数）。画面を開いたとき・移動したとき・
+  // アプリに戻ってきたときに最新にする。ログアウト中は消す。
+  useEffect(() => {
+    const nav = navigator as Navigator & {
+      setAppBadge?: (count?: number) => Promise<void>;
+      clearAppBadge?: () => Promise<void>;
+    };
+    if (!nav.setAppBadge || !nav.clearAppBadge) return;
+    const setBadge = nav.setAppBadge.bind(nav);
+    const clearBadge = nav.clearAppBadge.bind(nav);
+    const loggedOut = LOGGED_OUT_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+    async function refresh() {
+      if (loggedOut) {
+        await clearBadge().catch(() => {});
+        return;
+      }
+      try {
+        const res = await fetch("/api/app-badge", { cache: "no-store" });
+        if (res.status === 401) return clearBadge().catch(() => {});
+        if (!res.ok) return;
+        const { count } = (await res.json()) as { count: number };
+        await (count > 0 ? setBadge(count) : clearBadge());
+      } catch {
+        // 電波が弱いときなどは前の数字のまま
+      }
+    }
+    refresh();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [pathname]);
+
   if (!servedFromCopy) return null;
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-between gap-3 bg-foreground px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] text-xs text-white">
