@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition, type TouchEvent } from "react";
+import { PdfLink } from "@/components/PdfLink";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { todayJst } from "@/lib/date";
@@ -443,10 +444,9 @@ export function CalendarView({
           </select>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Link
+          <PdfLink
             href={`/api/calendar/pdf?y=${year}&m=${month}${selectedTeamId ? `&team=${selectedTeamId}` : ""}${selectedRelationshipId ? `&rel=${selectedRelationshipId}` : ""}`}
-            target="_blank"
-            aria-label="PDF出力"
+            ariaLabel="PDF出力"
             title="PDF出力"
             className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-white p-2 hover:border-primary hover:text-primary sm:px-3 sm:py-1.5 sm:text-xs"
           >
@@ -461,7 +461,7 @@ export function CalendarView({
               <path d="M8 12h8M8 15.5h8M8 18.5h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
             <span className="hidden sm:inline">PDF出力</span>
-          </Link>
+          </PdfLink>
           <button
             type="button"
             disabled={sharingImage}

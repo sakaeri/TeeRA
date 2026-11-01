@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { PdfLink } from "@/components/PdfLink";
 import { todayJst } from "@/lib/date";
 import {
   createTemplateAction,
@@ -997,14 +998,12 @@ export function TemplateModal({
           </h3>
           <div className="flex items-center gap-3">
             {pdfUrl ? (
-              <a
+              <PdfLink
                 href={pdfUrl}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="rounded-md border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/5"
               >
                 PDFで開く
-              </a>
+              </PdfLink>
             ) : null}
             <button type="button" onClick={onClose} className="text-muted">
               ✕

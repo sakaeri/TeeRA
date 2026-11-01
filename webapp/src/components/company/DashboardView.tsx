@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { PdfLink } from "@/components/PdfLink";
 import Link from "next/link";
 import {
   createManualTodoAction,
@@ -1536,13 +1537,12 @@ function TodoSection({
       {tab === "promoOrders" ? (
         <div>
           <div className="mb-3 flex items-center justify-end gap-2">
-            <Link
+            <PdfLink
               href="/api/promo/pending-shipment-pdf"
-              target="_blank"
               className="rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary"
             >
               発送待ちをPDF出力
-            </Link>
+            </PdfLink>
             <select
               value={orderFilter}
               onChange={(e) => setOrderFilter(e.target.value as "all" | "pending")}
