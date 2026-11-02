@@ -56,6 +56,18 @@ try {
   shift(many);
   shift(many);
   shift(few);
+  // 絞り込みと関係ないもの：静か社で取り消されたシフト（取消）と、自社の募集
+  const otherStaff = psql(
+    `insert into "User" (id, email, "passwordHash", name, "updatedAt") values (gen_random_uuid()::text, 'toolbar-other-${suffix}@example.com', 'x', '取消さん', now()) returning id;`,
+  );
+  const cancelledId = psql(
+    `insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', '${otherStaff}', 'CLIENT', '${quiet}', '確認', '${today}', '09:00', '17:00', false, false, 'CANCELLED', 'ASSIGN', now(), now()) returning id;`,
+  );
+  psql(`insert into "ShiftCancellation" (id, "shiftId", "cancelledByCompanyId", source, "feeAmount") values (gen_random_uuid()::text, '${cancelledId}', '${companyId}', 'CLIENT_APP', 0);`);
+  psql(
+    `insert into "PublicRecruitment" (id, "companyId", title, date, "maxEntries", "lockedTee", status, visibility, "publishedAt", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${companyId}', '自社の募集', '${today}', 2, 0, 'PUBLISHED', 'ORDER', now(), now(), now());`,
+  );
 
   await page.goto("http://localhost:3000/company/calendar");
   const [y, m] = today.split("-").map(Number);
@@ -64,6 +76,9 @@ try {
   log("前の月・次の月のボタンがある", (await page.getByRole("button", { name: "次の月" }).count()) === 1);
 
   // 絞り込みの一覧
+  const todayCell0 = page.locator(`button:has(> span:text-is("${Number(today.slice(8, 10))}"))`).first();
+  const allCellText = await todayCell0.innerText();
+  log("絞り込みなしでは、取消と募集が出る", allCellText.includes("取消") && allCellText.includes("募集"));
   await page.getByRole("button", { name: "絞り込み", exact: true }).click();
   const sheet = page.locator("div.fixed.inset-0.z-40").last();
   await sheet.getByText("依頼主", { exact: true }).waitFor();
@@ -80,6 +95,10 @@ try {
   await sheet.getByRole("button", { name: /かきく少ない社/ }).click();
   await page.waitForURL(/rel=/);
   await page.getByRole("button", { name: "絞り込みを解除" }).waitFor();
+  const todayCell = page.locator(`button:has(> span:text-is("${Number(today.slice(8, 10))}"))`).first();
+  const filteredCellText = await todayCell.innerText();
+  log("絞り込み中は、別の依頼主で取り消されたシフト（取消）は出ない", !filteredCellText.includes("取消"));
+  log("依頼主で絞り込み中は、自社の募集は出ない", !filteredCellText.includes("募集"));
   log("絞り込み中は「かきく少ない社 ✕」が出る", (await page.getByText("かきく少ない社").count()) >= 1);
   const filterClass = await page.getByRole("button", { name: "絞り込み", exact: true }).getAttribute("class");
   log("絞り込み中はアイコンが濃い緑", (filterClass ?? "").includes("bg-primary"));
