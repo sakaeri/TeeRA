@@ -113,6 +113,8 @@ try {
   staffBody = await recruitmentItem.innerText();
   log("expanded detail shows 業務内容", staffBody.includes(recruitmentTitle));
   await recruitmentItem.getByRole("button", { name: "応募する" }).click();
+  // 確認のポップアップで「応募する」
+  await recruitmentItem.page().locator("div.fixed.inset-0.z-40").getByRole("button", { name: "応募する" }).click();
   await staff.waitForTimeout(800);
   // 応募済みの募集は一覧から消える仕様（他セッションの変更）— バッジで
   // 残すのではなく丸ごと非表示にする。

@@ -11,6 +11,9 @@ type Row = {
   date: string;
   startTime: string | null;
   endTime: string | null;
+  isUndecided: boolean;
+  note: string | null;
+  announcements: string[];
   hourlyWage: number | null;
   wageType: string | null;
   extraItems: { label: string; value: string }[];
@@ -37,6 +40,8 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [applied, setApplied] = useState<Record<string, boolean>>({});
   const [openId, setOpenId] = useState<string | null>(null);
+  // 応募する前に、内容を確かめてもらう
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   function apply(id: string) {
     startTransition(async () => {
@@ -117,7 +122,7 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
                 </p>
                 <p>
                   <span className="mr-1 text-xs text-muted">時間</span>
-                  {r.startTime}〜{r.endTime}
+                  {r.isUndecided || (!r.startTime && !r.endTime) ? "未定" : `${r.startTime ?? ""}〜${r.endTime ?? ""}`}
                 </p>
                 {r.hourlyWage ? (
                   <p>
@@ -132,11 +137,27 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
                     {item.value}
                   </p>
                 ))}
+                {r.note ? (
+                  <p className="whitespace-pre-wrap">
+                    <span className="mr-1 text-xs text-muted">備考</span>
+                    {r.note}
+                  </p>
+                ) : null}
+                {r.announcements.length > 0 ? (
+                  <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    <p className="mb-1 font-semibold">追加のお知らせ</p>
+                    {r.announcements.map((body, i) => (
+                      <p key={i} className="whitespace-pre-wrap">
+                        {body}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
                 {errors[r.id] ? <p className="text-xs text-red-600">{errors[r.id]}</p> : null}
                 <button
                   type="button"
                   disabled={pending || isFull || isApplied}
-                  onClick={() => apply(r.id)}
+                  onClick={() => setConfirmId(r.id)}
                   className="mt-1 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
                 >
                   {isApplied ? "応募済み" : isFull ? "満員" : "応募する"}
@@ -149,6 +170,42 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
       {recruitments.length === 0 ? (
         <p className="text-sm text-muted">現在募集中のシフトはありません。</p>
       ) : null}
+      {(() => {
+        const target = recruitments.find((r) => r.id === confirmId);
+        if (!target) return null;
+        return (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setConfirmId(null)}>
+            <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+              <p className="mb-1 font-serif-jp text-base font-bold text-primary">この募集に応募しますか？</p>
+              <p className="mb-4 text-sm text-muted">
+                {formatDateJa(target.date)} {target.companyName}
+                <br />
+                {target.title}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmId(null)}
+                  className="flex-1 rounded-lg border border-border px-4 py-2 text-sm"
+                >
+                  やめる
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    setConfirmId(null);
+                    apply(target.id);
+                  }}
+                  className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                >
+                  応募する
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </ul>
   );
 }

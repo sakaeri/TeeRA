@@ -1822,17 +1822,18 @@ function OrderCard({
             <button
               type="button"
               onClick={onEdit}
-              className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-muted hover:bg-background hover:text-primary"
+              aria-label="編集"
+              title="編集"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted hover:bg-background hover:text-primary"
             >
-              <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5">
+              <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5">
                 <path
                   d="M13.5 3.5L16.5 6.5L7 16H4V13L13.5 3.5Z"
                   stroke="currentColor"
-                  strokeWidth="1.4"
+                  strokeWidth="1.6"
                   strokeLinejoin="round"
                 />
               </svg>
-              編集
             </button>
           ) : null}
         </div>

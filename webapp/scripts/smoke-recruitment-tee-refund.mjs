@@ -175,6 +175,8 @@ try {
   await zItem.locator("button").first().click();
   await staffZ.waitForTimeout(200);
   await zItem.getByRole("button", { name: "応募する" }).click();
+  // 確認のポップアップで「応募する」
+  await zItem.page().locator("div.fixed.inset-0.z-40").getByRole("button", { name: "応募する" }).click();
   await staffZ.waitForTimeout(800);
 
   state = psql(`select "lockedTee" from "PublicRecruitment" where id='${recruitmentId}';`);

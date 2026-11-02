@@ -206,6 +206,8 @@ try {
   await publicRecItem.locator("button").first().click();
   await staff.waitForTimeout(200);
   await publicRecItem.getByRole("button", { name: "応募する" }).click();
+  // 確認のポップアップで「応募する」
+  await publicRecItem.page().locator("div.fixed.inset-0.z-40").getByRole("button", { name: "応募する" }).click();
   await staff.waitForTimeout(600);
 
   const publicApplyEntry = psql(`select count(*) from "RecruitmentEntry" where "publicRecruitmentId"='${publicRecId}' and "staffUserId"='${staffUserId}';`);

@@ -83,9 +83,9 @@ function shortCompanyName(name: string) {
       break;
     }
   }
-  // マスが狭いので、空白を除いて最大6文字で切る（日付の詳細では全部の名前が見える）
+  // 空白を除いた名前をそのまま出す（マスに入りきらない分は枠で切れる。日付の詳細では全部見える）
   stripped = stripped.replace(/\s+/g, "");
-  return (stripped || name.replace(/\s+/g, "")).slice(0, 6);
+  return stripped || name.replace(/\s+/g, "");
 }
 
 // 業務報告の状態。「未提出」は業務時間を過ぎてから初めて意味を持つ警告 —
