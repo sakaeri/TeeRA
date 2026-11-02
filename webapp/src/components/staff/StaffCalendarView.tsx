@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition, type TouchEvent } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { submitShiftRequestAction } from "@/app/staff/actions";
 import { todayJst, nowJstHHMM } from "@/lib/date";
 import { holidayName } from "@/lib/holidays";
+import { useMonthSwipe } from "@/lib/useMonthSwipe";
 
 type ShiftRow = {
   id: string;
@@ -140,8 +140,8 @@ function buildMonthCells(year: number, month: number) {
 }
 
 export function StaffCalendarView({
-  year,
-  month,
+  year: dataYear,
+  month: dataMonth,
   companies,
   shifts,
   pendingRequests,
@@ -152,14 +152,19 @@ export function StaffCalendarView({
   shifts: ShiftRow[];
   pendingRequests: PendingRequestRow[];
 }) {
-  const router = useRouter();
   const [showWizard, setShowWizard] = useState(false);
   const [wizardInitialDate, setWizardInitialDate] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [companyFilter, setCompanyFilter] = useState("");
   const todayStr = todayJst();
-  const touchStartX = useRef<number | null>(null);
-  const touchStartY = useRef<number | null>(null);
+  // 月送り（押した瞬間に次の月の枠を出す・指に合わせて動く・横スワイプ中は縦に動かない）
+  const {
+    year,
+    month,
+    goToMonth,
+    containerRef: swipeContainerRef,
+    style: swipeStyle,
+  } = useMonthSwipe({ year: dataYear, month: dataMonth, hrefFor: (y, m) => `?y=${y}&m=${m}` });
 
   const filteredShifts = companyFilter ? shifts.filter((s) => s.companyId === companyFilter) : shifts;
   const filteredRequests = companyFilter
@@ -186,59 +191,40 @@ export function StaffCalendarView({
 
   const cells = useMemo(() => buildMonthCells(year, month), [year, month]);
 
-  const prev = month === 1 ? { y: year - 1, m: 12 } : { y: year, m: month - 1 };
-  const next = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
-
-  // モバイルでのスワイプによる月送り — 縦スクロールと誤検知しないよう、
-  // 横移動が縦移動より明確に大きい場合のみ月を切り替える。
-  const SWIPE_THRESHOLD_PX = 60;
-  function handleTouchStart(e: TouchEvent) {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-  }
-  function handleTouchEnd(e: TouchEvent) {
-    if (touchStartX.current === null || touchStartY.current === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX.current;
-    const dy = e.changedTouches[0].clientY - touchStartY.current;
-    touchStartX.current = null;
-    touchStartY.current = null;
-    if (Math.abs(dx) < SWIPE_THRESHOLD_PX || Math.abs(dx) < Math.abs(dy)) return;
-    const target = dx < 0 ? next : prev;
-    router.push(`?y=${target.y}&m=${target.m}`);
-  }
-
   const CONFIRMED_SLOT_BUDGET = 5;
   // 月によって5行/6行と変わっても月カード全体の縦幅は一定に保ち（＋ボタンの
   // 裏まで届くように)、その差は週の行の高さ側で吸収する。
   const weeks = Math.max(1, Math.ceil(cells.length / 7));
 
   return (
-    <div className="flex flex-1 flex-col rounded-2xl bg-white p-1.5 sm:block sm:p-4">
+    <div className="flex flex-1 flex-col overflow-x-clip rounded-2xl bg-white p-1.5 sm:block sm:p-4">
       <div className="mb-2 flex items-center justify-center gap-2">
-        <Link
-          href={`?y=${prev.y}&m=${prev.m}`}
+        <button
+          type="button"
+          onClick={() => goToMonth(-1)}
           aria-label="前の月"
           className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
         >
           <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
             <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-        </Link>
+        </button>
         <Link
           href={`?y=${todayStr.slice(0, 4)}&m=${Number(todayStr.slice(5, 7))}`}
           className="rounded-lg px-2 py-1 font-serif-jp text-lg font-bold hover:bg-background"
         >
           {year}年{month}月
         </Link>
-        <Link
-          href={`?y=${next.y}&m=${next.m}`}
+        <button
+          type="button"
+          onClick={() => goToMonth(1)}
           aria-label="次の月"
           className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
         >
           <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
             <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-        </Link>
+        </button>
       </div>
 
       {companies.length > 1 ? (
@@ -265,11 +251,7 @@ export function StaffCalendarView({
         </div>
       ) : null}
 
-      <div
-        className="flex flex-1 flex-col sm:contents"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
+      <div ref={swipeContainerRef} className="flex flex-1 flex-col sm:contents" style={swipeStyle}>
       <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
         {WEEKDAYS.map((w, i) => (
           <div key={w} className={`py-1 text-center text-xs font-semibold ${weekdayColor(i)}`}>
