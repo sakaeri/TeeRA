@@ -91,6 +91,22 @@ try {
   log("過去で報告がまだなら「（未報告）」付き", after("未報告三郎").includes("09:00〜17:00（未報告）"));
   log("過去で時間未定のまま報告がまだなら「未報告」", after("未報告未定子").includes("未報告") && !after("未報告未定子").includes("未定 "));
 
+  // 実績表（請求の内容）：承認済みの出勤とキャンセル料のある取消だけ
+  const cancelFee = staff("料金五郎");
+  const feeShift = shift(cancelFee, `${lastMonth}-12`, false);
+  psql(`update "Shift" set status='CANCELLED' where id='${feeShift}';`);
+  psql(`insert into "ShiftCancellation" (id, "shiftId", "cancelledByCompanyId", source, "feeAmount") values (gen_random_uuid()::text, '${feeShift}', '${companyId}', 'CLIENT_APP', 3000);`);
+  const actualRes = await page.request.get(`http://localhost:3000/api/calendar/pdf?y=${ly}&m=${lm}&kind=actual`);
+  const actual = (await pdfText(await actualRes.body())).replace(/\s+/g, " ");
+  log("実績表のタイトルは「実績表」", actual.includes("実績表"));
+  log("実績表に承認済みの出勤が実際の時間で載る", actual.includes("出勤太郎") && actual.includes("08:05〜15:20"));
+  log("実績表にキャンセル料のある取消が載る", actual.includes("料金五郎") && actual.includes("取消（キャンセル料あり）"));
+  log(
+    "実績表に欠勤・料金なしの取消・未報告は載らない",
+    !actual.includes("欠勤花子") && !actual.includes("取消次郎") && !actual.includes("未報告三郎") && !actual.includes("未報告未定子"),
+  );
+  log("実績表に「承認済みの業務報告…のみ」の注記", actual.includes("承認済みの業務報告"));
+
   const [ny, nm] = nextMonth.split("-").map(Number);
   const futureRes = await page.request.get(`http://localhost:3000/api/calendar/pdf?y=${ny}&m=${nm}`);
   const futureText = (await pdfText(await futureRes.body())).replace(/\s+/g, " ");

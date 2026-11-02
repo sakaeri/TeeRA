@@ -15,6 +15,8 @@ export async function GET(request: Request) {
   const month = Number(url.searchParams.get("m")) || today.month;
   const teamId = url.searchParams.get("team") || undefined;
   const companyRelationshipId = url.searchParams.get("rel") || undefined;
+  // "actual" のときは実績表（請求の内容）、それ以外はシフト表
+  const kind = url.searchParams.get("kind") === "actual" ? "actual" : "schedule";
 
   const [shifts, company, team, relationship] = await Promise.all([
     listShiftsForMonth({ companyId: membership.companyId, year, month, teamId, companyRelationshipId }),
@@ -73,12 +75,50 @@ export async function GET(request: Request) {
     })),
   };
 
+  // 実績表（請求の内容）：請求書と同じ条件で、承認済みの出勤と、キャンセル料が発生した取消だけを載せる
+  if (kind === "actual") {
+    const monthStart = new Date(Date.UTC(year, month - 1, 1));
+    const monthEnd = new Date(Date.UTC(year, month, 1));
+    const actualShifts = await prisma.shift.findMany({
+      where: {
+        companyId: membership.companyId,
+        date: { gte: monthStart, lt: monthEnd },
+        status: { not: "SUPERSEDED" },
+        ...(teamId ? { teamId } : {}),
+        ...(companyRelationshipId ? { companyRelationshipId } : {}),
+      },
+      include: { staff: true, workReport: true, cancellation: true, companyRelationship: { include: { clientCompany: true } } },
+      orderBy: [{ date: "asc" }, { startTime: "asc" }],
+    });
+    data.title = "実績表";
+    data.note = "※承認済みの業務報告と、キャンセル料が発生した取消のみを載せています。";
+    data.shifts = actualShifts.flatMap((s): CalendarPdfData["shifts"] => {
+      const base = {
+        date: s.date.toISOString().slice(0, 10),
+        staffName: s.staff.name,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        isAllDay: s.isAllDay,
+        isUndecided: s.isUndecided,
+        clientName: s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? null,
+        taskName: s.taskName,
+      };
+      if (s.cancellation || s.status === "CANCELLED" || s.status === "ON_HOLD") {
+        return (s.cancellation?.feeAmount ?? 0) > 0 ? [{ ...base, timeOverride: "取消（キャンセル料あり）" }] : [];
+      }
+      const report = s.workReport;
+      if (!report || report.outcome !== "WORKED" || report.approvalStatus !== "APPROVED") return [];
+      const shown = reportDisplay(report);
+      return [{ ...base, taskName: shown.reportedTaskName ?? s.taskName, outcome: "WORKED", reportedTimeLabel: shown.reportedTimeLabel }];
+    });
+  }
+
   const buffer = await renderToBuffer(<CalendarPdfDocument data={data} />);
 
   return new Response(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="shift-calendar-${year}-${String(month).padStart(2, "0")}.pdf"`,
+      "Content-Disposition": `inline; filename="${kind === "actual" ? "work-record" : "shift-calendar"}-${year}-${String(month).padStart(2, "0")}.pdf"`,
     },
   });
 }

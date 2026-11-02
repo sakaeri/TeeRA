@@ -56,6 +56,8 @@ export type CalendarPdfShift = {
   // 業務報告の内容（出勤・欠勤・取消と、出勤の実際の時間）
   outcome?: string | null;
   reportedTimeLabel?: string | null;
+  // 時間欄にそのまま出す文字（実績表のキャンセル料の行など）
+  timeOverride?: string | null;
 };
 
 export type CalendarPdfData = {
@@ -69,9 +71,12 @@ export type CalendarPdfData = {
   // 依頼主/派遣会社で絞り込んでいる時は、全行が同じ勤務先になり冗長な
   // ため、代わりに業務内容を出す方が参考になる（chat相談で決定）。
   thirdColumn?: "workplace" | "task";
+  // 一覧の下に出す注記
+  note?: string;
 };
 
 function timeLabel(s: CalendarPdfShift, todayStr: string) {
+  if (s.timeOverride) return s.timeOverride;
   return shiftListTimeLabel({ ...s, todayStr });
 }
 
@@ -92,7 +97,9 @@ export function CalendarPdfDocument({ data }: { data: CalendarPdfData }) {
           {data.filterLabel ? ` ／ 絞り込み: ${data.filterLabel}` : ""}
         </Text>
 
-        {dates.length === 0 ? <Text style={styles.empty}>この月のシフトはありません。</Text> : null}
+        {dates.length === 0 ? (
+          <Text style={styles.empty}>{data.title === "実績表" ? "この月の実績はありません。" : "この月のシフトはありません。"}</Text>
+        ) : null}
 
         {dates.map((date) => {
           const dow = new Date(date + "T00:00:00Z").getUTCDay();
@@ -117,6 +124,7 @@ export function CalendarPdfDocument({ data }: { data: CalendarPdfData }) {
             </View>
           );
         })}
+        {data.note ? <Text style={styles.empty}>{data.note}</Text> : null}
       </Page>
     </Document>
   );
