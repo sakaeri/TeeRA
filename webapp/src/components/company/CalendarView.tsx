@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition, type TouchEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { PdfLink } from "@/components/PdfLink";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { todayJst } from "@/lib/date";
 import { holidayName } from "@/lib/holidays";
+import { useMonthSwipe } from "@/lib/useMonthSwipe";
 import { useClickOutside } from "@/lib/useClickOutside";
 import {
   createAssignedShiftAction,
@@ -287,21 +288,15 @@ export function CalendarView({
   const [sharingImage, setSharingImage] = useState(false);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
-  const touchStartX = useRef<number | null>(null);
-  const touchStartY = useRef<number | null>(null);
-  const swipeAxis = useRef<"x" | "y" | null>(null);
 
-  // 月送り：押した（スワイプした）瞬間に次の月の枠を出し、シフトなどのデータは
-  // 届きしだい埋まる。データが届くまでは pendingMonth の月を表示する。
-  const [pendingMonth, setPendingMonth] = useState<{ y: number; m: number } | null>(null);
-  const [, startMonthTransition] = useTransition();
-  const showingPending = pendingMonth && !(pendingMonth.y === dataYear && pendingMonth.m === dataMonth);
-  const year = showingPending ? pendingMonth.y : dataYear;
-  const month = showingPending ? pendingMonth.m : dataMonth;
-  // スワイプ中・切り替え中の横のずれ（px）と、動きをなめらかにするかどうか
-  const [slideX, setSlideX] = useState(0);
-  const [slideAnimated, setSlideAnimated] = useState(false);
-  const gridRef = useRef<HTMLDivElement>(null);
+  // 月送り（押した瞬間に次の月の枠を出す・指に合わせて動く・横スワイプ中は縦に動かない）
+  const swipe = useMonthSwipe({
+    year: dataYear,
+    month: dataMonth,
+    hrefFor: (y, m) => `?y=${y}&m=${m}${selectedTeamId ? `&team=${selectedTeamId}` : selectedRelationshipId ? `&rel=${selectedRelationshipId}` : ""}`,
+    prevBlockedAt: historyCutoff ?? null,
+  });
+  const { year, month, containerRef: swipeContainerRef, style: swipeStyle, goToMonth } = swipe;
 
   const todayStr = todayJst();
 
@@ -389,64 +384,11 @@ export function CalendarView({
     return out;
   }, [year, month]);
 
-  const prev = month === 1 ? { y: year - 1, m: 12 } : { y: year, m: month - 1 };
-  const next = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
   const atHistoryCutoff = Boolean(historyCutoff && historyCutoff.year === year && historyCutoff.month === month);
 
   // モバイルでのスワイプによる月送り — 縦スクロールと誤検知しないよう、
   // 横移動が縦移動より明確に大きい場合のみ月を切り替える。無料プランの
   // 閲覧制限にかかっている月では、スワイプでも前月へは戻れないようにする。
-  const SWIPE_THRESHOLD_PX = 60;
-  function goToMonth(target: { y: number; m: number }, direction: 1 | -1) {
-    const width = gridRef.current?.offsetWidth ?? window.innerWidth;
-    // 今の月を指の方向へ流し出し、反対側から次の月の枠を入れる
-    setSlideAnimated(true);
-    setSlideX(-direction * width);
-    window.setTimeout(() => {
-      setSlideAnimated(false);
-      setSlideX(direction * width);
-      setPendingMonth(target);
-      startMonthTransition(() => router.push(`?y=${target.y}&m=${target.m}${filterQuery}`));
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          setSlideAnimated(true);
-          setSlideX(0);
-        }),
-      );
-    }, 160);
-  }
-  function handleTouchStart(e: TouchEvent) {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-    swipeAxis.current = null;
-    setSlideAnimated(false);
-  }
-  function handleTouchMove(e: TouchEvent) {
-    if (touchStartX.current === null || touchStartY.current === null) return;
-    const dx = e.touches[0].clientX - touchStartX.current;
-    const dy = e.touches[0].clientY - touchStartY.current;
-    // 動き始めの向きで、横スワイプか縦スクロールかを決める
-    if (!swipeAxis.current && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-      swipeAxis.current = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
-    }
-    if (swipeAxis.current !== "x") return;
-    // 無料プランの閲覧範囲の端では、前の月側へは少しだけしか動かない
-    setSlideX(dx > 0 && atHistoryCutoff ? dx / 4 : dx);
-  }
-  function handleTouchEnd(e: TouchEvent) {
-    if (touchStartX.current === null || touchStartY.current === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX.current;
-    const axis = swipeAxis.current;
-    touchStartX.current = null;
-    touchStartY.current = null;
-    swipeAxis.current = null;
-    if (axis !== "x" || Math.abs(dx) < SWIPE_THRESHOLD_PX || (dx > 0 && atHistoryCutoff)) {
-      setSlideAnimated(true);
-      setSlideX(0);
-      return;
-    }
-    goToMonth(dx < 0 ? next : prev, dx < 0 ? 1 : -1);
-  }
   // 月によって5行/6行と変わっても月カード全体の縦幅は一定に保ち、その差は
   // 週の行の高さ側で吸収する（スタッフ画面のカレンダーと同じ方式）。
   const weeks = Math.max(1, Math.ceil(cells.length / 7));
@@ -475,7 +417,7 @@ export function CalendarView({
         <div className="flex min-w-0 items-center gap-1">
           <button
             type="button"
-            onClick={() => !atHistoryCutoff && goToMonth(prev, -1)}
+            onClick={() => goToMonth(-1)}
             disabled={atHistoryCutoff}
             aria-label={atHistoryCutoff ? "前の月（無料プランの閲覧範囲外）" : "前の月"}
             className="rounded-full p-2 text-muted hover:bg-background hover:text-primary disabled:text-border"
@@ -492,7 +434,7 @@ export function CalendarView({
           </Link>
           <button
             type="button"
-            onClick={() => goToMonth(next, 1)}
+            onClick={() => goToMonth(1)}
             aria-label="次の月"
             className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
           >
@@ -579,19 +521,8 @@ export function CalendarView({
         <ShiftRequestsSection requests={shiftRequests} onNavigate={navigateToDate} />
       </div>
 
-      <div className="order-3 flex flex-1 flex-col bg-white p-1.5 sm:block sm:rounded-2xl sm:p-4">
-      <div
-        ref={gridRef}
-        className="flex flex-1 touch-pan-y flex-col sm:contents"
-        style={{
-          transform: slideX ? `translateX(${slideX}px)` : undefined,
-          transition: slideAnimated ? "transform 160ms ease-out" : "none",
-          opacity: showingPending ? 0.85 : 1,
-        }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
+      <div className="order-3 flex flex-1 flex-col overflow-x-clip bg-white p-1.5 sm:block sm:rounded-2xl sm:p-4">
+      <div ref={swipeContainerRef} className="flex flex-1 flex-col sm:contents" style={swipeStyle}>
       <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
         {WEEKDAYS.map((w, i) => (
           <div key={w} className={`py-1 text-center text-xs font-semibold ${weekdayColor(i)}`}>
