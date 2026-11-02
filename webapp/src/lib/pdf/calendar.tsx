@@ -1,4 +1,5 @@
 import { Document, Page, Text, View, StyleSheet, Font } from "@react-pdf/renderer";
+import { shiftListTimeLabel } from "@/lib/shiftListTimeLabel";
 
 Font.register({
   family: "Noto Sans JP",
@@ -52,6 +53,9 @@ export type CalendarPdfShift = {
   isUndecided: boolean;
   clientName?: string | null;
   taskName?: string | null;
+  // 業務報告の内容（出勤・欠勤・取消と、出勤の実際の時間）
+  outcome?: string | null;
+  reportedTimeLabel?: string | null;
 };
 
 export type CalendarPdfData = {
@@ -67,10 +71,8 @@ export type CalendarPdfData = {
   thirdColumn?: "workplace" | "task";
 };
 
-function timeLabel(s: CalendarPdfShift) {
-  if (s.isUndecided) return "未定";
-  if (s.isAllDay) return "終日";
-  return `${s.startTime ?? "--:--"}〜${s.endTime ?? "--:--"}`;
+function timeLabel(s: CalendarPdfShift, todayStr: string) {
+  return shiftListTimeLabel({ ...s, todayStr });
 }
 
 export function CalendarPdfDocument({ data }: { data: CalendarPdfData }) {
@@ -106,7 +108,7 @@ export function CalendarPdfDocument({ data }: { data: CalendarPdfData }) {
               {byDate.get(date)!.map((s, i) => (
                 <View key={i} style={styles.row}>
                   <Text style={styles.colStaff}>{s.staffName}</Text>
-                  <Text style={styles.colTime}>{timeLabel(s)}</Text>
+                  <Text style={styles.colTime}>{timeLabel(s, data.issuedAt)}</Text>
                   <Text style={styles.colSource}>
                     {data.thirdColumn === "task" ? (s.taskName ?? "―") : (s.clientName ?? "自社")}
                   </Text>

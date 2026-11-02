@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { todayJst } from "@/lib/date";
 import { holidayName } from "@/lib/holidays";
 import { useMonthSwipe } from "@/lib/useMonthSwipe";
+import { shiftListTimeLabel } from "@/lib/shiftListTimeLabel";
 import { useClickOutside } from "@/lib/useClickOutside";
 import {
   createAssignedShiftAction,
@@ -772,7 +773,7 @@ function ShareableShiftList({
                 <div key={s.id} className="flex items-center justify-between border-b border-border/50 px-2 py-1.5">
                   <span className="w-2/5">{s.staffName}</span>
                   <span className="w-1/3 text-muted">
-                    {s.isUndecided ? "未定" : s.isAllDay ? "終日" : `${s.startTime}〜${s.endTime}`}
+                    {shiftListTimeLabel({ ...s, todayStr: todayJst() })}
                   </span>
                   <span className="w-1/4 text-right text-muted">{s.clientName ?? "自社"}</span>
                 </div>
