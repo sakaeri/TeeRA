@@ -70,7 +70,9 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
         const hideDetail = r.visibility === "PUBLIC" && r.isAffiliated;
         const open = !hideDetail && openId === r.id;
         const location = r.extraItems.find((i) => i.label === "勤務地")?.value;
-        const otherExtraItems = r.extraItems.filter((i) => i.label !== "勤務地");
+        // 給与・その他の項目は公開募集（所属していないスタッフ向け）だけのもの。
+        // 所属先の募集（オーダー）では出さない（実際の支給は契約の単価のため）
+        const otherExtraItems = r.visibility === "PUBLIC" ? r.extraItems.filter((i) => i.label !== "勤務地") : [];
         return (
           <li
             key={r.id}
@@ -124,7 +126,7 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
                   <span className="mr-1 text-xs text-muted">時間</span>
                   {r.isUndecided || (!r.startTime && !r.endTime) ? "未定" : `${r.startTime ?? ""}〜${r.endTime ?? ""}`}
                 </p>
-                {r.hourlyWage ? (
+                {r.hourlyWage && r.visibility === "PUBLIC" ? (
                   <p>
                     <span className="mr-1 text-xs text-muted">給与</span>
                     {r.wageType === "DAILY" ? "日給" : "時給"}
