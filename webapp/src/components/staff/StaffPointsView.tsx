@@ -123,8 +123,10 @@ export function StaffPointsView({
             <span className="flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold text-primary">
               Lv.{tier.rankLevel}
             </span>
-            <span className="font-serif-jp font-bold text-accent">現在のランク：{tier.rankName}</span>
-            <span className="text-primary-foreground/65">承認1件につき {tier.currentRate}pt</span>
+            {/* スマホでも1行に収まるよう短く・折り返さない */}
+            <span className="whitespace-nowrap font-serif-jp font-bold text-accent">{tier.rankName}</span>
+            <span className="text-primary-foreground/30">｜</span>
+            <span className="whitespace-nowrap text-primary-foreground/65">承認1件 {tier.currentRate}pt</span>
           </div>
         </div>
 
