@@ -31,8 +31,9 @@ try {
 
   page.on("console", (m) => { if (m.type() === "error") console.log("  [console]", m.text().slice(0, 400)); });
   await page.goto("http://localhost:3000/company/calendar");
-  const pdfLink = page.getByRole("link", { name: "PDF出力" });
-  await pdfLink.click();
+  // PDFのボタンからシフト表を選ぶ
+  await page.getByRole("button", { name: "PDF出力" }).click();
+  await page.getByRole("link", { name: /シフト表（予定）/ }).click();
   await page.waitForURL(/\/pdf-view\?src=/);
   log("スマホではアプリ内のPDF表示画面で開く", page.url().includes(encodeURIComponent("/api/calendar/pdf")));
   page.on("pageerror", (e) => console.log("  [pageerror]", String(e).slice(0, 300)));
@@ -57,7 +58,7 @@ try {
   await page.goto("http://localhost:3000/company/calendar");
   const [popup] = await Promise.all([
     context.waitForEvent("page", { timeout: 15000 }),
-    page.getByRole("link", { name: "PDF出力" }).click(),
+    page.getByRole("button", { name: "PDF出力" }).click().then(() => page.getByRole("link", { name: /シフト表（予定）/ }).click()),
   ]);
   log("パソコンでは新しいタブで開く", Boolean(popup) && page.url().includes("/company/calendar"));
   await popup.close();

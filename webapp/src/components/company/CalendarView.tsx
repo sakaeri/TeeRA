@@ -288,6 +288,8 @@ export function CalendarView({
 
   const [sharingImage, setSharingImage] = useState(false);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
+  const [showPdfMenu, setShowPdfMenu] = useState(false);
+  const pdfMenuRef = useClickOutside<HTMLDivElement>(showPdfMenu, () => setShowPdfMenu(false));
   const shareRef = useRef<HTMLDivElement>(null);
 
   // 月送り（押した瞬間に次の月の枠を出す・指に合わせて動く・横スワイプ中は縦に動かない）
@@ -458,23 +460,46 @@ export function CalendarView({
               <path d="M4 5h16l-6 7.5V19l-4-2v-4.5L4 5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
             </svg>
           </button>
-          <PdfLink
-            href={`/api/calendar/pdf?y=${year}&m=${month}${selectedTeamId ? `&team=${selectedTeamId}` : ""}${selectedRelationshipId ? `&rel=${selectedRelationshipId}` : ""}`}
-            ariaLabel="PDF出力"
-            title="PDF出力"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100"
-          >
-            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0">
-              <path
-                d="M6 3h8l4 4v14a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinejoin="round"
-              />
-              <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-              <path d="M8 12h8M8 15.5h8M8 18.5h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            </svg>
-          </PdfLink>
+          <div ref={pdfMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShowPdfMenu((v) => !v)}
+              aria-label="PDF出力"
+              title="PDF出力"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100"
+            >
+              <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0">
+                <path
+                  d="M6 3h8l4 4v14a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+                <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                <path d="M8 12h8M8 15.5h8M8 18.5h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            </button>
+            {/* シフト表（予定）と実績表（請求書と同じ内容）を選んで出す */}
+            {showPdfMenu ? (
+              <div className="absolute right-0 top-11 z-30 w-56 overflow-hidden rounded-xl border border-border bg-white text-sm shadow-lg">
+                {(
+                  [
+                    ["schedule", "シフト表（予定）", "予定と、報告があれば実際の時間"],
+                    ["actual", "実績表（請求の内容）", "承認済みの出勤とキャンセル料のみ"],
+                  ] as const
+                ).map(([kind, label, sub]) => (
+                  <PdfLink
+                    key={kind}
+                    href={`/api/calendar/pdf?y=${year}&m=${month}${selectedTeamId ? `&team=${selectedTeamId}` : ""}${selectedRelationshipId ? `&rel=${selectedRelationshipId}` : ""}${kind === "actual" ? "&kind=actual" : ""}`}
+                    className="block border-b border-border/60 px-4 py-3 last:border-b-0 hover:bg-background"
+                  >
+                    <span className="block font-semibold text-primary">{label}</span>
+                    <span className="block text-xs text-muted">{sub}</span>
+                  </PdfLink>
+                ))}
+              </div>
+            ) : null}
+          </div>
           <button
             type="button"
             disabled={sharingImage}
