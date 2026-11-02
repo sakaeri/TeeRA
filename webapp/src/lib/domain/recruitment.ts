@@ -394,7 +394,7 @@ export async function listOpenRecruitmentsForStaff(params: { companyId: string; 
         { visibility: "PUBLIC" },
       ],
     },
-    include: { entries: true, company: true },
+    include: { entries: true, company: true, announcements: { orderBy: { createdAt: "asc" } } },
     orderBy: { date: "asc" },
   });
 
