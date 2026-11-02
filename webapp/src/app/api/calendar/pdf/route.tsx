@@ -4,6 +4,7 @@ import { listShiftsForMonth } from "@/lib/domain/shifts";
 import { prisma } from "@/lib/prisma";
 import { todayJst, todayJstParts } from "@/lib/date";
 import { CalendarPdfDocument, type CalendarPdfData } from "@/lib/pdf/calendar";
+import { reportDisplay } from "@/lib/workReportDisplay";
 
 export async function GET(request: Request) {
   const { membership } = await requireCompanyAdminOrEditor();
@@ -65,6 +66,10 @@ export async function GET(request: Request) {
           ? `派遣：${s.companyRelationship?.agencyCompany?.name ?? "派遣会社"}`
           : (s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? null),
       taskName: s.taskName,
+      ...(() => {
+        const report = reportDisplay(s.workReport);
+        return { outcome: report.outcome, reportedTimeLabel: report.reportedTimeLabel };
+      })(),
     })),
   };
 
