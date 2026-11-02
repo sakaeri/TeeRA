@@ -370,6 +370,8 @@ export async function listShiftHistoryForMonth(params: {
   month: number;
   teamId?: string;
   restrictToTeamIds?: string[];
+  // 依頼主で絞り込んでいるときは、その依頼主の分だけ
+  companyRelationshipId?: string;
 }) {
   const start = new Date(Date.UTC(params.year, params.month - 1, 1));
   const end = new Date(Date.UTC(params.year, params.month, 1));
@@ -378,6 +380,7 @@ export async function listShiftHistoryForMonth(params: {
     where: {
       companyId: params.companyId,
       teamId: params.teamId ?? (params.restrictToTeamIds ? { in: params.restrictToTeamIds } : undefined),
+      ...(params.companyRelationshipId ? { companyRelationshipId: params.companyRelationshipId } : {}),
       date: { gte: start, lt: end },
       // 調整中（依頼主の取り消し後、振り替えるか未定）も、取り消された
       // 事実が分かるよう履歴に出す

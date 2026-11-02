@@ -60,7 +60,7 @@ export default async function CompanyCalendarPage({
 
   const [shifts, shiftHistory, staff, teams, shiftRequests, recruitments, clientRecruitments] = await Promise.all([
     listShiftsForMonth({ companyId: membership.companyId, year, month, teamId, restrictToTeamIds, companyRelationshipId: relationshipId }),
-    listShiftHistoryForMonth({ companyId: membership.companyId, year, month, teamId, restrictToTeamIds }),
+    listShiftHistoryForMonth({ companyId: membership.companyId, year, month, teamId, restrictToTeamIds, companyRelationshipId: relationshipId }),
     listStaff(membership.companyId, restrictToTeamIds),
     listTeams(membership.companyId),
     listShiftRequests({ companyId: membership.companyId, status: "PENDING" }),
@@ -173,7 +173,11 @@ export default async function CompanyCalendarPage({
           dates: r.dates.map((d) => d.toISOString().slice(0, 10)),
           note: r.note,
         }))}
-        recruitments={recruitments.map((r) => ({
+        // 絞り込み中は関係のある募集だけ：依頼主で絞っているときは自社の募集は出さず
+        // （自社の募集は依頼主に結びついていないため）、チームで絞っているときはそのチームの募集だけ
+        recruitments={recruitments
+          .filter((r) => !relationshipId && (!teamId || r.teamId === teamId))
+          .map((r) => ({
           id: r.id,
           title: r.title,
           note: r.note,
@@ -196,7 +200,14 @@ export default async function CompanyCalendarPage({
             createdAt: a.createdAt.toISOString(),
           })),
         }))}
-        clientRecruitments={clientRecruitments.map((r) => ({
+        // 依頼主のオーダーは、依頼主で絞っているときはその依頼主の分だけ
+        clientRecruitments={clientRecruitments
+          .filter((r) => {
+            if (!relationshipId) return true;
+            const rel = clients.find((c) => c.id === relationshipId);
+            return Boolean(rel?.clientCompanyId && r.companyId === rel.clientCompanyId);
+          })
+          .map((r) => ({
           id: r.id,
           clientCompanyName: r.company.name,
           title: r.title,
