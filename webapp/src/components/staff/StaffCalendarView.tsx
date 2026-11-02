@@ -83,8 +83,9 @@ function shortCompanyName(name: string) {
       break;
     }
   }
-  stripped = stripped.trim();
-  return stripped || name;
+  // マスが狭いので、空白を除いて最大6文字で切る（日付の詳細では全部の名前が見える）
+  stripped = stripped.replace(/\s+/g, "");
+  return (stripped || name.replace(/\s+/g, "")).slice(0, 6);
 }
 
 // 業務報告の状態。「未提出」は業務時間を過ぎてから初めて意味を持つ警告 —
@@ -284,7 +285,7 @@ export function StaffCalendarView({
               key={i}
               type="button"
               onClick={() => setSelectedDay(dateStr)}
-              className={`relative flex h-full flex-col items-stretch justify-start overflow-hidden rounded-lg p-1 text-left sm:h-[100px] sm:rounded-xl sm:rounded-tr-none sm:p-1.5 ${
+              className={`relative flex h-full flex-col items-stretch justify-start overflow-hidden rounded-lg rounded-tr-none px-0 py-1 text-left sm:h-[100px] sm:rounded-xl sm:rounded-tr-none sm:p-1.5 ${
                 isToday ? "bg-accent/25" : "bg-white/40"
               }`}
             >
@@ -297,7 +298,7 @@ export function StaffCalendarView({
               {hasOverflow ? (
                 <span
                   title={`他${totalCount - CONFIRMED_SLOT_BUDGET}件`}
-                  className="absolute right-0 top-0 h-0 w-0 border-r-[14px] border-b-[14px] border-r-accent border-b-transparent"
+                  className="absolute right-0 top-0 h-0 w-0 border-r-[8px] border-b-[8px] border-r-accent border-b-transparent"
                 />
               ) : null}
               <div className="mt-px flex flex-col gap-[2px]">
