@@ -11,7 +11,7 @@ import {
 } from "@/lib/domain/recruitment";
 import { listStaff } from "@/lib/domain/roster";
 import { listTeams } from "@/lib/domain/teams";
-import { listClients, listAgencies, listAssignableAgencyStaff } from "@/lib/domain/relationships";
+import { listClients, listAgencies, listAssignableAgencyStaff, countMonthlyShiftsByRelationship } from "@/lib/domain/relationships";
 import { listPlacementRates, listPastTaskNamesForRelationship } from "@/lib/domain/contracts";
 import { prisma } from "@/lib/prisma";
 import { todayJstParts, earliestAllowedMonth, isBeforeCutoff } from "@/lib/date";
@@ -72,6 +72,12 @@ export default async function CompanyCalendarPage({
   const clients = company.agencyEnabled ? await listClients(membership.companyId, restrictToTeamIds) : [];
   const agencies = company.dispatchEnabled ? await listAgencies(membership.companyId, restrictToTeamIds) : [];
   const assignableAgencyStaff = company.dispatchEnabled ? await listAssignableAgencyStaff(membership.companyId) : [];
+  // 絞り込みの一覧で「今月動いている順」に並べるための、依頼主・派遣会社ごとの今月のシフト数
+  const monthlyShiftCounts = await countMonthlyShiftsByRelationship(
+    membership.companyId,
+    [...clients.map((c) => c.id), ...agencies.filter((a) => a.agencyCompany).map((a) => a.id)],
+    agencies.filter((a) => !a.agencyCompany).map((a) => a.id),
+  );
   const agencyRelationshipIds = [...new Set(assignableAgencyStaff.map((s) => s.companyRelationshipId))];
   const agencyTaskNamesByRelationship = Object.fromEntries(
     await Promise.all(
@@ -208,13 +214,21 @@ export default async function CompanyCalendarPage({
         }))}
         teeBalance={company.teeBalance}
         affordableMaxEntries={affordable}
-        clients={clients.map((c) => ({ id: c.id, name: c.clientCompany?.name ?? c.proxyName ?? "" }))}
+        clients={clients.map((c) => ({
+          id: c.id,
+          name: c.clientCompany?.name ?? c.proxyName ?? "",
+          monthlyShiftCount: monthlyShiftCounts.get(c.id) ?? 0,
+        }))}
         placementRates={placementRates.map((r) => ({
           id: r.id,
           companyRelationshipId: r.companyRelationshipId,
           taskName: r.taskName,
         }))}
-        agencies={agencies.map((a) => ({ id: a.id, name: a.agencyCompany?.name ?? a.proxyName ?? "" }))}
+        agencies={agencies.map((a) => ({
+          id: a.id,
+          name: a.agencyCompany?.name ?? a.proxyName ?? "",
+          monthlyShiftCount: monthlyShiftCounts.get(a.id) ?? 0,
+        }))}
         agencyStaffOptions={assignableAgencyStaff}
         agencyTaskNamesByRelationship={agencyTaskNamesByRelationship}
         selectedRelationshipId={relationshipId}

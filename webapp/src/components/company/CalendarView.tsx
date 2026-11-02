@@ -212,8 +212,8 @@ function weekdayColor(dow: number, dateStr?: string) {
 }
 
 export function CalendarView({
-  year,
-  month,
+  year: dataYear,
+  month: dataMonth,
   selectedTeamId,
   shifts,
   shiftHistory,
@@ -247,8 +247,8 @@ export function CalendarView({
   clientRecruitments: ClientRecruitmentRow[];
   teeBalance: number;
   affordableMaxEntries: number;
-  clients: { id: string; name: string }[];
-  agencies: { id: string; name: string }[];
+  clients: { id: string; name: string; monthlyShiftCount?: number }[];
+  agencies: { id: string; name: string; monthlyShiftCount?: number }[];
   agencyStaffOptions: AgencyStaffOption[];
   agencyTaskNamesByRelationship: Record<string, string[]>;
   placementRates: TaskNameRow[];
@@ -285,9 +285,23 @@ export function CalendarView({
   }, []);
 
   const [sharingImage, setSharingImage] = useState(false);
+  const [showFilterSheet, setShowFilterSheet] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
+  const swipeAxis = useRef<"x" | "y" | null>(null);
+
+  // 月送り：押した（スワイプした）瞬間に次の月の枠を出し、シフトなどのデータは
+  // 届きしだい埋まる。データが届くまでは pendingMonth の月を表示する。
+  const [pendingMonth, setPendingMonth] = useState<{ y: number; m: number } | null>(null);
+  const [, startMonthTransition] = useTransition();
+  const showingPending = pendingMonth && !(pendingMonth.y === dataYear && pendingMonth.m === dataMonth);
+  const year = showingPending ? pendingMonth.y : dataYear;
+  const month = showingPending ? pendingMonth.m : dataMonth;
+  // スワイプ中・切り替え中の横のずれ（px）と、動きをなめらかにするかどうか
+  const [slideX, setSlideX] = useState(0);
+  const [slideAnimated, setSlideAnimated] = useState(false);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const todayStr = todayJst();
 
@@ -383,20 +397,55 @@ export function CalendarView({
   // 横移動が縦移動より明確に大きい場合のみ月を切り替える。無料プランの
   // 閲覧制限にかかっている月では、スワイプでも前月へは戻れないようにする。
   const SWIPE_THRESHOLD_PX = 60;
+  function goToMonth(target: { y: number; m: number }, direction: 1 | -1) {
+    const width = gridRef.current?.offsetWidth ?? window.innerWidth;
+    // 今の月を指の方向へ流し出し、反対側から次の月の枠を入れる
+    setSlideAnimated(true);
+    setSlideX(-direction * width);
+    window.setTimeout(() => {
+      setSlideAnimated(false);
+      setSlideX(direction * width);
+      setPendingMonth(target);
+      startMonthTransition(() => router.push(`?y=${target.y}&m=${target.m}${filterQuery}`));
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          setSlideAnimated(true);
+          setSlideX(0);
+        }),
+      );
+    }, 160);
+  }
   function handleTouchStart(e: TouchEvent) {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
+    swipeAxis.current = null;
+    setSlideAnimated(false);
+  }
+  function handleTouchMove(e: TouchEvent) {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const dx = e.touches[0].clientX - touchStartX.current;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    // 動き始めの向きで、横スワイプか縦スクロールかを決める
+    if (!swipeAxis.current && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      swipeAxis.current = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+    }
+    if (swipeAxis.current !== "x") return;
+    // 無料プランの閲覧範囲の端では、前の月側へは少しだけしか動かない
+    setSlideX(dx > 0 && atHistoryCutoff ? dx / 4 : dx);
   }
   function handleTouchEnd(e: TouchEvent) {
     if (touchStartX.current === null || touchStartY.current === null) return;
     const dx = e.changedTouches[0].clientX - touchStartX.current;
-    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    const axis = swipeAxis.current;
     touchStartX.current = null;
     touchStartY.current = null;
-    if (Math.abs(dx) < SWIPE_THRESHOLD_PX || Math.abs(dx) < Math.abs(dy)) return;
-    if (dx > 0 && atHistoryCutoff) return;
-    const target = dx < 0 ? next : prev;
-    router.push(`?y=${target.y}&m=${target.m}${filterQuery}`);
+    swipeAxis.current = null;
+    if (axis !== "x" || Math.abs(dx) < SWIPE_THRESHOLD_PX || (dx > 0 && atHistoryCutoff)) {
+      setSlideAnimated(true);
+      setSlideX(0);
+      return;
+    }
+    goToMonth(dx < 0 ? next : prev, dx < 0 ? 1 : -1);
   }
   // 月によって5行/6行と変わっても月カード全体の縦幅は一定に保ち、その差は
   // 週の行の高さ側で吸収する（スタッフ画面のカレンダーと同じ方式）。
@@ -421,59 +470,58 @@ export function CalendarView({
 
   return (
     <div className="flex flex-1 flex-col sm:block">
-      <div className="order-2 mb-2 flex items-center justify-between gap-2 sm:order-1 sm:mb-6 sm:gap-4">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-4">
-          {/* チーム・依頼主・派遣会社を1つの絞り込みにまとめる。実運用では
-              チーム＝契約先の依頼主がほぼ1:1なので、依頼主/派遣会社を選ぶ
-              こと自体が実質そのチームの絞り込みも兼ねるという前提。 */}
-          <select
-            value={selectedTeamId ? `team:${selectedTeamId}` : selectedRelationshipId ? `rel:${selectedRelationshipId}` : ""}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v.startsWith("team:")) router.push(calendarUrl({ team: v.slice(5), rel: "" }));
-              else if (v.startsWith("rel:")) router.push(calendarUrl({ team: "", rel: v.slice(4) }));
-              else router.push(calendarUrl({ team: "", rel: "" }));
-            }}
-            className="w-44 min-w-0 truncate rounded-lg border border-border bg-white px-2 py-1.5 text-xs sm:w-auto sm:px-3 sm:text-sm"
+      {/* 1列目：‹ 年月 › と、絞り込み・PDF・画像のアイコン */}
+      <div className="order-2 mb-2 flex items-center justify-between gap-2 sm:order-1 sm:mb-4">
+        <div className="flex min-w-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => !atHistoryCutoff && goToMonth(prev, -1)}
+            disabled={atHistoryCutoff}
+            aria-label={atHistoryCutoff ? "前の月（無料プランの閲覧範囲外）" : "前の月"}
+            className="rounded-full p-2 text-muted hover:bg-background hover:text-primary disabled:text-border"
           >
-            <option value="">全社（すべて表示）</option>
-            {teams.length > 0 ? (
-              <optgroup label="チーム">
-                {teams.map((t) => (
-                  <option key={t.id} value={`team:${t.id}`}>
-                    {t.name}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-            {clients.length > 0 ? (
-              <optgroup label="依頼主">
-                {clients.map((c) => (
-                  <option key={c.id} value={`rel:${c.id}`}>
-                    {c.name}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-            {agencies.length > 0 ? (
-              <optgroup label="派遣会社">
-                {agencies.map((a) => (
-                  <option key={a.id} value={`rel:${a.id}`}>
-                    {a.name}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-          </select>
+            <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+              <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <Link
+            href={`?y=${todayStr.slice(0, 4)}&m=${Number(todayStr.slice(5, 7))}${filterQuery}`}
+            className="whitespace-nowrap rounded-lg px-1 py-1 font-serif-jp text-lg font-bold hover:bg-background"
+          >
+            {year}年{month}月
+          </Link>
+          <button
+            type="button"
+            onClick={() => goToMonth(next, 1)}
+            aria-label="次の月"
+            className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
+          >
+            <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+              <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowFilterSheet(true)}
+            aria-label="絞り込み"
+            title="絞り込み"
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+              filterLabel ? "bg-primary text-primary-foreground" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+            }`}
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0">
+              <path d="M4 5h16l-6 7.5V19l-4-2v-4.5L4 5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+            </svg>
+          </button>
           <PdfLink
             href={`/api/calendar/pdf?y=${year}&m=${month}${selectedTeamId ? `&team=${selectedTeamId}` : ""}${selectedRelationshipId ? `&rel=${selectedRelationshipId}` : ""}`}
             ariaLabel="PDF出力"
             title="PDF出力"
-            className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-white p-2 hover:border-primary hover:text-primary sm:px-3 sm:py-1.5 sm:text-xs"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100"
           >
-            <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 shrink-0">
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0">
               <path
                 d="M6 3h8l4 4v14a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z"
                 stroke="currentColor"
@@ -483,7 +531,6 @@ export function CalendarView({
               <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
               <path d="M8 12h8M8 15.5h8M8 18.5h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
-            <span className="hidden sm:inline">PDF出力</span>
           </PdfLink>
           <button
             type="button"
@@ -491,17 +538,33 @@ export function CalendarView({
             onClick={shareAsImage}
             aria-label="画像でシフトを共有"
             title="画像でシフトを共有"
-            className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-white p-2 hover:border-primary hover:text-primary disabled:opacity-60 sm:px-3 sm:py-1.5 sm:text-xs"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:opacity-60"
           >
-            <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 shrink-0">
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0">
               <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
               <circle cx="8.5" cy="9.5" r="1.5" stroke="currentColor" strokeWidth="1.4" />
               <path d="M4 17l5-5 3 3 4-5 4 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span className="hidden sm:inline">{sharingImage ? "作成中…" : "画像でシフトを共有"}</span>
           </button>
         </div>
       </div>
+
+      {/* 絞り込み中は、何で絞っているかを出す（✕で全社に戻す） */}
+      {filterLabel ? (
+        <div className="order-2 mb-2 flex sm:order-1">
+          <span className="flex max-w-full items-center gap-1.5 rounded-full bg-primary/10 py-1 pl-3 pr-1 text-xs font-semibold text-primary">
+            <span className="truncate">{teamName ?? relationshipName}</span>
+            <button
+              type="button"
+              onClick={() => router.push(calendarUrl({ team: "", rel: "" }))}
+              aria-label="絞り込みを解除"
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full hover:bg-primary/15"
+            >
+              ✕
+            </button>
+          </span>
+        </div>
+      ) : null}
 
       {atHistoryCutoff ? (
         <div className="order-2 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-accent/10 px-3 py-2 text-xs text-primary sm:order-1">
@@ -517,44 +580,16 @@ export function CalendarView({
       </div>
 
       <div className="order-3 flex flex-1 flex-col bg-white p-1.5 sm:block sm:rounded-2xl sm:p-4">
-      <div className="mb-2 flex items-center justify-center gap-2">
-        {atHistoryCutoff ? (
-          <span aria-label="前の月（無料プランの閲覧範囲外）" className="p-2 text-border">
-            <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
-              <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </span>
-        ) : (
-          <Link
-            href={`?y=${prev.y}&m=${prev.m}${filterQuery}`}
-            aria-label="前の月"
-            className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
-          >
-            <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
-              <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </Link>
-        )}
-        <Link
-          href={`?y=${todayStr.slice(0, 4)}&m=${Number(todayStr.slice(5, 7))}${filterQuery}`}
-          className="rounded-lg px-2 py-1 font-serif-jp text-lg font-bold hover:bg-background"
-        >
-          {year}年{month}月
-        </Link>
-        <Link
-          href={`?y=${next.y}&m=${next.m}${filterQuery}`}
-          aria-label="次の月"
-          className="rounded-full p-2 text-muted hover:bg-background hover:text-primary"
-        >
-          <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
-            <path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </Link>
-      </div>
-
       <div
-        className="flex flex-1 flex-col sm:contents"
+        ref={gridRef}
+        className="flex flex-1 touch-pan-y flex-col sm:contents"
+        style={{
+          transform: slideX ? `translateX(${slideX}px)` : undefined,
+          transition: slideAnimated ? "transform 160ms ease-out" : "none",
+          opacity: showingPending ? 0.85 : 1,
+        }}
         onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
       <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
@@ -677,7 +712,7 @@ export function CalendarView({
           チャすると中身が食い違ってしまう）。 */}
       <div style={{ position: "fixed", top: 0, left: "-9999px" }} aria-hidden>
         <div ref={shareRef}>
-          <ShareableShiftList companyName={companyName} year={year} month={month} filterLabel={filterLabel} shifts={shifts} />
+          <ShareableShiftList companyName={companyName} year={dataYear} month={dataMonth} filterLabel={filterLabel} shifts={shifts} />
         </div>
       </div>
 
@@ -703,6 +738,22 @@ export function CalendarView({
             setShowAssignForm(true);
           }}
           onClose={() => setSelectedDate(null)}
+        />
+      ) : null}
+
+      {showFilterSheet ? (
+        <CalendarFilterSheet
+          teams={teams}
+          clients={clients}
+          agencies={agencies}
+          selectedValue={selectedTeamId ? `team:${selectedTeamId}` : selectedRelationshipId ? `rel:${selectedRelationshipId}` : ""}
+          onSelect={(v) => {
+            setShowFilterSheet(false);
+            if (v.startsWith("team:")) router.push(calendarUrl({ team: v.slice(5), rel: "" }));
+            else if (v.startsWith("rel:")) router.push(calendarUrl({ team: "", rel: v.slice(4) }));
+            else router.push(calendarUrl({ team: "", rel: "" }));
+          }}
+          onClose={() => setShowFilterSheet(false)}
         />
       ) : null}
 
@@ -4466,5 +4517,140 @@ function Field({
       {label}
       {children}
     </label>
+  );
+}
+
+// 絞り込みの一覧（下から出る）。依頼主が多くても探しやすいように：
+// 上に検索欄、最近使った絞り込み（この端末で直近3つ）、チーム、
+// 依頼主・派遣会社は今月シフトが多い順（件数つき）、今月0件はその下に名前順。
+const RECENT_FILTERS_KEY = "teera.calendarRecentFilters";
+type FilterOption = { value: string; label: string; group: string; count?: number };
+
+function readRecentFilters(): string[] {
+  try {
+    const raw = window.localStorage.getItem(RECENT_FILTERS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+function rememberRecentFilter(value: string) {
+  if (!value) return;
+  try {
+    const next = [value, ...readRecentFilters().filter((v) => v !== value)].slice(0, 3);
+    window.localStorage.setItem(RECENT_FILTERS_KEY, JSON.stringify(next));
+  } catch {
+    // 保存できない環境（プライベートブラウズなど）では覚えないだけ
+  }
+}
+
+function CalendarFilterSheet({
+  teams,
+  clients,
+  agencies,
+  selectedValue,
+  onSelect,
+  onClose,
+}: {
+  teams: { id: string; name: string }[];
+  clients: { id: string; name: string; monthlyShiftCount?: number }[];
+  agencies: { id: string; name: string; monthlyShiftCount?: number }[];
+  selectedValue: string;
+  onSelect: (value: string) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [recent] = useState<string[]>(() => (typeof window === "undefined" ? [] : readRecentFilters()));
+
+  const byActivity = (a: { name: string; monthlyShiftCount?: number }, b: { name: string; monthlyShiftCount?: number }) =>
+    (b.monthlyShiftCount ?? 0) - (a.monthlyShiftCount ?? 0) || a.name.localeCompare(b.name, "ja");
+  const options: FilterOption[] = [
+    ...teams.map((t) => ({ value: `team:${t.id}`, label: t.name, group: "チーム" })),
+    ...[...clients].sort(byActivity).map((c) => ({ value: `rel:${c.id}`, label: c.name, group: "依頼主", count: c.monthlyShiftCount ?? 0 })),
+    ...[...agencies].sort(byActivity).map((a) => ({ value: `rel:${a.id}`, label: a.name, group: "派遣会社", count: a.monthlyShiftCount ?? 0 })),
+  ];
+  const q = query.trim();
+  const matched = q ? options.filter((o) => o.label.includes(q)) : options;
+  const recentOptions = q
+    ? []
+    : recent.map((v) => options.find((o) => o.value === v)).filter((o): o is FilterOption => Boolean(o));
+  const groups = ["チーム", "依頼主", "派遣会社"]
+    .map((g) => ({ group: g, items: matched.filter((o) => o.group === g) }))
+    .filter((g) => g.items.length > 0);
+
+  function choose(value: string) {
+    rememberRecentFilter(value);
+    onSelect(value);
+  }
+  function Row({ option }: { option: FilterOption }) {
+    const selected = option.value === selectedValue;
+    return (
+      <button
+        type="button"
+        onClick={() => choose(option.value)}
+        className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm ${
+          selected ? "bg-primary/10 font-semibold text-primary" : "hover:bg-background"
+        }`}
+      >
+        <span className="min-w-0 truncate">{option.label}</span>
+        {option.count !== undefined ? (
+          <span className={`shrink-0 text-xs ${option.count > 0 ? "text-muted" : "text-border"}`}>今月{option.count}件</span>
+        ) : null}
+      </button>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 sm:items-center sm:p-4" onClick={onClose}>
+      <div
+        className="flex max-h-[80vh] w-full max-w-md flex-col rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-lg sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-serif-jp text-base font-bold text-primary">絞り込み</h3>
+          <button type="button" onClick={onClose} aria-label="閉じる" className="text-muted hover:text-primary">
+            ✕
+          </button>
+        </div>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="依頼主・チームの名前で探す"
+          className="mb-3 w-full rounded-lg border border-border px-3 py-2 text-sm"
+        />
+        <div className="-mx-1 flex-1 overflow-y-auto px-1">
+          {!q ? (
+            <button
+              type="button"
+              onClick={() => choose("")}
+              className={`mb-2 w-full rounded-lg px-3 py-2.5 text-left text-sm ${
+                selectedValue === "" ? "bg-primary/10 font-semibold text-primary" : "hover:bg-background"
+              }`}
+            >
+              全社（すべて表示）
+            </button>
+          ) : null}
+          {recentOptions.length > 0 ? (
+            <div className="mb-2">
+              <p className="px-3 pb-1 text-xs font-semibold text-muted">最近使った絞り込み</p>
+              {recentOptions.map((o) => (
+                <Row key={`recent-${o.value}`} option={o} />
+              ))}
+            </div>
+          ) : null}
+          {groups.map((g) => (
+            <div key={g.group} className="mb-2">
+              <p className="px-3 pb-1 text-xs font-semibold text-muted">{g.group}</p>
+              {g.items.map((o) => (
+                <Row key={o.value} option={o} />
+              ))}
+            </div>
+          ))}
+          {q && groups.length === 0 ? <p className="py-6 text-center text-sm text-muted">見つかりませんでした。</p> : null}
+        </div>
+      </div>
+    </div>
   );
 }
