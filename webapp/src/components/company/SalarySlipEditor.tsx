@@ -183,7 +183,7 @@ export function SalarySlipEditor({
         <p className="mb-1 text-xs text-muted">勤務内訳</p>
         <div role="radiogroup" aria-label="勤務内訳の載せ方" className="mb-1 flex gap-2">
           {[
-            { value: true, label: "勤務先・業務ごとにまとめる" },
+            { value: true, label: "まとめる" },
             { value: false, label: "1件ずつ" },
           ].map((o) => {
             const selected = groupShiftLines === o.value;
@@ -720,6 +720,10 @@ function DeductionsSection({
   );
 }
 
+function isDateString(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
 function PaymentInfoSection({
   slip,
   isEditable,
@@ -737,17 +741,24 @@ function PaymentInfoSection({
       <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">支払日・備考</h2>
       <div className="flex flex-col gap-3">
         <label className="flex flex-col gap-1 text-xs">
-          支払日（例：翌月25日）
+          支払日
           <input
-            type="text"
-            value={paymentDay}
+            type="date"
+            aria-label="支払日"
+            value={isDateString(paymentDay) ? paymentDay : ""}
             disabled={!isEditable}
-            onChange={(e) => setPaymentDay(e.target.value)}
-            onBlur={() => {
-              if (isEditable) startTransition(() => setSalarySlipPaymentDayAction(slip.id, paymentDay));
+            onChange={(e) => {
+              const value = e.target.value;
+              setPaymentDay(value);
+              if (isEditable) startTransition(() => setSalarySlipPaymentDayAction(slip.id, value));
             }}
-            className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            className="rounded-lg border border-border bg-white px-2 py-1.5 text-sm"
           />
+          {paymentDay && !isDateString(paymentDay) ? (
+            <span className="text-muted">以前の入力：{paymentDay}（カレンダーで選び直してください）</span>
+          ) : (
+            <span className="text-muted">翌月の明細は、この日の1か月後で始まります。</span>
+          )}
         </label>
         <label className="flex flex-col gap-1 text-xs">
           備考

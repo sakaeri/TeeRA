@@ -8,6 +8,19 @@ import { hasRemainingPdfQuota } from "@/lib/domain/plans";
 import type { EmploymentType } from "@/generated/prisma/enums";
 
 const FIXED_DEDUCTION_LABELS = ["社会保険料", "厚生年金", "雇用保険料", "所得税", "市県民税"];
+// 業務委託（支払明細書）は社会保険・雇用保険の対象外なので、源泉徴収だけを初期項目にする
+const CONTRACTOR_DEDUCTION_LABELS = ["源泉所得税"];
+
+// 支払日（"YYYY-MM-DD"）を1か月後の同じ日にする（月末を超える日は月末に寄せる）。
+// 日付でない昔の手入力（「翌月25日」など）は引き継がない。
+export function nextMonthPaymentDay(paymentDay: string | null | undefined): string | null {
+  const m = paymentDay?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const lastDay = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
+  const next = new Date(Date.UTC(y, mo, Math.min(d, lastDay)));
+  return next.toISOString().slice(0, 10);
+}
 
 // ratePercentは「雇用保険料」欄で率を入力して金額を自動計算したときの
 // 表示用の値（SalarySlipEditor.tsx参照）。計算には使わず、再表示だけに使う。
@@ -413,16 +426,21 @@ export async function getOrCreateSalarySlip(params: {
     const prevSlip = await findPreviousSalarySlip(params);
     // 控除は前月の内容（固定項目の金額・率指定・カスタム控除）をそのまま
     // 全額引き継ぐ。前月の明細が無い場合だけ、金額0の固定項目で初期化する。
+    const initialLabels =
+      prevSlip || (await getEmploymentType(params.companyId, params.staffUserId, params.targetMonth)) !== "CONTRACTOR"
+        ? FIXED_DEDUCTION_LABELS
+        : CONTRACTOR_DEDUCTION_LABELS;
     const deductions: DeductionItem[] = prevSlip
       ? (prevSlip.deductions as DeductionItem[])
-      : FIXED_DEDUCTION_LABELS.map((label, i) => ({ id: `fixed-${i}`, label, amount: 0 }));
+      : initialLabels.map((label, i) => ({ id: `fixed-${i}`, label, amount: 0 }));
     slip = await prisma.salarySlip.create({
       data: {
         companyId: params.companyId,
         staffUserId: params.staffUserId,
         targetMonth: params.targetMonth,
         deductions,
-        paymentDay: prevSlip?.paymentDay ?? null,
+        // 支払日は前の月の日付の1か月後
+        paymentDay: nextMonthPaymentDay(prevSlip?.paymentDay),
         note: prevSlip?.note ?? null,
         // PDFの載せ方も前の月の明細から引き継ぐ
         groupShiftLines: prevSlip?.groupShiftLines ?? true,
