@@ -60,6 +60,21 @@ export async function listTemplates(companyId: string) {
   });
 }
 
+// テンプレートの選択肢の並び：契約中（確認待ちを含む）の人数が多い順 → 最近使った順 → 新しい順
+export function sortTemplatesByUsage<
+  T extends { createdAt: Date; staffContracts: { status: string; createdAt: Date }[] },
+>(templates: T[]) {
+  const usage = (t: T) => ({
+    live: t.staffContracts.filter((c) => c.status === "ACTIVE" || c.status === "PENDING_CONSENT").length,
+    lastUsed: Math.max(0, ...t.staffContracts.map((c) => c.createdAt.getTime())),
+  });
+  return templates.sort((a, b) => {
+    const ua = usage(a);
+    const ub = usage(b);
+    return ub.live - ua.live || ub.lastUsed - ua.lastUsed || b.createdAt.getTime() - a.createdAt.getTime();
+  });
+}
+
 export async function createTemplate(input: TemplateInput) {
   assertPositiveAmount(input.wageAmount);
   return prisma.contractTemplate.create({ data: { ...input, extraItems: input.extraItems } });

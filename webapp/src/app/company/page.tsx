@@ -13,7 +13,7 @@ import {
   listDashboardAudience,
 } from "@/lib/domain/dashboard";
 import { listPromoItems, listRedemptionsForCompany } from "@/lib/domain/promo";
-import { listTemplates, listUploadOnlyTemplates } from "@/lib/domain/contracts";
+import { listTemplates, listUploadOnlyTemplates, sortTemplatesByUsage } from "@/lib/domain/contracts";
 import { listClients } from "@/lib/domain/relationships";
 import { prisma } from "@/lib/prisma";
 import { DashboardView } from "@/components/company/DashboardView";
@@ -87,6 +87,8 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
           ? ("unconfirmed" as const)
           : undefined;
   const initialReportDetailId = open === "reports" ? reportId : undefined;
+
+  sortTemplatesByUsage(templates);
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
