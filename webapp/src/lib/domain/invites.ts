@@ -135,8 +135,10 @@ export async function redeemInvite(token: string, userId: string) {
               wageAmountSnapshot: template.wageAmount,
               contractStartDate: invite.contractStartDate ?? template.contractStartDate,
               contractEndDate: template.contractEndDate,
-              status: "ACTIVE",
-              consentedAt: new Date(),
+              // 招待から参加しただけでは同意にしない。本人が契約書の画面で
+              // 必須の書類を出し、内容を確認して同意するまでは確認待ち
+              // （それまでは他の画面に行けない — StaffShell参照）
+              status: "PENDING_CONSENT",
               wageVersions: {
                 create: {
                   wageAmount: template.wageAmount,

@@ -302,6 +302,10 @@ export async function consentStaffContract(params: {
   ip: string | null;
   userAgent: string | null;
 }) {
+  // 氏名・住所・電話番号は同意の記録なので、空のままでは同意にしない
+  if (!params.partyName?.trim() || !params.partyAddress?.trim() || !params.partyPhoneNumber?.trim()) {
+    throw new Error("party_info_required");
+  }
   const contract = await prisma.staffContract.findFirstOrThrow({
     where: { id: params.staffContractId, staffUserId: params.staffUserId, status: "PENDING_CONSENT" },
     include: { template: { include: { company: true } }, staff: true },
