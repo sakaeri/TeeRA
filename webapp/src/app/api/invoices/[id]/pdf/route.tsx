@@ -1,9 +1,10 @@
-import { renderToBuffer } from "@react-pdf/renderer";
 import { verifySession, getActiveMembership } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { computeInvoiceTotals } from "@/lib/domain/invoicing";
 import { todayJst } from "@/lib/date";
-import { InvoiceDocument, type InvoicePdfData } from "@/lib/pdf/invoice";
+import { type InvoicePdfData } from "@/lib/pdf/invoice";
+import { renderInvoicePdf, type InvoiceWorkRecord } from "@/lib/pdf/renderInvoicePdf";
+import { workRecordRowsForShiftIds } from "@/lib/domain/workRecord";
 
 export async function GET(request: Request, { params }: RouteContext<"/api/invoices/[id]/pdf">) {
   const { id } = await params;
@@ -30,6 +31,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
   const clientName = invoice.companyRelationship.clientCompany?.name ?? invoice.companyRelationship.proxyName ?? "";
 
   let data: InvoicePdfData;
+  let workRecord: InvoiceWorkRecord | null = null;
   if (issueId) {
     const issue = await prisma.invoiceIssue.findUnique({ where: { id: issueId } });
     if (!issue || issue.invoiceId !== invoice.id) return new Response("not found", { status: 404 });
@@ -54,12 +56,15 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
       accountNumber: (snap.accountNumber as string | null) ?? null,
       accountHolderName: (snap.accountHolderName as string | null) ?? null,
       lines: snap.lines as InvoicePdfData["lines"],
+      // この機能より前に発行したものは、発行した時のまま（1件ずつ・実績表なし）
+      groupByTask: (snap.groupLinesByTask as boolean | undefined) ?? false,
       brackets: snap.brackets as InvoicePdfData["brackets"],
       subtotalAll: snap.subtotalAll as number,
       taxAll: snap.taxAll as number,
       total: snap.total as number,
       watermarked: false,
     };
+    workRecord = (snap.workRecord as InvoiceWorkRecord | null | undefined) ?? null;
   } else {
     const registered = Boolean(invoice.invoiceRegistrationNumberSnapshot);
     const totals = computeInvoiceTotals({ lines: invoice.lines, registered });
@@ -82,14 +87,19 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
       accountNumber: invoice.accountNumber,
       accountHolderName: invoice.accountHolderName,
       lines: invoice.lines,
+      groupByTask: invoice.groupLinesByTask,
       ...totals,
       watermarked: true,
     };
+    if (invoice.attachWorkRecord) {
+      const shiftIds = invoice.lines.map((l) => l.shiftId).filter((id): id is string => Boolean(id));
+      workRecord = { rows: await workRecordRowsForShiftIds(shiftIds) };
+    }
   }
 
-  const buffer = await renderToBuffer(<InvoiceDocument data={data} />);
+  const bytes = await renderInvoicePdf(data, workRecord);
 
-  return new Response(new Uint8Array(buffer), {
+  return new Response(new Uint8Array(bytes), {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `inline; filename="invoice-${invoice.periodLabel}.pdf"`,

@@ -1,4 +1,5 @@
 import { Document, Page, Text, View, Image, StyleSheet, Font } from "@react-pdf/renderer";
+import { groupInvoiceLines } from "@/lib/invoiceLineGrouping";
 
 Font.register({
   family: "Noto Sans JP",
@@ -138,7 +139,9 @@ export type InvoicePdfData = {
   accountType: string | null;
   accountNumber: string | null;
   accountHolderName: string | null;
-  lines: { staffName: string; description: string; hours: number; rate: number; amount: number; taxRatePercent: number }[];
+  lines: { shiftId?: string | null; staffName: string; description: string; hours: number; rate: number; amount: number; taxRatePercent: number }[];
+  // trueなら明細を「業務×単価」ごとに1行にまとめて載せる（以前に発行したものは1件ずつ）
+  groupByTask?: boolean;
   brackets: { rate: number; subtotal: number; tax: number }[];
   subtotalAll: number;
   taxAll: number;
@@ -208,16 +211,16 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
             <Text style={[styles.tableHeaderText, styles.tableColTax]}>税率</Text>
             <Text style={[styles.tableHeaderText, styles.tableColAmount]}>金額</Text>
           </View>
-          {data.lines.map((l, i) => (
+          {(data.groupByTask ? groupInvoiceLines(data.lines) : data.lines).map((l, i) => (
             <View key={i} style={styles.tableRow}>
               <Text style={styles.tableColDescription}>
                 {l.staffName ? `${l.staffName} / ` : ""}
                 {l.description}
               </Text>
               <Text style={styles.tableColQty}>{l.hours}</Text>
-              <Text style={styles.tableColRate}>{l.rate}円</Text>
+              <Text style={styles.tableColRate}>{l.rate.toLocaleString()}円</Text>
               <Text style={styles.tableColTax}>{l.taxRatePercent === 0 ? "なし" : `${l.taxRatePercent}%`}</Text>
-              <Text style={styles.tableColAmount}>{l.amount}円</Text>
+              <Text style={styles.tableColAmount}>{l.amount.toLocaleString()}円</Text>
             </View>
           ))}
         </View>

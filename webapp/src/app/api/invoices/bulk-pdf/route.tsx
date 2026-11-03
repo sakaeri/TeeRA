@@ -1,11 +1,10 @@
-import { renderToBuffer } from "@react-pdf/renderer";
-import { PDFDocument } from "pdf-lib";
 import { verifySession, getActiveMembership } from "@/lib/auth/session";
 import { isCompanyScopeAdmin } from "@/lib/auth/permissions";
 import { listClients } from "@/lib/domain/relationships";
 import { listInvoicesForCompany } from "@/lib/domain/invoicing";
 import { prisma } from "@/lib/prisma";
-import { InvoiceDocument, type InvoicePdfData } from "@/lib/pdf/invoice";
+import { type InvoicePdfData } from "@/lib/pdf/invoice";
+import { mergePdfs, renderInvoicePdf, type InvoiceWorkRecord } from "@/lib/pdf/renderInvoicePdf";
 
 export async function GET(request: Request) {
   const { userId } = await verifySession();
@@ -36,7 +35,7 @@ export async function GET(request: Request) {
 
   const issuingCompany = await prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } });
 
-  const mergedPdf = await PDFDocument.create();
+  const parts: Uint8Array[] = [];
   for (const invoice of invoicesThisMonth) {
     const latestIssue = invoice.issues.reduce((latest, i) => (i.issuedAt > latest.issuedAt ? i : latest));
     const snap = latestIssue.snapshot as unknown as Record<string, unknown>;
@@ -60,19 +59,17 @@ export async function GET(request: Request) {
       accountNumber: (snap.accountNumber as string | null) ?? null,
       accountHolderName: (snap.accountHolderName as string | null) ?? null,
       lines: snap.lines as InvoicePdfData["lines"],
+      groupByTask: (snap.groupLinesByTask as boolean | undefined) ?? false,
       brackets: snap.brackets as InvoicePdfData["brackets"],
       subtotalAll: snap.subtotalAll as number,
       taxAll: snap.taxAll as number,
       total: snap.total as number,
       watermarked: false,
     };
-    const buffer = await renderToBuffer(<InvoiceDocument data={data} />);
-    const sourcePdf = await PDFDocument.load(buffer);
-    const copiedPages = await mergedPdf.copyPages(sourcePdf, sourcePdf.getPageIndices());
-    for (const page of copiedPages) mergedPdf.addPage(page);
+    parts.push(await renderInvoicePdf(data, (snap.workRecord as InvoiceWorkRecord | null | undefined) ?? null));
   }
 
-  const mergedBytes = await mergedPdf.save();
+  const mergedBytes = await mergePdfs(parts);
 
   return new Response(new Uint8Array(mergedBytes), {
     headers: {
