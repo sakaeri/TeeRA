@@ -83,14 +83,18 @@ try {
   log("請求書エディタに「請求先：振込先確認取引先」が表示される", bodyText.includes("請求先：振込先確認取引先"));
 
   // --- 振込先：登録が無いうちは「振込先を載せない」、＋振込先を追加で登録してそのまま選ぶ ---
-  const bankSelect = admin.getByLabel("振込先", { exact: true });
-  const selectedText = async () => (await bankSelect.evaluate((el) => el.selectedOptions[0]?.textContent ?? "")).trim();
-  log("登録が無いうちは「振込先を載せない」", (await selectedText()) === "振込先を載せない");
+  const bankGroup = admin.getByRole("radiogroup", { name: "振込先" });
+  const selectedText = async () => ((await bankGroup.locator('[aria-checked="true"]').textContent()) ?? "").trim();
+  const choose = async (text) => {
+    await bankGroup.getByRole("radio").filter({ hasText: text }).click();
+    await admin.waitForTimeout(800);
+  };
+  log("登録が無いうちは「振込先を載せない」", (await selectedText()).startsWith("振込先を載せない"));
   const invoiceIdForBank = psql(
     `select id from "Invoice" where "issuingCompanyId"='${companyId}' and "companyRelationshipId"='${relationshipId}' and "periodLabel"='${thisMonth}';`,
   );
   const addAccount = async (bank, number, holder) => {
-    await bankSelect.selectOption("__add__");
+    await admin.getByRole("button", { name: "＋振込先を追加" }).click();
     const dialog = admin.getByRole("dialog", { name: "振込先を追加" });
     await dialog.getByLabel("銀行名（必須）").fill(bank);
     await dialog.getByLabel("支店名").fill("本店");
@@ -108,11 +112,11 @@ try {
       "テスト銀行|本店|普通|1234567",
   );
   await addAccount("この取引先専用銀行", "9999999", "ｾﾝﾖｳ");
-  log("2件目を追加すると、そちらが選ばれる", (await selectedText())?.startsWith("この取引先専用銀行"));
+  log("2件目を追加すると、そちらが選ばれる", (await selectedText()).startsWith("この取引先専用銀行"));
+  log("振込先は銀行・支店／種別・口座番号／名義に分けて表示される", (await selectedText()).includes("この取引先専用銀行 ／ 本店") && (await selectedText()).includes("普通 9999999") && (await selectedText()).includes("名義：ｾﾝﾖｳ"));
 
   // 載せない → また選ぶ
-  await bankSelect.selectOption({ label: "振込先を載せない" });
-  await admin.waitForTimeout(800);
+  await choose("振込先を載せない");
   log("「振込先を載せない」で請求書の振込先が空になる", psql(`select coalesce("bankName", '') || coalesce("accountNumber", '') from "Invoice" where id='${invoiceIdForBank}';`) === "");
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const pdfText = async (url) => {
@@ -121,8 +125,7 @@ try {
     return (await (await doc.getPage(1)).getTextContent()).items.map((it) => it.str).join("");
   };
   log("載せないときはPDFに「お振込先」が出ない", !(await pdfText(`http://localhost:3000/api/invoices/${invoiceIdForBank}/pdf`)).includes("お振込先"));
-  await bankSelect.selectOption({ label: "この取引先専用銀行 本店 普通 9999999 ｾﾝﾖｳ" });
-  await admin.waitForTimeout(800);
+  await choose("この取引先専用銀行");
   const invoiceBankAfterEdit = psql(`select "bankName" from "Invoice" where id='${invoiceIdForBank}';`);
   log("登録済みの振込先を選ぶと請求書に入る", invoiceBankAfterEdit === "この取引先専用銀行");
   log("選んだ振込先がPDFに出る", (await pdfText(`http://localhost:3000/api/invoices/${invoiceIdForBank}/pdf`)).includes("この取引先専用銀行"));
@@ -135,7 +138,7 @@ try {
   await manage.getByRole("button", { name: "閉じる" }).click();
   log("登録を削除できる", psql(`select count(*) from "CompanyBankAccount" where "companyId"='${companyId}';`) === "1");
   log("削除しても請求書の振込先は残る", psql(`select "bankName" from "Invoice" where id='${invoiceIdForBank}';`) === "この取引先専用銀行");
-  log("削除した振込先は「この請求書の振込先」として表示される", (await selectedText())?.includes("（この請求書の振込先）"));
+  log("削除した振込先は「この請求書の振込先」として表示される", (await selectedText()).includes("この請求書の振込先"));
 
   // custom line this month (will be carried over to next month with hours=0)
   await admin.getByRole("button", { name: "＋追加" }).click();

@@ -43,10 +43,6 @@ type BankAccount = {
 };
 type BankFields = Omit<BankAccount, "id">;
 
-function bankLabel(a: BankFields) {
-  return [a.bankName, a.branchName, a.accountType, a.accountNumber, a.accountHolderName].filter(Boolean).join(" ");
-}
-
 function sameBank(a: BankFields, b: BankFields) {
   return (
     a.bankName === b.bankName &&
@@ -576,7 +572,6 @@ function AddInvoiceLineModal({
 
 
 const NONE = "__none__";
-const ADD = "__add__";
 const CURRENT = "__current__";
 
 // 請求書の振込先：登録済みの振込先から選ぶ／載せない／＋振込先を追加。
@@ -608,39 +603,58 @@ function BankAccountPicker({
 
   return (
     <div className="mt-4 border-t border-border pt-3">
-      <label className="flex flex-col gap-1 text-xs">
-        振込先
-        <select
-          aria-label="振込先"
-          value={selected}
-          disabled={!isEditable || pending}
-          onChange={(e) => {
-            const next = e.target.value;
-            if (next === ADD) {
-              setShowAdd(true);
-              return;
-            }
-            if (next === CURRENT) return;
-            setSelected(next);
-            startTransition(() => selectInvoiceBankAccountAction(invoiceId, next === NONE ? null : next));
-          }}
-          className="rounded-lg border border-border bg-white px-2 py-2 text-sm"
+      <p className="mb-1.5 text-xs">振込先</p>
+      <div role="radiogroup" aria-label="振込先" className="flex flex-col gap-2">
+        {[
+          ...accounts.map((a) => ({ key: a.id, fields: a as BankFields | null, note: null as string | null })),
+          ...(value === CURRENT ? [{ key: CURRENT, fields: current as BankFields | null, note: "この請求書の振込先（登録は削除済み）" }] : []),
+          { key: NONE, fields: null, note: null },
+        ].map((o) => {
+          const checked = selected === o.key;
+          return (
+            <button
+              key={o.key}
+              type="button"
+              role="radio"
+              aria-checked={checked}
+              disabled={!isEditable || pending}
+              onClick={() => {
+                if (o.key === CURRENT || o.key === selected) return;
+                setSelected(o.key);
+                startTransition(() => selectInvoiceBankAccountAction(invoiceId, o.key === NONE ? null : o.key));
+              }}
+              className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 text-left disabled:cursor-default ${
+                checked ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-white"
+              } ${!isEditable && !checked ? "hidden" : ""}`}
+            >
+              <span
+                aria-hidden
+                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                  checked ? "border-primary" : "border-border"
+                }`}
+              >
+                {checked ? <span className="h-2 w-2 rounded-full bg-primary" /> : null}
+              </span>
+              {o.fields ? <BankCardText fields={o.fields} note={o.note} /> : (
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">振込先を載せない</span>
+                  <span className="block text-xs text-muted">PDFに「お振込先」の欄を出しません（契約で振込先が決まっている場合など）</span>
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {isEditable ? (
+        <button
+          type="button"
+          onClick={() => setShowAdd(true)}
+          className="mt-2 w-full rounded-xl border border-dashed border-primary px-3 py-2 text-sm font-semibold text-primary"
         >
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {bankLabel(a)}
-            </option>
-          ))}
-          {value === CURRENT ? <option value={CURRENT}>{bankLabel(current)}（この請求書の振込先）</option> : null}
-          <option value={NONE}>振込先を載せない</option>
-          {isEditable ? <option value={ADD}>＋振込先を追加</option> : null}
-        </select>
-      </label>
-      <p className="mt-1 text-xs text-muted">
-        {selected === NONE
-          ? "PDFに「お振込先」の欄を出しません（契約で振込先が決まっている場合など）。"
-          : "登録した振込先から選びます。翌月の請求書は、ここで選んだ振込先で始まります。"}
-      </p>
+          ＋振込先を追加
+        </button>
+      ) : null}
+      <p className="mt-2 text-xs text-muted">翌月の請求書は、ここで選んだ振込先で始まります。</p>
       {isEditable && accounts.length > 0 ? (
         <button type="button" onClick={() => setShowManage(true)} className="mt-1 text-xs font-semibold text-primary underline">
           登録した振込先の管理
@@ -678,7 +692,7 @@ function BankAccountPicker({
             <ul className="flex flex-col gap-2">
               {accounts.map((a) => (
                 <li key={a.id} className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm">
-                  <span className="min-w-0 break-all">{bankLabel(a)}</span>
+                  <BankCardText fields={a} />
                   <button
                     type="button"
                     disabled={pending}
@@ -694,6 +708,23 @@ function BankAccountPicker({
         </div>
       ) : null}
     </div>
+  );
+}
+
+// 振込先の表示：1行目に銀行・支店、2行目に種別・口座番号、3行目に名義
+function BankCardText({ fields, note }: { fields: BankFields; note?: string | null }) {
+  return (
+    <span className="min-w-0 flex-1">
+      <span className="block break-words text-sm font-semibold">
+        {fields.bankName}
+        {fields.branchName ? <span className="font-normal"> ／ {fields.branchName}</span> : null}
+      </span>
+      <span className="block text-sm tabular-nums">
+        {[fields.accountType, fields.accountNumber].filter(Boolean).join(" ")}
+      </span>
+      <span className="block break-words text-xs text-muted">名義：{fields.accountHolderName}</span>
+      {note ? <span className="mt-0.5 block text-xs text-amber-700">{note}</span> : null}
+    </span>
   );
 }
 
