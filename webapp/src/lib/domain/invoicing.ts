@@ -487,7 +487,7 @@ export async function issueInvoice(params: { invoiceId: string; issuedByUserId: 
         where: { id: invoice.issuingCompanyId },
         select: { planTier: true },
       });
-      countsAgainstQuota = await hasRemainingPdfQuota(tx, invoice.issuingCompanyId, company.planTier);
+      countsAgainstQuota = await hasRemainingPdfQuota(tx, invoice.issuingCompanyId, company.planTier, invoice.periodLabel);
       if (!countsAgainstQuota) {
         await postLedgerEntry(tx, {
           companyId: invoice.issuingCompanyId,

@@ -130,7 +130,7 @@ export default async function InvoicesPage({
   const invoicesThisMonth = (await listInvoicesForCompany(membership.companyId, periodLabel)).filter((inv) =>
     accessibleClientIds.has(inv.companyRelationshipId),
   );
-  const pdfQuota = await pdfQuotaRemaining(membership.companyId);
+  const pdfQuota = await pdfQuotaRemaining(membership.companyId, periodLabel);
   const bankAccounts = invoiceData ? await listBankAccounts(membership.companyId) : [];
   const draftInvoices = invoicesThisMonth.filter((inv) => inv.status !== "ISSUED");
   const issuedInvoices = invoicesThisMonth.filter((inv) => inv.status === "ISSUED");
@@ -176,7 +176,7 @@ export default async function InvoicesPage({
             willUseFreeQuota={pdfQuota.unlimited || (pdfQuota.quota > 0 && pdfQuota.remaining > 0)}
             pdfQuota={
               pdfQuota.unlimited || pdfQuota.quota > 0
-                ? { remaining: pdfQuota.remaining, quota: pdfQuota.quota, unlimited: pdfQuota.unlimited }
+                ? { remaining: pdfQuota.remaining, quota: pdfQuota.quota, unlimited: pdfQuota.unlimited, monthLabel: `${Number(periodLabel.slice(5, 7))}月分` }
                 : null
             }
           />

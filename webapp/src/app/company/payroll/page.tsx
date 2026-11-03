@@ -124,7 +124,7 @@ export default async function PayrollPage({
   const slipsThisMonth = (await listSalarySlipsForCompany(membership.companyId, targetMonth)).filter((s) =>
     accessibleStaffIds.has(s.staffUserId),
   );
-  const pdfQuota = await pdfQuotaRemaining(membership.companyId);
+  const pdfQuota = await pdfQuotaRemaining(membership.companyId, targetMonth);
   const draftSlips = slipsThisMonth.filter((s) => s.status !== "ISSUED");
   const issuedSlips = slipsThisMonth.filter((s) => s.status === "ISSUED");
   // ＋新しく作成の選択肢は、この月にまだ何も無いスタッフだけに絞る
@@ -159,7 +159,7 @@ export default async function PayrollPage({
             willUseFreeQuota={pdfQuota.unlimited || (pdfQuota.quota > 0 && pdfQuota.remaining > 0)}
             pdfQuota={
               pdfQuota.unlimited || pdfQuota.quota > 0
-                ? { remaining: pdfQuota.remaining, quota: pdfQuota.quota, unlimited: pdfQuota.unlimited }
+                ? { remaining: pdfQuota.remaining, quota: pdfQuota.quota, unlimited: pdfQuota.unlimited, monthLabel: `${Number(targetMonth.slice(5, 7))}月分` }
                 : null
             }
           />
