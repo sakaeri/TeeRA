@@ -158,8 +158,8 @@ try {
   // --- ⑤ 前月のカスタム項目を仕込んでおき、翌月を初めて開くと数量0で引き継がれる ---
   // seed月のInvoiceレコードを直接作成し、カスタム行を1件入れておく
   const seedInvoiceId = psql(
-    `with ins as (insert into "Invoice" (id, "issuingCompanyId", "companyRelationshipId", "periodLabel", "createdAt", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${companyId}', '${relationshipId}', '${monthForSeed}', now(), now()) returning id) select id from ins;`,
+    `with ins as (insert into "Invoice" (id, "issuingCompanyId", "companyRelationshipId", "periodLabel", note, "bankName", "accountNumber", "accountHolderName", "groupLinesByTask", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', '${relationshipId}', '${monthForSeed}', '前月の備考（持ち越しテスト）', '前月の銀行', '7654321', 'ゼンゲツ', false, now(), now()) returning id) select id from ins;`,
   );
   psql(
     `insert into "InvoiceLine" (id, "invoiceId", "staffName", description, hours, rate, amount, "taxRatePercent") ` +
@@ -186,6 +186,15 @@ try {
     .first()
     .inputValue();
   log("引き継がれた項目の数量は0になっている", carriedHoursValue === "0");
+  log("翌月を初めて開くと前月の備考が引き継がれる", (await admin.getByLabel("備考").inputValue()) === "前月の備考（持ち越しテスト）");
+  log(
+    "翌月を初めて開くと前月の振込先が引き継がれる（会社設定ではなく前月の値）",
+    (await admin.getByLabel("銀行名").inputValue()) === "前月の銀行" && (await admin.getByLabel("口座番号").inputValue()) === "7654321",
+  );
+  log(
+    "PDFの載せ方も前月から引き継がれる",
+    psql(`select "groupLinesByTask" from "Invoice" where "periodLabel"='${monthToOpen}' and "companyRelationshipId"='${relationshipId}';`) === "f",
+  );
   const carriedLine = psql(
     `select rate from "InvoiceLine" il join "Invoice" i on i.id = il."invoiceId" ` +
       `where i."periodLabel"='${monthToOpen}' and i."companyRelationshipId"='${relationshipId}' and il.description='前月の会場使用料';`,

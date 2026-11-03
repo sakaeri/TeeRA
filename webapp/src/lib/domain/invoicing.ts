@@ -231,20 +231,43 @@ export async function getOrCreateInvoice(params: {
 
   if (!invoice) {
     const company = await prisma.company.findUniqueOrThrow({ where: { id: params.issuingCompanyId } });
+    // 同じ依頼主の前の月（いちばん近い過去の月）の請求書があれば、備考・振込先・
+    // PDFの載せ方はそこから引き継ぐ。無ければ振込先は会社設定の値を初期値にする。
+    const previous = await prisma.invoice.findFirst({
+      where: {
+        issuingCompanyId: params.issuingCompanyId,
+        companyRelationshipId: params.companyRelationshipId,
+        periodLabel: { lt: params.periodLabel },
+      },
+      orderBy: { periodLabel: "desc" },
+    });
     invoice = await prisma.invoice.create({
       data: {
         issuingCompanyId: params.issuingCompanyId,
         companyRelationshipId: params.companyRelationshipId,
         periodLabel: params.periodLabel,
         invoiceRegistrationNumberSnapshot: company.invoiceRegistrationNumber,
-        // 振込先は依頼主ごとに異なりうるため、会社設定の値はあくまで新規
-        // 作成時の初期値としてコピーするだけ（インボイス番号と違い以降は
-        // 双方向同期しない — この請求書だけ編集すればよい）。
-        bankName: company.bankName,
-        branchName: company.branchName,
-        accountType: company.accountType,
-        accountNumber: company.accountNumber,
-        accountHolderName: company.accountHolderName,
+        // 振込先は依頼主ごとに異なりうるため、会社設定（または前の月）の値は
+        // あくまで新規作成時の初期値としてコピーするだけ（インボイス番号と違い
+        // 以降は双方向同期しない — この請求書だけ編集すればよい）。
+        ...(previous
+          ? {
+              note: previous.note,
+              bankName: previous.bankName,
+              branchName: previous.branchName,
+              accountType: previous.accountType,
+              accountNumber: previous.accountNumber,
+              accountHolderName: previous.accountHolderName,
+              groupLinesByTask: previous.groupLinesByTask,
+              attachWorkRecord: previous.attachWorkRecord,
+            }
+          : {
+              bankName: company.bankName,
+              branchName: company.branchName,
+              accountType: company.accountType,
+              accountNumber: company.accountNumber,
+              accountHolderName: company.accountHolderName,
+            }),
       },
     });
     await carryOverCustomLines({
