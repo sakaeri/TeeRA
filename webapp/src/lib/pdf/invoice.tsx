@@ -146,6 +146,12 @@ export type InvoicePdfData = {
   watermarked: boolean;
 };
 
+// 「2026-10」→「2026年10月」（件名用）
+function periodLabelJa(label: string) {
+  const m = /^(\d{4})-(\d{2})$/.exec(label);
+  return m ? `${m[1]}年${Number(m[2])}月` : label;
+}
+
 export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
   return (
     <Document>
@@ -165,7 +171,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
         <View style={styles.headerRow}>
           <View style={styles.recipientBlock}>
             <Text style={styles.recipientName}>{data.clientName} 御中</Text>
-            <Text style={styles.subjectLine}>件名：{data.periodLabel}分 ご請求</Text>
+            <Text style={styles.subjectLine}>件名：{periodLabelJa(data.periodLabel)}分 ご請求</Text>
           </View>
           <View style={styles.issuerBlock}>
             {/* 文字より先に描いて、文字の後ろに敷く */}
