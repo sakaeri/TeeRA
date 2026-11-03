@@ -232,7 +232,7 @@ export async function getOrCreateInvoice(params: {
   if (!invoice) {
     const company = await prisma.company.findUniqueOrThrow({ where: { id: params.issuingCompanyId } });
     // 同じ依頼主の前の月（いちばん近い過去の月）の請求書があれば、備考・振込先・
-    // PDFの載せ方はそこから引き継ぐ。無ければ振込先は会社設定の値を初期値にする。
+    // PDFの載せ方はそこから引き継ぐ。
     const previous = await prisma.invoice.findFirst({
       where: {
         issuingCompanyId: params.issuingCompanyId,
@@ -241,15 +241,21 @@ export async function getOrCreateInvoice(params: {
       },
       orderBy: { periodLabel: "desc" },
     });
+    // 前の月が無い依頼主は、最初に登録した振込先を初期値にする
+    const defaultAccount = previous
+      ? null
+      : await prisma.companyBankAccount.findFirst({
+          where: { companyId: params.issuingCompanyId },
+          orderBy: { createdAt: "asc" },
+        });
     invoice = await prisma.invoice.create({
       data: {
         issuingCompanyId: params.issuingCompanyId,
         companyRelationshipId: params.companyRelationshipId,
         periodLabel: params.periodLabel,
         invoiceRegistrationNumberSnapshot: company.invoiceRegistrationNumber,
-        // 振込先は依頼主ごとに異なりうるため、会社設定（または前の月）の値は
-        // あくまで新規作成時の初期値としてコピーするだけ（インボイス番号と違い
-        // 以降は双方向同期しない — この請求書だけ編集すればよい）。
+        // 振込先は依頼主ごとに異なりうるため、前の月（または登録済みの振込先）の
+        // 値は新規作成時の初期値としてコピーするだけ。以降はこの請求書で選び直す。
         ...(previous
           ? {
               note: previous.note,
@@ -261,13 +267,15 @@ export async function getOrCreateInvoice(params: {
               groupLinesByTask: previous.groupLinesByTask,
               attachWorkRecord: previous.attachWorkRecord,
             }
-          : {
-              bankName: company.bankName,
-              branchName: company.branchName,
-              accountType: company.accountType,
-              accountNumber: company.accountNumber,
-              accountHolderName: company.accountHolderName,
-            }),
+          : defaultAccount
+            ? {
+                bankName: defaultAccount.bankName,
+                branchName: defaultAccount.branchName,
+                accountType: defaultAccount.accountType,
+                accountNumber: defaultAccount.accountNumber,
+                accountHolderName: defaultAccount.accountHolderName,
+              }
+            : {}),
       },
     });
     await carryOverCustomLines({
@@ -355,6 +363,48 @@ export async function setPdfLayout(invoiceId: string, layout: { groupLinesByTask
 
 export async function setNote(invoiceId: string, note: string) {
   return prisma.invoice.update({ where: { id: invoiceId }, data: { note } });
+}
+
+export type BankAccountInput = {
+  bankName: string;
+  branchName: string;
+  accountType: string;
+  accountNumber: string;
+  accountHolderName: string;
+};
+
+export async function listBankAccounts(companyId: string) {
+  return prisma.companyBankAccount.findMany({ where: { companyId }, orderBy: { createdAt: "asc" } });
+}
+
+export async function addBankAccount(companyId: string, input: BankAccountInput) {
+  const bankName = input.bankName.trim();
+  const accountNumber = input.accountNumber.trim();
+  const accountHolderName = input.accountHolderName.trim();
+  if (!bankName || !accountNumber || !accountHolderName) throw new Error("bank_account_required");
+  return prisma.companyBankAccount.create({
+    data: {
+      companyId,
+      bankName,
+      branchName: input.branchName.trim() || null,
+      accountType: input.accountType.trim() || null,
+      accountNumber,
+      accountHolderName,
+    },
+  });
+}
+
+// 登録を消すだけ。請求書に写した振込先はそのまま残る
+export async function deleteBankAccount(companyId: string, accountId: string) {
+  await prisma.companyBankAccount.deleteMany({ where: { id: accountId, companyId } });
+}
+
+// 請求書の振込先を、登録済みの振込先から選ぶ（nullなら「振込先を載せない」）
+export async function selectInvoiceBankAccount(invoiceId: string, account: BankAccountInput | null) {
+  return setBankInfo(
+    invoiceId,
+    account ?? { bankName: "", branchName: "", accountType: "", accountNumber: "", accountHolderName: "" },
+  );
 }
 
 export async function setBankInfo(
