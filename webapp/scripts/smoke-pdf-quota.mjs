@@ -24,6 +24,11 @@ function psql(sql) {
 
 const today = new Date().toISOString().slice(0, 10);
 const thisMonth = today.slice(0, 7);
+const prevMonth = (() => {
+  const [y, m] = thisMonth.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 2, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+})();
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 const adminCtx = await browser.newContext();
@@ -181,6 +186,32 @@ try {
   log("同月内の再発行はTeeが消費されない（9のまま）", balance === 9);
   const invoiceIssueReissue = psql(`select "countsAgainstQuota" from "InvoiceIssue" where "invoiceId"='${invoiceId}' order by "issuedAt" desc limit 1;`);
   log("再発行のInvoiceIssueもcountsAgainstQuota=false（無料枠を消費しない）", invoiceIssueReissue === "f");
+
+  // --- 無料枠は「何月分か」ごと（会社全体）。今月分を使い切っていても、先月分の請求書は
+  // 先月分の枠（まだ0件）で無料になる。逆に、先月分を発行しても今月分の枠は減らない ---
+  await admin.goto(`http://localhost:3000/company/invoices?month=${prevMonth}&client=${relationshipId}`);
+  await admin.waitForTimeout(800);
+  bodyText = await admin.textContent("body");
+  log(
+    `先月分の請求書の画面では「${Number(prevMonth.slice(5))}月分」の枠（残り30/30件）が出る`,
+    bodyText.includes(`${Number(prevMonth.slice(5))}月分の無料発行枠`) && bodyText.includes("残り30/30件"),
+  );
+  await admin.fill('input[type="date"]', `${thisMonth}-28`);
+  await admin.locator('input[type="date"]').blur();
+  await admin.waitForTimeout(400);
+  await admin.getByRole("button", { name: "PDFで請求書を発行する", exact: true }).click();
+  await admin.waitForTimeout(1000);
+  balance = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
+  log("今月分の枠を使い切っていても、先月分の請求書は先月分の枠で無料（9のまま）", balance === 9);
+  const prevIssue = psql(
+    `select ii."countsAgainstQuota" from "InvoiceIssue" ii join "Invoice" i on i.id=ii."invoiceId" where i."companyRelationshipId"='${relationshipId}' and i."periodLabel"='${prevMonth}' order by ii."issuedAt" desc limit 1;`,
+  );
+  log("先月分のInvoiceIssueはcountsAgainstQuota=true（先月分の枠を使う）", prevIssue === "t");
+  const thisMonthUsed = psql(
+    `select (select count(*) from "SalarySlipIssue" ssi join "SalarySlip" ss on ss.id=ssi."salarySlipId" where ss."companyId"='${companyId}' and ss."targetMonth"='${thisMonth}' and ssi."countsAgainstQuota") + ` +
+      `(select count(*) from "InvoiceIssue" ii join "Invoice" i on i.id=ii."invoiceId" where i."issuingCompanyId"='${companyId}' and i."periodLabel"='${thisMonth}' and ii."countsAgainstQuota");`,
+  );
+  log("先月分を発行しても今月分の使用数は30件のまま", thisMonthUsed === "30");
 
   const balanceInvariant = Number(psql(`select sum(amount) from "TeeLedgerEntry" where "companyId"='${companyId}';`));
   log("teeBalanceが台帳合計と一致する（不変条件）", balance === balanceInvariant);

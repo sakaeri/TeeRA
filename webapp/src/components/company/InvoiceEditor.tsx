@@ -90,7 +90,7 @@ export function InvoiceEditor({
   };
   clientName: string;
   willUseFreeQuota: boolean;
-  pdfQuota: { remaining: number; quota: number; unlimited?: boolean } | null;
+  pdfQuota: { remaining: number; quota: number; unlimited?: boolean; monthLabel?: string } | null;
 }) {
   const [pending, startTransition] = useTransition();
   const [dueDate, setDueDateState] = useState(invoice.dueDate);
@@ -406,7 +406,7 @@ export function InvoiceEditor({
               <p className="text-xs text-muted">
                 {pdfQuota.unlimited
                   ? "PDF発行は無制限です（エンタープライズプラン）"
-                  : `今月の無料発行枠（給与明細・請求書の合算）：残り${pdfQuota.remaining}/${pdfQuota.quota}件`}
+                  : `${pdfQuota.monthLabel ?? "今月"}の無料発行枠（会社全体・給与明細と請求書の合算）：残り${pdfQuota.remaining}/${pdfQuota.quota}件`}
               </p>
             ) : null}
             <div className="flex gap-2">

@@ -556,7 +556,7 @@ export async function issueSalarySlip(params: { salarySlipId: string; issuedByUs
 
     if (!alreadyIssuedThisMonth) {
       const company = await tx.company.findUniqueOrThrow({ where: { id: slip.companyId }, select: { planTier: true } });
-      countsAgainstQuota = await hasRemainingPdfQuota(tx, slip.companyId, company.planTier);
+      countsAgainstQuota = await hasRemainingPdfQuota(tx, slip.companyId, company.planTier, slip.targetMonth);
       if (!countsAgainstQuota) {
         chargedTee = true;
         await postLedgerEntry(tx, {
