@@ -125,6 +125,7 @@ try {
   log("手で足した交通費はそのまま1行（業務の行の後）", first.includes("交通費") && first.includes("1,500円") && first.indexOf("交通費") > first.indexOf("清掃"));
   log("まとめた明細にはスタッフ名や日付は出ない", !first.includes("明細スタッフ甲") && !first.includes(day(5)));
   log("PDFは2ページ以上（2ページ目以降が実績表）", pages.length >= 2);
+  log("見本のPDFは請求書・実績表とも「ーTeeRA見本ー」の透かし入り", first.includes("TeeRA見本") && (pages[1] ?? "").includes("TeeRA見本"));
   const record = pages.slice(1).join("");
   log("実績表に請求書のシフトのスタッフと報告の時間が出る", record.includes("実績表") && record.includes("明細スタッフ甲") && record.includes("09:00〜13:30"));
   log("明細から外したシフト（9日）は実績表に出ない", !record.includes("9日（"));
@@ -164,6 +165,7 @@ try {
   psql(`update "WorkReport" set "clockOut" = "clockIn" + interval '1 minute' where "shiftId"='${shifts.a1}';`);
   pages = await pdfPages(page, `${pdfUrl}?issueId=${issueId}`);
   log("発行済みPDFもまとめた明細＋実績表", pages[0].includes("キャディ（3件）") && pages.length >= 2);
+  log("発行済みのPDFには見本の透かしが入らない", !pages.join("").includes("TeeRA見本"));
   log("発行済みの実績表は発行時点の時間のまま", pages.slice(1).join("").includes("09:00〜15:00"));
 
   // 一括ダウンロードにも実績表が付く

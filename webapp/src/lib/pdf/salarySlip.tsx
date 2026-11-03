@@ -27,9 +27,10 @@ const styles = StyleSheet.create({
     display: "flex",
     flexDirection: "row",
     flexWrap: "wrap",
-    opacity: 0.06,
+    // 見本だと分かるように、以前より少し濃く出す（このまま使われないように）
+    opacity: 0.14,
   },
-  watermarkText: { fontSize: 24, color: "#0b3d2e", margin: 30, transform: "rotate(-30deg)" },
+  watermarkText: { fontSize: 22, color: "#0b3d2e", marginVertical: 34, marginHorizontal: 18, transform: "rotate(-30deg)" },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   recipientBlock: { flexGrow: 1 },
   recipientName: { fontSize: 14, fontWeight: 700, marginBottom: 10 },
@@ -126,9 +127,9 @@ export function SalarySlipDocument({ data }: { data: SalarySlipPdfData }) {
       <Page size="A4" style={styles.page}>
         {data.watermarked ? (
           <View style={styles.watermark} fixed>
-            {Array.from({ length: 13 }).map((_, i) => (
+            {Array.from({ length: 30 }).map((_, i) => (
               <Text key={i} style={styles.watermarkText}>
-                TeeRA
+                ーTeeRA見本ー
               </Text>
             ))}
           </View>

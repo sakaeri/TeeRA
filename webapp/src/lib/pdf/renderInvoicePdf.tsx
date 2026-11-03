@@ -18,6 +18,7 @@ function workRecordData(data: InvoicePdfData, workRecord: InvoiceWorkRecord): Ca
     thirdColumn: "task",
     shifts: workRecord.rows,
     note: "※請求書の明細の内訳です（承認済みの業務報告と、キャンセル料が発生した取消）。",
+    watermarked: data.watermarked,
   };
 }
 
