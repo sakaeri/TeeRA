@@ -17,6 +17,8 @@ Font.register({
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontFamily: "Noto Sans JP", fontSize: 10, color: "#1c2b26" },
+  watermark: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, flexDirection: "row", flexWrap: "wrap", opacity: 0.14 },
+  watermarkText: { fontSize: 22, color: "#0b3d2e", marginVertical: 34, marginHorizontal: 18, transform: "rotate(-30deg)" },
   title: { fontSize: 18, fontWeight: 700, color: "#0b3d2e", marginBottom: 4 },
   subtitle: { fontSize: 10, color: "#6b7d76", marginBottom: 16 },
   dayGroup: { marginBottom: 10 },
@@ -73,6 +75,8 @@ export type CalendarPdfData = {
   thirdColumn?: "workplace" | "task";
   // 一覧の下に出す注記
   note?: string;
+  // 請求書の見本に付けるときは、実績表にも「見本」の透かしを入れる
+  watermarked?: boolean;
 };
 
 function timeLabel(s: CalendarPdfShift, todayStr: string) {
@@ -91,6 +95,15 @@ export function CalendarPdfDocument({ data }: { data: CalendarPdfData }) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
+        {data.watermarked ? (
+          <View style={styles.watermark} fixed>
+            {Array.from({ length: 30 }).map((_, i) => (
+              <Text key={i} style={styles.watermarkText}>
+                ーTeeRA見本ー
+              </Text>
+            ))}
+          </View>
+        ) : null}
         <Text style={styles.title}>{data.title ?? "シフト表"}</Text>
         <Text style={styles.subtitle}>
           {data.companyName} ／ 対象月: {data.year}年{data.month}月 ／ 発行日: {data.issuedAt}
