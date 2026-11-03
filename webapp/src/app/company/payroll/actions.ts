@@ -17,6 +17,7 @@ import {
   reopenSalarySlip,
   renameUnresolvedTaskNames,
   type DeductionItem,
+  setSalarySlipGroupShiftLines,
 } from "@/lib/domain/payroll";
 
 async function assertAccess(salarySlipId: string) {
@@ -58,6 +59,12 @@ export async function updateDeductionsAction(salarySlipId: string, deductions: D
 export async function setSalarySlipPaymentDayAction(salarySlipId: string, paymentDay: string) {
   await assertAccess(salarySlipId);
   await setSalarySlipPaymentDay(salarySlipId, paymentDay);
+  revalidatePath("/company/payroll");
+}
+
+export async function setSalarySlipGroupShiftLinesAction(salarySlipId: string, groupShiftLines: boolean) {
+  await assertAccess(salarySlipId);
+  await setSalarySlipGroupShiftLines(salarySlipId, groupShiftLines === true);
   revalidatePath("/company/payroll");
 }
 

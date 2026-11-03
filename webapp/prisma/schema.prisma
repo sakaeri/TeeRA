@@ -1184,6 +1184,8 @@ model SalarySlip {
   // しまう（isManuallyEditedは既存行の上書き防止であって、削除済みの
   // shiftIdを覚えておく仕組みではなかったため）。
   excludedShiftIds     Json             @default("[]")
+  // PDFの勤務内訳を「勤務先（業務）×単価」ごとに1行にまとめる（falseならシフト1件ずつ）
+  groupShiftLines      Boolean          @default(true)
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 

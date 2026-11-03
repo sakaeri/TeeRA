@@ -93,12 +93,15 @@ export type SalarySlipPdfLine = { description: string; hours: number; rate: numb
 // 時間なのか紛らわしくなるため、これまで通り1日＝1行のまま残す。
 // CUSTOM行（手動追加分）もそのまま個別に残す。画面上の編集欄（シフトごと
 // に時間を直す一覧）は対象外 — グループ化するのはPDF出力のときだけ。
+// groupShiftLines=false（1件ずつ）のときは、シフト1件ずつを「日付 勤務先（業務内容）」で載せる。
 export function buildSalarySlipPdfLines(
   lines: { kind?: string; shiftId?: string | null; description: string; hours: number; rate: number; amount: number }[],
   workplaceByShiftId: Map<string, string | null>,
+  options: { groupShiftLines?: boolean } = {},
 ): SalarySlipPdfLine[] {
   const grouped = new Map<string, SalarySlipPdfLine>();
   const result: SalarySlipPdfLine[] = [];
+  const groupShiftLines = options.groupShiftLines ?? true;
 
   for (const line of lines) {
     if (line.kind !== "SHIFT" || !line.shiftId) {
@@ -106,6 +109,15 @@ export function buildSalarySlipPdfLines(
       continue;
     }
     const { taskName, isDaily } = parseAutoShiftDescription(line.description);
+    if (!groupShiftLines) {
+      const date = line.description.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+      const workplace = workplaceByShiftId.get(line.shiftId) ?? "社内";
+      const description = date
+        ? `${date} ${workplace}${taskName ? `（${taskName}）` : ""}${isDaily ? DAILY_WAGE_SUFFIX : ""}`
+        : line.description;
+      result.push({ description, hours: line.hours, rate: line.rate, amount: line.amount });
+      continue;
+    }
     if (isDaily) {
       result.push({ description: line.description, hours: line.hours, rate: line.rate, amount: line.amount });
       continue;
@@ -412,6 +424,8 @@ export async function getOrCreateSalarySlip(params: {
         deductions,
         paymentDay: prevSlip?.paymentDay ?? null,
         note: prevSlip?.note ?? null,
+        // PDFの載せ方も前の月の明細から引き継ぐ
+        groupShiftLines: prevSlip?.groupShiftLines ?? true,
       },
     });
     await carryOverCustomLines(slip.id, prevSlip);
@@ -475,6 +489,10 @@ export async function deleteLine(lineId: string) {
 
 export async function updateDeductions(salarySlipId: string, deductions: DeductionItem[]) {
   return prisma.salarySlip.update({ where: { id: salarySlipId }, data: { deductions } });
+}
+
+export async function setSalarySlipGroupShiftLines(salarySlipId: string, groupShiftLines: boolean) {
+  return prisma.salarySlip.update({ where: { id: salarySlipId }, data: { groupShiftLines } });
 }
 
 export async function setSalarySlipPaymentDay(salarySlipId: string, paymentDay: string) {
@@ -580,6 +598,7 @@ export async function issueSalarySlip(params: { salarySlipId: string; issuedByUs
           targetMonth: slip.targetMonth,
           paymentDay: slip.paymentDay,
           note: slip.note,
+          groupShiftLines: slip.groupShiftLines,
           lines: slip.lines,
           deductions: slip.deductions,
           paidLeaveDaysUsed: slip.paidLeaveDaysUsed,
