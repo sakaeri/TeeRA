@@ -346,8 +346,8 @@ export function InvoiceEditor({
         <p className="mb-1 text-xs text-muted">明細</p>
         <div role="radiogroup" aria-label="明細の載せ方" className="mb-1 flex gap-2">
           {[
-            { value: true, label: "業務ごとにまとめる" },
-            { value: false, label: "1件ずつ" },
+            { value: true, label: "業務ごと" },
+            { value: false, label: "スタッフ・業務ごと" },
           ].map((o) => {
             const selected = groupLinesByTask === o.value;
             return (
@@ -373,7 +373,7 @@ export function InvoiceEditor({
         <p className="mb-4 text-xs text-muted">
           {groupLinesByTask
             ? "業務と単価が同じシフトを1行にまとめ、時間（日給は日数）を合計して載せます。上の一覧は1件ずつのまま直せます。"
-            : "シフト1件ずつを明細に載せます。"}
+            : "スタッフごとに、業務と単価が同じシフトを1行にまとめて載せます（スタッフ名順）。上の一覧は1件ずつのまま直せます。"}
         </p>
         <label className="flex items-center gap-2 text-sm">
           <input

@@ -513,6 +513,8 @@ export async function issueInvoice(params: { invoiceId: string; issuedByUserId: 
           note: invoice.note,
           lines: invoice.lines,
           groupLinesByTask: invoice.groupLinesByTask,
+          // 載せ方（groupLinesByTask=falseは「スタッフ×業務ごと」）
+          lineLayout: invoice.groupLinesByTask ? "TASK" : "STAFF_TASK",
           workRecord,
           registered,
           invoiceRegistrationNumber: invoice.invoiceRegistrationNumberSnapshot,

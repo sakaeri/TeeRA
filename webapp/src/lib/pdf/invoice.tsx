@@ -1,5 +1,5 @@
 import { Document, Page, Text, View, Image, StyleSheet, Font } from "@react-pdf/renderer";
-import { groupInvoiceLines } from "@/lib/invoiceLineGrouping";
+import { layoutInvoiceLines, type InvoiceLineLayout } from "@/lib/invoiceLineGrouping";
 
 Font.register({
   family: "Noto Sans JP",
@@ -141,8 +141,8 @@ export type InvoicePdfData = {
   accountNumber: string | null;
   accountHolderName: string | null;
   lines: { shiftId?: string | null; staffName: string; description: string; hours: number; rate: number; amount: number; taxRatePercent: number }[];
-  // trueなら明細を「業務×単価」ごとに1行にまとめて載せる（以前に発行したものは1件ずつ）
-  groupByTask?: boolean;
+  // 明細の載せ方。業務×単価ごと／スタッフ×業務×単価ごと／1件ずつ（この機能より前に発行したもの）
+  lineLayout?: InvoiceLineLayout;
   brackets: { rate: number; subtotal: number; tax: number }[];
   subtotalAll: number;
   taxAll: number;
@@ -212,7 +212,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
             <Text style={[styles.tableHeaderText, styles.tableColTax]}>税率</Text>
             <Text style={[styles.tableHeaderText, styles.tableColAmount]}>金額</Text>
           </View>
-          {(data.groupByTask ? groupInvoiceLines(data.lines) : data.lines).map((l, i) => (
+          {layoutInvoiceLines(data.lines, data.lineLayout ?? "DETAIL").map((l, i) => (
             <View key={i} style={styles.tableRow}>
               <Text style={styles.tableColDescription}>
                 {l.staffName ? `${l.staffName} / ` : ""}

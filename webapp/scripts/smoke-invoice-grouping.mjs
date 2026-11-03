@@ -3,10 +3,10 @@ import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 // 請求書PDFの明細を業務ごとにまとめ、実績表を2ページ目以降に付ける：
-// ・「業務ごとにまとめる」（最初から）：業務×単価ごとに1行、時間を合計、時給は件数を添える
+// ・「業務ごと」（最初から）：業務×単価ごとに1行、時間を合計、時給は件数を添える
 // ・手で追加した行（交通費など）は1行ずつのまま
 // ・実績表には請求書に載ったシフトだけが出る（明細から外したシフトは出ない）
-// ・「1件ずつ」に切り替えるとシフト1件ずつ、「実績表を付ける」を外すと1ページだけ
+// ・「スタッフ・業務ごと」に切り替えるとスタッフ×業務×単価ごと、「実績表を付ける」を外すと1ページだけ
 // ・発行すると、その時の載せ方と実績表がスナップショットに固定される
 
 function log(label, ok) {
@@ -106,7 +106,7 @@ try {
   await page.waitForTimeout(1200);
   const invoiceId = psql(`select id from "Invoice" where "companyRelationshipId"='${relId}';`);
   log("明細はシフト5件分できる", psql(`select count(*) from "InvoiceLine" where "invoiceId"='${invoiceId}' and "shiftId" is not null;`) === "5");
-  log("最初は「業務ごとにまとめる」が選ばれている", (await page.getByRole("radio", { name: "業務ごとにまとめる" }).getAttribute("aria-checked")) === "true");
+  log("最初は「業務ごと」が選ばれている", (await page.getByRole("radio", { name: "業務ごと", exact: true }).getAttribute("aria-checked")) === "true");
   log("最初は「実績表を付ける」にチェックが入っている", await page.getByRole("checkbox", { name: /実績表を付ける/ }).isChecked());
 
   // 1件（乙の9日）を明細から外し、交通費を手で足す
@@ -130,12 +130,21 @@ try {
   log("実績表に請求書のシフトのスタッフと報告の時間が出る", record.includes("実績表") && record.includes("明細スタッフ甲") && record.includes("09:00〜13:30"));
   log("明細から外したシフト（9日）は実績表に出ない", !record.includes("9日（"));
 
-  // --- 1件ずつ ---
-  await page.getByRole("radio", { name: "1件ずつ" }).click();
+  // --- スタッフ・業務ごと ---
+  await page.getByRole("radio", { name: "スタッフ・業務ごと" }).click();
   await page.waitForTimeout(800);
-  log("「1件ずつ」が保存される", psql(`select "groupLinesByTask" from "Invoice" where id='${invoiceId}';`) === "f");
+  log("「スタッフ・業務ごと」が保存される", psql(`select "groupLinesByTask" from "Invoice" where id='${invoiceId}';`) === "f");
   pages = await pdfPages(page, pdfUrl);
-  log("1件ずつのときはスタッフ名と日付の行が出る", pages[0].includes("明細スタッフ甲") && pages[0].includes(`${day(5)} 勤務（キャディ）`));
+  // 甲のキャディ：6h + 4.5h = 10.5h（2件）= 15,750円、乙のキャディ：5h（1件）、乙の清掃：1日
+  log(
+    "スタッフ・業務ごとのときは、スタッフ×業務で1行ずつ（日付は出ない）",
+    pages[0].includes("明細スタッフ甲 ／ キャディ（2件）") &&
+      pages[0].includes("10.5") &&
+      pages[0].includes("15,750円") &&
+      pages[0].includes("明細スタッフ乙 ／ キャディ（1件）") &&
+      pages[0].includes("明細スタッフ乙 ／ 清掃") &&
+      !pages[0].includes(`${day(5)} 勤務`),
+  );
 
   // --- 実績表を外す ---
   await page.getByRole("checkbox", { name: /実績表を付ける/ }).uncheck();
@@ -145,7 +154,7 @@ try {
   log("実績表を外すと請求書だけ（1ページ）", pages.length === 1 && !pages[0].includes("実績表"));
 
   // --- 戻して発行 ---
-  await page.getByRole("radio", { name: "業務ごとにまとめる" }).click();
+  await page.getByRole("radio", { name: "業務ごと", exact: true }).click();
   await page.waitForTimeout(600);
   await page.getByRole("checkbox", { name: /実績表を付ける/ }).check();
   await page.waitForTimeout(600);
@@ -158,8 +167,8 @@ try {
   await page.waitForTimeout(1200);
   const issueId = psql(`select id from "InvoiceIssue" where "invoiceId"='${invoiceId}' order by "issuedAt" desc limit 1;`);
   log("発行できる", Boolean(issueId));
-  const snap = psql(`select snapshot->>'groupLinesByTask', jsonb_array_length(snapshot->'workRecord'->'rows') from "InvoiceIssue" where id='${issueId}';`);
-  log("発行時の載せ方と実績表（4件）がスナップショットに入る", snap === "true|4");
+  const snap = psql(`select snapshot->>'lineLayout', jsonb_array_length(snapshot->'workRecord'->'rows') from "InvoiceIssue" where id='${issueId}';`);
+  log("発行時の載せ方と実績表（4件）がスナップショットに入る", snap === "TASK|4");
 
   // 発行後に報告の時間が変わっても、発行済みの実績表は変わらない
   psql(`update "WorkReport" set "clockOut" = "clockIn" + interval '1 minute' where "shiftId"='${shifts.a1}';`);
