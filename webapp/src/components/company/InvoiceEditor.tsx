@@ -37,9 +37,12 @@ const STATUS_LABEL: Record<string, string> = { DRAFT: "下書き", ISSUED: "発�
 export function InvoiceEditor({
   invoice,
   clientName,
+  clientRelationshipId,
   willUseFreeQuota,
   pdfQuota,
 }: {
+  // 単価が無いときに、その依頼主の「単価」タブを開くため
+  clientRelationshipId?: string;
   invoice: {
     id: string;
     status: string;
@@ -111,7 +114,17 @@ export function InvoiceEditor({
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-xs">設定＞契約関連の「賃金単価・請求単価」で該当の業務内容に単価を設定すると、次回の編集画面表示時に自動で明細に反映されます。</p>
+          <p className="mt-2 text-xs">
+            名簿の「依頼主」から{clientName}を開き、「単価」タブで該当の業務内容の請求単価を設定すると、この画面を開き直したときに自動で明細に入ります。
+          </p>
+          {clientRelationshipId ? (
+            <a
+              href={`/company/roster?client=${clientRelationshipId}&clientTab=rates`}
+              className="mt-3 inline-block rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              {clientName}の単価を設定する →
+            </a>
+          ) : null}
         </section>
       ) : null}
 

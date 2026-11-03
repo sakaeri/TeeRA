@@ -27,6 +27,9 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
   const initialTab = sp.tab === "clients" || sp.tab === "agencies" ? sp.tab : undefined;
   const initialAddMenu = sp.add === "1";
   const initialInviteStaff = sp.invite === "staff";
+  // 請求書の「単価を設定する」から、その依頼主の詳細（単価タブ）を開いた状態で来る
+  const initialClientId = typeof sp.client === "string" ? sp.client : undefined;
+  const initialClientTab = sp.clientTab === "rates" ? ("rates" as const) : undefined;
 
   // 本部管理者/編集者以外（チームマネージャー/リーダー）には、自分が
   // 管轄するチームに所属するスタッフ・依頼主・派遣会社だけを見せる
@@ -60,7 +63,9 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
         companyName={company.name}
         initialStaffId={initialStaffId}
         initialStaffTab={initialStaffTab}
-        initialTab={initialTab}
+        initialTab={initialClientId ? "clients" : initialTab}
+        initialClientId={initialClientId}
+        initialClientTab={initialClientTab}
         initialAddMenu={initialAddMenu}
         initialInviteStaff={initialInviteStaff}
         knownTaskNames={knownTaskNames}

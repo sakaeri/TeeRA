@@ -138,6 +138,7 @@ export function ClientDetailPanel({
   allTeams,
   onOpenStaff,
   onClose,
+  initialTab,
 }: {
   relationshipId: string;
   kind: "client" | "agency";
@@ -145,12 +146,13 @@ export function ClientDetailPanel({
   allTeams: { id: string; name: string }[];
   onOpenStaff: (userId: string) => void;
   onClose: () => void;
+  initialTab?: "rates";
 }) {
   const router = useRouter();
   const initToday = todayJstParts();
   const [year, setYear] = useState(initToday.year);
   const [month, setMonth] = useState(initToday.month);
-  const [tab, setTab] = useState<"history" | "staff" | "rates" | "note">("history");
+  const [tab, setTab] = useState<"history" | "staff" | "rates" | "note">(initialTab ?? "history");
   const [data, setData] = useState<ClientMonthDetail | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [pending, startTransition] = useTransition();
