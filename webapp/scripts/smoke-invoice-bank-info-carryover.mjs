@@ -83,10 +83,11 @@ try {
   log("請求書エディタに「請求先：振込先確認取引先」が表示される", bodyText.includes("請求先：振込先確認取引先"));
 
   // --- 振込先：登録が無いうちは「振込先を載せない」、＋振込先を追加で登録してそのまま選ぶ ---
-  const bankGroup = admin.getByRole("radiogroup", { name: "振込先" });
-  const selectedText = async () => ((await bankGroup.locator('[aria-checked="true"]').textContent()) ?? "").trim();
+  const bankButton = admin.getByRole("button", { name: "振込先", exact: true });
+  const selectedText = async () => ((await bankButton.textContent()) ?? "").replace("⌃⌄", "").trim();
   const choose = async (text) => {
-    await bankGroup.getByRole("radio").filter({ hasText: text }).click();
+    await bankButton.click();
+    await admin.getByRole("listbox", { name: "振込先の選択肢" }).getByRole("option").filter({ hasText: text }).click();
     await admin.waitForTimeout(800);
   };
   log("登録が無いうちは「振込先を載せない」", (await selectedText()).startsWith("振込先を載せない"));
@@ -94,7 +95,8 @@ try {
     `select id from "Invoice" where "issuingCompanyId"='${companyId}' and "companyRelationshipId"='${relationshipId}' and "periodLabel"='${thisMonth}';`,
   );
   const addAccount = async (bank, number, holder) => {
-    await admin.getByRole("button", { name: "＋振込先を追加" }).click();
+    await bankButton.click();
+    await admin.getByRole("listbox", { name: "振込先の選択肢" }).getByRole("button", { name: "＋振込先を追加" }).click();
     const dialog = admin.getByRole("dialog", { name: "振込先を追加" });
     await dialog.getByLabel("銀行名（必須）").fill(bank);
     await dialog.getByLabel("支店名").fill("本店");
@@ -113,7 +115,14 @@ try {
   );
   await addAccount("この取引先専用銀行", "9999999", "ｾﾝﾖｳ");
   log("2件目を追加すると、そちらが選ばれる", (await selectedText()).startsWith("この取引先専用銀行"));
-  log("振込先は銀行・支店／種別・口座番号／名義に分けて表示される", (await selectedText()).includes("この取引先専用銀行 ／ 本店") && (await selectedText()).includes("普通 9999999") && (await selectedText()).includes("名義：ｾﾝﾖｳ"));
+  await bankButton.click();
+  log(
+    "一覧も銀行／支店／種別・口座番号／名義に分けて表示される",
+    ((await admin.getByRole("option").filter({ hasText: "テスト銀行" }).textContent()) ?? "").includes("普通 1234567"),
+  );
+  await admin.mouse.click(5, 5);
+  await admin.waitForTimeout(300);
+  log("振込先は銀行／支店／種別・口座番号／名義に分けて表示される", (await selectedText()).includes("この取引先専用銀行本店") && (await selectedText()).includes("普通 9999999") && (await selectedText()).includes("名義：ｾﾝﾖｳ"));
 
   // 載せない → また選ぶ
   await choose("振込先を載せない");
