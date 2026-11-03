@@ -4,7 +4,7 @@ import { isCompanyScopeAdmin, isLeaderOnly, myManagedOrLedTeamIds } from "@/lib/
 import { listStaffWithSummary } from "@/lib/domain/roster";
 import { listClients, listAgencies, countMonthlyShiftsByRelationship } from "@/lib/domain/relationships";
 import { listTeams } from "@/lib/domain/teams";
-import { listTemplates, listUploadOnlyTemplates, listKnownTaskNames } from "@/lib/domain/contracts";
+import { listTemplates, sortTemplatesByUsage, listUploadOnlyTemplates, listKnownTaskNames } from "@/lib/domain/contracts";
 import { RosterView } from "@/components/company/RosterView";
 import { prisma } from "@/lib/prisma";
 
@@ -49,6 +49,8 @@ export default async function RosterPage({ searchParams }: PageProps<"/company/r
     listKnownTaskNames(membership.companyId),
     prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
   ]);
+
+  sortTemplatesByUsage(templates);
 
   const monthlyShiftCounts = await countMonthlyShiftsByRelationship(
     membership.companyId,
