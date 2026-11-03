@@ -188,6 +188,38 @@ try {
   log("PDFが非自明なサイズで生成される", pdfBuffer.length > 1000);
   log("PDFが%PDFマジックバイトで始まる", pdfBuffer.slice(0, 4).toString() === "%PDF");
 
+  // --- PDFの中身（pdfjsで文字を取り出して確認） ---
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const pdfText = async (url) => {
+    const res = await admin.request.get(url);
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(await res.body()) }).promise;
+    return (await (await doc.getPage(1)).getTextContent()).items.map((it) => it.str).join("");
+  };
+  const slipPdfUrl = `http://localhost:3000/api/salary-slips/${slipId}/pdf`;
+  let text = await pdfText(slipPdfUrl);
+  log("最初は「勤務先・業務ごとにまとめる」が選ばれている", (await admin.getByRole("radio", { name: "勤務先・業務ごとにまとめる" }).getAttribute("aria-checked")) === "true");
+  log("まとめるときは「社内（レジ業務）」「A社（品出し）」の2行になる", text.includes("社内（レジ業務）") && text.includes("A社（品出し）") && !text.includes(`${thisMonth}-01 社内`));
+
+  // 1件ずつ
+  await admin.getByRole("radio", { name: "1件ずつ" }).click();
+  await admin.waitForTimeout(800);
+  log("「1件ずつ」が保存される", psql(`select "groupShiftLines" from "SalarySlip" where id='${slipId}';`) === "f");
+  text = await pdfText(slipPdfUrl);
+  log(
+    "1件ずつのときは日付・勤務先・業務内容つきで1件ずつ載る",
+    text.includes(`${thisMonth}-01 社内（レジ業務）`) && text.includes(`${thisMonth}-01 A社（品出し）`),
+  );
+
+  // 翌月の明細は、選んだ載せ方で始まる
+  const [ty, tm] = thisMonth.split("-").map(Number);
+  const nextMonth = `${tm === 12 ? ty + 1 : ty}-${String(tm === 12 ? 1 : tm + 1).padStart(2, "0")}`;
+  await admin.goto(`http://localhost:3000/company/payroll?month=${nextMonth}&staff=${payrollStaffUserId}`);
+  await admin.waitForTimeout(800);
+  log(
+    "翌月の明細は前の月の載せ方（1件ずつ）で始まる",
+    psql(`select "groupShiftLines" from "SalarySlip" where "staffUserId"='${payrollStaffUserId}' and "targetMonth"='${nextMonth}';`) === "f",
+  );
+
   console.log(process.exitCode ? "PAYROLL PDF GROUPING SMOKE TEST HAD FAILURES" : "PAYROLL PDF GROUPING SMOKE TEST PASSED");
 } catch (err) {
   console.error("PAYROLL PDF GROUPING SMOKE TEST FAILED", err);

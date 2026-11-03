@@ -9,6 +9,7 @@ import {
   updatePaidLeaveAction,
   setSalarySlipPaymentDayAction,
   setSalarySlipNoteAction,
+  setSalarySlipGroupShiftLinesAction,
   issueSalarySlipAction,
   reopenSalarySlipAction,
   renameUnresolvedTaskNamesAction,
@@ -39,6 +40,7 @@ export function SalarySlipEditor({
     deductions: Deduction[];
     paymentDay: string | null;
     note: string | null;
+    groupShiftLines: boolean;
     paidLeaveDaysUsed: number;
     paidLeaveDailyRate: number;
     paidLeaveBalance: number;
@@ -56,6 +58,8 @@ export function SalarySlipEditor({
   const [showIssueConfirm, setShowIssueConfirm] = useState(false);
 
   const isEditable = slip.status === "DRAFT";
+  // 押したらすぐ切り替わって見えるように、画面側でも持っておく
+  const [groupShiftLines, setGroupShiftLines] = useState(slip.groupShiftLines);
 
   // 同月内の再発行、および無料枠内の発行は確認を挟まずそのまま発行する。
   // Teeを実際に課金する時だけ確認ダイアログを出す（無料なのに確認を
@@ -173,6 +177,53 @@ export function SalarySlipEditor({
       <PaidLeaveSection slip={slip} isEditable={isEditable} pending={pending} startTransition={startTransition} />
       <DeductionsSection slip={slip} gross={slip.totals.gross} isEditable={isEditable} startTransition={startTransition} />
       <PaymentInfoSection slip={slip} isEditable={isEditable} startTransition={startTransition} />
+
+      <section className="rounded-2xl border border-border bg-white/60 p-6">
+        <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">PDFの載せ方</h2>
+        <p className="mb-1 text-xs text-muted">勤務内訳</p>
+        <div role="radiogroup" aria-label="勤務内訳の載せ方" className="mb-1 flex gap-2">
+          {[
+            { value: true, label: "勤務先・業務ごとにまとめる" },
+            { value: false, label: "1件ずつ" },
+          ].map((o) => {
+            const selected = groupShiftLines === o.value;
+            return (
+              <button
+                key={o.label}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                disabled={!isEditable}
+                onClick={() => {
+                  setGroupShiftLines(o.value);
+                  startTransition(() => setSalarySlipGroupShiftLinesAction(slip.id, o.value));
+                }}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-60 ${
+                  selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-white text-foreground"
+                }`}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted">
+          {groupShiftLines
+            ? "勤務先・業務内容・単価が同じ勤務を1行にまとめ、時間を合計して載せます（日給は1日ずつ）。"
+            : "勤務1件ずつを、日付・勤務先・業務内容つきで載せます。"}
+          翌月の明細も、ここで選んだ載せ方で始まります。
+        </p>
+        {isEditable ? (
+          <a
+            href={`/api/salary-slips/${slip.id}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-block text-sm font-semibold text-primary underline"
+          >
+            見本のPDFを見る
+          </a>
+        ) : null}
+      </section>
 
       <section className="rounded-2xl border-2 border-primary bg-white/60 p-6">
         <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
