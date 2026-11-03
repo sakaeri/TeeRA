@@ -43,10 +43,6 @@ type BankAccount = {
 };
 type BankFields = Omit<BankAccount, "id">;
 
-function bankLabel(a: BankFields) {
-  return [a.bankName, a.branchName, a.accountType, a.accountNumber, a.accountHolderName].filter(Boolean).join(" ");
-}
-
 function sameBank(a: BankFields, b: BankFields) {
   return (
     a.bankName === b.bankName &&
@@ -576,7 +572,6 @@ function AddInvoiceLineModal({
 
 
 const NONE = "__none__";
-const ADD = "__add__";
 const CURRENT = "__current__";
 
 // 請求書の振込先：登録済みの振込先から選ぶ／載せない／＋振込先を追加。
@@ -595,6 +590,7 @@ function BankAccountPicker({
   const [pending, startTransition] = useTransition();
   const [showAdd, setShowAdd] = useState(false);
   const [showManage, setShowManage] = useState(false);
+  const [open, setOpen] = useState(false);
   const isEmpty = !current.bankName && !current.accountNumber && !current.accountHolderName;
   const matched = accounts.find((a) => sameBank(a, current));
   // 登録を消した振込先や、以前に手で入れた振込先は「この請求書の振込先」として出す
@@ -605,41 +601,94 @@ function BankAccountPicker({
     setPrevValue(value);
     setSelected(value);
   }
+  const options = [
+    ...accounts.map((a) => ({ key: a.id, fields: a as BankFields | null, note: null as string | null })),
+    ...(value === CURRENT ? [{ key: CURRENT, fields: current as BankFields | null, note: "この請求書の振込先（登録は削除済み）" }] : []),
+    { key: NONE, fields: null as BankFields | null, note: null as string | null },
+  ];
+  const selectedOption = options.find((o) => o.key === selected);
 
   return (
     <div className="mt-4 border-t border-border pt-3">
-      <label className="flex flex-col gap-1 text-xs">
-        振込先
-        <select
+      <p className="mb-1 text-xs">振込先</p>
+      {/* 見た目は今までのプルダウンのまま。標準のプルダウンは選択肢の中で改行できないため、
+          同じ形の枠を押すと、銀行・口座番号・名義を行に分けた一覧が開くようにしている */}
+      <div className="relative">
+        <button
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded={open}
           aria-label="振込先"
-          value={selected}
           disabled={!isEditable || pending}
-          onChange={(e) => {
-            const next = e.target.value;
-            if (next === ADD) {
-              setShowAdd(true);
-              return;
-            }
-            if (next === CURRENT) return;
-            setSelected(next);
-            startTransition(() => selectInvoiceBankAccountAction(invoiceId, next === NONE ? null : next));
-          }}
-          className="rounded-lg border border-border bg-white px-2 py-2 text-sm"
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-left disabled:opacity-70"
         >
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {bankLabel(a)}
-            </option>
-          ))}
-          {value === CURRENT ? <option value={CURRENT}>{bankLabel(current)}（この請求書の振込先）</option> : null}
-          <option value={NONE}>振込先を載せない</option>
-          {isEditable ? <option value={ADD}>＋振込先を追加</option> : null}
-        </select>
-      </label>
+          <span className="min-w-0 flex-1">
+            {selectedOption?.fields ? (
+              <BankCardText fields={selectedOption.fields} note={selectedOption.note} />
+            ) : (
+              <span className="block text-sm">振込先を載せない</span>
+            )}
+          </span>
+          {isEditable ? (
+            <span aria-hidden className="shrink-0 text-xs text-muted">
+              ⌃⌄
+            </span>
+          ) : null}
+        </button>
+        {open ? (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+            <ul
+              role="listbox"
+              aria-label="振込先の選択肢"
+              className="absolute left-0 right-0 z-40 mt-1 max-h-80 overflow-y-auto rounded-xl border border-border bg-white py-1 shadow-lg"
+            >
+              {options.map((o) => {
+                const checked = selected === o.key;
+                return (
+                  <li key={o.key}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={checked}
+                      onClick={() => {
+                        setOpen(false);
+                        if (o.key === CURRENT || o.key === selected) return;
+                        setSelected(o.key);
+                        startTransition(() => selectInvoiceBankAccountAction(invoiceId, o.key === NONE ? null : o.key));
+                      }}
+                      className="flex w-full items-start gap-2 border-b border-border/60 px-3 py-2.5 text-left last:border-b-0"
+                    >
+                      <span aria-hidden className="w-4 shrink-0 text-sm text-primary">
+                        {checked ? "✓" : ""}
+                      </span>
+                      {o.fields ? <BankCardText fields={o.fields} note={o.note} /> : <span className="text-sm">振込先を載せない</span>}
+                    </button>
+                  </li>
+                );
+              })}
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    setShowAdd(true);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold text-primary"
+                >
+                  <span aria-hidden className="w-4 shrink-0" />
+                  ＋振込先を追加
+                </button>
+              </li>
+            </ul>
+          </>
+        ) : null}
+      </div>
       <p className="mt-1 text-xs text-muted">
         {selected === NONE
           ? "PDFに「お振込先」の欄を出しません（契約で振込先が決まっている場合など）。"
-          : "登録した振込先から選びます。翌月の請求書は、ここで選んだ振込先で始まります。"}
+          : "翌月の請求書は、ここで選んだ振込先で始まります。"}
       </p>
       {isEditable && accounts.length > 0 ? (
         <button type="button" onClick={() => setShowManage(true)} className="mt-1 text-xs font-semibold text-primary underline">
@@ -678,7 +727,7 @@ function BankAccountPicker({
             <ul className="flex flex-col gap-2">
               {accounts.map((a) => (
                 <li key={a.id} className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm">
-                  <span className="min-w-0 break-all">{bankLabel(a)}</span>
+                  <BankCardText fields={a} />
                   <button
                     type="button"
                     disabled={pending}
@@ -694,6 +743,21 @@ function BankAccountPicker({
         </div>
       ) : null}
     </div>
+  );
+}
+
+// 振込先の表示：銀行／支店／種別・口座番号／名義を1行ずつ
+function BankCardText({ fields, note }: { fields: BankFields; note?: string | null }) {
+  return (
+    <span className="min-w-0 flex-1">
+      <span className="block break-words text-sm font-semibold">{fields.bankName}</span>
+      {fields.branchName ? <span className="block break-words text-sm">{fields.branchName}</span> : null}
+      <span className="block text-sm tabular-nums">
+        {[fields.accountType, fields.accountNumber].filter(Boolean).join(" ")}
+      </span>
+      <span className="block break-words text-xs text-muted">名義：{fields.accountHolderName}</span>
+      {note ? <span className="mt-0.5 block text-xs text-amber-700">{note}</span> : null}
+    </span>
   );
 }
 
