@@ -24,6 +24,11 @@ function psql(sql) {
 
 const today = new Date().toISOString().slice(0, 10);
 const thisMonth = today.slice(0, 7);
+const prevMonth = (() => {
+  const [y, m] = thisMonth.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 2, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+})();
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 const adminCtx = await browser.newContext();
@@ -87,7 +92,7 @@ try {
       `insert into "TeeLedgerEntry" (id, "companyId", type, amount, "balanceAfter", "createdAt") values (gen_random_uuid()::text, '${companyId}', 'ADJUSTMENT', 10, 10, now());`,
   );
 
-  // 無料枠を29件、当月分としてダミーで使い切っておく（ダミーUser×ダミー
+  // 無料枠を29件、今月発行したものとしてダミーで使い切っておく（うち10件は前の月分）（ダミーUser×ダミー
   // SalarySlipを29件作り、それぞれにcountsAgainstQuota=trueの発行済み
   // 履歴を1件ずつ付ける）
   for (let i = 0; i < 29; i++) {
@@ -97,7 +102,8 @@ try {
     );
     const dummySlipId = psql(
       `with ins as (insert into "SalarySlip" (id, "companyId", "staffUserId", "targetMonth", status, "createdAt", "updatedAt") ` +
-        `values (gen_random_uuid()::text, '${companyId}', '${dummyUserId}', '${thisMonth}', 'ISSUED', now(), now()) returning id) select id from ins;`,
+        // 前の月分を今月発行したものも今月の枠を使う（何月分かではなく発行した日で数える）
+        `values (gen_random_uuid()::text, '${companyId}', '${dummyUserId}', '${i < 10 ? prevMonth : thisMonth}', 'ISSUED', now(), now()) returning id) select id from ins;`,
     );
     psql(
       `insert into "SalarySlipIssue" (id, "salarySlipId", snapshot, "chargedTee", "countsAgainstQuota", "issuedAt") ` +
@@ -111,6 +117,21 @@ try {
     ),
   );
   log("無料枠を29件ダミーで使い切った状態を仕込めた", usedSoFar === 29);
+  // 先月に発行したもの（今月分の明細でも）は今月の枠に数えない
+  {
+    const oldUserId = psql(
+      `with ins as (insert into "User" (id, email, "passwordHash", name, "createdAt", "updatedAt") ` +
+        `values (gen_random_uuid()::text, 'pdfquota-old-${Date.now()}@example.com', 'x', 'ダミー先月発行', now(), now()) returning id) select id from ins;`,
+    );
+    const oldSlipId = psql(
+      `with ins as (insert into "SalarySlip" (id, "companyId", "staffUserId", "targetMonth", status, "createdAt", "updatedAt") ` +
+        `values (gen_random_uuid()::text, '${companyId}', '${oldUserId}', '${thisMonth}', 'ISSUED', now(), now()) returning id) select id from ins;`,
+    );
+    psql(
+      `insert into "SalarySlipIssue" (id, "salarySlipId", snapshot, "chargedTee", "countsAgainstQuota", "issuedAt") ` +
+        `values (gen_random_uuid()::text, '${oldSlipId}', '{}'::jsonb, false, true, now() - interval '40 days');`,
+    );
+  }
 
   // --- 給与計算ページで残り枠が1/30と表示される ---
   await admin.goto(`http://localhost:3000/company/payroll?month=${thisMonth}&staff=${staffUserId}`);
