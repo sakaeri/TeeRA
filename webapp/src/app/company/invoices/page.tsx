@@ -159,6 +159,7 @@ export default async function InvoicesPage({
           <InvoiceEditor
             invoice={invoiceData}
             clientName={selectedClientName}
+            clientRelationshipId={companyRelationshipId}
             willUseFreeQuota={pdfQuota.unlimited || (pdfQuota.quota > 0 && pdfQuota.remaining > 0)}
             pdfQuota={
               pdfQuota.unlimited || pdfQuota.quota > 0

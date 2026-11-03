@@ -116,6 +116,12 @@ try {
   await admin.waitForTimeout(500);
   bodyText = await admin.textContent("body");
   log("invoice page shows 単価未設定 warning for the shift", bodyText.includes("単価未設定") && bodyText.includes("キャディ業務") && bodyText.includes("分離スタッフ"));
+  // 「単価を設定する」から、その依頼主の詳細（単価タブ）が開く
+  await admin.getByRole("link", { name: /の単価を設定する/ }).click();
+  await admin.waitForURL(/\/company\/roster\?client=/);
+  const ratePanel = admin.locator("div.fixed.inset-0.z-30").last();
+  await ratePanel.getByText("キャンセル規定").first().waitFor({ timeout: 15000 });
+  log("「単価を設定する」で名簿の依頼主の単価タブが開く", true);
 
   let lineCount = psql(`select count(*) from "InvoiceLine" il join "Invoice" i on i.id=il."invoiceId" where i."companyRelationshipId"='${relId}' and il."shiftId" is not null;`);
   log("no invoice line was auto-created while rate is unset", lineCount === "0");

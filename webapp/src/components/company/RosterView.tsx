@@ -94,6 +94,8 @@ export function RosterView({
   initialStaffId,
   initialStaffTab,
   initialTab,
+  initialClientId,
+  initialClientTab,
   initialAddMenu = false,
   initialInviteStaff = false,
   isCompanyScopeAdmin,
@@ -111,6 +113,9 @@ export function RosterView({
   initialStaffId?: string;
   initialStaffTab?: "contracts";
   initialTab?: "clients" | "agencies";
+  // 請求書の「単価を設定する」から来たとき、その依頼主の詳細（単価タブ）を開く
+  initialClientId?: string;
+  initialClientTab?: "rates";
   initialAddMenu?: boolean;
   initialInviteStaff?: boolean;
   isCompanyScopeAdmin: boolean;
@@ -118,8 +123,10 @@ export function RosterView({
 }) {
   const [tab, setTab] = useState<Tab>(initialTab ?? "staff");
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(initialStaffId ?? null);
-  const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(null);
-  const [selectedRelationshipKind, setSelectedRelationshipKind] = useState<"client" | "agency" | null>(null);
+  const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(initialClientId ?? null);
+  const [selectedRelationshipKind, setSelectedRelationshipKind] = useState<"client" | "agency" | null>(
+    initialClientId ? "client" : null,
+  );
   const [showInviteStaffModal, setShowInviteStaffModal] = useState(initialInviteStaff);
   const [showInviteRelationshipModal, setShowInviteRelationshipModal] = useState<"client" | "agency" | null>(null);
   const [pending, startTransition] = useTransition();
@@ -589,6 +596,7 @@ export function RosterView({
         <ClientDetailPanel
           relationshipId={selectedRelationshipId}
           kind={selectedRelationshipKind}
+          initialTab={selectedRelationshipId === initialClientId ? initialClientTab : undefined}
           knownTaskNames={knownTaskNames}
           allTeams={teams}
           onOpenStaff={(userId) => {
