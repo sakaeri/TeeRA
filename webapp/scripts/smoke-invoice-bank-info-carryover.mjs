@@ -55,24 +55,12 @@ try {
       `insert into "TeeLedgerEntry" (id, "companyId", type, amount, "balanceAfter", "createdAt") values (gen_random_uuid()::text, '${companyId}', 'ADJUSTMENT', 10, 10, now());`,
   );
 
-  // --- ④ 会社情報に振込先を登録する ---
+  // --- ④ 振込先は会社設定ではなく請求書の画面で登録・選択する ---
   await admin.goto("http://localhost:3000/company/settings");
   await admin.getByRole("button", { name: /変更/ }).click();
-  await admin.waitForTimeout(200);
-  await admin.getByLabel("銀行名").fill("テスト銀行");
-  await admin.getByLabel("支店名").fill("本店");
-  await admin.getByLabel("口座種別").fill("普通");
-  await admin.getByLabel("口座番号").fill("1234567");
-  await admin.getByLabel("口座名義").fill("ﾌﾘｺﾍﾟ ｶﾌﾞｶﾌﾞ");
-  await admin.getByRole("button", { name: "保存", exact: true }).click();
-  await admin.waitForTimeout(1800);
+  await admin.waitForTimeout(300);
   let bodyText = await admin.textContent("body");
-  log(
-    "設定画面に保存した振込先情報が表示される",
-    bodyText.includes("テスト銀行") && bodyText.includes("1234567") && bodyText.includes("ﾌﾘｺﾍﾟ ｶﾌﾞｶﾌﾞ"),
-  );
-  const savedBank = psql(`select "bankName", "accountNumber" from "Company" where id='${companyId}';`);
-  log("DBに振込先情報が保存される", savedBank === "テスト銀行|1234567");
+  log("会社設定に請求書の振込先の欄は無い", !bodyText.includes("請求書の振込先") && (await admin.getByLabel("銀行名").count()) === 0);
 
   // --- agency module + proxy client for invoicing ---
   await admin.goto("http://localhost:3000/company/roster");
@@ -94,29 +82,60 @@ try {
   bodyText = await admin.textContent("body");
   log("請求書エディタに「請求先：振込先確認取引先」が表示される", bodyText.includes("請求先：振込先確認取引先"));
 
-  // --- 振込先は依頼主ごとに異なりうる: 新規請求書は会社設定の値で初期化
-  // されるが、請求書側で個別に編集しても会社設定（他の請求書のデフォルト）
-  // には影響しない ---
-  const invoiceBankNameValue = await admin.getByLabel("銀行名").inputValue();
-  const invoiceAccountNumberValue = await admin.getByLabel("口座番号").inputValue();
-  log(
-    "新規請求書の振込先は会社設定の値で初期化される",
-    invoiceBankNameValue === "テスト銀行" && invoiceAccountNumberValue === "1234567",
-  );
-
-  await admin.getByLabel("銀行名").fill("この取引先専用銀行");
-  await admin.getByLabel("銀行名").blur();
-  await admin.waitForTimeout(600);
+  // --- 振込先：登録が無いうちは「振込先を載せない」、＋振込先を追加で登録してそのまま選ぶ ---
+  const bankSelect = admin.getByLabel("振込先", { exact: true });
+  const selectedText = async () => (await bankSelect.evaluate((el) => el.selectedOptions[0]?.textContent ?? "")).trim();
+  log("登録が無いうちは「振込先を載せない」", (await selectedText()) === "振込先を載せない");
   const invoiceIdForBank = psql(
     `select id from "Invoice" where "issuingCompanyId"='${companyId}' and "companyRelationshipId"='${relationshipId}' and "periodLabel"='${thisMonth}';`,
   );
-  const invoiceBankAfterEdit = psql(`select "bankName" from "Invoice" where id='${invoiceIdForBank}';`);
-  log("請求書側で編集した振込先がその請求書に保存される", invoiceBankAfterEdit === "この取引先専用銀行");
-  const companyBankAfterInvoiceEdit = psql(`select "bankName" from "Company" where id='${companyId}';`);
+  const addAccount = async (bank, number, holder) => {
+    await bankSelect.selectOption("__add__");
+    const dialog = admin.getByRole("dialog", { name: "振込先を追加" });
+    await dialog.getByLabel("銀行名（必須）").fill(bank);
+    await dialog.getByLabel("支店名").fill("本店");
+    await dialog.getByLabel("口座番号（必須）").fill(number);
+    await dialog.getByLabel("口座名義（必須）").fill(holder);
+    await dialog.getByRole("button", { name: "追加してこの請求書で使う" }).click();
+    await dialog.waitFor({ state: "detached" });
+    await admin.waitForTimeout(800);
+  };
+  await addAccount("テスト銀行", "1234567", "ﾌﾘｺﾍﾟ ｶﾌﾞｶﾌﾞ");
+  log("追加した振込先が登録される", psql(`select count(*) from "CompanyBankAccount" where "companyId"='${companyId}';`) === "1");
   log(
-    "請求書側の編集は会社設定（他の請求書のデフォルト）には影響しない",
-    companyBankAfterInvoiceEdit === "テスト銀行",
+    "追加した振込先がこの請求書の振込先になる",
+    psql(`select "bankName" || '|' || "branchName" || '|' || "accountType" || '|' || "accountNumber" from "Invoice" where id='${invoiceIdForBank}';`) ===
+      "テスト銀行|本店|普通|1234567",
   );
+  await addAccount("この取引先専用銀行", "9999999", "ｾﾝﾖｳ");
+  log("2件目を追加すると、そちらが選ばれる", (await selectedText())?.startsWith("この取引先専用銀行"));
+
+  // 載せない → また選ぶ
+  await bankSelect.selectOption({ label: "振込先を載せない" });
+  await admin.waitForTimeout(800);
+  log("「振込先を載せない」で請求書の振込先が空になる", psql(`select coalesce("bankName", '') || coalesce("accountNumber", '') from "Invoice" where id='${invoiceIdForBank}';`) === "");
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const pdfText = async (url) => {
+    const res = await admin.request.get(url);
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(await res.body()) }).promise;
+    return (await (await doc.getPage(1)).getTextContent()).items.map((it) => it.str).join("");
+  };
+  log("載せないときはPDFに「お振込先」が出ない", !(await pdfText(`http://localhost:3000/api/invoices/${invoiceIdForBank}/pdf`)).includes("お振込先"));
+  await bankSelect.selectOption({ label: "この取引先専用銀行 本店 普通 9999999 ｾﾝﾖｳ" });
+  await admin.waitForTimeout(800);
+  const invoiceBankAfterEdit = psql(`select "bankName" from "Invoice" where id='${invoiceIdForBank}';`);
+  log("登録済みの振込先を選ぶと請求書に入る", invoiceBankAfterEdit === "この取引先専用銀行");
+  log("選んだ振込先がPDFに出る", (await pdfText(`http://localhost:3000/api/invoices/${invoiceIdForBank}/pdf`)).includes("この取引先専用銀行"));
+
+  // 登録の削除：請求書に入っている振込先はそのまま
+  await admin.getByRole("button", { name: "登録した振込先の管理" }).click();
+  const manage = admin.getByRole("dialog", { name: "登録した振込先" });
+  await manage.locator("li", { hasText: "この取引先専用銀行" }).getByRole("button", { name: "削除" }).click();
+  await admin.waitForTimeout(800);
+  await manage.getByRole("button", { name: "閉じる" }).click();
+  log("登録を削除できる", psql(`select count(*) from "CompanyBankAccount" where "companyId"='${companyId}';`) === "1");
+  log("削除しても請求書の振込先は残る", psql(`select "bankName" from "Invoice" where id='${invoiceIdForBank}';`) === "この取引先専用銀行");
+  log("削除した振込先は「この請求書の振込先」として表示される", (await selectedText())?.includes("（この請求書の振込先）"));
 
   // custom line this month (will be carried over to next month with hours=0)
   await admin.getByRole("button", { name: "＋追加" }).click();
@@ -188,8 +207,8 @@ try {
   log("引き継がれた項目の数量は0になっている", carriedHoursValue === "0");
   log("翌月を初めて開くと前月の備考が引き継がれる", (await admin.getByLabel("備考").inputValue()) === "前月の備考（持ち越しテスト）");
   log(
-    "翌月を初めて開くと前月の振込先が引き継がれる（会社設定ではなく前月の値）",
-    (await admin.getByLabel("銀行名").inputValue()) === "前月の銀行" && (await admin.getByLabel("口座番号").inputValue()) === "7654321",
+    "翌月を初めて開くと前月の振込先が引き継がれる（登録済みの振込先ではなく前月の値）",
+    psql(`select "bankName" || '|' || "accountNumber" from "Invoice" where "periodLabel"='${monthToOpen}' and "companyRelationshipId"='${relationshipId}';`) === "前月の銀行|7654321",
   );
   log(
     "PDFの載せ方も前月から引き継がれる",
@@ -200,6 +219,17 @@ try {
       `where i."periodLabel"='${monthToOpen}' and i."companyRelationshipId"='${relationshipId}' and il.description='前月の会場使用料';`,
   );
   log("引き継がれた項目の単価は前月と同じ（2000）", carriedLine === "2000");
+
+  // 前の月の請求書が無い依頼主は、最初に登録した振込先で始まる
+  const rel2 = psql(
+    `with ins as (insert into "CompanyRelationship" (id, "ownerCompanyId", "agencyCompanyId", "proxyName", status, "createdAt") values (gen_random_uuid()::text, '${companyId}', '${companyId}', '振込先確認取引先2', 'ACTIVE', now()) returning id) select id from ins;`,
+  );
+  await admin.goto(`http://localhost:3000/company/invoices?month=${thisMonth}&client=${rel2}`);
+  await admin.waitForTimeout(600);
+  log(
+    "初めての依頼主の請求書は、最初に登録した振込先で始まる",
+    psql(`select "bankName" from "Invoice" where "companyRelationshipId"='${rel2}';`) === "テスト銀行",
+  );
 
   console.log(process.exitCode ? "INVOICE BANK INFO / CARRYOVER SMOKE TEST HAD FAILURES" : "INVOICE BANK INFO / CARRYOVER SMOKE TEST PASSED");
 } catch (err) {

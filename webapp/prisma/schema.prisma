@@ -153,6 +153,7 @@ model Company {
   shiftRequests        ShiftRequest[]
   salarySlips          SalarySlip[]
   issuedInvoices       Invoice[]
+  bankAccounts         CompanyBankAccount[]
   teeLedgerEntries     TeeLedgerEntry[]
   bankTransferRequests BankTransferRequest[]
   stripeCharges        StripeCharge[]
@@ -1276,6 +1277,24 @@ model Invoice {
   issues              InvoiceIssue[]
 
   @@unique([issuingCompanyId, companyRelationshipId, periodLabel])
+}
+
+// 請求書に載せる振込先（会社で何件でも登録しておき、請求書ごとに選ぶ）。
+// 選んだ時点の内容を請求書（Invoice.bankName等）に写すので、ここで消しても
+// 作成済み・発行済みの請求書の振込先は変わらない。
+model CompanyBankAccount {
+  id                String   @id @default(cuid())
+  companyId         String
+  bankName          String
+  branchName        String?
+  accountType       String?
+  accountNumber     String
+  accountHolderName String
+  createdAt         DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
 }
 
 model InvoiceLine {

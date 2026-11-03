@@ -8,7 +8,6 @@ import {
   updateCompanyAddressAction,
   updateCompanyPhoneNumberAction,
   updateCompanyNotificationEmailAction,
-  updateCompanyBankInfoAction,
   updateCompanySealAction,
   updateCompanySealOpacityAction,
   setMemberCanWorkShiftsAction,
@@ -110,11 +109,6 @@ export function SettingsView({
   address,
   phoneNumber,
   notificationEmail,
-  bankName,
-  branchName,
-  accountType,
-  accountNumber,
-  accountHolderName,
   sealImageDataUrl,
   sealOpacity,
   admins,
@@ -135,11 +129,6 @@ export function SettingsView({
   address: string;
   phoneNumber: string;
   notificationEmail: string;
-  bankName: string;
-  branchName: string;
-  accountType: string;
-  accountNumber: string;
-  accountHolderName: string;
   sealImageDataUrl: string | null;
   sealOpacity: number;
   admins: Admin[];
@@ -202,11 +191,6 @@ export function SettingsView({
             address={address}
             phoneNumber={phoneNumber}
             notificationEmail={notificationEmail}
-            bankName={bankName}
-            branchName={branchName}
-            accountType={accountType}
-            accountNumber={accountNumber}
-            accountHolderName={accountHolderName}
           />
           <SealSection companyName={companyName} sealImageDataUrl={sealImageDataUrl} sealOpacity={sealOpacity} />
           <div id="admins" className="scroll-mt-24">
@@ -946,22 +930,12 @@ function CompanyInfoSection({
   address,
   phoneNumber,
   notificationEmail,
-  bankName,
-  branchName,
-  accountType,
-  accountNumber,
-  accountHolderName,
 }: {
   companyName: string;
   invoiceRegistrationNumber: string;
   address: string;
   phoneNumber: string;
   notificationEmail: string;
-  bankName: string;
-  branchName: string;
-  accountType: string;
-  accountNumber: string;
-  accountHolderName: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(companyName);
@@ -969,11 +943,6 @@ function CompanyInfoSection({
   const [addressValue, setAddressValue] = useState(address);
   const [phoneValue, setPhoneValue] = useState(phoneNumber);
   const [notificationEmailValue, setNotificationEmailValue] = useState(notificationEmail);
-  const [bankNameValue, setBankNameValue] = useState(bankName);
-  const [branchNameValue, setBranchNameValue] = useState(branchName);
-  const [accountTypeValue, setAccountTypeValue] = useState(accountType);
-  const [accountNumberValue, setAccountNumberValue] = useState(accountNumber);
-  const [accountHolderNameValue, setAccountHolderNameValue] = useState(accountHolderName);
   const [pending, startTransition] = useTransition();
 
   if (!editing) {
@@ -1000,22 +969,6 @@ function CompanyInfoSection({
             <div>
               <p className="text-xs text-muted">通知メールアドレス</p>
               <p className="font-medium">{notificationEmailValue || "未設定（通知メールは送信されません）"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted">請求書の振込先（デフォルト）</p>
-              <p className="font-medium">
-                {bankNameValue || accountNumberValue ? (
-                  <>
-                    {bankNameValue}
-                    {branchNameValue ? ` ${branchNameValue}` : ""}
-                    {accountTypeValue ? ` ${accountTypeValue}` : ""}
-                    {accountNumberValue ? ` ${accountNumberValue}` : ""}
-                    {accountHolderNameValue ? ` ${accountHolderNameValue}` : ""}
-                  </>
-                ) : (
-                  "未登録"
-                )}
-              </p>
             </div>
           </div>
           <button
@@ -1079,62 +1032,6 @@ function CompanyInfoSection({
             className="rounded-lg border border-border px-3 py-2 text-sm"
           />
         </label>
-        <div className="mt-2 border-t border-border pt-3">
-          <p className="mb-1 text-xs font-semibold text-muted">請求書の振込先（デフォルト）</p>
-          <p className="mb-2 text-xs text-muted">
-            新しく請求書を作成した時の初期値です。依頼主ごとに異なる場合は、各請求書の編集画面で個別に変更できます（ここを変更しても既存の請求書には影響しません）。
-          </p>
-          <div className="flex flex-col gap-3">
-            <label className="flex flex-col gap-1 text-xs">
-              銀行名
-              <input
-                type="text"
-                value={bankNameValue}
-                onChange={(e) => setBankNameValue(e.target.value)}
-                placeholder="例：〇〇銀行"
-                className="rounded-lg border border-border px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs">
-              支店名
-              <input
-                type="text"
-                value={branchNameValue}
-                onChange={(e) => setBranchNameValue(e.target.value)}
-                placeholder="例：〇〇支店"
-                className="rounded-lg border border-border px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs">
-              口座種別
-              <input
-                type="text"
-                value={accountTypeValue}
-                onChange={(e) => setAccountTypeValue(e.target.value)}
-                placeholder="例：普通"
-                className="rounded-lg border border-border px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs">
-              口座番号
-              <input
-                type="text"
-                value={accountNumberValue}
-                onChange={(e) => setAccountNumberValue(e.target.value)}
-                className="rounded-lg border border-border px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs">
-              口座名義
-              <input
-                type="text"
-                value={accountHolderNameValue}
-                onChange={(e) => setAccountHolderNameValue(e.target.value)}
-                className="rounded-lg border border-border px-3 py-2 text-sm"
-              />
-            </label>
-          </div>
-        </div>
         <div className="flex gap-2">
           <button
             type="button"
@@ -1146,13 +1043,6 @@ function CompanyInfoSection({
                 await updateCompanyAddressAction(addressValue);
                 await updateCompanyPhoneNumberAction(phoneValue);
                 await updateCompanyNotificationEmailAction(notificationEmailValue);
-                await updateCompanyBankInfoAction({
-                  bankName: bankNameValue,
-                  branchName: branchNameValue,
-                  accountType: accountTypeValue,
-                  accountNumber: accountNumberValue,
-                  accountHolderName: accountHolderNameValue,
-                });
                 setEditing(false);
               })
             }

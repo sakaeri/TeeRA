@@ -492,30 +492,6 @@ export async function updateCompanySealOpacityAction(sealOpacity: number) {
   revalidatePath("/company/settings");
 }
 
-export async function updateCompanyBankInfoAction(bankInfo: {
-  bankName: string;
-  branchName: string;
-  accountType: string;
-  accountNumber: string;
-  accountHolderName: string;
-}) {
-  const { membership } = await requireCompanyAdminOrEditor();
-  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
-
-  await prisma.company.update({
-    where: { id: membership.companyId },
-    data: {
-      bankName: bankInfo.bankName.trim() || null,
-      branchName: bankInfo.branchName.trim() || null,
-      accountType: bankInfo.accountType.trim() || null,
-      accountNumber: bankInfo.accountNumber.trim() || null,
-      accountHolderName: bankInfo.accountHolderName.trim() || null,
-    },
-  });
-  revalidatePath("/company/settings");
-  revalidatePath("/company/invoices");
-}
-
 // 兼務フラグの切り替え（管理者/編集者が自分もシフトに入って稼働するか）。
 export async function setMemberCanWorkShiftsAction(targetUserId: string, canWorkShifts: boolean) {
   const { membership } = await requireCompanyAdminOrEditor();

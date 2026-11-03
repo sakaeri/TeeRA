@@ -8,7 +8,9 @@ import {
   setDueDateAction,
   setNoteAction,
   setPdfLayoutAction,
-  setBankInfoAction,
+  selectInvoiceBankAccountAction,
+  addBankAccountAction,
+  deleteBankAccountAction,
   setInvoiceRegistrationNumberAction,
   issueInvoiceAction,
   reopenInvoiceForEditAction,
@@ -31,6 +33,30 @@ type Totals = {
   total: number;
 };
 
+type BankAccount = {
+  id: string;
+  bankName: string;
+  branchName: string;
+  accountType: string;
+  accountNumber: string;
+  accountHolderName: string;
+};
+type BankFields = Omit<BankAccount, "id">;
+
+function bankLabel(a: BankFields) {
+  return [a.bankName, a.branchName, a.accountType, a.accountNumber, a.accountHolderName].filter(Boolean).join(" ");
+}
+
+function sameBank(a: BankFields, b: BankFields) {
+  return (
+    a.bankName === b.bankName &&
+    a.branchName === b.branchName &&
+    a.accountType === b.accountType &&
+    a.accountNumber === b.accountNumber &&
+    a.accountHolderName === b.accountHolderName
+  );
+}
+
 type UnresolvedShift = { shiftId: string; date: string; staffName: string; taskName: string | null };
 
 const STATUS_LABEL: Record<string, string> = { DRAFT: "下書き", ISSUED: "発行済み" };
@@ -41,7 +67,10 @@ export function InvoiceEditor({
   clientRelationshipId,
   willUseFreeQuota,
   pdfQuota,
+  bankAccounts = [],
 }: {
+  // 登録済みの振込先（請求書ごとに選ぶ）
+  bankAccounts?: BankAccount[];
   // 単価が無いときに、その依頼主の「単価」タブを開くため
   clientRelationshipId?: string;
   invoice: {
@@ -71,11 +100,6 @@ export function InvoiceEditor({
   const [dueDate, setDueDateState] = useState(invoice.dueDate);
   const [note, setNoteState] = useState(invoice.note);
   const [regNumber, setRegNumber] = useState(invoice.invoiceRegistrationNumber);
-  const [bankName, setBankName] = useState(invoice.bankName);
-  const [branchName, setBranchName] = useState(invoice.branchName);
-  const [accountType, setAccountType] = useState(invoice.accountType);
-  const [accountNumber, setAccountNumber] = useState(invoice.accountNumber);
-  const [accountHolderName, setAccountHolderName] = useState(invoice.accountHolderName);
   const [showIssueConfirm, setShowIssueConfirm] = useState(false);
   const [showAddLineModal, setShowAddLineModal] = useState(false);
   // 押したらすぐ切り替わって見えるように、画面側でも持っておく
@@ -83,15 +107,6 @@ export function InvoiceEditor({
   const [attachWorkRecord, setAttachWorkRecord] = useState(invoice.attachWorkRecord);
 
   const isEditable = invoice.status === "DRAFT";
-
-  // 振込先は5項目まとめて1つのアクションで保存する（依頼主ごとに異なり
-  // うるため、会社設定とは違いこの請求書だけの値として独立して持つ）。
-  function saveBankInfo() {
-    if (!isEditable) return;
-    startTransition(() =>
-      setBankInfoAction(invoice.id, { bankName, branchName, accountType, accountNumber, accountHolderName }),
-    );
-  }
 
   // 同月内の再発行、および無料枠内の発行は確認を挟まずそのまま発行する。
   // Teeを実際に課金する時だけ確認ダイアログを出す（無料なのに確認を
@@ -240,6 +255,97 @@ export function InvoiceEditor({
       </section>
 
       <section className="rounded-2xl border border-border bg-white/60 p-6">
+        <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">消費税区分</h2>
+        {invoice.totals.brackets.map((b) => (
+          <div key={b.rate} className="flex justify-between border-b border-border/60 py-1 text-sm">
+            <span>{b.rate === 0 ? "対象外" : `${b.rate}%対象`}</span>
+            <span>
+              小計 {b.subtotal}円 ／ 消費税 {b.tax}円
+            </span>
+          </div>
+        ))}
+        {!invoice.registered ? (
+          <p className="mt-2 text-xs text-red-600">登録なし（適格請求書発行事業者登録なし）— 税抜きで発行されます。</p>
+        ) : null}
+        <div className="mt-3 flex flex-col gap-1 border-t border-border pt-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            小計 {invoice.totals.subtotalAll.toLocaleString()}円 ／ 消費税合計 {invoice.totals.taxAll.toLocaleString()}円
+          </span>
+          <span className="text-lg font-bold text-primary">合計金額 {invoice.totals.total.toLocaleString()}円</span>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-white/60 p-6">
+        <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">請求書情報</h2>
+        <div className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-xs">
+            インボイス登録番号
+            <input
+              type="text"
+              value={regNumber}
+              disabled={!isEditable}
+              onChange={(e) => setRegNumber(e.target.value)}
+              onBlur={() => {
+                if (isEditable) startTransition(() => setInvoiceRegistrationNumberAction(invoice.id, regNumber));
+              }}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            支払期限（必須）
+            <input
+              type="date"
+              value={dueDate}
+              disabled={!isEditable}
+              onChange={(e) => setDueDateState(e.target.value)}
+              onBlur={() => {
+                if (isEditable && dueDate) startTransition(() => setDueDateAction(invoice.id, dueDate));
+              }}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            備考
+            <textarea
+              value={note}
+              disabled={!isEditable}
+              onChange={(e) => setNoteState(e.target.value)}
+              onBlur={() => {
+                if (isEditable) startTransition(() => setNoteAction(invoice.id, note));
+              }}
+              rows={2}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm"
+            />
+          </label>
+        </div>
+
+        <BankAccountPicker
+          invoiceId={invoice.id}
+          isEditable={isEditable}
+          accounts={bankAccounts}
+          current={{
+            bankName: invoice.bankName,
+            branchName: invoice.branchName,
+            accountType: invoice.accountType,
+            accountNumber: invoice.accountNumber,
+            accountHolderName: invoice.accountHolderName,
+          }}
+        />
+      </section>
+
+      {showAddLineModal ? (
+        <AddInvoiceLineModal
+          onClose={() => setShowAddLineModal(false)}
+          onSubmit={(fields) =>
+            startTransition(async () => {
+              await addCustomLineAction(invoice.id, fields);
+              setShowAddLineModal(false);
+            })
+          }
+        />
+      ) : null}
+
+      <section className="rounded-2xl border-2 border-primary bg-white/60 p-6">
         <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">PDFの載せ方</h2>
         <p className="mb-1 text-xs text-muted">明細</p>
         <div role="radiogroup" aria-label="明細の載せ方" className="mb-1 flex gap-2">
@@ -297,150 +403,6 @@ export function InvoiceEditor({
             見本のPDFを見る
           </a>
         ) : null}
-      </section>
-
-      {showAddLineModal ? (
-        <AddInvoiceLineModal
-          onClose={() => setShowAddLineModal(false)}
-          onSubmit={(fields) =>
-            startTransition(async () => {
-              await addCustomLineAction(invoice.id, fields);
-              setShowAddLineModal(false);
-            })
-          }
-        />
-      ) : null}
-
-      <section className="rounded-2xl border border-border bg-white/60 p-6">
-        <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">消費税区分</h2>
-        {invoice.totals.brackets.map((b) => (
-          <div key={b.rate} className="flex justify-between border-b border-border/60 py-1 text-sm">
-            <span>{b.rate === 0 ? "対象外" : `${b.rate}%対象`}</span>
-            <span>
-              小計 {b.subtotal}円 ／ 消費税 {b.tax}円
-            </span>
-          </div>
-        ))}
-        {!invoice.registered ? (
-          <p className="mt-2 text-xs text-red-600">登録なし（適格請求書発行事業者登録なし）— 税抜きで発行されます。</p>
-        ) : null}
-      </section>
-
-      <section className="rounded-2xl border border-border bg-white/60 p-6">
-        <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">請求書情報</h2>
-        <div className="flex flex-col gap-3">
-          <label className="flex flex-col gap-1 text-xs">
-            インボイス登録番号
-            <input
-              type="text"
-              value={regNumber}
-              disabled={!isEditable}
-              onChange={(e) => setRegNumber(e.target.value)}
-              onBlur={() => {
-                if (isEditable) startTransition(() => setInvoiceRegistrationNumberAction(invoice.id, regNumber));
-              }}
-              className="rounded-lg border border-border px-2 py-1.5 text-sm"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs">
-            支払期限（必須）
-            <input
-              type="date"
-              value={dueDate}
-              disabled={!isEditable}
-              onChange={(e) => setDueDateState(e.target.value)}
-              onBlur={() => {
-                if (isEditable && dueDate) startTransition(() => setDueDateAction(invoice.id, dueDate));
-              }}
-              className="rounded-lg border border-border px-2 py-1.5 text-sm"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs">
-            備考
-            <textarea
-              value={note}
-              disabled={!isEditable}
-              onChange={(e) => setNoteState(e.target.value)}
-              onBlur={() => {
-                if (isEditable) startTransition(() => setNoteAction(invoice.id, note));
-              }}
-              rows={2}
-              className="rounded-lg border border-border px-2 py-1.5 text-sm"
-            />
-          </label>
-        </div>
-
-        <div className="mt-4 border-t border-border pt-3">
-          {/* 振込先は依頼主ごとに異なりうるため、会社設定の値を初期値として
-              コピーしつつ、この請求書だけで独立して編集できる。 */}
-          <p className="mb-2 text-xs font-semibold text-muted">振込先</p>
-          <div className="flex flex-col gap-3">
-            <label className="flex flex-col gap-1 text-xs">
-              銀行名
-              <input
-                type="text"
-                value={bankName}
-                disabled={!isEditable}
-                onChange={(e) => setBankName(e.target.value)}
-                onBlur={saveBankInfo}
-                className="rounded-lg border border-border px-2 py-1.5 text-sm"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs">
-              支店名
-              <input
-                type="text"
-                value={branchName}
-                disabled={!isEditable}
-                onChange={(e) => setBranchName(e.target.value)}
-                onBlur={saveBankInfo}
-                className="rounded-lg border border-border px-2 py-1.5 text-sm"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs">
-              口座種別
-              <input
-                type="text"
-                value={accountType}
-                disabled={!isEditable}
-                onChange={(e) => setAccountType(e.target.value)}
-                onBlur={saveBankInfo}
-                className="rounded-lg border border-border px-2 py-1.5 text-sm"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs">
-              口座番号
-              <input
-                type="text"
-                value={accountNumber}
-                disabled={!isEditable}
-                onChange={(e) => setAccountNumber(e.target.value)}
-                onBlur={saveBankInfo}
-                className="rounded-lg border border-border px-2 py-1.5 text-sm"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs">
-              口座名義
-              <input
-                type="text"
-                value={accountHolderName}
-                disabled={!isEditable}
-                onChange={(e) => setAccountHolderName(e.target.value)}
-                onBlur={saveBankInfo}
-                className="rounded-lg border border-border px-2 py-1.5 text-sm"
-              />
-            </label>
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border-2 border-primary bg-white/60 p-6">
-        <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
-          <span>
-            小計 {invoice.totals.subtotalAll}円 ／ 消費税合計 {invoice.totals.taxAll}円
-          </span>
-          <span className="text-lg font-bold text-primary">合計金額 {invoice.totals.total}円</span>
-        </div>
 
         {isEditable ? (
           <div className="mt-4 flex flex-col gap-2">
@@ -607,6 +569,202 @@ function AddInvoiceLineModal({
             追加する
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+const NONE = "__none__";
+const ADD = "__add__";
+const CURRENT = "__current__";
+
+// 請求書の振込先：登録済みの振込先から選ぶ／載せない／＋振込先を追加。
+// 選んだ内容は請求書に写す（登録を消しても、この請求書の振込先は残る）。
+function BankAccountPicker({
+  invoiceId,
+  isEditable,
+  accounts,
+  current,
+}: {
+  invoiceId: string;
+  isEditable: boolean;
+  accounts: BankAccount[];
+  current: BankFields;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [showAdd, setShowAdd] = useState(false);
+  const [showManage, setShowManage] = useState(false);
+  const isEmpty = !current.bankName && !current.accountNumber && !current.accountHolderName;
+  const matched = accounts.find((a) => sameBank(a, current));
+  // 登録を消した振込先や、以前に手で入れた振込先は「この請求書の振込先」として出す
+  const value = isEmpty ? NONE : (matched?.id ?? CURRENT);
+  const [selected, setSelected] = useState(value);
+  const [prevValue, setPrevValue] = useState(value);
+  if (prevValue !== value) {
+    setPrevValue(value);
+    setSelected(value);
+  }
+
+  return (
+    <div className="mt-4 border-t border-border pt-3">
+      <label className="flex flex-col gap-1 text-xs">
+        振込先
+        <select
+          aria-label="振込先"
+          value={selected}
+          disabled={!isEditable || pending}
+          onChange={(e) => {
+            const next = e.target.value;
+            if (next === ADD) {
+              setShowAdd(true);
+              return;
+            }
+            if (next === CURRENT) return;
+            setSelected(next);
+            startTransition(() => selectInvoiceBankAccountAction(invoiceId, next === NONE ? null : next));
+          }}
+          className="rounded-lg border border-border bg-white px-2 py-2 text-sm"
+        >
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {bankLabel(a)}
+            </option>
+          ))}
+          {value === CURRENT ? <option value={CURRENT}>{bankLabel(current)}（この請求書の振込先）</option> : null}
+          <option value={NONE}>振込先を載せない</option>
+          {isEditable ? <option value={ADD}>＋振込先を追加</option> : null}
+        </select>
+      </label>
+      <p className="mt-1 text-xs text-muted">
+        {selected === NONE
+          ? "PDFに「お振込先」の欄を出しません（契約で振込先が決まっている場合など）。"
+          : "登録した振込先から選びます。翌月の請求書は、ここで選んだ振込先で始まります。"}
+      </p>
+      {isEditable && accounts.length > 0 ? (
+        <button type="button" onClick={() => setShowManage(true)} className="mt-1 text-xs font-semibold text-primary underline">
+          登録した振込先の管理
+        </button>
+      ) : null}
+
+      {showAdd ? (
+        <AddBankAccountModal
+          pending={pending}
+          onClose={() => setShowAdd(false)}
+          onSubmit={(input) =>
+            startTransition(async () => {
+              await addBankAccountAction(invoiceId, input);
+              setShowAdd(false);
+            })
+          }
+        />
+      ) : null}
+
+      {showManage ? (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center" onClick={() => setShowManage(false)}>
+          <div
+            role="dialog"
+            aria-label="登録した振込先"
+            className="w-full max-w-md rounded-t-2xl bg-white p-5 sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-serif-jp text-base font-bold text-primary">登録した振込先</h3>
+              <button type="button" aria-label="閉じる" onClick={() => setShowManage(false)} className="text-muted">
+                ✕
+              </button>
+            </div>
+            <p className="mb-3 text-xs text-muted">削除しても、作成済み・発行済みの請求書の振込先は変わりません。</p>
+            <ul className="flex flex-col gap-2">
+              {accounts.map((a) => (
+                <li key={a.id} className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm">
+                  <span className="min-w-0 break-all">{bankLabel(a)}</span>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => startTransition(() => deleteBankAccountAction(invoiceId, a.id))}
+                    className="shrink-0 text-xs font-semibold text-red-600 disabled:opacity-60"
+                  >
+                    削除
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AddBankAccountModal({
+  pending,
+  onClose,
+  onSubmit,
+}: {
+  pending: boolean;
+  onClose: () => void;
+  onSubmit: (input: BankFields) => void;
+}) {
+  const [form, setForm] = useState<BankFields>({
+    bankName: "",
+    branchName: "",
+    accountType: "普通",
+    accountNumber: "",
+    accountHolderName: "",
+  });
+  const canSubmit = form.bankName.trim() && form.accountNumber.trim() && form.accountHolderName.trim();
+  const field = (key: keyof BankFields, label: string, placeholder?: string) => (
+    <label className="flex flex-col gap-1 text-xs">
+      {label}
+      <input
+        type="text"
+        value={form[key]}
+        placeholder={placeholder}
+        onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+        className="rounded-lg border border-border px-3 py-2 text-sm"
+      />
+    </label>
+  );
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-label="振込先を追加"
+        className="w-full max-w-md rounded-t-2xl bg-white p-5 sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-serif-jp text-base font-bold text-primary">振込先を追加</h3>
+          <button type="button" aria-label="閉じる" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <div className="flex flex-col gap-3">
+          {field("bankName", "銀行名（必須）", "例：〇〇銀行")}
+          {field("branchName", "支店名", "例：〇〇支店")}
+          <label className="flex flex-col gap-1 text-xs">
+            口座種別
+            <select
+              value={form.accountType}
+              onChange={(e) => setForm((f) => ({ ...f, accountType: e.target.value }))}
+              className="rounded-lg border border-border bg-white px-3 py-2 text-sm"
+            >
+              <option value="普通">普通</option>
+              <option value="当座">当座</option>
+            </select>
+          </label>
+          {field("accountNumber", "口座番号（必須）")}
+          {field("accountHolderName", "口座名義（必須）")}
+        </div>
+        <button
+          type="button"
+          disabled={pending || !canSubmit}
+          onClick={() => onSubmit(form)}
+          className="mt-4 w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        >
+          追加してこの請求書で使う
+        </button>
       </div>
     </div>
   );

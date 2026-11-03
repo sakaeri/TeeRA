@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManageAny, isCompanyScopeAdmin, isLeaderOnly } from "@/lib/auth/permissions";
 import { listClients } from "@/lib/domain/relationships";
-import { getOrCreateInvoice, computeInvoiceTotals, listInvoicesForCompany } from "@/lib/domain/invoicing";
+import { getOrCreateInvoice, computeInvoiceTotals, listInvoicesForCompany, listBankAccounts } from "@/lib/domain/invoicing";
 import { pdfQuotaRemaining } from "@/lib/domain/plans";
 import { prisma } from "@/lib/prisma";
 import { InvoiceEditor } from "@/components/company/InvoiceEditor";
@@ -131,6 +131,7 @@ export default async function InvoicesPage({
     accessibleClientIds.has(inv.companyRelationshipId),
   );
   const pdfQuota = await pdfQuotaRemaining(membership.companyId);
+  const bankAccounts = invoiceData ? await listBankAccounts(membership.companyId) : [];
   const draftInvoices = invoicesThisMonth.filter((inv) => inv.status !== "ISSUED");
   const issuedInvoices = invoicesThisMonth.filter((inv) => inv.status === "ISSUED");
   // ＋新しく作成の選択肢は、この月にまだ何も無い依頼主だけに絞る
@@ -164,6 +165,14 @@ export default async function InvoicesPage({
             invoice={invoiceData}
             clientName={selectedClientName}
             clientRelationshipId={companyRelationshipId}
+            bankAccounts={bankAccounts.map((a) => ({
+              id: a.id,
+              bankName: a.bankName,
+              branchName: a.branchName ?? "",
+              accountType: a.accountType ?? "",
+              accountNumber: a.accountNumber,
+              accountHolderName: a.accountHolderName,
+            }))}
             willUseFreeQuota={pdfQuota.unlimited || (pdfQuota.quota > 0 && pdfQuota.remaining > 0)}
             pdfQuota={
               pdfQuota.unlimited || pdfQuota.quota > 0

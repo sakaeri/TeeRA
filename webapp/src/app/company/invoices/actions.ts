@@ -13,6 +13,10 @@ import {
   setNote,
   setPdfLayout,
   setBankInfo,
+  addBankAccount,
+  deleteBankAccount,
+  selectInvoiceBankAccount,
+  type BankAccountInput,
   setInvoiceRegistrationNumber,
   issueInvoice,
   reopenInvoiceForEdit,
@@ -81,6 +85,42 @@ export async function setBankInfoAction(
 ) {
   await assertAccess(invoiceId);
   await setBankInfo(invoiceId, bankInfo);
+  revalidatePath("/company/invoices");
+}
+
+function toInput(a: { bankName: string; branchName: string | null; accountType: string | null; accountNumber: string; accountHolderName: string }): BankAccountInput {
+  return { ...a, branchName: a.branchName ?? "", accountType: a.accountType ?? "" };
+}
+
+// 請求書の振込先を選ぶ（accountId=nullなら「振込先を載せない」）
+export async function selectInvoiceBankAccountAction(invoiceId: string, accountId: string | null) {
+  const { membership, invoice } = await assertAccess(invoiceId);
+  if (invoice.status !== "DRAFT") throw new Error("not_editable");
+  const account = accountId
+    ? await prisma.companyBankAccount.findFirstOrThrow({ where: { id: accountId, companyId: membership.companyId } })
+    : null;
+  await selectInvoiceBankAccount(invoiceId, account ? toInput(account) : null);
+  revalidatePath("/company/invoices");
+}
+
+// 振込先を登録して、そのままこの請求書の振込先にする
+export async function addBankAccountAction(invoiceId: string, input: BankAccountInput) {
+  const { membership, invoice } = await assertAccess(invoiceId);
+  if (invoice.status !== "DRAFT") throw new Error("not_editable");
+  const account = await addBankAccount(membership.companyId, {
+    bankName: String(input.bankName ?? ""),
+    branchName: String(input.branchName ?? ""),
+    accountType: String(input.accountType ?? ""),
+    accountNumber: String(input.accountNumber ?? ""),
+    accountHolderName: String(input.accountHolderName ?? ""),
+  });
+  await selectInvoiceBankAccount(invoiceId, toInput(account));
+  revalidatePath("/company/invoices");
+}
+
+export async function deleteBankAccountAction(invoiceId: string, accountId: string) {
+  const { membership } = await assertAccess(invoiceId);
+  await deleteBankAccount(membership.companyId, accountId);
   revalidatePath("/company/invoices");
 }
 

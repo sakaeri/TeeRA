@@ -109,7 +109,7 @@ try {
   await admin.goto("http://localhost:3000/company/settings");
   await admin.waitForTimeout(800);
   const adminBody = await admin.locator("main").innerText();
-  log("本部は口座・全チームが見える", adminBody.includes("テスト銀行") && adminBody.includes("範囲Bチーム"));
+  log("本部はインボイス番号・全チームが見える（振込先は請求書の画面で選ぶので設定には出ない）", adminBody.includes("T1234567890123") && adminBody.includes("範囲Bチーム"));
 
   console.log(process.exitCode ? "SETTINGS MANAGER SCOPE SMOKE TEST HAD FAILURES" : "SETTINGS MANAGER SCOPE SMOKE TEST PASSED");
 } finally {
