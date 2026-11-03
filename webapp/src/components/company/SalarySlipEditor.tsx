@@ -1,5 +1,6 @@
 "use client";
 
+import { PdfLink } from "@/components/PdfLink";
 import { useEffect, useState, useTransition } from "react";
 import {
   addCustomLineAction,
@@ -214,14 +215,9 @@ export function SalarySlipEditor({
           翌月の明細も、ここで選んだ載せ方で始まります。
         </p>
         {isEditable ? (
-          <a
-            href={`/api/salary-slips/${slip.id}/pdf`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-block text-sm font-semibold text-primary underline"
-          >
+          <PdfLink href={`/api/salary-slips/${slip.id}/pdf`} className="mt-3 inline-block text-sm font-semibold text-primary underline">
             見本のPDFを見る
-          </a>
+          </PdfLink>
         ) : null}
       </section>
 

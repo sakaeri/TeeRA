@@ -244,9 +244,21 @@ try {
       `with ins as (insert into "ContractTemplate" (id, "companyId", title, "employmentType", "workplaceType", "jobDescription", "scheduleType", "wageType", "wageAmount", "paymentClosingDay", "paymentDay", "paymentMethod", "contractPeriodType", "contractStartDate", status, "createdAt", "updatedAt") ` +
         `values (gen_random_uuid()::text, '${companyId}', '委託契約', 'CONTRACTOR', 'INHOUSE', 'キャディ業務', 'FIXED', 'DAILY', 11000, '末日', '翌月15日', '振込', 'INDEFINITE', '2020-01-01', 'LOCKED', now(), now()) returning id) select id from ins;`,
     );
-    psql(
-      `insert into "StaffContract" (id, "templateId", "staffUserId", "wageAmountSnapshot", status, "contractStartDate", "consentedAt", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${tplId}', '${contractorId}', 11000, 'ACTIVE', '2020-01-01', now(), now(), now());`,
+    const scId = psql(
+      `with ins as (insert into "StaffContract" (id, "templateId", "staffUserId", "wageAmountSnapshot", status, "contractStartDate", "consentedAt", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${tplId}', '${contractorId}', 11000, 'ACTIVE', '2020-01-01', now(), now(), now()) returning id) select id from ins;`,
     );
+    psql(`insert into "StaffContractWageVersion" (id, "staffContractId", "wageAmount", "effectiveFrom") values (gen_random_uuid()::text, '${scId}', 11000, '2020-01-01');`);
+    // 日給の勤務を2日分（日付は後の日を先に作る）
+    for (const d of ["03", "02"]) {
+      const sid = psql(
+        `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "taskName", date, "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
+          `values (gen_random_uuid()::text, '${companyId}', '${contractorId}', 'INHOUSE', 'キャディ業務', '${thisMonth}-${d}'::date, false, false, 'CONFIRMED', 'ASSIGN', now(), now()) returning id) select id from ins;`,
+      );
+      psql(
+        `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "clockIn", "clockOut", "breakMinutes", "computedMinutes", "submittedAt", "approvalStatus", "approvedAt", "createdAt", "updatedAt") ` +
+          `values (gen_random_uuid()::text, '${sid}', '${contractorId}', 'WORKED', now() - interval '8 hours', now(), 0, 480, now(), 'APPROVED', now(), now(), now());`,
+      );
+    }
     await admin.goto(`http://localhost:3000/company/payroll?month=${thisMonth}&staff=${contractorId}`);
     await admin.waitForTimeout(1000);
     const deductionLabels = psql(
@@ -255,6 +267,10 @@ try {
     log("業務委託の初めての明細は、控除が「源泉所得税」だけ", deductionLabels === "源泉所得税");
     const contractorSlipId = psql(`select id from "SalarySlip" where "staffUserId"='${contractorId}';`);
     const ctext = await pdfText(`http://localhost:3000/api/salary-slips/${contractorSlipId}/pdf`);
+    log(
+      "日給の勤務も「勤務先（業務）（日給）」で1行にまとまる（2日・22,000円）",
+      ctext.includes("社内（キャディ業務）（日給）") && ctext.includes("11,000円") && ctext.includes("22,000円") && !ctext.includes(`${thisMonth}-02`),
+    );
     log("業務委託のPDFは「支払明細書」で、内訳の見出しは「業務内訳」", ctext.includes("支払明細書") && ctext.includes("業務内訳") && !ctext.includes("勤務内訳"));
   }
 
