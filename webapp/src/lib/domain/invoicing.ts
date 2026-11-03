@@ -4,6 +4,7 @@ import { postLedgerEntry } from "@/lib/domain/wallet";
 import { resolveRateVersion } from "@/lib/domain/contracts";
 import { isWeekendOrHoliday } from "@/lib/holidays";
 import { hasRemainingPdfQuota } from "@/lib/domain/plans";
+import { workRecordRowsForShiftIds } from "@/lib/domain/workRecord";
 
 function monthRange(periodLabel: string) {
   const [year, month] = periodLabel.split("-").map(Number);
@@ -325,6 +326,10 @@ export async function setDueDate(invoiceId: string, dueDate: Date) {
   return prisma.invoice.update({ where: { id: invoiceId }, data: { dueDate } });
 }
 
+export async function setPdfLayout(invoiceId: string, layout: { groupLinesByTask?: boolean; attachWorkRecord?: boolean }) {
+  return prisma.invoice.update({ where: { id: invoiceId }, data: layout });
+}
+
 export async function setNote(invoiceId: string, note: string) {
   return prisma.invoice.update({ where: { id: invoiceId }, data: { note } });
 }
@@ -386,7 +391,7 @@ export async function reopenInvoiceForEdit(invoiceId: string) {
 export async function issueInvoice(params: { invoiceId: string; issuedByUserId: string }) {
   const invoice = await prisma.invoice.findUniqueOrThrow({
     where: { id: params.invoiceId },
-    include: { lines: true, companyRelationship: true, issues: true },
+    include: { lines: { orderBy: { sortOrder: "asc" } }, companyRelationship: true, issues: true },
   });
   if (!invoice.dueDate) throw new Error("due_date_required");
 
@@ -394,6 +399,8 @@ export async function issueInvoice(params: { invoiceId: string; issuedByUserId: 
   const registered = Boolean(invoice.invoiceRegistrationNumberSnapshot);
   const totals = computeInvoiceTotals({ lines: invoice.lines, registered });
   const shiftIds = invoice.lines.map((l) => l.shiftId).filter((id): id is string => Boolean(id));
+  // 実績表も発行時点の内容で固定する（後で報告が直っても、送った請求書と食い違わないように）
+  const workRecord = invoice.attachWorkRecord ? { rows: await workRecordRowsForShiftIds(shiftIds) } : null;
 
   return prisma.$transaction(async (tx) => {
     let countsAgainstQuota = false;
@@ -432,6 +439,8 @@ export async function issueInvoice(params: { invoiceId: string; issuedByUserId: 
           dueDate: invoice.dueDate?.toISOString(),
           note: invoice.note,
           lines: invoice.lines,
+          groupLinesByTask: invoice.groupLinesByTask,
+          workRecord,
           registered,
           invoiceRegistrationNumber: invoice.invoiceRegistrationNumberSnapshot,
           bankName: invoice.bankName,

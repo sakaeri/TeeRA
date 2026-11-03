@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { todayJst, todayJstParts } from "@/lib/date";
 import { CalendarPdfDocument, type CalendarPdfData } from "@/lib/pdf/calendar";
 import { reportDisplay } from "@/lib/workReportDisplay";
+import { isBillableWorkRecord, workRecordRow, workRecordShiftInclude } from "@/lib/domain/workRecord";
 
 export async function GET(request: Request) {
   const { membership } = await requireCompanyAdminOrEditor();
@@ -87,30 +88,12 @@ export async function GET(request: Request) {
         ...(teamId ? { teamId } : {}),
         ...(companyRelationshipId ? { companyRelationshipId } : {}),
       },
-      include: { staff: true, workReport: true, cancellation: true, companyRelationship: { include: { clientCompany: true } } },
+      include: workRecordShiftInclude,
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     });
     data.title = "実績表";
     data.note = "※承認済みの業務報告と、キャンセル料が発生した取消のみを載せています。";
-    data.shifts = actualShifts.flatMap((s): CalendarPdfData["shifts"] => {
-      const base = {
-        date: s.date.toISOString().slice(0, 10),
-        staffName: s.staff.name,
-        startTime: s.startTime,
-        endTime: s.endTime,
-        isAllDay: s.isAllDay,
-        isUndecided: s.isUndecided,
-        clientName: s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? null,
-        taskName: s.taskName,
-      };
-      if (s.cancellation || s.status === "CANCELLED" || s.status === "ON_HOLD") {
-        return (s.cancellation?.feeAmount ?? 0) > 0 ? [{ ...base, timeOverride: "取消（キャンセル料あり）" }] : [];
-      }
-      const report = s.workReport;
-      if (!report || report.outcome !== "WORKED" || report.approvalStatus !== "APPROVED") return [];
-      const shown = reportDisplay(report);
-      return [{ ...base, taskName: shown.reportedTaskName ?? s.taskName, outcome: "WORKED", reportedTimeLabel: shown.reportedTimeLabel }];
-    });
+    data.shifts = actualShifts.filter(isBillableWorkRecord).map(workRecordRow);
   }
 
   const buffer = await renderToBuffer(<CalendarPdfDocument data={data} />);

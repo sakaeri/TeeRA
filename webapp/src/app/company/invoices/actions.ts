@@ -11,6 +11,7 @@ import {
   deleteLine,
   setDueDate,
   setNote,
+  setPdfLayout,
   setBankInfo,
   setInvoiceRegistrationNumber,
   issueInvoice,
@@ -62,6 +63,15 @@ export async function setDueDateAction(invoiceId: string, dueDate: string) {
 export async function setNoteAction(invoiceId: string, note: string) {
   await assertAccess(invoiceId);
   await setNote(invoiceId, note);
+  revalidatePath("/company/invoices");
+}
+
+export async function setPdfLayoutAction(invoiceId: string, layout: { groupLinesByTask?: boolean; attachWorkRecord?: boolean }) {
+  await assertAccess(invoiceId);
+  await setPdfLayout(invoiceId, {
+    groupLinesByTask: typeof layout.groupLinesByTask === "boolean" ? layout.groupLinesByTask : undefined,
+    attachWorkRecord: typeof layout.attachWorkRecord === "boolean" ? layout.attachWorkRecord : undefined,
+  });
   revalidatePath("/company/invoices");
 }
 

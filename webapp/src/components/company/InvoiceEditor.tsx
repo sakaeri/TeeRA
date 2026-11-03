@@ -7,6 +7,7 @@ import {
   deleteLineAction,
   setDueDateAction,
   setNoteAction,
+  setPdfLayoutAction,
   setBankInfoAction,
   setInvoiceRegistrationNumberAction,
   issueInvoiceAction,
@@ -59,6 +60,8 @@ export function InvoiceEditor({
     totals: Totals;
     unresolved: UnresolvedShift[];
     issues: { id: string }[];
+    groupLinesByTask: boolean;
+    attachWorkRecord: boolean;
   };
   clientName: string;
   willUseFreeQuota: boolean;
@@ -75,6 +78,9 @@ export function InvoiceEditor({
   const [accountHolderName, setAccountHolderName] = useState(invoice.accountHolderName);
   const [showIssueConfirm, setShowIssueConfirm] = useState(false);
   const [showAddLineModal, setShowAddLineModal] = useState(false);
+  // 押したらすぐ切り替わって見えるように、画面側でも持っておく
+  const [groupLinesByTask, setGroupLinesByTask] = useState(invoice.groupLinesByTask);
+  const [attachWorkRecord, setAttachWorkRecord] = useState(invoice.attachWorkRecord);
 
   const isEditable = invoice.status === "DRAFT";
 
@@ -230,6 +236,66 @@ export function InvoiceEditor({
               ＋追加
             </button>
           </div>
+        ) : null}
+      </section>
+
+      <section className="rounded-2xl border border-border bg-white/60 p-6">
+        <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">PDFの載せ方</h2>
+        <p className="mb-1 text-xs text-muted">明細</p>
+        <div role="radiogroup" aria-label="明細の載せ方" className="mb-1 flex gap-2">
+          {[
+            { value: true, label: "業務ごとにまとめる" },
+            { value: false, label: "1件ずつ" },
+          ].map((o) => {
+            const selected = groupLinesByTask === o.value;
+            return (
+              <button
+                key={o.label}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                disabled={!isEditable}
+                onClick={() => {
+                  setGroupLinesByTask(o.value);
+                  startTransition(() => setPdfLayoutAction(invoice.id, { groupLinesByTask: o.value }));
+                }}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-60 ${
+                  selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-white text-foreground"
+                }`}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mb-4 text-xs text-muted">
+          {groupLinesByTask
+            ? "業務と単価が同じシフトを1行にまとめ、時間（日給は日数）を合計して載せます。上の一覧は1件ずつのまま直せます。"
+            : "シフト1件ずつを明細に載せます。"}
+        </p>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={attachWorkRecord}
+            disabled={!isEditable}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setAttachWorkRecord(checked);
+              startTransition(() => setPdfLayoutAction(invoice.id, { attachWorkRecord: checked }));
+            }}
+            className="h-4 w-4"
+          />
+          実績表を付ける（2ページ目以降に、この請求書に載ったシフトの日付・スタッフ・時間）
+        </label>
+        {isEditable ? (
+          <a
+            href={`/api/invoices/${invoice.id}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 inline-block text-sm font-semibold text-primary underline"
+          >
+            見本のPDFを見る
+          </a>
         ) : null}
       </section>
 
