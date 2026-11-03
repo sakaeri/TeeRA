@@ -167,9 +167,9 @@ export function SalarySlipDocument({ data }: { data: SalarySlipPdfData }) {
           {data.lines.map((l, i) => (
             <View key={i} style={styles.tableRow}>
               <Text style={styles.tableColDescription}>{l.description}</Text>
-              <Text style={styles.tableColQty}>{l.hours}</Text>
-              <Text style={styles.tableColRate}>{l.rate}円</Text>
-              <Text style={styles.tableColAmount}>{l.amount}円</Text>
+              <Text style={styles.tableColQty}>{Math.round(l.hours * 100) / 100}</Text>
+              <Text style={styles.tableColRate}>{l.rate.toLocaleString()}円</Text>
+              <Text style={styles.tableColAmount}>{l.amount.toLocaleString()}円</Text>
             </View>
           ))}
           {data.paidLeaveDaysUsed > 0 || data.paidLeaveConfigured ? (

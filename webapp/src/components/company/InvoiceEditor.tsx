@@ -1,5 +1,6 @@
 "use client";
 
+import { PdfLink } from "@/components/PdfLink";
 import { useState, useTransition } from "react";
 import {
   addCustomLineAction,
@@ -390,14 +391,9 @@ export function InvoiceEditor({
           実績表を付ける（2ページ目以降に、この請求書に載ったシフトの日付・スタッフ・時間）
         </label>
         {isEditable ? (
-          <a
-            href={`/api/invoices/${invoice.id}/pdf`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-4 inline-block text-sm font-semibold text-primary underline"
-          >
+          <PdfLink href={`/api/invoices/${invoice.id}/pdf`} className="mt-4 inline-block text-sm font-semibold text-primary underline">
             見本のPDFを見る
-          </a>
+          </PdfLink>
         ) : null}
 
         {isEditable ? (

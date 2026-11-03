@@ -101,9 +101,8 @@ export async function resolveWorkplaceNamesByShiftId(shiftIds: string[]): Promis
 
 export type SalarySlipPdfLine = { description: string; hours: number; rate: number; amount: number };
 
-// 時給制のSHIFT行は「勤務先（業務内容）」でまとめて1行に合算する
-// （1日ごとの内訳はPDFでは冗長なため）。日給制は「数量」欄が日数なのか
-// 時間なのか紛らわしくなるため、これまで通り1日＝1行のまま残す。
+// SHIFT行は「勤務先（業務内容）」×単価でまとめて1行に合算する（1日ごとの内訳は
+// PDFでは冗長なため）。日給は「勤務先（業務内容）（日給）」として別の行にし、数量＝日数。
 // CUSTOM行（手動追加分）もそのまま個別に残す。画面上の編集欄（シフトごと
 // に時間を直す一覧）は対象外 — グループ化するのはPDF出力のときだけ。
 // groupShiftLines=false（1件ずつ）のときは、シフト1件ずつを「日付 勤務先（業務内容）」で載せる。
@@ -116,7 +115,13 @@ export function buildSalarySlipPdfLines(
   const result: SalarySlipPdfLine[] = [];
   const groupShiftLines = options.groupShiftLines ?? true;
 
-  for (const line of lines) {
+  // シフトの行は日付順にする（作られた順だと日付がばらばらに並ぶため）
+  const dateOf = (d: string) => d.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? "";
+  const ordered = [...lines].sort((a, b) =>
+    a.kind === "SHIFT" && b.kind === "SHIFT" ? dateOf(a.description).localeCompare(dateOf(b.description)) : 0,
+  );
+
+  for (const line of ordered) {
     if (line.kind !== "SHIFT" || !line.shiftId) {
       result.push({ description: line.description, hours: line.hours, rate: line.rate, amount: line.amount });
       continue;
@@ -131,12 +136,9 @@ export function buildSalarySlipPdfLines(
       result.push({ description, hours: line.hours, rate: line.rate, amount: line.amount });
       continue;
     }
-    if (isDaily) {
-      result.push({ description: line.description, hours: line.hours, rate: line.rate, amount: line.amount });
-      continue;
-    }
+    // 日給も「勤務先（業務内容）（日給）」×単価でまとめる（数量＝日数）
     const workplace = workplaceByShiftId.get(line.shiftId) ?? "社内";
-    const label = taskName ? `${workplace}（${taskName}）` : workplace;
+    const label = `${taskName ? `${workplace}（${taskName}）` : workplace}${isDaily ? DAILY_WAGE_SUFFIX : ""}`;
     const key = `${label}__${line.rate}`;
     const existing = grouped.get(key);
     if (existing) {
