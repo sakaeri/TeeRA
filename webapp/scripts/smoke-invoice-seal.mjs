@@ -105,6 +105,16 @@ try {
     return (await res.body()).toString("latin1");
   };
   log("請求書PDFに印の画像が入る", (await pdf()).includes("/Subtype /Image"));
+  // 件名は「YYYY年M月分 ご請求」
+  {
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const res = await page.request.get(`http://localhost:3000/api/invoices/${invoiceId}/pdf`);
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(await res.body()) }).promise;
+    const content = await (await doc.getPage(1)).getTextContent();
+    const text = content.items.map((it) => it.str).join("");
+    const [yy, mm] = month.split("-").map(Number);
+    log(`件名が「${yy}年${mm}月分 ご請求」`, text.includes(`件名：${yy}年${mm}月分 ご請求`));
+  }
 
   // --- 発行済みは発行時点の印を使う ---
   const snapshot = (withSeal) =>
