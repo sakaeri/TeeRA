@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { computeInvoiceTotals } from "@/lib/domain/invoicing";
 import { todayJst } from "@/lib/date";
 import { type InvoicePdfData } from "@/lib/pdf/invoice";
+import { invoiceLineLayoutFromSnapshot } from "@/lib/invoiceLineGrouping";
 import { renderInvoicePdf, type InvoiceWorkRecord } from "@/lib/pdf/renderInvoicePdf";
 import { workRecordRowsForShiftIds } from "@/lib/domain/workRecord";
 
@@ -57,7 +58,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
       accountHolderName: (snap.accountHolderName as string | null) ?? null,
       lines: snap.lines as InvoicePdfData["lines"],
       // この機能より前に発行したものは、発行した時のまま（1件ずつ・実績表なし）
-      groupByTask: (snap.groupLinesByTask as boolean | undefined) ?? false,
+      lineLayout: invoiceLineLayoutFromSnapshot(snap),
       brackets: snap.brackets as InvoicePdfData["brackets"],
       subtotalAll: snap.subtotalAll as number,
       taxAll: snap.taxAll as number,
@@ -87,7 +88,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
       accountNumber: invoice.accountNumber,
       accountHolderName: invoice.accountHolderName,
       lines: invoice.lines,
-      groupByTask: invoice.groupLinesByTask,
+      lineLayout: invoice.groupLinesByTask ? "TASK" : "STAFF_TASK",
       ...totals,
       watermarked: true,
     };

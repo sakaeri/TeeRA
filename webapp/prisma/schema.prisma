@@ -1265,7 +1265,7 @@ model Invoice {
   // regenerateLinesでその月の承認済み実績としてまた自動生成されてしまう
   // （SalarySlip.excludedShiftIdsと同じ理由）。
   excludedShiftIds                  Json          @default("[]")
-  // PDFの明細を「業務×単価」ごとに1行にまとめる（falseならシフト1件ずつ）
+  // PDFの明細の載せ方：trueは「業務×単価」ごと、falseは「スタッフ×業務×単価」ごと
   groupLinesByTask                  Boolean       @default(true)
   // PDFの2ページ目以降に、この請求書に載ったシフトの実績表を付ける
   attachWorkRecord                  Boolean       @default(true)

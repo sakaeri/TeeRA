@@ -4,6 +4,7 @@ import { listClients } from "@/lib/domain/relationships";
 import { listInvoicesForCompany } from "@/lib/domain/invoicing";
 import { prisma } from "@/lib/prisma";
 import { type InvoicePdfData } from "@/lib/pdf/invoice";
+import { invoiceLineLayoutFromSnapshot } from "@/lib/invoiceLineGrouping";
 import { mergePdfs, renderInvoicePdf, type InvoiceWorkRecord } from "@/lib/pdf/renderInvoicePdf";
 
 export async function GET(request: Request) {
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
       accountNumber: (snap.accountNumber as string | null) ?? null,
       accountHolderName: (snap.accountHolderName as string | null) ?? null,
       lines: snap.lines as InvoicePdfData["lines"],
-      groupByTask: (snap.groupLinesByTask as boolean | undefined) ?? false,
+      lineLayout: invoiceLineLayoutFromSnapshot(snap),
       brackets: snap.brackets as InvoicePdfData["brackets"],
       subtotalAll: snap.subtotalAll as number,
       taxAll: snap.taxAll as number,
