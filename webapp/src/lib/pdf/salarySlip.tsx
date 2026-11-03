@@ -113,6 +113,13 @@ export type SalarySlipPdfData = {
   watermarked: boolean;
 };
 
+// "2026-11-25" → "2026年11月25日"。昔の手入力（「翌月25日」など）はそのまま
+function formatPaymentDay(paymentDay: string | null) {
+  const m = paymentDay?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[1]}年${Number(m[2])}月${Number(m[3])}日`;
+  return paymentDay || "—";
+}
+
 export function SalarySlipDocument({ data }: { data: SalarySlipPdfData }) {
   return (
     <Document>
@@ -145,11 +152,11 @@ export function SalarySlipDocument({ data }: { data: SalarySlipPdfData }) {
 
         <View style={styles.metaBlock}>
           <Text style={styles.metaLine}>発行日: {data.issuedAt}</Text>
-          <Text style={styles.metaLine}>支払日: {data.paymentDay ?? "—"}</Text>
+          <Text style={styles.metaLine}>支払日: {formatPaymentDay(data.paymentDay)}</Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>勤務内訳</Text>
+          <Text style={styles.sectionTitle}>{data.isContractor ? "業務内訳" : "勤務内訳"}</Text>
           <View style={styles.tableHeaderRow}>
             <Text style={[styles.tableHeaderText, styles.tableColDescription]}>内容</Text>
             <Text style={[styles.tableHeaderText, styles.tableColQty]}>数量</Text>
@@ -174,15 +181,20 @@ export function SalarySlipDocument({ data }: { data: SalarySlipPdfData }) {
           ) : null}
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>控除</Text>
-          {data.deductions.map((d) => (
-            <View key={d.id} style={styles.tableRow}>
-              <Text style={styles.tableColDescription}>{d.label}</Text>
-              <Text style={styles.tableColAmount}>{d.amount}円</Text>
-            </View>
-          ))}
-        </View>
+        {/* 金額が0円の控除は載せない（業務委託の社会保険料など、対象外の項目が並ばないように） */}
+        {data.deductions.some((d) => d.amount !== 0) ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>控除</Text>
+            {data.deductions
+              .filter((d) => d.amount !== 0)
+              .map((d) => (
+                <View key={d.id} style={styles.tableRow}>
+                  <Text style={styles.tableColDescription}>{d.label}</Text>
+                  <Text style={styles.tableColAmount}>{d.amount.toLocaleString()}円</Text>
+                </View>
+              ))}
+          </View>
+        ) : null}
 
         <View style={styles.summaryBox}>
           <View style={styles.summaryRow}>

@@ -197,8 +197,18 @@ try {
   };
   const slipPdfUrl = `http://localhost:3000/api/salary-slips/${slipId}/pdf`;
   let text = await pdfText(slipPdfUrl);
-  log("最初は「勤務先・業務ごとにまとめる」が選ばれている", (await admin.getByRole("radio", { name: "勤務先・業務ごとにまとめる" }).getAttribute("aria-checked")) === "true");
+  log("最初は「まとめる」が選ばれている", (await admin.getByRole("radio", { name: "まとめる" }).getAttribute("aria-checked")) === "true");
   log("まとめるときは「社内（レジ業務）」「A社（品出し）」の2行になる", text.includes("社内（レジ業務）") && text.includes("A社（品出し）") && !text.includes(`${thisMonth}-01 社内`));
+
+  log("控除が0円の項目（社会保険料など）はPDFに載らない", !text.includes("社会保険料"));
+
+  // 支払日はカレンダーで選ぶ → PDFは「YYYY年M月D日」
+  const payDate = `${thisMonth}-25`;
+  await admin.getByLabel("支払日", { exact: true }).fill(payDate);
+  await admin.waitForTimeout(800);
+  log("支払日がカレンダーの日付で保存される", psql(`select "paymentDay" from "SalarySlip" where id='${slipId}';`) === payDate);
+  text = await pdfText(slipPdfUrl);
+  log("PDFの支払日は「YYYY年M月D日」", text.includes(`支払日: ${thisMonth.slice(0, 4)}年${Number(thisMonth.slice(5))}月25日`));
 
   // 1件ずつ
   await admin.getByRole("radio", { name: "1件ずつ" }).click();
@@ -219,6 +229,34 @@ try {
     "翌月の明細は前の月の載せ方（1件ずつ）で始まる",
     psql(`select "groupShiftLines" from "SalarySlip" where "staffUserId"='${payrollStaffUserId}' and "targetMonth"='${nextMonth}';`) === "f",
   );
+  log(
+    "翌月の明細の支払日は1か月後の同じ日で始まる",
+    psql(`select "paymentDay" from "SalarySlip" where "staffUserId"='${payrollStaffUserId}' and "targetMonth"='${nextMonth}';`) === `${nextMonth}-25`,
+  );
+
+  // --- 業務委託のスタッフ：初めての明細は控除が「源泉所得税」だけ、PDFは「業務内訳」 ---
+  {
+    const contractorId = psql(
+      `with ins as (insert into "User" (id, email, name, "createdAt", "updatedAt") values (gen_random_uuid()::text, 'contractor-${Date.now()}@example.com', '委託スタッフ', now(), now()) returning id) select id from ins;`,
+    );
+    psql(`insert into "CompanyMembership" (id, "userId", "companyId", role, "createdAt") values (gen_random_uuid()::text, '${contractorId}', '${companyId}', 'STAFF', now());`);
+    const tplId = psql(
+      `with ins as (insert into "ContractTemplate" (id, "companyId", title, "employmentType", "workplaceType", "jobDescription", "scheduleType", "wageType", "wageAmount", "paymentClosingDay", "paymentDay", "paymentMethod", "contractPeriodType", "contractStartDate", status, "createdAt", "updatedAt") ` +
+        `values (gen_random_uuid()::text, '${companyId}', '委託契約', 'CONTRACTOR', 'INHOUSE', 'キャディ業務', 'FIXED', 'DAILY', 11000, '末日', '翌月15日', '振込', 'INDEFINITE', '2020-01-01', 'LOCKED', now(), now()) returning id) select id from ins;`,
+    );
+    psql(
+      `insert into "StaffContract" (id, "templateId", "staffUserId", "wageAmountSnapshot", status, "contractStartDate", "consentedAt", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${tplId}', '${contractorId}', 11000, 'ACTIVE', '2020-01-01', now(), now(), now());`,
+    );
+    await admin.goto(`http://localhost:3000/company/payroll?month=${thisMonth}&staff=${contractorId}`);
+    await admin.waitForTimeout(1000);
+    const deductionLabels = psql(
+      `select string_agg(d->>'label', ',') from "SalarySlip" s, jsonb_array_elements(s.deductions) d where s."staffUserId"='${contractorId}';`,
+    );
+    log("業務委託の初めての明細は、控除が「源泉所得税」だけ", deductionLabels === "源泉所得税");
+    const contractorSlipId = psql(`select id from "SalarySlip" where "staffUserId"='${contractorId}';`);
+    const ctext = await pdfText(`http://localhost:3000/api/salary-slips/${contractorSlipId}/pdf`);
+    log("業務委託のPDFは「支払明細書」で、内訳の見出しは「業務内訳」", ctext.includes("支払明細書") && ctext.includes("業務内訳") && !ctext.includes("勤務内訳"));
+  }
 
   console.log(process.exitCode ? "PAYROLL PDF GROUPING SMOKE TEST HAD FAILURES" : "PAYROLL PDF GROUPING SMOKE TEST PASSED");
 } catch (err) {
