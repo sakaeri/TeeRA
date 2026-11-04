@@ -12,6 +12,13 @@ import {
   isCompanyScopeAdmin,
 } from "@/lib/auth/permissions";
 import { isClientSiteShiftOf } from "@/lib/domain/shifts";
+import {
+  createCompanyAnnouncement,
+  updateCompanyAnnouncement,
+  deleteCompanyAnnouncement,
+  ANNOUNCEMENT_AUDIENCES,
+  type AnnouncementAudience,
+} from "@/lib/domain/companyAnnouncements";
 import { getWorkReportDetail } from "@/lib/domain/workReports";
 import { prisma } from "@/lib/prisma";
 import {
@@ -841,4 +848,76 @@ export async function getWorkReportDetailAction(shiftId: string) {
       : isClientSiteShiftOf(shift, membership.companyId) && isCompanyScopeAdmin(membership);
   if (!allowed) throw new Error("forbidden");
   return getWorkReportDetail(shiftId);
+}
+
+// 会社からスタッフへのお知らせ。本部はどの宛先にも出せる。チームのマネージャーは
+// 自分のチーム宛て（TEAMS）だけ出せて、直す・消すのもそのお知らせだけ。
+async function assertCanPostAnnouncement(audience: AnnouncementAudience, teamIds: string[]) {
+  const ctx = await requireCompanyAdminOrEditor();
+  const { membership } = ctx;
+  if (isCompanyScopeAdmin(membership)) return ctx;
+  if (audience !== "TEAMS" || teamIds.length === 0 || !teamIds.every((id) => canManage(membership, id))) {
+    throw new Error("forbidden");
+  }
+  return ctx;
+}
+
+export async function createCompanyAnnouncementAction(input: {
+  title: string;
+  body: string;
+  audience: AnnouncementAudience;
+  teamIds: string[];
+  staffUserIds: string[];
+  attachments: NoteAttachmentInput[];
+}) {
+  const audience = ANNOUNCEMENT_AUDIENCES.includes(input.audience) ? input.audience : "ALL";
+  const teamIds = Array.isArray(input.teamIds) ? input.teamIds.map(String) : [];
+  const staffUserIds = Array.isArray(input.staffUserIds) ? input.staffUserIds.map(String) : [];
+  const { userId, membership } = await assertCanPostAnnouncement(audience, teamIds);
+  if (audience === "TEAMS") {
+    const count = await prisma.team.count({ where: { id: { in: teamIds }, companyId: membership.companyId } });
+    if (count !== teamIds.length || count === 0) throw new Error("invalid_team");
+  }
+  const result = await createCompanyAnnouncement({
+    companyId: membership.companyId,
+    audience,
+    teamIds,
+    staffUserIds,
+    title: String(input.title ?? ""),
+    body: String(input.body ?? ""),
+    attachments: Array.isArray(input.attachments) ? input.attachments : [],
+    createdByUserId: userId,
+  });
+  revalidatePath("/company");
+  return { recipientCount: result.recipientCount };
+}
+
+async function assertCanEditAnnouncement(announcementId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const announcement = await prisma.companyAnnouncement.findFirstOrThrow({
+    where: { id: announcementId, companyId: membership.companyId },
+  });
+  await assertCanPostAnnouncement(announcement.audience as AnnouncementAudience, (announcement.teamIds as string[]) ?? []);
+  return { membership };
+}
+
+export async function updateCompanyAnnouncementAction(
+  announcementId: string,
+  input: { title: string; body: string; attachments: NoteAttachmentInput[] },
+) {
+  const { membership } = await assertCanEditAnnouncement(announcementId);
+  await updateCompanyAnnouncement({
+    companyId: membership.companyId,
+    announcementId,
+    title: String(input.title ?? ""),
+    body: String(input.body ?? ""),
+    attachments: Array.isArray(input.attachments) ? input.attachments : [],
+  });
+  revalidatePath("/company");
+}
+
+export async function deleteCompanyAnnouncementAction(announcementId: string) {
+  const { membership } = await assertCanEditAnnouncement(announcementId);
+  await deleteCompanyAnnouncement(membership.companyId, announcementId);
+  revalidatePath("/company");
 }

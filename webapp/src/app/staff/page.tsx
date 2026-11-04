@@ -2,7 +2,7 @@ import { requireCompanyStaffRole, listMyMemberships } from "@/lib/auth/session";
 import { listStaffShiftsForMonth, listOwnPendingShiftRequests } from "@/lib/domain/shifts";
 import { listOwnShiftsNeedingReport } from "@/lib/domain/workReports";
 import { listKnownTaskNames } from "@/lib/domain/contracts";
-import { listStaffNotices } from "@/lib/domain/notices";
+import { listAllStaffNotices } from "@/lib/domain/notices";
 import { todayJst, todayJstParts } from "@/lib/date";
 import { StaffCalendarView } from "@/components/staff/StaffCalendarView";
 import { StaffNoticesSection } from "@/components/staff/StaffNoticesSection";
@@ -24,7 +24,7 @@ function formatJstTime(date: Date) {
 export default async function StaffHomePage({
   searchParams,
 }: PageProps<"/staff">) {
-  const { userId, membership } = await requireCompanyStaffRole();
+  const { userId } = await requireCompanyStaffRole();
   const sp = await searchParams;
 
   const today = todayJstParts();
@@ -37,12 +37,11 @@ export default async function StaffHomePage({
   const [shifts, pendingRequests, notices, shiftsNeedingReport, knownTaskNamesByCompany, missingDocuments] = await Promise.all([
     listStaffShiftsForMonth({ staffUserId: userId, companyIds, year, month }),
     listOwnPendingShiftRequests({ staffUserId: userId, companyIds }),
-    listStaffNotices(userId, membership.companyId, companyIds),
+    listAllStaffNotices(userId, { unreadOnly: true }),
     listOwnShiftsNeedingReport(userId, companyIds),
     Promise.all(companyIds.map((id) => listKnownTaskNames(id))),
     listMyMissingDocuments(userId),
   ]);
-  const unreadNotices = notices.filter((n) => !n.readAt);
   const knownTaskNames = Object.fromEntries(companyIds.map((id, i) => [id, knownTaskNamesByCompany[i]]));
 
   // カレンダー画面の「本日の出退勤」カード用 — 今日の分でまだ対応が
@@ -101,9 +100,7 @@ export default async function StaffHomePage({
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col bg-white px-1 pb-24 pt-2 sm:block sm:bg-transparent sm:px-6 sm:py-10">
       <RequiredDocumentsBanner items={missingDocuments} />
-      <StaffNoticesSection
-        notices={unreadNotices.map((n) => ({ id: n.id, message: n.message, createdAt: n.createdAt.toISOString() }))}
-      />
+      <StaffNoticesSection notices={notices} />
       <TodayShiftPopup
         shifts={[...todayShifts, ...pastUnsubmitted.slice(0, PAST_IN_POPUP)]}
         moreUnsubmittedCount={Math.max(pastUnsubmitted.length - PAST_IN_POPUP, 0)}

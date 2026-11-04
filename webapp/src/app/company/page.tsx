@@ -17,6 +17,8 @@ import { listTemplates, listUploadOnlyTemplates, sortTemplatesByUsage } from "@/
 import { listClients } from "@/lib/domain/relationships";
 import { prisma } from "@/lib/prisma";
 import { DashboardView } from "@/components/company/DashboardView";
+import { CompanyAnnouncementsCard } from "@/components/company/CompanyAnnouncementsCard";
+import { listCompanyAnnouncements, listAnnouncementCandidates } from "@/lib/domain/companyAnnouncements";
 
 const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
   PART_TIME: "アルバイト",
@@ -89,6 +91,19 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
   const initialReportDetailId = open === "reports" ? reportId : undefined;
 
   sortTemplatesByUsage(templates);
+
+  // スタッフへのお知らせ：本部は全部、チームのマネージャーは自分のチーム宛ての分だけ
+  const canPostToAll = isCompanyScopeAdmin(membership);
+  const managedTeamIds = membership.teamMemberships.filter((tm) => tm.role === "TEAM_MANAGER").map((tm) => tm.teamId);
+  const [announcements, announcementTeams, announcementStaff] = await Promise.all([
+    listCompanyAnnouncements(membership.companyId, canPostToAll ? null : managedTeamIds),
+    prisma.team.findMany({
+      where: { companyId: membership.companyId, ...(canPostToAll ? {} : { id: { in: managedTeamIds } }) },
+      select: { id: true, name: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    canPostToAll ? listAnnouncementCandidates(membership.companyId) : Promise.resolve([]),
+  ]);
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
@@ -197,6 +212,14 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
         initialTab={initialTab}
         initialOpenPopup={initialOpenPopup}
         initialReportDetailId={initialReportDetailId}
+      />
+      <CompanyAnnouncementsCard
+        key={sp.announce === "1" ? "announce" : "default"}
+        announcements={announcements}
+        teams={announcementTeams}
+        staffOptions={announcementStaff}
+        canPostToAll={canPostToAll}
+        initialOpen={sp.announce === "1"}
       />
     </main>
   );

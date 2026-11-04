@@ -44,6 +44,20 @@ function ClockIcon({ className }: { className?: string }) {
   );
 }
 
+function BellIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <path
+        d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M10 20.5a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function GearIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className}>
@@ -62,6 +76,7 @@ const NAV = [
   { href: "/staff", label: "カレンダー", Icon: CalendarIcon },
   { href: "/staff/recruitments", label: "募集", Icon: MegaphoneIcon },
   { href: "/staff/timecard", label: "タイムカード", Icon: ClockIcon },
+  { href: "/staff/notices", label: "お知らせ", Icon: BellIcon },
   { href: "/staff/contracts", label: "設定", Icon: GearIcon },
 ];
 
@@ -79,6 +94,7 @@ export function StaffShell({
   openRecruitmentCount,
   unsubmittedReportCount,
   contractSettingsBadgeCount,
+  unreadNoticeCount,
   hasPendingContracts,
   children,
 }: {
@@ -90,6 +106,7 @@ export function StaffShell({
   openRecruitmentCount: number;
   unsubmittedReportCount: number;
   contractSettingsBadgeCount: number;
+  unreadNoticeCount: number;
   // 確認待ち（PENDING_CONSENT）の契約書が1件以上ある間は、「見てません」
   // 問題を防ぐため契約書ページ以外への遷移を禁止する。
   hasPendingContracts: boolean;
@@ -200,9 +217,11 @@ export function StaffShell({
               ? openRecruitmentCount
               : item.href === "/staff/timecard"
                 ? unsubmittedReportCount
-                : item.href === "/staff/contracts"
-                  ? contractSettingsBadgeCount
-                  : 0;
+                : item.href === "/staff/notices"
+                  ? unreadNoticeCount
+                  : item.href === "/staff/contracts"
+                    ? contractSettingsBadgeCount
+                    : 0;
           // 確認待ちの契約書がある間は、契約書ページ以外のナビをタップしても
           // 遷移しない（useEffectの強制リダイレクトと二重の防止策）。
           const blocked = hasPendingContracts && item.href !== "/staff/contracts";

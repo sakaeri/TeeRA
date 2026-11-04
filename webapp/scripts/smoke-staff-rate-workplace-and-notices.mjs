@@ -207,12 +207,13 @@ try {
   log("スタッフ画面トップに「お知らせ」欄が表示される", staffBody.includes("お知らせ"));
   log("お知らせにキャディ業務(A社)の内容が含まれる", staffBody.includes("キャディ業務") && staffBody.includes("A社") && staffBody.includes("11000円"));
 
-  // dismiss one notice
-  const firstDismiss = staff.getByRole("button", { name: "既読にする" }).first();
-  await firstDismiss.click();
-  await staff.waitForTimeout(500);
+  // お知らせを開くと既読になる（メニューの「お知らせ」から）
+  await staff.getByRole("link", { name: /すべて見る/ }).click();
+  await staff.waitForURL(/\/staff\/notices/);
+  await staff.locator("main li button").first().click();
+  await staff.waitForTimeout(800);
   const unreadAfterDismiss = psql(`select count(*) from "StaffNotice" where "staffUserId"='${staffUserId}' and "readAt" is null;`);
-  log("✕で既読にすると未読件数が減る（DB上もreadAtが記録される）", unreadAfterDismiss === "2");
+  log("お知らせを開くと既読になり未読件数が減る（DB上もreadAtが記録される）", unreadAfterDismiss === "2");
 
   console.log(process.exitCode ? "STAFF WORKPLACE RATE / NOTICES SMOKE TEST HAD FAILURES" : "STAFF WORKPLACE RATE / NOTICES SMOKE TEST PASSED");
 } catch (err) {

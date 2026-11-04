@@ -16,7 +16,7 @@ import {
   disputeCorrectedWorkReport,
 } from "@/lib/domain/workReports";
 import { notifyCompanyOfWorkReportSubmission } from "@/lib/domain/emailNotifications";
-import { markStaffNoticeRead } from "@/lib/domain/notices";
+import { markStaffNoticeRead, markAllStaffNoticesRead } from "@/lib/domain/notices";
 import { updateMembershipIdDocument, updateMembershipBankInfo, updateStaffAddressPhone } from "@/lib/domain/roster";
 import { addStaffRelationshipNote } from "@/lib/domain/relationships";
 import { prisma } from "@/lib/prisma";
@@ -307,5 +307,11 @@ export async function applyToRecruitmentAction(recruitmentId: string) {
 export async function markStaffNoticeReadAction(noticeId: string) {
   const { userId } = await requireCompanyStaffRole();
   await markStaffNoticeRead(noticeId, userId);
-  revalidatePath("/staff");
+  revalidatePath("/staff", "layout");
+}
+
+export async function markAllStaffNoticesReadAction(companyId: string | null) {
+  const { userId } = await requireCompanyStaffRole();
+  await markAllStaffNoticesRead(userId, companyId || null);
+  revalidatePath("/staff", "layout");
 }

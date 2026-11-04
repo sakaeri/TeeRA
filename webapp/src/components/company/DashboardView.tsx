@@ -245,13 +245,12 @@ const QUICK_ACTIONS: { href: string; label: string; icon: ReactNode }[] = [
     ),
   },
   {
-    href: "/company/roster?tab=agencies&add=1",
-    label: "派遣会社を追加",
+    href: "/company?announce=1#announcements",
+    label: "お知らせを作成",
     icon: (
       <>
-        <circle cx="7" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.8" />
-        <circle cx="17" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.8" />
-        <path d="M2.5 19c.5-3 2.3-4.5 4.5-4.5s4 1.5 4.5 4.5M12.5 19c.5-3 2.3-4.5 4.5-4.5s4 1.5 4.5 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        <path d="M10 20.5a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       </>
     ),
   },

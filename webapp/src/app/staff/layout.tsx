@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getStaffPointsBalance } from "@/lib/domain/promo";
 import { listOpenRecruitmentsForStaff } from "@/lib/domain/recruitment";
 import { countUnsubmittedReports } from "@/lib/domain/workReports";
+import { countUnreadStaffNotices } from "@/lib/domain/notices";
 import { StaffShell } from "@/components/staff/StaffShell";
 
 export default async function StaffLayout({
@@ -20,9 +21,7 @@ export default async function StaffLayout({
     prisma.staffContract.count({
       where: { staffUserId: userId, status: "PENDING_CONSENT", template: { companyId: membership.companyId } },
     }),
-    prisma.staffNotice.count({
-      where: { staffUserId: userId, companyId: membership.companyId, readAt: null },
-    }),
+    countUnreadStaffNotices(userId),
   ]);
   // ナビの「募集一覧」バッジ用 — まだ応募しておらず、まだ枠が埋まって
   // いない募集だけを数える（応募済み/満員は「新着」として知らせる
@@ -32,9 +31,9 @@ export default async function StaffLayout({
     const alreadyApplied = r.entries.some((e) => e.staffUserId === userId && e.status !== "REJECTED");
     return !alreadyApplied && filled < r.maxEntries;
   }).length;
-  // ナビの「設定」バッジ用 — 契約書未確認（同意待ち）＋単価変更などの未読
-  // お知らせの合算。設定を開かないと新着に気づけない問題への対応。
-  const contractSettingsBadgeCount = pendingContractCount + unreadNoticeCount;
+  // ナビの「設定」バッジ用 — 契約書未確認（同意待ち）の件数。
+  // お知らせの未読は「お知らせ」のバッジに出す（所属する全社分）。
+  const contractSettingsBadgeCount = pendingContractCount;
   // ナビの「タイムカード」バッジ用 — 業務報告が未提出の件数（所属する全社分）
   const unsubmittedReportCount = await countUnsubmittedReports(
     userId,
@@ -51,6 +50,7 @@ export default async function StaffLayout({
       openRecruitmentCount={openRecruitmentCount}
       unsubmittedReportCount={unsubmittedReportCount}
       contractSettingsBadgeCount={contractSettingsBadgeCount}
+      unreadNoticeCount={unreadNoticeCount}
       hasPendingContracts={pendingContractCount > 0}
     >
       {children}
