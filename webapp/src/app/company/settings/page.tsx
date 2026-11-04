@@ -80,6 +80,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
         // 以下は本部の管理者/編集者だけに渡す
         invoiceRegistrationNumber={isCompanyAdmin ? (company.invoiceRegistrationNumber ?? "") : ""}
         notificationEmail={isCompanyAdmin ? (company.notificationEmail ?? "") : ""}
+        workReportDigestHour={company.workReportDigestHour}
         sealImageDataUrl={isCompanyAdmin ? company.sealImageDataUrl : null}
         sealOpacity={company.sealOpacity}
         teeBalance={company.teeBalance}

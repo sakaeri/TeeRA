@@ -8,6 +8,7 @@ import {
   updateCompanyAddressAction,
   updateCompanyPhoneNumberAction,
   updateCompanyNotificationEmailAction,
+  updateCompanyWorkReportDigestHourAction,
   updateCompanySealAction,
   updateCompanySealOpacityAction,
   setMemberCanWorkShiftsAction,
@@ -109,6 +110,7 @@ export function SettingsView({
   address,
   phoneNumber,
   notificationEmail,
+  workReportDigestHour,
   sealImageDataUrl,
   sealOpacity,
   admins,
@@ -129,6 +131,7 @@ export function SettingsView({
   address: string;
   phoneNumber: string;
   notificationEmail: string;
+  workReportDigestHour: number;
   sealImageDataUrl: string | null;
   sealOpacity: number;
   admins: Admin[];
@@ -191,6 +194,7 @@ export function SettingsView({
             address={address}
             phoneNumber={phoneNumber}
             notificationEmail={notificationEmail}
+            workReportDigestHour={workReportDigestHour}
           />
           <SealSection companyName={companyName} sealImageDataUrl={sealImageDataUrl} sealOpacity={sealOpacity} />
           <div id="admins" className="scroll-mt-24">
@@ -930,12 +934,14 @@ function CompanyInfoSection({
   address,
   phoneNumber,
   notificationEmail,
+  workReportDigestHour,
 }: {
   companyName: string;
   invoiceRegistrationNumber: string;
   address: string;
   phoneNumber: string;
   notificationEmail: string;
+  workReportDigestHour: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(companyName);
@@ -943,6 +949,7 @@ function CompanyInfoSection({
   const [addressValue, setAddressValue] = useState(address);
   const [phoneValue, setPhoneValue] = useState(phoneNumber);
   const [notificationEmailValue, setNotificationEmailValue] = useState(notificationEmail);
+  const [digestHourValue, setDigestHourValue] = useState(workReportDigestHour);
   const [pending, startTransition] = useTransition();
 
   if (!editing) {
@@ -969,6 +976,10 @@ function CompanyInfoSection({
             <div>
               <p className="text-xs text-muted">通知メールアドレス</p>
               <p className="font-medium">{notificationEmailValue || "未設定（通知メールは送信されません）"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">業務報告のまとめメール</p>
+              <p className="font-medium">毎日 {digestHourValue}:00</p>
             </div>
           </div>
           <button
@@ -1032,6 +1043,20 @@ function CompanyInfoSection({
             className="rounded-lg border border-border px-3 py-2 text-sm"
           />
         </label>
+        <label className="flex flex-col gap-1 text-xs">
+          業務報告のまとめメールを送る時刻（届くたびではなく、1日1回この時刻に前回からの分をまとめて送ります）
+          <select
+            value={digestHourValue}
+            onChange={(e) => setDigestHourValue(Number(e.target.value))}
+            className="rounded-lg border border-border bg-white px-3 py-2 text-sm"
+          >
+            {Array.from({ length: 24 }, (_, h) => (
+              <option key={h} value={h}>
+                毎日 {h}:00
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="flex gap-2">
           <button
             type="button"
@@ -1043,6 +1068,7 @@ function CompanyInfoSection({
                 await updateCompanyAddressAction(addressValue);
                 await updateCompanyPhoneNumberAction(phoneValue);
                 await updateCompanyNotificationEmailAction(notificationEmailValue);
+                await updateCompanyWorkReportDigestHourAction(digestHourValue);
                 setEditing(false);
               })
             }

@@ -19,6 +19,23 @@ function psql(sql) {
 }
 
 const DEV_LOG_PATH = "/tmp/nextdev.log";
+// 業務報告のメールは1日1回のまとめになったため、提出のあとにまとめの送信（5分おきのジョブ）を
+// 動かして確かめる。会社の送信時刻を、ジョブに渡す時刻の「時」に合わせる（毎回1時間ずつ進める）。
+let digestClock = Date.now();
+// sinceMs：前回まとめた時刻として扱う時刻（この後に提出された報告がまとめに入る）
+async function runWorkReportDigest(companyId, sinceMs = Date.now() - 60e3) {
+  digestClock = Math.max(digestClock + 3600e3, Date.now() + 3600e3);
+  const hour = new Date(digestClock + 9 * 3600e3).getUTCHours();
+  psql(
+    `update "Company" set "workReportDigestHour"=${hour}, "workReportDigestSentAt"='${new Date(sinceMs).toISOString()}' where id='${companyId}';`,
+  );
+  await fetch(
+    `http://localhost:3000/api/cron/notifications?job=shift-start-reminders&now=${encodeURIComponent(new Date(digestClock).toISOString())}`,
+    { headers: { Authorization: "Bearer local-dev-cron-secret-not-for-production" } },
+  );
+  await new Promise((r) => setTimeout(r, 800));
+}
+
 function readServerLogSince(startSize) {
   return readFileSync(DEV_LOG_PATH, "utf8").slice(startSize);
 }
@@ -163,19 +180,21 @@ try {
     await page.reload();
     await page.waitForTimeout(400);
     const logStart = readFileSync(DEV_LOG_PATH, "utf8").length;
+    const submittedFrom = Date.now() - 1000;
     // 「勤務終了」を押すと、退勤と同時に業務報告が提出される
     await page.getByRole("button", { name: "勤務終了" }).click();
     await page.getByText("業務報告を提出しました").first().waitFor({ timeout: 15000 });
     await page.waitForTimeout(800);
+    await runWorkReportDigest(companyId, submittedFrom);
     return readServerLogSince(logStart);
   }
 
   const logA = await submitReport(staffA, staffAUserId);
-  log("チームA（通知先あり）の提出はチームAのメアドに届く", logA.includes(teamANotifyEmail) && logA.includes("業務報告が届きました"));
+  log("チームA（通知先あり）の提出はチームAのメアドに届く", logA.includes(teamANotifyEmail) && logA.includes("業務報告のまとめ"));
   log("チームA（通知先あり）の提出は本部のメアドには届かない", !logA.includes(companyNotifyEmail));
 
   const logB = await submitReport(staffB, staffBUserId);
-  log("チームB（通知先未設定）の提出は本部のメアドにフォールバックする", logB.includes(companyNotifyEmail) && logB.includes("業務報告が届きました"));
+  log("チームB（通知先未設定）の提出は本部のメアドにフォールバックする", logB.includes(companyNotifyEmail) && logB.includes("業務報告のまとめ"));
   log("チームB（通知先未設定）の提出はチームAのメアドには届かない", !logB.includes(teamANotifyEmail));
 
   // --- シフト希望ダイジェスト: 本部は全体集計、チームAは個別件数 ---

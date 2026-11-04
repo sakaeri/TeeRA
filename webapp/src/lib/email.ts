@@ -243,6 +243,48 @@ export async function sendWorkReportSubmittedEmail(
   );
 }
 
+// 業務報告のまとめ（1日1回）。届いた報告の一覧と、まだ承認していない件数。
+export async function sendWorkReportDigestEmail(
+  to: string,
+  params: {
+    companyName: string;
+    items: {
+      staffName: string;
+      date: string;
+      timeLabel: string;
+      outcomeLabel: string | null;
+      taskLabel: string;
+      approved: boolean;
+      approveUrl: string | null;
+    }[];
+    pendingCount: number;
+    reviewUrl: string;
+  },
+) {
+  const rows = params.items
+    .map(
+      (i) =>
+        `<tr>
+          <td style="padding:6px 8px;border-bottom:1px solid #eef0ec;white-space:nowrap;">${i.date.slice(5).replace("-", "/")}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #eef0ec;">${i.staffName}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #eef0ec;">${i.outcomeLabel ?? `${i.timeLabel}<br><span style="color:#8b968e;">${i.taskLabel}</span>`}${i.approved ? '<br><span style="color:#8b968e;">承認済み</span>' : ""}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #eef0ec;white-space:nowrap;text-align:right;">${i.approveUrl ? `<a href="${i.approveUrl}" style="color:#0b3d2e;font-weight:bold;">${i.outcomeLabel ? "確認" : "承認"}</a>` : ""}</td>
+        </tr>`,
+    )
+    .join("");
+  await sendMail(
+    to,
+    `【TeeRA】業務報告のまとめ（${params.items.length}件）`,
+    emailLayout(
+      "業務報告のまとめ",
+      `${companyGreeting(params.companyName)}
+       <p style="margin:0 0 12px;font-size:14px;line-height:1.6;">前回のお知らせから<strong>${params.items.length}件</strong>の業務報告が届きました。まだ承認していない報告は<strong>${params.pendingCount}件</strong>です。</p>
+       <table style="width:100%;border-collapse:collapse;font-size:13px;line-height:1.5;">${rows}</table>
+       ${button(params.reviewUrl, "確認・承認する")}`,
+    ),
+  );
+}
+
 export async function sendShiftRequestDigestEmail(to: string, companyName: string, count: number, reviewUrl: string) {
   await sendMail(
     to,

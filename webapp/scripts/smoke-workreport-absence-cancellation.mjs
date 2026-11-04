@@ -18,6 +18,23 @@ function psql(sql) {
     .trim();
 }
 const DEV_LOG_PATH = "/tmp/nextdev.log";
+// 業務報告のメールは1日1回のまとめになったため、提出のあとにまとめの送信（5分おきのジョブ）を
+// 動かして確かめる。会社の送信時刻を、ジョブに渡す時刻の「時」に合わせる（毎回1時間ずつ進める）。
+let digestClock = Date.now();
+// sinceMs：前回まとめた時刻として扱う時刻（この後に提出された報告がまとめに入る）
+async function runWorkReportDigest(companyId, sinceMs = Date.now() - 60e3) {
+  digestClock = Math.max(digestClock + 3600e3, Date.now() + 3600e3);
+  const hour = new Date(digestClock + 9 * 3600e3).getUTCHours();
+  psql(
+    `update "Company" set "workReportDigestHour"=${hour}, "workReportDigestSentAt"='${new Date(sinceMs).toISOString()}' where id='${companyId}';`,
+  );
+  await fetch(
+    `http://localhost:3000/api/cron/notifications?job=shift-start-reminders&now=${encodeURIComponent(new Date(digestClock).toISOString())}`,
+    { headers: { Authorization: "Bearer local-dev-cron-secret-not-for-production" } },
+  );
+  await new Promise((r) => setTimeout(r, 800));
+}
+
 function readServerLogSince(startSize) {
   return readFileSync(DEV_LOG_PATH, "utf8").slice(startSize);
 }
@@ -100,6 +117,7 @@ try {
 
   // --- 実際に「欠勤」を確定する ---
   const logStart = readFileSync(DEV_LOG_PATH, "utf8").length;
+  const absenceFrom = Date.now() - 1000;
   await staff.getByRole("button", { name: "欠勤", exact: true }).click();
   await staff.waitForTimeout(300);
   await staff.getByRole("button", { name: "報告する", exact: true }).click();
@@ -111,9 +129,10 @@ try {
   log("WorkReportのoutcomeがABSENTになる", workReportOutcome === "ABSENT");
 
   // --- ②会社側メール: 欠勤であることがはっきり伝わるか ---
+  await runWorkReportDigest(companyId, absenceFrom);
   const emailLog = readServerLogSince(logStart);
-  log("通知メールの件名に「欠勤」が入る（従来は「業務報告が届きました」のまま区別つかなかった）", emailLog.includes("欠勤の報告が届きました"));
-  log("メール本文に「結果：欠勤」が入る", emailLog.includes("結果") && emailLog.includes("欠勤"));
+  log("まとめメールが届く", emailLog.includes("業務報告のまとめ"));
+  log("まとめメールの一覧に「欠勤」と出る（時間の代わりに結果をはっきり出す）", emailLog.includes("欠勤"));
   log("メール本文に紛らわしい「未定」の時間表示が出ない", !emailLog.includes("時間：未定") && !/時間[^\n]*未定/.test(emailLog));
 
   const urlMatch = emailLog.match(/\/email-actions\/approve-work-report\/([A-Za-z0-9_-]+)/);
@@ -144,6 +163,7 @@ try {
   );
 
   const logStart2 = readFileSync(DEV_LOG_PATH, "utf8").length;
+  const cancelFrom = Date.now() - 1000;
   await staff.goto("http://localhost:3000/staff/timecard");
   await staff.getByRole("button", { name: "勤務先からのキャンセル" }).click();
   await staff.waitForTimeout(300);
@@ -152,8 +172,9 @@ try {
   await staff.getByRole("button", { name: "報告する", exact: true }).click();
   await staff.waitForTimeout(800);
 
+  await runWorkReportDigest(companyId, cancelFrom);
   const emailLog2 = readServerLogSince(logStart2);
-  log("勤務先からのキャンセルでも件名に反映される", emailLog2.includes("勤務先からのキャンセルの報告が届きました"));
+  log("勤務先からのキャンセルもまとめメールに結果として出る", emailLog2.includes("業務報告のまとめ") && emailLog2.includes("勤務先からのキャンセル"));
 
   console.log(process.exitCode ? "WORKREPORT ABSENCE/CANCELLATION SMOKE TEST HAD FAILURES" : "WORKREPORT ABSENCE/CANCELLATION SMOKE TEST PASSED");
 } catch (err) {
