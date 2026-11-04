@@ -578,7 +578,7 @@ export function CalendarView({
       >
         {cells.map((c, i) => {
           if (!c.dateStr) {
-            return <div key={i} className="h-full sm:h-[116px]" />;
+            return <div key={i} className="h-full sm:h-[116px] xl:h-[150px]" />;
           }
           const dow = new Date(c.dateStr + "T00:00:00Z").getUTCDay();
           const dayShifts = shiftsByDate.get(c.dateStr) ?? [];
@@ -639,13 +639,13 @@ export function CalendarView({
               key={i}
               type="button"
               onClick={() => setSelectedDate(c.dateStr)}
-              className={`relative flex h-full flex-col items-stretch justify-start overflow-hidden rounded-lg rounded-tr-none px-0 py-1 text-left sm:h-[116px] sm:rounded-xl sm:rounded-tr-none sm:p-1.5 ${
+              className={`relative flex h-full flex-col items-stretch justify-start overflow-hidden rounded-lg rounded-tr-none px-0 py-1 text-left sm:h-[116px] sm:rounded-xl xl:h-[150px] sm:rounded-tr-none sm:p-1.5 ${
                 isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "hover:bg-background"
               }`}
             >
               <span
                 title={holidayName(c.dateStr) ?? undefined}
-                className={`block text-center text-[11px] font-semibold ${weekdayColor(dow, c.dateStr)}`}
+                className={`block text-center text-[11px] font-semibold xl:text-sm ${weekdayColor(dow, c.dateStr)}`}
               >
                 {c.day}
               </span>
@@ -655,11 +655,11 @@ export function CalendarView({
                   className="absolute right-0 top-0 h-0 w-0 border-r-[8px] border-b-[8px] border-r-accent border-b-transparent"
                 />
               ) : null}
-              <div className="mt-px flex flex-col gap-[2px]">
+              <div className="mt-px flex flex-col gap-[2px] xl:gap-[3px]">
                 {tagEntries.map((tag) => (
                   <span
                     key={tag.id}
-                    className={`block w-full overflow-hidden text-clip whitespace-nowrap rounded px-0 py-px text-center text-[8px] font-medium leading-tight tracking-tighter ${tag.className}`}
+                    className={`block w-full overflow-hidden text-clip whitespace-nowrap rounded px-0 py-px text-center text-[8px] font-medium leading-tight tracking-tighter xl:text-[11px] xl:tracking-normal ${tag.className}`}
                   >
                     {tag.mobileLabel ? (
                       <>
