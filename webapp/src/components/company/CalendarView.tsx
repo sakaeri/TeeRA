@@ -192,6 +192,17 @@ type ClientRecruitmentRow = {
   announcements: AnnouncementRow[];
 };
 
+// 削除されたオーダー（日別詳細に履歴として残す）
+type DeletedOrderRow = {
+  id: string;
+  date: string;
+  title: string;
+  clientCompanyName: string | null;
+  timeLabel: string;
+  maxEntries: number;
+  deletedAt: string;
+};
+
 // mobileLabelはスマホ幅でだけ使う短い表示（スタッフ名を5文字で切ったもの）
 type TagEntry = { kind: "solid"; id: string; label: string; mobileLabel?: string; className: string };
 
@@ -224,6 +235,7 @@ export function CalendarView({
   shiftRequests,
   recruitments,
   clientRecruitments,
+  deletedOrders = [],
   teeBalance,
   affordableMaxEntries,
   clients,
@@ -247,6 +259,7 @@ export function CalendarView({
   shiftRequests: ShiftRequestRow[];
   recruitments: RecruitmentRow[];
   clientRecruitments: ClientRecruitmentRow[];
+  deletedOrders?: DeletedOrderRow[];
   teeBalance: number;
   affordableMaxEntries: number;
   clients: { id: string; name: string; monthlyShiftCount?: number }[];
@@ -452,13 +465,14 @@ export function CalendarView({
             onClick={() => setShowFilterSheet(true)}
             aria-label="絞り込み"
             title="絞り込み"
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+            className={`flex h-9 w-9 shrink-0 items-center justify-center gap-1.5 rounded-lg lg:w-auto lg:px-3 ${
               filterLabel ? "bg-primary text-primary-foreground" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
             }`}
           >
             <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0">
               <path d="M4 5h16l-6 7.5V19l-4-2v-4.5L4 5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
             </svg>
+            <span className="hidden text-sm font-semibold lg:inline">絞り込み</span>
           </button>
           <div ref={pdfMenuRef} className="relative">
             <button
@@ -466,7 +480,7 @@ export function CalendarView({
               onClick={() => setShowPdfMenu((v) => !v)}
               aria-label="PDF出力"
               title="PDF出力"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100"
+              className="flex h-9 w-9 shrink-0 items-center justify-center gap-1.5 rounded-lg lg:w-auto lg:px-3 bg-rose-50 text-rose-700 hover:bg-rose-100"
             >
               <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0">
                 <path
@@ -478,6 +492,7 @@ export function CalendarView({
                 <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
                 <path d="M8 12h8M8 15.5h8M8 18.5h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
+            <span className="hidden text-sm font-semibold lg:inline">PDF</span>
             </button>
             {/* シフト表（予定）と実績表（請求書と同じ内容）を選んで出す */}
             {showPdfMenu ? (
@@ -506,13 +521,14 @@ export function CalendarView({
             onClick={shareAsImage}
             aria-label="画像でシフトを共有"
             title="画像でシフトを共有"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:opacity-60"
+            className="flex h-9 w-9 shrink-0 items-center justify-center gap-1.5 rounded-lg lg:w-auto lg:px-3 bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:opacity-60"
           >
             <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0">
               <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
               <circle cx="8.5" cy="9.5" r="1.5" stroke="currentColor" strokeWidth="1.4" />
               <path d="M4 17l5-5 3 3 4-5 4 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
+            <span className="hidden text-sm font-semibold lg:inline">画像で共有</span>
           </button>
         </div>
       </div>
@@ -680,6 +696,7 @@ export function CalendarView({
           history={shiftHistory.filter((h) => h.date === selectedDate)}
           recruitments={recruitments.filter((r) => r.date === selectedDate && r.status === "PUBLISHED")}
           clientOrders={clientRecruitments.filter((r) => r.date === selectedDate)}
+          deletedOrders={deletedOrders.filter((r) => r.date === selectedDate)}
           staffOptions={staffOptions}
           requestedStaffUserIds={shiftRequests
             .filter((r) => r.desire === "WORK" && r.dates.includes(selectedDate))
@@ -879,6 +896,7 @@ function DayDetailModal({
   history,
   recruitments,
   clientOrders,
+  deletedOrders,
   staffOptions,
   requestedStaffUserIds,
   affordableMaxEntries,
@@ -893,6 +911,7 @@ function DayDetailModal({
   history: ShiftHistoryRow[];
   recruitments: RecruitmentRow[];
   clientOrders: ClientRecruitmentRow[];
+  deletedOrders: DeletedOrderRow[];
   staffOptions: StaffOption[];
   requestedStaffUserIds: string[];
   affordableMaxEntries: number;
@@ -1195,6 +1214,7 @@ function DayDetailModal({
           </ul>
         )}
       </div>
+      <DeletedOrdersSection orders={deletedOrders} />
 
       {editingRecruitmentId ? (
         <OrderEditModal
@@ -1919,6 +1939,44 @@ function OrderCard({
 // キャンセル・上書きで外れたスタッフを、カード下部に薄い折りたたみで表示する
 // 共通パーツ（募集一覧のオーダーカード／オーダータブの依頼主別カード／
 // スタッフシフトタブの3か所で使う）。履歴が無いカードには何も出さない。
+// 削除されたオーダーの履歴（消しても、その日に何が削除されたかを後から確かめられるように）
+function DeletedOrdersSection({ orders }: { orders: DeletedOrderRow[] }) {
+  const [expanded, setExpanded] = useState(false);
+  if (orders.length === 0) return null;
+  const deletedAtLabel = (iso: string) => {
+    const d = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000);
+    return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+  };
+  return (
+    <div className="mt-2 border-t border-border/50 pt-2">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1 text-[11px] text-muted/70 hover:text-muted"
+      >
+        <svg viewBox="0 0 20 20" fill="none" className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`}>
+          <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        削除されたオーダー（{orders.length}件）
+      </button>
+      {expanded ? (
+        <ul className="mt-1 flex flex-col gap-0.5">
+          {orders.map((o) => (
+            <li key={o.id} className="flex justify-between gap-2 text-[11px] text-muted/70">
+              <span className="min-w-0 truncate">
+                {o.clientCompanyName ? `${o.clientCompanyName}：` : ""}
+                {o.title}
+                {o.timeLabel ? ` ${o.timeLabel}` : ""}・{o.maxEntries}名
+              </span>
+              <span className="shrink-0">{deletedAtLabel(o.deletedAt)} 削除</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function ShiftHistorySection({ history }: { history: ShiftHistoryRow[] }) {
   const [expanded, setExpanded] = useState(false);
   if (history.length === 0) return null;

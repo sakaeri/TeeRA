@@ -5,6 +5,7 @@ import { isCompanyScopeAdmin, myManagedOrLedTeamIds } from "@/lib/auth/permissio
 import {
   listPublicRecruitments,
   listClientRecruitments,
+  listDeletedOrdersForMonth,
   affordableMaxEntries,
   resolveStaffOrigins,
   settlePastRecruitments,
@@ -58,7 +59,7 @@ export default async function CompanyCalendarPage({
   // Recruitmentsに結果を反映させるため、Promise.allより前に完了させる。
   await settlePastRecruitments(membership.companyId);
 
-  const [shifts, shiftHistory, staff, teams, shiftRequests, recruitments, clientRecruitments] = await Promise.all([
+  const [shifts, shiftHistory, staff, teams, shiftRequests, recruitments, clientRecruitments, deletedOrders] = await Promise.all([
     listShiftsForMonth({ companyId: membership.companyId, year, month, teamId, restrictToTeamIds, companyRelationshipId: relationshipId }),
     listShiftHistoryForMonth({ companyId: membership.companyId, year, month, teamId, restrictToTeamIds, companyRelationshipId: relationshipId }),
     listStaff(membership.companyId, restrictToTeamIds),
@@ -66,6 +67,7 @@ export default async function CompanyCalendarPage({
     listShiftRequests({ companyId: membership.companyId, status: "PENDING" }),
     listPublicRecruitments({ companyId: membership.companyId }),
     listClientRecruitments(membership.companyId),
+    listDeletedOrdersForMonth({ companyId: membership.companyId, year, month }),
   ]);
 
   const affordable = await affordableMaxEntries(membership.companyId);
@@ -223,6 +225,22 @@ export default async function CompanyCalendarPage({
             createdAt: a.createdAt.toISOString(),
           })),
         }))}
+        // 削除されたオーダー（日別詳細に履歴として出す）。依頼主で絞っているときはその依頼主の分だけ
+        deletedOrders={deletedOrders
+          .filter((r) => {
+            if (!relationshipId) return true;
+            const rel = clients.find((c) => c.id === relationshipId);
+            return Boolean(rel?.clientCompanyId && r.companyId === rel.clientCompanyId);
+          })
+          .map((r) => ({
+            id: r.id,
+            date: r.date.toISOString().slice(0, 10),
+            title: r.title,
+            clientCompanyName: r.companyId === membership.companyId ? null : r.company.name,
+            timeLabel: r.isUndecided ? "時間未定" : r.startTime ? `${r.startTime}〜${r.endTime ?? ""}` : "",
+            maxEntries: r.maxEntries,
+            deletedAt: r.updatedAt.toISOString(),
+          }))}
         teeBalance={company.teeBalance}
         affordableMaxEntries={affordable}
         clients={clients.map((c) => ({
