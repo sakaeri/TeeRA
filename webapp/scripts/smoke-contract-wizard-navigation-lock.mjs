@@ -78,43 +78,55 @@ try {
   await assignModal.getByRole("button", { name: "このテンプレートのまま契約する" }).click();
   await admin.waitForTimeout(700);
 
-  // 確認待ちの契約書がある状態で、別ページへ直接遷移を試みる
+  // 確認待ちの契約書がある間は、どの画面でも閉じられないポップアップが出る
+  const popup = staff.getByRole("dialog", { name: "新しい契約書が届いています" });
   await staff.goto("http://localhost:3000/staff/timecard");
-  await staff.waitForTimeout(800);
-  log(
-    "確認待ちの契約書がある間は他ページへ直接遷移しても契約書ページへ戻される",
-    staff.url().includes("/staff/contracts"),
-  );
-
+  await popup.waitFor({ timeout: 15000 });
+  log("確認待ちの契約書がある間は、ほかの画面でポップアップが出る", (await popup.innerText()).includes("ほかの画面は使えません"));
+  await staff.goto("http://localhost:3000/staff");
+  await popup.waitFor({ timeout: 15000 });
+  log("ホームでもポップアップが出る", (await popup.innerText()).includes("離脱防止株式会社"));
+  log("ポップアップに✕は無い", (await popup.getByRole("button").count()) === 0);
   await staff.goto("http://localhost:3000/staff/recruitments");
-  await staff.waitForTimeout(800);
-  log("募集一覧への直接遷移も戻される", staff.url().includes("/staff/contracts"));
+  await popup.waitFor({ timeout: 15000 });
+  log("募集の画面でもポップアップが出る", true);
 
-  // ナビのリンクをクリックしても遷移しない
+  // ポップアップのボタンから契約書の画面へ（契約書の画面ではポップアップを出さない）
   disableRequiredDocuments();
-  await staff.goto("http://localhost:3000/staff/contracts");
+  // 登録済みの住所・電話番号（同意の欄に最初から入っているかを確かめる）
+  execSync(
+    `PGPASSWORD=postgres psql -h localhost -U postgres -d teera -c "update \\"User\\" set address='東京都品川区1-1-1', \\"phoneNumber\\"='03-1111-2222' where email='${staffEmail}';"`,
+  );
+  await popup.getByRole("link", { name: "契約書を確認する" }).click();
+  await staff.waitForURL(/\/staff\/contracts\//);
   await staff.waitForTimeout(500);
-  await staff.getByRole("link", { name: "タイムカード" }).click({ force: true }).catch(() => {});
-  await staff.waitForTimeout(500);
-  log("ナビの他リンクをクリックしても遷移しない", staff.url().includes("/staff/contracts"));
+  log("ボタンで契約書の画面に進み、そこではポップアップが出ない", (await popup.count()) === 0);
 
   // 同意すると通常のナビゲーションに戻る
-  await staff.goto(`http://localhost:3000/staff/contracts`);
-  await staff.waitForTimeout(500);
-  await staff.getByRole("link", { name: /離脱防止株式会社/ }).click();
-  await staff.waitForTimeout(500);
   await staff.getByRole("button", { name: "契約書の全文を確認する" }).click();
   await staff.waitForTimeout(300);
   const consentModal = staff.locator("div.fixed.inset-0.z-30").last();
   await consentModal.locator('label:has-text("氏名") input').fill("離脱防止花子");
+  log(
+    "登録済みの住所・電話番号が最初から入っている",
+    (await consentModal.locator('label:has-text("住所") input').inputValue()) === "東京都品川区1-1-1" &&
+      (await consentModal.locator('label:has-text("電話番号") input').inputValue()) === "03-1111-2222",
+  );
+  // 手直しもできる（直した内容は登録済みの住所にも反映される）
   await consentModal.locator('label:has-text("住所") input').fill("東京都品川区6-6-6");
-  await consentModal.locator('label:has-text("電話番号") input').fill("090-1212-3434");
   await consentModal.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
-  await staff.waitForTimeout(600);
+  // 同意の処理（控えのPDF・メール・住所の反映）が終わって閉じるまで待つ
+  await staff.getByRole("button", { name: "内容を確認しました（同意する）" }).waitFor({ state: "detached", timeout: 30000 });
 
   await staff.goto("http://localhost:3000/staff/timecard");
   await staff.waitForTimeout(800);
-  log("同意後は他ページへ普通に遷移できる", staff.url().includes("/staff/timecard"));
+  const savedAddress = execSync(
+    `PGPASSWORD=postgres psql -h localhost -U postgres -d teera -t -A -c "select address from \\"User\\" where email='${staffEmail}';"`,
+  )
+    .toString()
+    .trim();
+  log("同意のときに直した住所が登録済みの住所にも反映される", savedAddress === "東京都品川区6-6-6");
+  log("同意後はポップアップが出ない", staff.url().includes("/staff/timecard") && (await popup.count()) === 0);
 
   console.log(process.exitCode ? "CONTRACT WIZARD NAVIGATION LOCK SMOKE TEST HAD FAILURES" : "CONTRACT WIZARD NAVIGATION LOCK SMOKE TEST PASSED");
 } catch (err) {
