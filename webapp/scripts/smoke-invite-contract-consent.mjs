@@ -76,10 +76,10 @@ try {
     psql(`select status || '|' || coalesce("consentedAt"::text, '') from "StaffContract" where "staffUserId"='${staffUserId}';`) === "PENDING_CONSENT|",
   );
 
-  // 契約書の画面から出られない
+  // 同意するまでは、ホームでも閉じられないポップアップが出る
   await staff.goto("http://localhost:3000/staff");
-  await staff.waitForURL(/\/staff\/contracts/, { timeout: 15000 });
-  log("ホームを開いても契約書の画面に戻される", staff.url().includes("/staff/contracts"));
+  await staff.getByRole("dialog", { name: "新しい契約書が届いています" }).waitFor({ timeout: 15000 });
+  log("ホームを開くと契約書のポップアップが出る", true);
   await staff.goto(`http://localhost:3000/staff/contracts/${companyId}`);
   await staff.getByText("本人確認書類を提出").waitFor({ timeout: 15000 });
   log("必須の身分証から手続きが始まる", true);

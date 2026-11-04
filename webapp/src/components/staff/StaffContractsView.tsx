@@ -237,6 +237,9 @@ export function StaffContractsView({
     startTransition(async () => {
       try {
         await consentContractAction(id, companyId, party);
+        // 同意のときに直した住所・電話番号は、登録済みの内容にも反映される
+        setAddress(party.address);
+        setPhoneNumber(party.phoneNumber);
         setShowDetail(false);
         goNextStep();
       } catch {
@@ -451,7 +454,13 @@ export function StaffContractsView({
           clients={[]}
           editingTemplate={activePending.templateDetail}
           viewingStaff={{ name: myName }}
-          consentForm={{ pending: consentPending, error: consentError, onConsent: handleConsent }}
+          consentForm={{
+            pending: consentPending,
+            error: consentError,
+            onConsent: handleConsent,
+            initialAddress: address,
+            initialPhoneNumber: phoneNumber,
+          }}
           onClose={() => setShowDetail(false)}
         />
       ) : null}

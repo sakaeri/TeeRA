@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Toaster } from "@/components/Toast";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/actions/auth";
 import { useClickOutside } from "@/lib/useClickOutside";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
@@ -95,7 +95,7 @@ export function StaffShell({
   unsubmittedReportCount,
   contractSettingsBadgeCount,
   unreadNoticeCount,
-  hasPendingContracts,
+  pendingContractCompanies,
   children,
 }: {
   userName: string;
@@ -107,22 +107,17 @@ export function StaffShell({
   unsubmittedReportCount: number;
   contractSettingsBadgeCount: number;
   unreadNoticeCount: number;
-  // 確認待ち（PENDING_CONSENT）の契約書が1件以上ある間は、「見てません」
-  // 問題を防ぐため契約書ページ以外への遷移を禁止する。
-  hasPendingContracts: boolean;
+  // 確認待ち（PENDING_CONSENT）の契約書がある会社。ある間は、契約書の画面以外では
+  // 閉じられないポップアップを出して、確認・同意を先に済ませてもらう。
+  pendingContractCompanies: { id: string; name: string }[];
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useClickOutside<HTMLDivElement>(profileOpen, () => setProfileOpen(false));
   const initial = userName.slice(0, 1);
 
-  useEffect(() => {
-    if (hasPendingContracts && !pathname.startsWith("/staff/contracts")) {
-      router.replace("/staff/contracts");
-    }
-  }, [hasPendingContracts, pathname, router]);
+  const showContractPopup = pendingContractCompanies.length > 0 && !pathname.startsWith("/staff/contracts");
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
@@ -222,20 +217,11 @@ export function StaffShell({
                   : item.href === "/staff/contracts"
                     ? contractSettingsBadgeCount
                     : 0;
-          // 確認待ちの契約書がある間は、契約書ページ以外のナビをタップしても
-          // 遷移しない（useEffectの強制リダイレクトと二重の防止策）。
-          const blocked = hasPendingContracts && item.href !== "/staff/contracts";
           return (
             <Link
               key={item.href}
               href={item.href}
-              aria-disabled={blocked}
-              onClick={(e) => {
-                if (blocked) e.preventDefault();
-              }}
-              className={`flex flex-1 flex-col items-center gap-1 rounded-xl py-1.5 sm:flex-none sm:px-3 ${
-                blocked ? "pointer-events-none opacity-40" : ""
-              }`}
+              className="flex flex-1 flex-col items-center gap-1 rounded-xl py-1.5 sm:flex-none sm:px-3"
             >
               <span
                 className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${
@@ -258,7 +244,40 @@ export function StaffShell({
       </nav>
 
       <div className="flex flex-1 flex-col bg-background">{children}</div>
+      {showContractPopup ? <PendingContractPopup companies={pendingContractCompanies} /> : null}
       <Toaster />
+    </div>
+  );
+}
+
+// 確認待ちの契約書があるときのポップアップ。✕では閉じられず、契約書の画面に進んでもらう
+// （どの画面を開いてもこのポップアップが前に出るので、止まっている理由が分かる）
+function PendingContractPopup({ companies }: { companies: { id: string; name: string }[] }) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="新しい契約書が届いています"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
+    >
+      <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg">
+        <p className="font-serif-jp text-lg font-bold text-primary">新しい契約書が届いています</p>
+        <p className="mt-2 text-sm text-foreground/80">
+          契約書の確認・同意が終わるまで、ほかの画面は使えません。内容を確認して同意してください。
+        </p>
+        <div className="mt-4 flex flex-col gap-2">
+          {companies.map((c) => (
+            <Link
+              key={c.id}
+              href={`/staff/contracts/${c.id}`}
+              className="rounded-lg bg-primary px-4 py-2.5 text-center text-sm font-semibold text-primary-foreground"
+            >
+              {companies.length > 1 ? `${c.name}の契約書を確認する` : "契約書を確認する"}
+            </Link>
+          ))}
+        </div>
+        {companies.length === 1 ? <p className="mt-2 text-center text-xs text-muted">{companies[0].name}</p> : null}
+      </div>
     </div>
   );
 }

@@ -13,13 +13,15 @@ export default async function StaffLayout({
   children: React.ReactNode;
 }) {
   const { userId, membership } = await requireCompanyStaffRole();
-  const [user, pointsBalance, myMemberships, openRecruitments, pendingContractCount, unreadNoticeCount] = await Promise.all([
+  const [user, pointsBalance, myMemberships, openRecruitments, pendingContracts, unreadNoticeCount] = await Promise.all([
     prisma.user.findUniqueOrThrow({ where: { id: userId } }),
     getStaffPointsBalance(userId),
     listMyMemberships(userId),
     listOpenRecruitmentsForStaff({ companyId: membership.companyId, staffUserId: userId }),
-    prisma.staffContract.count({
-      where: { staffUserId: userId, status: "PENDING_CONSENT", template: { companyId: membership.companyId } },
+    // 確認待ちの契約書（所属する全社分）。会社ごとにまとめてポップアップで知らせる
+    prisma.staffContract.findMany({
+      where: { staffUserId: userId, status: "PENDING_CONSENT" },
+      select: { template: { select: { company: { select: { id: true, name: true } } } } },
     }),
     countUnreadStaffNotices(userId),
   ]);
@@ -33,7 +35,11 @@ export default async function StaffLayout({
   }).length;
   // ナビの「設定」バッジ用 — 契約書未確認（同意待ち）の件数。
   // お知らせの未読は「お知らせ」のバッジに出す（所属する全社分）。
+  const pendingContractCount = pendingContracts.length;
   const contractSettingsBadgeCount = pendingContractCount;
+  const pendingContractCompanies = [
+    ...new Map(pendingContracts.map((c) => [c.template.company.id, c.template.company])).values(),
+  ];
   // ナビの「タイムカード」バッジ用 — 業務報告が未提出の件数（所属する全社分）
   const unsubmittedReportCount = await countUnsubmittedReports(
     userId,
@@ -51,7 +57,7 @@ export default async function StaffLayout({
       unsubmittedReportCount={unsubmittedReportCount}
       contractSettingsBadgeCount={contractSettingsBadgeCount}
       unreadNoticeCount={unreadNoticeCount}
-      hasPendingContracts={pendingContractCount > 0}
+      pendingContractCompanies={pendingContractCompanies}
     >
       {children}
     </StaffShell>

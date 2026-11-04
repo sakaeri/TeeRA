@@ -837,6 +837,9 @@ export function TemplateModal({
     pending: boolean;
     error?: string | null;
     onConsent: (party: { name: string; address: string; phoneNumber: string }) => void;
+    // 登録済みの住所・電話番号（あれば最初から入れておき、手直しもできる）
+    initialAddress?: string;
+    initialPhoneNumber?: string;
   };
   // trueの場合、editingTemplateの内容を初期値として引き継ぎつつ、更新では
   // なく新規の独立したテンプレートとして保存する（招待モーダルからの
@@ -908,8 +911,8 @@ export function TemplateModal({
   // 同意フォーム（consentForm）用の入力欄。全文を確認した本人がここで
   // 氏名・住所・電話番号を入力してから同意する（署名代わり）。
   const [consentName, setConsentName] = useState(viewingStaff?.name ?? "");
-  const [consentAddress, setConsentAddress] = useState("");
-  const [consentPhoneNumber, setConsentPhoneNumber] = useState("");
+  const [consentAddress, setConsentAddress] = useState(consentForm?.initialAddress ?? "");
+  const [consentPhoneNumber, setConsentPhoneNumber] = useState(consentForm?.initialPhoneNumber ?? "");
 
   const autoTitle = `${EMPLOYMENT_TYPE_LABEL[employmentType]}${jobDescription ? "・" + jobDescription : ""}`;
   const title = customTitle.trim() || autoTitle;
