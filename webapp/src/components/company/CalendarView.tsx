@@ -922,11 +922,15 @@ function DayDetailModal({
   onClose: () => void;
 }) {
   const [selectedTab, setTab] = useState<"shifts" | "client" | "recruit">("shifts");
-  // 開いていたタブの中身が無くなったら（募集を削除した直後など）スタッフシフトに戻す
+  // 削除された募集・オーダーは、それぞれのタブ（募集一覧・オーダー）の下に履歴として出す
+  // （シフトの変更履歴とは混ぜない）。削除した分しか無い日も、そのタブは出しておく
+  const deletedOwn = deletedOrders.filter((o) => !o.clientCompanyName);
+  const deletedClient = deletedOrders.filter((o) => o.clientCompanyName);
+  const showRecruitTab = recruitments.length > 0 || deletedOwn.length > 0;
+  const showClientTab = clientOrders.length > 0 || deletedClient.length > 0;
+  // 開いていたタブが出なくなったらスタッフシフトに戻す
   const tab =
-    (selectedTab === "recruit" && recruitments.length === 0) || (selectedTab === "client" && clientOrders.length === 0)
-      ? "shifts"
-      : selectedTab;
+    (selectedTab === "recruit" && !showRecruitTab) || (selectedTab === "client" && !showClientTab) ? "shifts" : selectedTab;
   const [editingRecruitmentId, setEditingRecruitmentId] = useState<string | null>(null);
   const isPastDay = dateStr < todayJst();
   const leftOffShifts = clientCancelledLeftOff(history, shifts);
@@ -993,7 +997,7 @@ function DayDetailModal({
           >
             スタッフシフト
           </button>
-          {clientOrders.length > 0 ? (
+          {showClientTab ? (
             <button
               type="button"
               onClick={() => setTab("client")}
@@ -1002,7 +1006,7 @@ function DayDetailModal({
               オーダー
             </button>
           ) : null}
-          {recruitments.length > 0 ? (
+          {showRecruitTab ? (
             <button
               type="button"
               onClick={() => setTab("recruit")}
@@ -1186,7 +1190,8 @@ function DayDetailModal({
           ) : null}
           </>
         ) : tab === "client" ? (
-          clientOrders.length === 0 ? (
+          <>
+          {clientOrders.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted">この日のオーダーはありません。</p>
           ) : (
             <ul className="flex flex-col gap-2 text-sm">
@@ -1201,8 +1206,14 @@ function DayDetailModal({
                 />
               ))}
             </ul>
-          )
+          )}
+          <DeletedOrdersSection orders={deletedClient} />
+          </>
         ) : (
+          <>
+          {recruitments.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted">この日の募集はありません。</p>
+          ) : (
           <ul className="flex flex-col gap-2 text-sm">
             {recruitments.map((r) => (
               <OrderCard
@@ -1217,8 +1228,10 @@ function DayDetailModal({
               />
             ))}
           </ul>
+          )}
+          <DeletedOrdersSection orders={deletedOwn} />
+          </>
         )}
-        <DeletedOrdersSection orders={deletedOrders} />
       </div>
 
       {editingRecruitmentId ? (
