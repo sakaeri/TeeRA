@@ -5,6 +5,7 @@ import {
   runEveningUnsubmittedReminders,
   runUnsubmittedWorkReportReminders,
   runContractConsentReminders,
+  runWorkReportDigests,
 } from "@/lib/domain/emailNotifications";
 
 // Vercelの無料(Hobby)プランのCronは1日1回までしか使えないため、この受付口は
@@ -38,6 +39,8 @@ export async function GET(request: Request) {
       await runUnsubmittedReportPushReminders();
       // 当日20時の未提出リマインド（退勤の打刻忘れも拾う）
       await runEveningUnsubmittedReminders(now);
+      // 業務報告のまとめメール（会社が選んだ時刻に1日1回）
+      await runWorkReportDigests(now);
       break;
     case "shift-request-digest":
       await runShiftRequestDigest();

@@ -346,6 +346,23 @@ async function visibleClientCompanyIds(companyId: string) {
 
 // 依頼主オーダー: PUBLISHED recruitment postings from companies in this
 // company's 依頼主名簿 (i.e. companies this company dispatches staff to).
+// 削除されたオーダー（自社のものと、取引のある依頼主のもの）。カレンダーの日別詳細に
+// 履歴として残すため。削除した日時は削除時に更新されるupdatedAtを使う。
+export async function listDeletedOrdersForMonth(params: { companyId: string; year: number; month: number }) {
+  const clientCompanyIds = await visibleClientCompanyIds(params.companyId);
+  const start = new Date(Date.UTC(params.year, params.month - 1, 1));
+  const end = new Date(Date.UTC(params.year, params.month, 1));
+  return prisma.publicRecruitment.findMany({
+    where: {
+      status: "DELETED",
+      date: { gte: start, lt: end },
+      companyId: { in: [params.companyId, ...clientCompanyIds] },
+    },
+    include: { company: { select: { name: true } } },
+    orderBy: [{ date: "asc" }, { startTime: "asc" }],
+  });
+}
+
 export async function listClientRecruitments(companyId: string) {
   const clientCompanyIds = await visibleClientCompanyIds(companyId);
   if (clientCompanyIds.length === 0) return [];

@@ -463,6 +463,15 @@ export async function updateCompanyNotificationEmailAction(notificationEmail: st
   revalidatePath("/company/settings");
 }
 
+// 業務報告のまとめメールを送る時刻（日本時間の時、0〜23）
+export async function updateCompanyWorkReportDigestHourAction(hour: number) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) throw new Error("invalid_hour");
+  await prisma.company.update({ where: { id: membership.companyId }, data: { workReportDigestHour: hour } });
+  revalidatePath("/company/settings");
+}
+
 // 請求書の電子印（社印）。nullで削除。画像はブラウザ側で白背景を透過・縮小
 // したPNGのdata URLで受け取る。
 const MAX_SEAL_DATA_URL_LENGTH = 400_000;

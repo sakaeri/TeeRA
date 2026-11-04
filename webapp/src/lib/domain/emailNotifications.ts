@@ -3,7 +3,7 @@ import { randomBytes, createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { todayJst } from "@/lib/date";
 import {
-  sendWorkReportSubmittedEmail,
+  sendWorkReportDigestEmail,
   sendShiftRequestDigestEmail,
   sendPromoOrderEmail,
   sendShiftReminderEmail,
@@ -111,8 +111,8 @@ function combineJstDateTime(date: Date, hhmm: string): Date {
   return new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate(), h, m) - JST_OFFSET_MS);
 }
 
-// ①業務報告が届いたら即メール — 会社の「通知メールアドレス」が設定されて
-// いる場合のみ送る（未設定の会社には一切送らない）。
+// ①業務報告が届いたら、チームのマネージャー・リーダー（チームの無いシフトは本部）へ
+// すぐプッシュ通知する。メールは1日1回のまとめ（runWorkReportDigests）で送る。
 export async function notifyCompanyOfWorkReportSubmission(workReportId: string) {
   console.log(`[email-notif] notifyCompanyOfWorkReportSubmission called workReportId=${workReportId}`);
   const report = await prisma.workReport.findUnique({
@@ -127,41 +127,8 @@ export async function notifyCompanyOfWorkReportSubmission(workReportId: string) 
   const company = report.shift.company;
   const team = report.shift.team;
 
-  // チーム所属のシフトは、そのチームに通知先メアド・マネージャー/リーダー
-  // がいればそちらへ届け、本部へは送らない（本部は業務報告キューでいつでも
-  // 全件確認できるため、関係ないチームの通知で受信箱・プッシュが埋まる
-  // のを避ける）。チーム未設定のシフト、またはチームに通知先メアドが
-  // 無い場合は、これまでどおり本部のnotificationEmail・本部管理者/編集者
-  // へのプッシュにフォールバックする。
-  const destinationEmail = team?.notificationEmail || company.notificationEmail;
-
-  if (destinationEmail) {
-    console.log(`[email-notif] sending to ${destinationEmail} for company ${company.id}${team ? ` team ${team.id}` : ""}`);
-
-    const token = generateToken();
-    await prisma.accountActionToken.create({
-      data: {
-        tokenHash: hashToken(token),
-        kind: "APPROVE_WORK_REPORT",
-        workReportId: report.id,
-        expiresAt: new Date(Date.now() + APPROVE_TOKEN_TTL_MS),
-      },
-    });
-
-    await sendWorkReportSubmittedEmail(destinationEmail, {
-      companyName: company.name,
-      staffName: report.staff.name,
-      date: report.shift.date.toISOString().slice(0, 10),
-      timeLabel: reportTimeLabel(report, report.shift),
-      outcomeLabel: reportOutcomeLabel(report),
-      taskLabel: report.taskName ?? report.shift.taskName ?? "（未指定）",
-      approveUrl: absoluteUrl(`/email-actions/approve-work-report/${token}`),
-      reviewUrl: absoluteUrl("/company/settings?tab=workreports"),
-    });
-  } else {
-    console.log(`[email-notif] company ${company.id} has no notificationEmail set, skipping email`);
-  }
-
+  // メールは届くたびには送らず、会社が選んだ時刻に1日1回まとめて送る（runWorkReportDigests）。
+  // プッシュ通知はこれまで通りすぐ届ける。
   const pushTargetUserIds = team ? await teamManagerUserIds(team.id) : await companyAdminUserIds(company.id);
   await sendPushToUsers(pushTargetUserIds, {
     title: "業務報告が届きました",
@@ -717,5 +684,89 @@ export async function notifyRecruitmentAnnouncement(params: {
       body: params.body,
       appUrl: absoluteUrl("/staff"),
     });
+  }
+}
+
+// 業務報告のまとめメール（1日1回）。5分おきのジョブから呼ばれ、会社が選んだ時刻
+// （日本時間の「時」）になったら、前回のまとめ以降に届いた報告を一覧で送る。
+// 宛先は今まで通り、チームに通知先メアドがあればそちら、無ければ会社の通知メールアドレス。
+export async function runWorkReportDigests(now = new Date()) {
+  const jstNow = new Date(now.getTime() + JST_OFFSET_MS);
+  const hour = jstNow.getUTCHours();
+  const slot = new Date(
+    Date.UTC(jstNow.getUTCFullYear(), jstNow.getUTCMonth(), jstNow.getUTCDate(), hour) - JST_OFFSET_MS,
+  );
+  const companies = await prisma.company.findMany({
+    where: {
+      workReportDigestHour: hour,
+      OR: [{ workReportDigestSentAt: null }, { workReportDigestSentAt: { lt: slot } }],
+    },
+    select: { id: true, name: true, notificationEmail: true, workReportDigestSentAt: true },
+  });
+
+  for (const company of companies) {
+    const since = company.workReportDigestSentAt ?? new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    // 先に送った印を付けて、5分おきのジョブが重なっても二重に送らないようにする
+    const claimed = await prisma.company.updateMany({
+      where: {
+        id: company.id,
+        OR: [{ workReportDigestSentAt: null }, { workReportDigestSentAt: { lt: slot } }],
+      },
+      data: { workReportDigestSentAt: now },
+    });
+    if (claimed.count === 0) continue;
+
+    const [reports, pending] = await Promise.all([
+      prisma.workReport.findMany({
+        where: { submittedAt: { gt: since, lte: now }, shift: { companyId: company.id } },
+        include: { staff: true, shift: { include: { team: true } } },
+        orderBy: [{ shift: { date: "asc" } }, { submittedAt: "asc" }],
+      }),
+      prisma.workReport.findMany({
+        where: { submittedAt: { not: null }, approvalStatus: "PENDING", shift: { companyId: company.id } },
+        select: { shift: { select: { team: { select: { notificationEmail: true } } } } },
+      }),
+    ]);
+
+    const destinationOf = (team: { notificationEmail: string | null } | null) =>
+      team?.notificationEmail || company.notificationEmail;
+    const byDestination = new Map<string, typeof reports>();
+    for (const r of reports) {
+      const dest = destinationOf(r.shift.team);
+      if (!dest) continue;
+      byDestination.set(dest, [...(byDestination.get(dest) ?? []), r]);
+    }
+    for (const [dest, items] of byDestination) {
+      // まだ承認していない報告には、メールからそのまま承認できるリンクを付ける（7日間有効）
+      const approveUrls = new Map<string, string>();
+      for (const r of items) {
+        if (r.approvalStatus !== "PENDING") continue;
+        const token = generateToken();
+        await prisma.accountActionToken.create({
+          data: {
+            tokenHash: hashToken(token),
+            kind: "APPROVE_WORK_REPORT",
+            workReportId: r.id,
+            expiresAt: new Date(Date.now() + APPROVE_TOKEN_TTL_MS),
+          },
+        });
+        approveUrls.set(r.id, absoluteUrl(`/email-actions/approve-work-report/${token}`));
+      }
+      await sendWorkReportDigestEmail(dest, {
+        companyName: company.name,
+        items: items.map((r) => ({
+          approveUrl: approveUrls.get(r.id) ?? null,
+          staffName: r.staff.name,
+          date: r.shift.date.toISOString().slice(0, 10),
+          timeLabel: reportTimeLabel(r, r.shift),
+          outcomeLabel: reportOutcomeLabel(r),
+          taskLabel: r.taskName ?? r.shift.taskName ?? "（未指定）",
+          approved: r.approvalStatus === "APPROVED",
+        })),
+        pendingCount: pending.filter((p) => destinationOf(p.shift.team) === dest).length,
+        reviewUrl: absoluteUrl("/company/settings?tab=workreports"),
+      });
+    }
+    console.log(`[email-notif] work report digest company=${company.id} reports=${reports.length} destinations=${byDestination.size}`);
   }
 }

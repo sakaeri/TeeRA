@@ -20,6 +20,23 @@ import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 // page.on("console")ではブラウザ側のログしか拾えないため、devサーバーの
 // ログファイルを直接読む。
 const DEV_LOG_PATH = "/tmp/nextdev.log";
+// 業務報告のメールは1日1回のまとめになったため、提出のあとにまとめの送信（5分おきのジョブ）を
+// 動かして確かめる。会社の送信時刻を、ジョブに渡す時刻の「時」に合わせる（毎回1時間ずつ進める）。
+let digestClock = Date.now();
+// sinceMs：前回まとめた時刻として扱う時刻（この後に提出された報告がまとめに入る）
+async function runWorkReportDigest(companyId, sinceMs = Date.now() - 60e3) {
+  digestClock = Math.max(digestClock + 3600e3, Date.now() + 3600e3);
+  const hour = new Date(digestClock + 9 * 3600e3).getUTCHours();
+  psql(
+    `update "Company" set "workReportDigestHour"=${hour}, "workReportDigestSentAt"='${new Date(sinceMs).toISOString()}' where id='${companyId}';`,
+  );
+  await fetch(
+    `http://localhost:3000/api/cron/notifications?job=shift-start-reminders&now=${encodeURIComponent(new Date(digestClock).toISOString())}`,
+    { headers: { Authorization: "Bearer local-dev-cron-secret-not-for-production" } },
+  );
+  await new Promise((r) => setTimeout(r, 800));
+}
+
 function readServerLogSince(startSize) {
   const buf = readFileSync(DEV_LOG_PATH, "utf8");
   return buf.slice(startSize);
@@ -54,10 +71,17 @@ try {
   await admin.goto("http://localhost:3000/company/settings");
   await admin.getByRole("button", { name: /変更/ }).first().click();
   await admin.getByPlaceholder("例：shift@your-company.com").fill(notifEmail);
+  // 業務報告のまとめメールを送る時刻を選べる
+  await admin.locator("label", { hasText: "業務報告のまとめメールを送る時刻" }).locator("select").selectOption("20");
   await admin.getByRole("button", { name: "保存" }).click();
-  await admin.waitForTimeout(800);
+  // 保存は会社情報の項目を順に保存するので、少し長めに待つ
+  await admin.getByText("毎日 20:00").waitFor({ timeout: 10000 });
   let body = await admin.textContent("body");
   log("設定画面に通知メールアドレスが保存・表示される", body.includes(notifEmail));
+  log(
+    "まとめメールの時刻（20時）が保存される",
+    psql(`select "workReportDigestHour" from "Company" where id=(select "companyId" from "CompanyMembership" m join "User" u on u.id=m."userId" where u.email='${adminEmail}' limit 1);`) === "20",
+  );
 
   const companyId = psql(`select id from "Company" where name='${companyName}';`);
   const savedEmail = psql(`select "notificationEmail" from "Company" where id='${companyId}';`);
@@ -112,11 +136,12 @@ try {
   await staff.waitForTimeout(800);
 
   // ① 提出でメール（fallbackログ）が飛び、承認トークンが作られる
+  await runWorkReportDigest(companyId);
   const submitLog = readServerLogSince(logSizeBeforeSubmit);
-  const fallbackLog = submitLog.includes("[email:fallback]") && submitLog.includes(notifEmail) && submitLog.includes("業務報告が届きました")
+  const fallbackLog = submitLog.includes("[email:fallback]") && submitLog.includes(notifEmail) && submitLog.includes("業務報告のまとめ")
     ? submitLog
     : null;
-  log("業務報告提出で通知メール（fallback）が送られる", Boolean(fallbackLog));
+  log("業務報告のまとめメール（fallback）が送られる", Boolean(fallbackLog));
   log(
     "会社宛メールには個人名でなく会社名に「御中」が付く",
     Boolean(fallbackLog) && fallbackLog.includes(companyName) && fallbackLog.includes("御中"),
