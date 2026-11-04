@@ -54,7 +54,7 @@ try {
         "やることリスト作成",
         "スタッフを招待",
         "依頼主を追加",
-        "派遣会社を追加",
+        "お知らせを作成",
         "給与・請求書",
         "シフトチームを作成",
         "本部メンバーを管理",
@@ -103,9 +103,9 @@ try {
   let text = await page.locator("main").innerText();
   log("「依頼主を追加」で名簿の依頼主の追加メニューが開く", text.includes("依頼主名簿") && text.includes("本アカウントを招待"));
 
-  await tap("派遣会社を追加");
-  text = await page.locator("main").innerText();
-  log("「派遣会社を追加」で名簿の派遣会社の追加メニューが開く", text.includes("派遣会社名簿") && text.includes("本アカウントを招待"));
+  await tap("お知らせを作成");
+  await page.waitForTimeout(500);
+  log("「お知らせを作成」でダッシュボードのお知らせの作成が開く", (await page.getByLabel("件名（必須）").count()) > 0);
 
   await tap("給与・請求書");
   log("「給与・請求書」で給与・請求書の画面に移る", page.url().includes("/company/payroll"));

@@ -176,11 +176,15 @@ try {
   await staffPage.goto(`http://localhost:3000/staff?y=${ty}&m=${tm}`);
   await staffPage.waitForTimeout(1000);
   const home = await staffPage.locator("main").innerText();
-  log(
-    "スタッフのホームのお知らせ欄に出る（所属以外の会社からのお知らせも）",
-    home.includes(`【${clientName}`) && home.includes("雨の場合はレインウェアを持参してください"),
-  );
-  log("削除したお知らせはスタッフのお知らせ欄に出ない", !home.includes("集合場所がクラブハウス裏口に変わりました"));
+  log("スタッフのホームのお知らせ欄に出る（所属以外の会社からのお知らせも）", home.includes(`${clientName}・`));
+  const noticesPage = await staffPage.context().newPage();
+  await noticesPage.goto("http://localhost:3000/staff/notices");
+  await noticesPage.locator("main li button", { hasText: `${clientName}・` }).first().click();
+  await noticesPage.waitForTimeout(300);
+  const noticesText = await noticesPage.locator("main").innerText();
+  log("お知らせを開くと本文が出る", noticesText.includes("雨の場合はレインウェアを持参してください"));
+  log("削除したお知らせはスタッフのお知らせに出ない", !noticesText.includes("集合場所がクラブハウス裏口に変わりました"));
+  await noticesPage.close();
   const popup = staffPage.locator("div.fixed.inset-0.z-30");
   if (await popup.count()) {
     await popup.last().getByRole("button", { name: "✕" }).click();

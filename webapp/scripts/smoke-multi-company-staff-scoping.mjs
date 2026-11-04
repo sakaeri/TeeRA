@@ -17,9 +17,8 @@ function psql(sql) {
 // 1人のスタッフが2社（A社・B社）で本当に稼働している状態を作って検証する。
 // カレンダー・タイムカードは「スタッフ画面はその人個人の所有物」という
 // 方針に合わせ、アクティブな会社に関わらず所属する全社分をまとめて表示
-// する（絞り込みは配属先セレクトで任意に行う）。一方、お知らせ・所属先
-// 設定（契約書）のように本質的に1社宛の情報は、引き続きアクティブな
-// 会社だけに絞られる。
+// する（絞り込みは配属先セレクトで任意に行う）。お知らせも会社名つきで
+// 全社分が溜まる（お知らせのメニューで会社ごとに絞り込める）。
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 const adminACtx = await browser.newContext();
@@ -151,8 +150,7 @@ try {
   let mainText = await staff.locator("main").textContent();
   let gridText = await staff.locator(".grid.grid-cols-7.flex-1").textContent();
   log("カレンダーはアクティブ会社に関わらずA社・B社とも表示される", gridText.includes(shortA) && gridText.includes(shortB));
-  log("A社アクティブ時: A社のお知らせが表示される", mainText.includes("A社からのお知らせ"));
-  log("A社アクティブ時: B社のお知らせは表示されない", !mainText.includes("B社からのお知らせ"));
+  log("お知らせはアクティブ会社に関わらずA社・B社とも表示される（会社名つき）", mainText.includes("A社からのお知らせ") && mainText.includes("B社からのお知らせ"));
 
   // 配属先セレクトでA社だけに絞り込める（selectの<option>自体にも両社名が
   // 常に含まれるため、main全体ではなくカレンダーの日付グリッドだけを見る）
@@ -186,8 +184,7 @@ try {
   mainText = await staff.locator("main").textContent();
   gridText = await staff.locator(".grid.grid-cols-7.flex-1").textContent();
   log("B社アクティブ時もカレンダーはA社・B社とも表示される", gridText.includes(shortA) && gridText.includes(shortB));
-  log("B社アクティブ時: B社のお知らせが表示される", mainText.includes("B社からのお知らせ"));
-  log("B社アクティブ時: A社のお知らせは表示されない", !mainText.includes("A社からのお知らせ"));
+  log("B社アクティブ時もお知らせはA社・B社とも表示される", mainText.includes("A社からのお知らせ") && mainText.includes("B社からのお知らせ"));
 
   await staff.goto("http://localhost:3000/staff/timecard");
   mainText = await staff.locator("main").textContent();

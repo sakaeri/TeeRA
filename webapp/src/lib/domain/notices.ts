@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { todayJst } from "@/lib/date";
+import { noteAttachmentView } from "@/lib/noteAttachments";
 
 // スタッフ向けの一方向のお知らせ（例：個別単価の変更・終了）。同意は求めず、
 // 既読管理のみ。給与計算はこれとは無関係に、シフト日付時点で有効な単価で
@@ -9,30 +9,49 @@ export async function createStaffNotice(params: { companyId: string; staffUserId
   return prisma.staffNotice.create({ data: params });
 }
 
-// 所属会社からのお知らせは、その会社を開いている時だけ出す。所属していない
-// 会社からのお知らせ（派遣先の依頼主が出した募集のお知らせなど）は、どの
-// 会社を開いていても出す（そうしないと見る場所がないため）。
-export async function listStaffNotices(staffUserId: string, activeCompanyId: string, memberCompanyIds: string[]) {
-  return prisma.staffNotice.findMany({
-    where: {
-      staffUserId,
-      AND: [
-        { OR: [{ companyId: activeCompanyId }, { companyId: { notIn: memberCompanyIds } }] },
-        // 掲載期限を過ぎた会社からのお知らせは出さない
-        {
-          OR: [
-            { companyAnnouncementId: null },
-            {
-              companyAnnouncement: {
-                is: { OR: [{ expiresOn: null }, { expiresOn: { gte: new Date(`${todayJst()}T00:00:00.000Z`) } }] },
-              },
-            },
-          ],
-        },
-      ],
+// スタッフのお知らせ（所属している会社・派遣先の会社すべて）。新しい順に溜まっていく。
+// 会社からのお知らせ（ダッシュボードで出したもの）はタイトル・本文・添付を、それ以外
+// （単価の変更・募集の追加のお知らせなど）は本文の1行目をタイトルとして返す。
+export async function listAllStaffNotices(staffUserId: string, options: { take?: number; unreadOnly?: boolean } = {}) {
+  const rows = await prisma.staffNotice.findMany({
+    where: { staffUserId, ...(options.unreadOnly ? { readAt: null } : {}) },
+    include: {
+      company: { select: { id: true, name: true } },
+      companyAnnouncement: { include: { attachments: { orderBy: { createdAt: "asc" } } } },
     },
     orderBy: { createdAt: "desc" },
-    take: 20,
+    take: options.take ?? 200,
+  });
+  return rows.map((n) => {
+    const a = n.companyAnnouncement;
+    // 「【見出し】本文」（募集の追加のお知らせ）は見出しをタイトルに、それ以外は1行目をタイトルに
+    const lines = n.message.split("\n");
+    const heading = lines[0].match(/^【([^】]*)】(.*)$/);
+    const plainTitle = heading ? heading[1] : lines[0];
+    const plainBody = [heading?.[2] ?? "", ...lines.slice(1)].filter((x) => x).join("\n");
+    return {
+      id: n.id,
+      companyId: n.company.id,
+      companyName: n.company.name,
+      title: a ? a.title : plainTitle,
+      body: a ? a.body : plainBody,
+      attachments: a ? a.attachments.map((x) => noteAttachmentView(x)) : [],
+      edited: Boolean(a?.editedAt),
+      createdAt: n.createdAt.toISOString(),
+      read: Boolean(n.readAt),
+    };
+  });
+}
+
+export async function countUnreadStaffNotices(staffUserId: string) {
+  return prisma.staffNotice.count({ where: { staffUserId, readAt: null } });
+}
+
+// 「すべて既読にする」（会社で絞り込んでいるときはその会社の分だけ）
+export async function markAllStaffNoticesRead(staffUserId: string, companyId?: string | null) {
+  return prisma.staffNotice.updateMany({
+    where: { staffUserId, readAt: null, ...(companyId ? { companyId } : {}) },
+    data: { readAt: new Date() },
   });
 }
 

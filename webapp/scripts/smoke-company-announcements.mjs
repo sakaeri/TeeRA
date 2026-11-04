@@ -3,9 +3,11 @@ import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 // 会社からスタッフへのお知らせ：
-// ・ダッシュボードで書くと、自社スタッフ（＋派遣スタッフ）のホームの「お知らせ」に出る
-// ・チームを選ぶとそのチームのスタッフだけ、「派遣スタッフにも出す」を外すと派遣スタッフには出ない
-// ・既読の人数が出る、削除するとスタッフのホームからも消える、掲載期限を過ぎたら出ない
+// ・宛先は「全スタッフ（自社＋派遣）／自社スタッフのみ／チームを選ぶ／個別に選ぶ」
+// ・スタッフは「お知らせ」メニューに溜まり（会社名・タイトル・掲載日、未読は太字・数字のバッジ）、
+//   ホームの上には未読が最大3件＋「すべて見る」。開くと既読、すべて既読にもできる
+// ・会社側で直すとスタッフのお知らせにも反映（編集済み）、削除するとスタッフからも消える
+// ・添付ファイルは受け取ったスタッフと会社の人だけが開ける
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -82,60 +84,128 @@ try {
   const noticeFor = (uid, title) =>
     psql(`select count(*) from "StaffNotice" n join "CompanyAnnouncement" a on a.id=n."companyAnnouncementId" where n."staffUserId"='${uid}' and a.title='${title}';`);
 
-  const post = async ({ title, body, team, agency = true, expires }) => {
+  const post = async ({ title, body, audience, teams = [], people = [] }) => {
     await admin.goto("http://localhost:3000/company");
-    await admin.getByRole("button", { name: "＋お知らせを出す" }).click();
+    await admin.getByRole("button", { name: "＋お知らせを作成" }).click();
     await admin.getByLabel("件名（必須）").fill(title);
     if (body) await admin.getByLabel("本文").fill(body);
-    if (team) await admin.getByLabel("宛先").selectOption({ label: `${team}のスタッフ` });
-    if (!agency) await admin.getByLabel("派遣スタッフ（派遣会社から来ているスタッフ）にも出す").uncheck();
-    if (expires) await admin.locator('input[type="date"]').fill(expires);
+    if (audience) await admin.getByLabel("宛先").selectOption({ label: audience });
+    for (const t of teams) await admin.getByRole("group", { name: "チーム" }).getByLabel(t).check();
+    for (const p of people) {
+      await admin.getByPlaceholder("名前で探す").fill(p);
+      await admin.getByRole("group", { name: "スタッフ" }).getByLabel(p).check();
+    }
     await admin.getByRole("button", { name: "お知らせを出す", exact: true }).click();
     await admin.getByText(/人にお知らせしました/).waitFor({ timeout: 15000 });
   };
 
-  // 全員宛て（派遣スタッフも）
+  // ダッシュボードの「よく使う操作」から開ける
+  await admin.goto("http://localhost:3000/company?announce=1#announcements");
+  log("「お知らせを作成」で入力欄が開いた状態になる", (await admin.getByLabel("件名（必須）").count()) === 1);
+
   await post({ title: "全員へのお知らせ", body: "年末年始は12/29〜1/3お休みです" });
   log(
-    "全員宛ては自社スタッフ（チームの有無を問わず）と派遣スタッフに届く",
+    "全スタッフ宛ては自社スタッフと派遣スタッフに届く",
     noticeFor(realStaffId, "全員へのお知らせ") === "1" && noticeFor(otherStaff, "全員へのお知らせ") === "1" && noticeFor(agencyStaff, "全員へのお知らせ") === "1",
   );
-
-  // チームA宛て・派遣スタッフ除く
-  await post({ title: "チームAだけ", team: "チームA", agency: false });
+  await post({ title: "自社だけ", audience: "自社スタッフのみ" });
   log(
-    "チーム宛てはそのチームのスタッフだけ（派遣スタッフ除く）",
+    "自社スタッフのみは派遣スタッフに届かない",
+    noticeFor(realStaffId, "自社だけ") === "1" && noticeFor(otherStaff, "自社だけ") === "1" && noticeFor(agencyStaff, "自社だけ") === "0",
+  );
+  await post({ title: "チームAだけ", audience: "チームを選ぶ", teams: ["チームA"] });
+  log(
+    "チーム宛てはそのチームのスタッフだけ",
     noticeFor(realStaffId, "チームAだけ") === "1" && noticeFor(otherStaff, "チームAだけ") === "0" && noticeFor(agencyStaff, "チームAだけ") === "0",
   );
+  await post({ title: "個別のお知らせ", audience: "個別に選ぶ", people: ["お知らせスタッフ", "派遣スタッフ"] });
+  log(
+    "個別は選んだ人だけ（派遣スタッフも選べる）",
+    noticeFor(realStaffId, "個別のお知らせ") === "1" && noticeFor(otherStaff, "個別のお知らせ") === "0" && noticeFor(agencyStaff, "個別のお知らせ") === "1",
+  );
+  let card = await admin.locator("#announcements").innerText();
+  log("会社側の一覧に宛先が出る", card.includes("チームA") && card.includes("個別（2人）") && card.includes("自社スタッフのみ"));
+  log("既読の人数は出さない", !card.includes("既読"));
 
-  // 期限切れ
-  await post({ title: "期限切れのお知らせ", expires: "2020-01-01" });
+  // 添付（DBに直接付ける）— 受け取った人は開ける、受け取っていない人は開けない
+  const annId = psql(`select id from "CompanyAnnouncement" where "companyId"='${companyId}' and title='全員へのお知らせ';`);
+  const attId = psql(
+    `insert into "NoteAttachment" (id, "companyAnnouncementId", url, "fileName", "contentType", size, "createdAt") values (gen_random_uuid()::text, '${annId}', 'http://localhost:3000/does-not-exist.png', '案内.png', 'image/png', 100, now()) returning id;`,
+  );
+  const teamOnlyId = psql(`select id from "CompanyAnnouncement" where "companyId"='${companyId}' and title='チームAだけ';`);
+  const att2Id = psql(
+    `insert into "NoteAttachment" (id, "companyAnnouncementId", url, "fileName", "contentType", size, "createdAt") values (gen_random_uuid()::text, '${teamOnlyId}', 'http://localhost:3000/does-not-exist.png', '別紙.png', 'image/png', 100, now()) returning id;`,
+  );
+  // 「チームAだけ」を本物のスタッフが受け取っていないことにして、開けないのを確かめる
+  psql(`delete from "StaffNotice" where "companyAnnouncementId"='${teamOnlyId}' and "staffUserId"='${realStaffId}';`);
+  const s1 = (await staff.request.get(`http://localhost:3000/api/note-attachments/${attId}`)).status();
+  const s2 = (await staff.request.get(`http://localhost:3000/api/note-attachments/${att2Id}`)).status();
+  log("受け取ったお知らせの添付は開ける（403にならない）", s1 !== 403);
+  log("受け取っていないお知らせの添付は開けない（403）", s2 === 403);
+  log("会社の管理者は添付を開ける", (await admin.request.get(`http://localhost:3000/api/note-attachments/${att2Id}`)).status() !== 403);
 
-  // スタッフのホーム
+  // スタッフのホーム：未読が最大3件＋すべて見る
   await staff.goto("http://localhost:3000/staff");
   await staff.waitForTimeout(1200);
-  let home = await staff.textContent("body");
-  log("スタッフのホームに件名と本文が出る", home.includes("【全員へのお知らせ】") && home.includes("年末年始は12/29〜1/3お休みです"));
-  log("チーム宛てのお知らせも出る", home.includes("【チームAだけ】"));
-  log("掲載期限を過ぎたお知らせは出ない", !home.includes("期限切れのお知らせ"));
+  const popupClose = staff.getByRole("button", { name: "✕", exact: true });
+  if ((await popupClose.count()) > 0) await popupClose.first().click();
+  let home = await staff.locator("main").innerText();
+  log("ホームに「お知らせ（未読3件）」が出る", home.includes("お知らせ（未読3件）"));
+  log("ホームには最大3件（新しい順）", home.includes("個別のお知らせ") && home.includes("自社だけ") && home.includes("全員へのお知らせ"));
+  const navBadge = await staff.getByRole("link", { name: /お知らせ/ }).filter({ hasText: "3" }).count();
+  log("メニューの「お知らせ」に未読数が出る", navBadge > 0);
 
-  // 既読 → 会社側に既読数
-  await staff.locator("li", { hasText: "【全員へのお知らせ】" }).getByRole("button", { name: "既読にする" }).click();
+  // お知らせの一覧
+  await staff.getByRole("link", { name: "すべて見る" }).click();
+  await staff.waitForURL(/\/staff\/notices/);
+  await staff.waitForTimeout(500);
+  let list = await staff.locator("main").innerText();
+  log("一覧に会社名・タイトルが出る", list.includes(companyName) && list.includes("全員へのお知らせ"));
+  const boldCount = await staff.locator("main li span.font-bold").count();
+  log("未読は太字（3件）", boldCount === 3);
+  await staff.locator("main li button", { hasText: "全員へのお知らせ" }).click();
   await staff.waitForTimeout(800);
+  list = await staff.locator("main").innerText();
+  log(
+    "開くと本文と添付が出る",
+    list.includes("年末年始は12/29〜1/3お休みです") && (await staff.getByRole("button", { name: "案内.pngを大きく表示" }).count()) === 1,
+  );
+  log("開くと既読になる", psql(`select count(*) from "StaffNotice" where "staffUserId"='${realStaffId}' and "readAt" is null;`) === "2");
+
+  // 会社側で直す → スタッフにも反映（編集済み）。仮の添付（保存先が本物でない）は外しておく
+  psql(`delete from "NoteAttachment" where id in ('${attId}', '${att2Id}');`);
   await admin.goto("http://localhost:3000/company");
-  await admin.waitForTimeout(800);
-  const card = await admin.locator("section", { hasText: "スタッフへのお知らせ" }).last().innerText();
-  log("会社側に既読の人数が出る（1/3人）", card.includes("既読 1/3人"));
+  await admin.locator("#announcements li", { hasText: "全員へのお知らせ" }).getByRole("button", { name: "編集" }).click();
+  await admin.getByLabel("本文").fill("年末年始は12/28〜1/4お休みです");
+  await admin.getByRole("button", { name: "保存する" }).click();
+  await admin.waitForTimeout(1200);
+  card = await admin.locator("#announcements").innerText();
+  log("会社側に（編集済み）が出る", card.includes("（編集済み）") && card.includes("12/28〜1/4"));
+  await staff.goto("http://localhost:3000/staff/notices");
+  await staff.locator("main li button", { hasText: "全員へのお知らせ" }).click();
+  await staff.waitForTimeout(500);
+  list = await staff.locator("main").innerText();
+  log("直した内容がスタッフにも反映される", list.includes("12/28〜1/4") && list.includes("（編集済み）"));
+  log("直しても既読はそのまま", psql(`select count(*) from "StaffNotice" where "staffUserId"='${realStaffId}' and "readAt" is null;`) === "2");
+
+  // すべて既読
+  await staff.getByRole("button", { name: "すべて既読にする" }).click();
+  await staff.waitForTimeout(800);
+  log("すべて既読にできる", psql(`select count(*) from "StaffNotice" where "staffUserId"='${realStaffId}' and "readAt" is null;`) === "0");
+  await staff.goto("http://localhost:3000/staff");
+  await staff.waitForTimeout(800);
+  home = await staff.locator("main").innerText();
+  log("未読が無いとホームのお知らせ欄は出ない", !home.includes("お知らせ（未読"));
 
   // 削除
   admin.once("dialog", (d) => d.accept());
-  await admin.locator("li", { hasText: "チームAだけ" }).getByRole("button", { name: "削除" }).click();
+  await admin.locator("#announcements li", { hasText: "個別のお知らせ" }).getByRole("button", { name: "削除" }).click();
   await admin.waitForTimeout(1000);
-  log("削除するとスタッフのお知らせも消える", noticeFor(realStaffId, "チームAだけ") === "0");
-  await staff.goto("http://localhost:3000/staff");
-  await staff.waitForTimeout(1000);
-  home = await staff.textContent("body");
-  log("削除したお知らせはスタッフのホームに出ない", !home.includes("【チームAだけ】"));
+  log("削除するとスタッフのお知らせも消える", noticeFor(realStaffId, "個別のお知らせ") === "0" && noticeFor(agencyStaff, "個別のお知らせ") === "0");
+  await staff.goto("http://localhost:3000/staff/notices");
+  await staff.waitForTimeout(500);
+  list = await staff.locator("main").innerText();
+  log("削除したお知らせは一覧に出ない", !list.includes("個別のお知らせ") && list.includes("全員へのお知らせ"));
 
   console.log(process.exitCode ? "COMPANY ANNOUNCEMENTS SMOKE TEST HAD FAILURES" : "COMPANY ANNOUNCEMENTS SMOKE TEST PASSED");
 } catch (err) {
