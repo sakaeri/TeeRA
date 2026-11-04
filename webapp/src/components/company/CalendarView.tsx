@@ -921,7 +921,12 @@ function DayDetailModal({
   onCreateShiftForStaff: (staffUserId: string) => void;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<"shifts" | "client" | "recruit">("shifts");
+  const [selectedTab, setTab] = useState<"shifts" | "client" | "recruit">("shifts");
+  // 開いていたタブの中身が無くなったら（募集を削除した直後など）スタッフシフトに戻す
+  const tab =
+    (selectedTab === "recruit" && recruitments.length === 0) || (selectedTab === "client" && clientOrders.length === 0)
+      ? "shifts"
+      : selectedTab;
   const [editingRecruitmentId, setEditingRecruitmentId] = useState<string | null>(null);
   const isPastDay = dateStr < todayJst();
   const leftOffShifts = clientCancelledLeftOff(history, shifts);
@@ -1213,8 +1218,8 @@ function DayDetailModal({
             ))}
           </ul>
         )}
+        <DeletedOrdersSection orders={deletedOrders} />
       </div>
-      <DeletedOrdersSection orders={deletedOrders} />
 
       {editingRecruitmentId ? (
         <OrderEditModal

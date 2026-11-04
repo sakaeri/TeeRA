@@ -4,7 +4,7 @@ import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 // カレンダー：
 // ・PCの幅では、絞り込み・PDF・画像のボタンに文字も出る（スマホはアイコンだけ）
-// ・削除したオーダーは消えずに、その日の詳細の「削除されたオーダー」に残る
+// ・削除したオーダーは消えずに、その日の詳細の「削除されたオーダー」に残る（スマホでも枠の中に）
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -69,6 +69,14 @@ try {
   await page.goto(`http://localhost:3000/company/calendar?y=${y}&m=${m}`);
   await page.waitForTimeout(800);
   log("スマホの幅では絞り込みボタンはアイコンだけ", (await page.getByRole("button", { name: "絞り込み", exact: true }).innerText()).trim() === "");
+
+  // スマホの幅でも、詳細の枠が細くならず、履歴が枠の中に出る（以前は枠の外にはみ出していた）
+  await page.locator(`button:has(> span:text-is("${d}"))`).first().click();
+  await page.waitForTimeout(600);
+  const panel = page.locator("div.fixed.inset-0").last().locator("> div").first();
+  const box = await panel.boundingBox();
+  log("スマホの幅で日別詳細の枠が画面いっぱいに広がる", box && box.width >= 340);
+  log("削除されたオーダーの履歴が詳細の枠の中に出る", (await panel.innerText()).includes("削除されたオーダー（1件）"));
 
   console.log(process.exitCode ? "CALENDAR DELETED ORDERS SMOKE TEST HAD FAILURES" : "CALENDAR DELETED ORDERS SMOKE TEST PASSED");
 } catch (err) {
