@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { todayJst } from "@/lib/date";
 
 // スタッフ向けの一方向のお知らせ（例：個別単価の変更・終了）。同意は求めず、
 // 既読管理のみ。給与計算はこれとは無関係に、シフト日付時点で有効な単価で
@@ -15,7 +16,20 @@ export async function listStaffNotices(staffUserId: string, activeCompanyId: str
   return prisma.staffNotice.findMany({
     where: {
       staffUserId,
-      OR: [{ companyId: activeCompanyId }, { companyId: { notIn: memberCompanyIds } }],
+      AND: [
+        { OR: [{ companyId: activeCompanyId }, { companyId: { notIn: memberCompanyIds } }] },
+        // 掲載期限を過ぎた会社からのお知らせは出さない
+        {
+          OR: [
+            { companyAnnouncementId: null },
+            {
+              companyAnnouncement: {
+                is: { OR: [{ expiresOn: null }, { expiresOn: { gte: new Date(`${todayJst()}T00:00:00.000Z`) } }] },
+              },
+            },
+          ],
+        },
+      ],
     },
     orderBy: { createdAt: "desc" },
     take: 20,

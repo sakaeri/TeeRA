@@ -23,7 +23,7 @@ export function StaffNoticesSection({ notices }: { notices: Notice[] }) {
       <ul className="flex flex-col gap-1">
         {visible.map((n) => (
           <li key={n.id} className="flex items-start justify-between gap-2 text-xs text-foreground/90">
-            <span>{n.message}</span>
+            <span className="whitespace-pre-wrap break-words">{n.message}</span>
             <button
               type="button"
               onClick={() => dismiss(n.id)}

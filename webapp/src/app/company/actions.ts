@@ -12,6 +12,7 @@ import {
   isCompanyScopeAdmin,
 } from "@/lib/auth/permissions";
 import { isClientSiteShiftOf } from "@/lib/domain/shifts";
+import { createCompanyAnnouncement, deleteCompanyAnnouncement } from "@/lib/domain/companyAnnouncements";
 import { getWorkReportDetail } from "@/lib/domain/workReports";
 import { prisma } from "@/lib/prisma";
 import {
@@ -841,4 +842,44 @@ export async function getWorkReportDetailAction(shiftId: string) {
       : isClientSiteShiftOf(shift, membership.companyId) && isCompanyScopeAdmin(membership);
   if (!allowed) throw new Error("forbidden");
   return getWorkReportDetail(shiftId);
+}
+
+// 会社からスタッフへのお知らせ。全員宛ては本部、チーム宛てはそのチームのマネージャーも出せる。
+export async function createCompanyAnnouncementAction(input: {
+  title: string;
+  body: string;
+  teamId: string | null;
+  includeAgencyStaff: boolean;
+  push: boolean;
+  expiresOn: string | null;
+}) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  const teamId = input.teamId || null;
+  if (!canManage(membership, teamId)) throw new Error("forbidden");
+  if (teamId) {
+    await prisma.team.findFirstOrThrow({ where: { id: teamId, companyId: membership.companyId } });
+  }
+  const expiresOn = input.expiresOn && /^\d{4}-\d{2}-\d{2}$/.test(input.expiresOn) ? new Date(`${input.expiresOn}T00:00:00.000Z`) : null;
+  const result = await createCompanyAnnouncement({
+    companyId: membership.companyId,
+    teamId,
+    title: String(input.title ?? ""),
+    body: String(input.body ?? ""),
+    includeAgencyStaff: input.includeAgencyStaff === true,
+    push: input.push === true,
+    expiresOn,
+    createdByUserId: userId,
+  });
+  revalidatePath("/company");
+  return { recipientCount: result.recipientCount };
+}
+
+export async function deleteCompanyAnnouncementAction(announcementId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const announcement = await prisma.companyAnnouncement.findFirstOrThrow({
+    where: { id: announcementId, companyId: membership.companyId },
+  });
+  if (!canManage(membership, announcement.teamId)) throw new Error("forbidden");
+  await deleteCompanyAnnouncement(membership.companyId, announcementId);
+  revalidatePath("/company");
 }
