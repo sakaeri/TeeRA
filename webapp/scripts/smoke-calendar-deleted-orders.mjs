@@ -4,7 +4,8 @@ import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 // カレンダー：
 // ・PCの幅では、絞り込み・PDF・画像のボタンに文字も出る（スマホはアイコンだけ）
-// ・削除したオーダーは消えずに、その日の詳細の「削除されたオーダー」に残る
+// ・削除したオーダーは消えずに、その日の詳細の募集一覧のタブの下に「削除されたオーダー」として残る
+//   （シフトの変更履歴とは混ぜない。スマホでも枠の中に）
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -60,6 +61,9 @@ try {
   await page.locator(`button:has(> span:text-is("${d}"))`).first().click();
   await page.waitForTimeout(600);
   const modal = page.locator("div.fixed.inset-0").last();
+  log("スタッフシフトのタブ（シフトの変更履歴）には混ぜない", !(await modal.innerText()).includes("削除されたオーダー"));
+  await modal.getByRole("button", { name: /募集一覧/ }).click();
+  log("削除した分しか無い日も募集一覧のタブが出て、募集は無いと出る", (await modal.innerText()).includes("この日の募集はありません"));
   await modal.getByRole("button", { name: /削除されたオーダー（1件）/ }).click();
   const text = await modal.innerText();
   log("削除したオーダーが「削除されたオーダー」に残る", text.includes("消したオーダー 08:00〜17:00・3名") && text.includes("削除"));
@@ -69,6 +73,15 @@ try {
   await page.goto(`http://localhost:3000/company/calendar?y=${y}&m=${m}`);
   await page.waitForTimeout(800);
   log("スマホの幅では絞り込みボタンはアイコンだけ", (await page.getByRole("button", { name: "絞り込み", exact: true }).innerText()).trim() === "");
+
+  // スマホの幅でも、詳細の枠が細くならず、履歴が枠の中に出る（以前は枠の外にはみ出していた）
+  await page.locator(`button:has(> span:text-is("${d}"))`).first().click();
+  await page.waitForTimeout(600);
+  const panel = page.locator("div.fixed.inset-0").last().locator("> div").first();
+  const box = await panel.boundingBox();
+  await panel.getByRole("button", { name: /募集一覧/ }).click();
+  log("スマホの幅で日別詳細の枠が画面いっぱいに広がる", box && box.width >= 340);
+  log("削除されたオーダーの履歴が詳細の枠の中に出る", (await panel.innerText()).includes("削除されたオーダー（1件）"));
 
   console.log(process.exitCode ? "CALENDAR DELETED ORDERS SMOKE TEST HAD FAILURES" : "CALENDAR DELETED ORDERS SMOKE TEST PASSED");
 } catch (err) {
