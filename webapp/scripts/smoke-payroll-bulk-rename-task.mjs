@@ -80,7 +80,7 @@ try {
   await staffPanel1.getByRole("button", { name: "業務内容単価", exact: true }).click();
   await staffPanel1.getByRole("button", { name: "＋業務内容を追加" }).click();
   await staffPanel1.locator('input[placeholder*="業務内容"]').fill("キャディ業務");
-  await staffPanel1.locator('input[type=number]').fill("1500");
+  await staffPanel1.locator('input[placeholder="金額"]').fill("1500");
   await staffPanel1.getByRole("button", { name: "追加", exact: true }).click();
   await admin.waitForTimeout(500);
 
