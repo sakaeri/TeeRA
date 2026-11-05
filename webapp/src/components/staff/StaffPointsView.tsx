@@ -7,8 +7,8 @@ import { redeemPromoItemAction } from "@/app/staff/points/actions";
 type Item = {
   id: string;
   imageUrl: string;
-  imageUrl2: string | null;
-  imageUrl3: string | null;
+  // 画像（最大5枚、1枚目＝imageUrl）
+  imageUrls: string[];
   name: string;
   pointsCost: number;
   stock: number;
@@ -305,7 +305,7 @@ function ItemDetailModal({
   const outOfStock = item.stock <= 0;
   const insufficientPoints = balance < item.pointsCost;
   const canRedeem = !pendingSince && !outOfStock && !insufficientPoints;
-  const images = [item.imageUrl, item.imageUrl2, item.imageUrl3].filter((u): u is string => Boolean(u));
+  const images = item.imageUrls.length > 0 ? item.imageUrls : [item.imageUrl];
   const [imageIndex, setImageIndex] = useState(0);
 
   return (

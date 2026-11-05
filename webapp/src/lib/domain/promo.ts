@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { promoImageColumns } from "@/lib/promoImages";
 
 export async function listPromoItems(companyId: string) {
   return prisma.promoItem.findMany({ where: { companyId }, orderBy: { createdAt: "asc" } });
@@ -7,30 +8,31 @@ export async function listPromoItems(companyId: string) {
 
 export async function createPromoItem(params: {
   companyId: string;
-  imageUrl: string;
-  imageUrl2?: string;
-  imageUrl3?: string;
+  imageUrls: string[];
   name: string;
   pointsCost: number;
   stock: number;
   description?: string;
 }) {
-  return prisma.promoItem.create({ data: params });
+  const { imageUrls, ...rest } = params;
+  return prisma.promoItem.create({ data: { ...rest, ...promoImageColumns(imageUrls) } });
 }
 
 export async function updatePromoItem(
   id: string,
   changes: Partial<{
-    imageUrl: string;
-    imageUrl2: string;
-    imageUrl3: string;
+    imageUrls: string[];
     name: string;
     pointsCost: number;
     stock: number;
     description: string;
   }>,
 ) {
-  return prisma.promoItem.update({ where: { id }, data: changes });
+  const { imageUrls, ...rest } = changes;
+  return prisma.promoItem.update({
+    where: { id },
+    data: { ...rest, ...(imageUrls ? promoImageColumns(imageUrls) : {}) },
+  });
 }
 
 export async function deletePromoItem(id: string) {

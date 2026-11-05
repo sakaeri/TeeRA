@@ -1,3 +1,4 @@
+import { promoImageUrls } from "@/lib/promoImages";
 import { requireCompanyStaffRole } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import {
@@ -32,8 +33,7 @@ export default async function StaffPointsPage() {
         items={items.map((i) => ({
           id: i.id,
           imageUrl: i.imageUrl,
-          imageUrl2: i.imageUrl2,
-          imageUrl3: i.imageUrl3,
+          imageUrls: promoImageUrls(i),
           name: i.name,
           pointsCost: i.pointsCost,
           stock: i.stock,

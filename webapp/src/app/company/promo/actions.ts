@@ -7,9 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { createPromoItem, updatePromoItem, deletePromoItem, markRedemptionShipped } from "@/lib/domain/promo";
 
 export async function createPromoItemAction(input: {
-  imageUrl: string;
-  imageUrl2?: string;
-  imageUrl3?: string;
+  imageUrls: string[];
   name: string;
   pointsCost: number;
   stock: number;
@@ -25,9 +23,7 @@ export async function createPromoItemAction(input: {
 export async function updatePromoItemAction(
   id: string,
   changes: Partial<{
-    imageUrl: string;
-    imageUrl2: string;
-    imageUrl3: string;
+    imageUrls: string[];
     name: string;
     pointsCost: number;
     stock: number;

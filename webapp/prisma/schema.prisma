@@ -1504,8 +1504,10 @@ model PromoItem {
   id          String   @id @default(cuid())
   companyId   String
   imageUrl    String
-  imageUrl2   String? // 商品画像2〜3枚目（任意）
+  imageUrl2   String? // 商品画像2〜5枚目（任意）
   imageUrl3   String?
+  imageUrl4   String?
+  imageUrl5   String?
   name        String
   pointsCost  Int
   stock       Int
