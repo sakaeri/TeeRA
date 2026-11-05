@@ -376,11 +376,35 @@ export async function listShiftHistoryForMonth(params: {
   const start = new Date(Date.UTC(params.year, params.month - 1, 1));
   const end = new Date(Date.UTC(params.year, params.month, 1));
 
+  const own: Prisma.ShiftWhereInput = {
+    companyId: params.companyId,
+    teamId: params.teamId ?? (params.restrictToTeamIds ? { in: params.restrictToTeamIds } : undefined),
+  };
+  // 派遣会社が自社（依頼主）の現場・オーダーに入れて、その後に解除・変更したシフト
+  // （派遣会社名義）も、依頼主の履歴に出す。カレンダー本体（listShiftsForMonth）と
+  // 同じく三者で共有する。チームの絞り込みは依頼主側のチームとは関係がないので全体表示の時だけ
+  let clientSite: Prisma.ShiftWhereInput | null =
+    params.teamId || params.restrictToTeamIds
+      ? null
+      : {
+          source: "CLIENT",
+          companyId: { not: params.companyId },
+          companyRelationship: { clientCompanyId: params.companyId },
+        };
+  if (params.companyRelationshipId) {
+    const rel = await prisma.companyRelationship.findUniqueOrThrow({ where: { id: params.companyRelationshipId } });
+    if (rel.agencyCompanyId === params.companyId) {
+      own.companyRelationshipId = params.companyRelationshipId;
+      clientSite = null;
+    } else if (clientSite) {
+      clientSite.companyRelationshipId = params.companyRelationshipId;
+      own.companyRelationshipId = params.companyRelationshipId;
+    }
+  }
+
   return prisma.shift.findMany({
     where: {
-      companyId: params.companyId,
-      teamId: params.teamId ?? (params.restrictToTeamIds ? { in: params.restrictToTeamIds } : undefined),
-      ...(params.companyRelationshipId ? { companyRelationshipId: params.companyRelationshipId } : {}),
+      OR: clientSite ? [own, clientSite] : [own],
       date: { gte: start, lt: end },
       // 調整中（依頼主の取り消し後、振り替えるか未定）も、取り消された
       // 事実が分かるよう履歴に出す
@@ -391,8 +415,8 @@ export async function listShiftHistoryForMonth(params: {
       // 移動元の会社／募集名を「変更履歴」に出すため辿る（移動先は既に
       // その枠のカードに正式に表示されるので不要 — 出すのは変更前の情報のみ）。
       publicRecruitment: { include: { company: true } },
-      // 勤務先（依頼主名）と、取り消しの理由・キャンセル料
-      companyRelationship: { include: { clientCompany: true } },
+      // 勤務先（依頼主名）・派遣会社名と、取り消しの理由・キャンセル料
+      companyRelationship: { include: { clientCompany: true, agencyCompany: true } },
       cancellation: true,
     },
     orderBy: [{ date: "asc" }, { updatedAt: "asc" }],

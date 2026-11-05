@@ -144,7 +144,7 @@ try {
     await client.waitForTimeout(600);
     await client.getByText("募集一覧").first().click();
     await client.waitForTimeout(300);
-    await client.getByText("編集").first().click();
+    await client.getByRole("button", { name: "編集", exact: true }).first().click();
     await client.waitForTimeout(400);
     await client.getByRole("button", { name: "この募集を削除する" }).click();
     await client.waitForTimeout(800);

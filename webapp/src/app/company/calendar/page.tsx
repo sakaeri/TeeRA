@@ -276,11 +276,18 @@ export default async function CompanyCalendarPage({
 // それ以外は自社。
 function historyWorkplaceLabel(
   s: {
-    companyRelationship: { clientCompany: { name: string } | null; proxyName: string | null } | null;
+    companyId: string;
+    companyRelationship: {
+      clientCompany: { name: string } | null;
+      agencyCompany: { name: string } | null;
+      proxyName: string | null;
+    } | null;
     publicRecruitment: { companyId: string; company: { name: string } } | null;
   },
   myCompanyId: string,
 ) {
+  // 派遣会社が自社（依頼主）の現場に入れていたシフト — どの派遣会社のスタッフか
+  if (s.companyId !== myCompanyId) return `派遣：${s.companyRelationship?.agencyCompany?.name ?? "派遣会社"}`;
   if (s.companyRelationship) return s.companyRelationship.clientCompany?.name ?? s.companyRelationship.proxyName ?? "依頼主";
   if (s.publicRecruitment && s.publicRecruitment.companyId !== myCompanyId) return s.publicRecruitment.company.name;
   return "自社";
