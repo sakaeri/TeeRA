@@ -80,30 +80,33 @@ try {
   await staff.goto("http://localhost:3000/staff");
   await staff.getByRole("dialog", { name: "新しい契約書が届いています" }).waitFor({ timeout: 15000 });
   log("ホームを開くと契約書のポップアップが出る", true);
-  await staff.goto(`http://localhost:3000/staff/contracts/${companyId}`);
-  await staff.getByText("本人確認書類を提出").waitFor({ timeout: 15000 });
-  log("必須の身分証から手続きが始まる", true);
-
-  // 身分証は提出済みにして（アップロード先はローカルに無いため）、振込先 → 確認・同意
+  // 身分証は提出済みにして（アップロード先はローカルに無いため）、ポップアップからその場で開く
   psql(
     `update "CompanyMembership" set "idDocumentFrontUrl"='https://example.com/f.png', "idDocumentBackUrl"='https://example.com/b.png' where "userId"='${staffUserId}' and "companyId"='${companyId}';`,
   );
-  await staff.reload();
-  await staff.getByText("振込先情報を入力").waitFor();
-  const field = (label) => staff.locator("label", { hasText: label }).locator("input");
+  await staff.getByRole("dialog", { name: "新しい契約書が届いています" }).getByRole("button", { name: "契約書を確認する" }).click();
+  const wizard = staff.getByRole("dialog", { name: "契約書の確認" });
+  await wizard.waitFor({ timeout: 15000 });
+  log("ポップアップの「契約書を確認する」で、その場で契約書が開く", staff.url().endsWith("/staff") && (await wizard.innerText()).includes("1/4 契約書の内容"));
+  await wizard.getByRole("button", { name: "次へ", exact: true }).click();
+  await wizard.getByRole("button", { name: "次へ", exact: true }).click();
+  await wizard.getByText("3/4 振込先情報").waitFor();
+  const field = (label) => wizard.locator("label", { hasText: label }).locator("input");
   await field("銀行名").fill("テスト銀行");
   await field("口座番号").fill("1234567");
   await field("口座名義").fill("テスト タロウ");
-  await staff.getByRole("button", { name: "次へ", exact: true }).click();
-  await staff.getByRole("button", { name: "契約書の全文を確認する" }).click();
-  const consentButton = staff.getByRole("button", { name: "内容を確認しました（同意する）" });
-  const consentField = (label) => staff.locator("label", { hasText: label }).last().locator("input");
+  await wizard.getByRole("button", { name: "次へ", exact: true }).click();
+  await wizard.getByText("4/4 署名").waitFor();
+  const consentButton = wizard.getByRole("button", { name: "内容を確認しました（同意する）" });
+  const consentField = (label) => wizard.locator("label", { hasText: label }).last().locator("input");
   await consentField("氏名").fill("招待契約スタッフ");
   log("住所・電話番号が空のうちは同意できない", await consentButton.isDisabled());
   await consentField("住所").fill("沖縄県那覇市1-1");
   await consentField("電話番号").fill("090-0000-0000");
   await consentButton.click();
-  await staff.getByText("お疲れ様でした").waitFor({ timeout: 15000 });
+  await wizard.waitFor({ state: "detached", timeout: 30000 });
+  await staff.waitForTimeout(1500);
+  log("同意するとその場で閉じて、ポップアップも消える", (await staff.getByRole("dialog").count()) === 0);
   log(
     "同意すると氏名・住所・電話番号つきで記録される",
     psql(`select status || '|' || "partyAddress" || '|' || "partyPhoneNumber" || '|' || ("consentedAt" is not null) from "StaffContract" where "staffUserId"='${staffUserId}';`) ===

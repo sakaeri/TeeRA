@@ -820,7 +820,10 @@ export function TemplateModal({
   readOnly,
   pdfUrl,
   consentRecord,
+  embedded,
 }: {
+  // trueなら枠（全画面の暗い背景・見出し・✕）なしで本文だけを出す（スタッフの同意の流れの中に入れる）
+  embedded?: boolean;
   clients: ClientOption[];
   companyName: string;
   editingTemplate?: Template;
@@ -993,12 +996,15 @@ export function TemplateModal({
   }
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+    <div
+      className={embedded ? "" : "fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4"}
+      onClick={embedded ? undefined : onClose}
+    >
       <div
-        className="max-h-[85vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
+        className={embedded ? "" : "max-h-[85vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-center justify-between">
+        <div className={embedded ? "hidden" : "mb-4 flex items-center justify-between"}>
           <h3 className="font-serif-jp text-lg font-bold text-primary">
             {generateForStaff
               ? `契約書を生成${preview ? "" : "（" + generateForStaff.name + "様）"}`

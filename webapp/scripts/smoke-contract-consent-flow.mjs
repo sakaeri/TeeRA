@@ -131,22 +131,27 @@ try {
   await staffA.goto(`http://localhost:3000/staff/contracts/${companyId}`);
   await staffA.waitForTimeout(500);
   let bodyA = await staffA.textContent("body");
-  log("スタッフ側に「新しい契約書があります」ウィザードが表示される", bodyA.includes("新しい契約書があります") && bodyA.includes("① 契約内容を確認"));
+  log("スタッフ側に「新しい契約書があります」と出る", bodyA.includes("新しい契約書があります"));
 
-  await staffA.getByRole("button", { name: "契約書の全文を確認する" }).click();
-  await staffA.waitForTimeout(300);
-  bodyA = await staffA.textContent("body");
-  log("全文確認ポップアップが開く（読み取り専用）", bodyA.includes("キャディ業務"));
-  log("同意フォーム（氏名・住所・電話番号）が末尾に表示される", bodyA.includes("氏名") && bodyA.includes("住所") && bodyA.includes("電話番号"));
-
-  const consentModalA = staffA.locator("div.fixed.inset-0.z-30").last();
-  const consentButtonA = consentModalA.getByRole("button", { name: "内容を確認しました（同意する）" });
-  log("氏名・住所・電話番号が未入力のうちは同意ボタンが無効", await consentButtonA.isDisabled());
-  await consentModalA.locator('label:has-text("氏名") input').fill("同意花子");
-  await consentModalA.locator('label:has-text("住所") input').fill("東京都千代田区1-1-1");
-  await consentModalA.locator('label:has-text("電話番号") input').fill("090-1111-2222");
+  // 「契約書を確認する」で、その場で全画面の流れが開く（必須の書類が無いので 内容 → 署名 の2手順）
+  await staffA.getByRole("button", { name: "契約書を確認する" }).click();
+  const wizardA = staffA.getByRole("dialog", { name: "契約書の確認" });
+  await wizardA.waitFor({ timeout: 15000 });
+  let wizardText = await wizardA.innerText();
+  log("1/2 契約書の内容が開き、全文が読める", wizardText.includes("1/2 契約書の内容") && wizardText.includes("キャディ業務"));
+  await wizardA.getByRole("button", { name: "次へ", exact: true }).click();
+  wizardText = await wizardA.innerText();
+  log("2/2 署名で氏名・住所・電話番号を入力する", wizardText.includes("2/2 署名") && wizardText.includes("住所") && wizardText.includes("電話番号"));
+  const consentButtonA = wizardA.getByRole("button", { name: "内容を確認しました（同意する）" });
+  log("住所・電話番号が未入力のうちは同意ボタンが無効", await consentButtonA.isDisabled());
+  await wizardA.getByRole("button", { name: "戻る" }).click();
+  log("「戻る」で前の手順に戻れる", (await wizardA.innerText()).includes("1/2 契約書の内容"));
+  await wizardA.getByRole("button", { name: "次へ", exact: true }).click();
+  await wizardA.locator('label:has-text("氏名") input').fill("同意花子");
+  await wizardA.locator('label:has-text("住所") input').fill("東京都千代田区1-1-1");
+  await wizardA.locator('label:has-text("電話番号") input').fill("090-1111-2222");
   await consentButtonA.click();
-  await staffA.waitForTimeout(600);
+  await wizardA.waitFor({ state: "detached", timeout: 30000 });
 
   const statusAfterConsent = psql(
     `select status || '|' || ("consentedAt" is not null)::text || '|' || "partyName" || '|' || "partyAddress" || '|' || "partyPhoneNumber" from "StaffContract" where "staffUserId"='${staffAUserId}';`,
@@ -155,10 +160,6 @@ try {
     "同意ボタンでACTIVEになり、同意日時・入力した氏名住所電話番号が記録される",
     statusAfterConsent === "ACTIVE|true|同意花子|東京都千代田区1-1-1|090-1111-2222",
   );
-
-  bodyA = await staffA.textContent("body");
-  log("同意後は自動的に② 本人確認書類のステップに進む（未提出のため）", bodyA.includes("② 本人確認書類を提出"));
-  log("本人確認書類が未提出のうちは「次へ」が無効", await staffA.getByRole("button", { name: "次へ" }).isDisabled());
 
   await admin.goto(`http://localhost:3000/company/payroll?month=${thisMonth}&staff=${staffAUserId}`);
   await admin.waitForTimeout(600);
@@ -171,40 +172,57 @@ try {
     parsedLine && Number(parsedLine.rate) === 9000 && Number(parsedLine.amount) === 9000,
   );
 
-  // --- staff C: ID docs already on file (rehire-style) but no bank info yet
+  // --- staff C: 身分証は提出済み・振込先はまだ。この契約書では両方必須
   await generateContract("同意次郎");
+  psql(
+    `update "ContractTemplate" set "requireIdDocument"=true, "requireBankInfo"=true where id=(select "templateId" from "StaffContract" where "staffUserId"='${staffCUserId}' and status='PENDING_CONSENT');`,
+  );
   await staffC.goto(`http://localhost:3000/staff/contracts/${companyId}`);
   await staffC.waitForTimeout(500);
-  await staffC.getByRole("button", { name: "契約書の全文を確認する" }).click();
-  await staffC.waitForTimeout(300);
-  const consentModalC = staffC.locator("div.fixed.inset-0.z-30").last();
-  await consentModalC.locator('label:has-text("氏名") input').fill("同意次郎");
-  await consentModalC.locator('label:has-text("住所") input').fill("東京都中央区2-2-2");
-  await consentModalC.locator('label:has-text("電話番号") input').fill("090-3333-4444");
-  await consentModalC.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
-  await staffC.waitForTimeout(600);
-
-  let bodyC = await staffC.textContent("body");
-  log("本人確認書類が既に登録済みなら②はスキップされ③振込先情報に進む", bodyC.includes("③ 振込先情報を入力") && !bodyC.includes("② 本人確認書類を提出"));
-
-  const wizardC = staffC.locator("section.border-primary");
+  await staffC.getByRole("button", { name: "契約書を確認する" }).click();
+  const wizardC = staffC.getByRole("dialog", { name: "契約書の確認" });
+  await wizardC.waitFor({ timeout: 15000 });
+  log("必須の書類があると 内容 → 身分証 → 振込先 → 署名 の4手順になる", (await wizardC.innerText()).includes("1/4 契約書の内容"));
+  await wizardC.getByRole("button", { name: "次へ", exact: true }).click();
+  let wizardTextC = await wizardC.innerText();
+  log(
+    "2/4 身分証明書の添付：提出済みなら「提出済み」と出て、そのまま次へ進める",
+    wizardTextC.includes("2/4 身分証明書の添付") &&
+      wizardTextC.includes("提出済み") &&
+      !(await wizardC.getByRole("button", { name: "次へ", exact: true }).isDisabled()),
+  );
+  await wizardC.getByRole("button", { name: "次へ", exact: true }).click();
+  wizardTextC = await wizardC.innerText();
+  log(
+    "3/4 振込先情報：未入力のうちは次へ進めない",
+    wizardTextC.includes("3/4 振込先情報") && (await wizardC.getByRole("button", { name: "次へ", exact: true }).isDisabled()),
+  );
   await wizardC.locator('label:has-text("銀行名") input').fill("同意銀行");
   await wizardC.locator('label:has-text("口座番号") input').fill("7654321");
   await wizardC.locator('label:has-text("口座名義") input').fill("ドウイ ジロウ");
-  await wizardC.getByRole("button", { name: "次へ" }).click();
-  await staffC.waitForTimeout(500);
-
+  await wizardC.getByRole("button", { name: "次へ", exact: true }).click();
+  await wizardC.getByText("4/4 署名").waitFor({ timeout: 15000 });
   const bankAfterSave = psql(`select "bankName" || '|' || "accountNumber" from "CompanyMembership" where "userId"='${staffCUserId}';`);
-  log("振込先情報が保存される", bankAfterSave === "同意銀行|7654321");
+  log("振込先は「次へ」で保存される", bankAfterSave === "同意銀行|7654321");
 
-  bodyC = await staffC.textContent("body");
-  log("振込先を入力すると④ 完了ステップに進む", bodyC.includes("④ 完了") && bodyC.includes("お疲れ様でした"));
-
-  await staffC.getByRole("button", { name: "閉じる" }).click();
-  await staffC.waitForTimeout(300);
-  bodyC = await staffC.textContent("body");
+  // 途中で閉じても、次に開くと振込先は入ったまま
+  await wizardC.getByRole("button", { name: "閉じる" }).click();
+  await staffC.waitForTimeout(800);
+  await staffC.getByRole("button", { name: "契約書を確認する" }).click();
+  await wizardC.waitFor({ timeout: 15000 });
+  await wizardC.getByRole("button", { name: "次へ", exact: true }).click();
+  await wizardC.getByRole("button", { name: "次へ", exact: true }).click();
+  log("途中で閉じても、次に開くと入力済みの振込先が入っている", (await wizardC.locator('label:has-text("銀行名") input').inputValue()) === "同意銀行");
+  await wizardC.getByRole("button", { name: "次へ", exact: true }).click();
+  await wizardC.getByText("4/4 署名").waitFor({ timeout: 15000 });
+  await wizardC.locator('label:has-text("住所") input').fill("東京都中央区2-2-2");
+  await wizardC.locator('label:has-text("電話番号") input').fill("090-3333-4444");
+  await wizardC.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
+  await wizardC.waitFor({ state: "detached", timeout: 30000 });
+  await staffC.waitForTimeout(800);
+  const bodyC = await staffC.textContent("body");
   log(
-    "ウィザードを閉じると通常の画面に戻る（契約中の雇用契約書に表示される）",
+    "同意すると流れが閉じ、契約中の雇用契約書に表示される",
     bodyC.includes("契約中の雇用契約書") && !bodyC.includes("新しい契約書があります"),
   );
 

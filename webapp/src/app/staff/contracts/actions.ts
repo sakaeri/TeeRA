@@ -8,6 +8,7 @@ import { updateStaffAddressPhone } from "@/lib/domain/roster";
 import { prisma } from "@/lib/prisma";
 import { renderContractPdf, formatConsentedAt } from "@/lib/domain/contractPdf";
 import { sendContractConsentCopyEmail } from "@/lib/email";
+import { loadPendingContractConsent } from "@/lib/domain/staffContractConsent";
 
 export async function consentContractAction(
   staffContractId: string,
@@ -54,6 +55,11 @@ export async function consentContractAction(
     address: party.address,
     phoneNumber: party.phoneNumber,
   });
-  revalidatePath("/staff/contracts");
-  revalidatePath(`/staff/contracts/${companyId}`);
+  revalidatePath("/staff", "layout");
+}
+
+// ポップアップから契約書をその場で開くためのデータ（契約書の全文・提出済みの書類など）
+export async function loadContractConsentAction(companyId: string) {
+  const { userId } = await requireCompanyStaffRole();
+  return loadPendingContractConsent(userId, companyId);
 }

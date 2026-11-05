@@ -12,6 +12,7 @@ import { listClients, listStaffVisibleRelationshipNotes } from "@/lib/domain/rel
 import { todayJst } from "@/lib/date";
 import { prisma } from "@/lib/prisma";
 import { StaffContractsView } from "@/components/staff/StaffContractsView";
+import { buildTemplateDetail, contractDisplayTitle } from "@/lib/domain/staffContractConsent";
 
 const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
 const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
@@ -21,13 +22,6 @@ const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
   CONTRACTOR: "業務委託",
   DISPATCH_STAFF: "派遣社員",
 };
-
-// 契約一覧の見出しは、管理用のテンプレート名ではなく「雇用形態・業務内容」
-// から機械的に生成する（会社側roster.tsのcontractDisplayTitleと同じ考え方）。
-function contractDisplayTitle(employmentType: string, jobDescription: string) {
-  const label = EMPLOYMENT_TYPE_LABEL[employmentType] ?? employmentType;
-  return jobDescription ? `${label}・${jobDescription}` : label;
-}
 
 export default async function StaffCompanyContractsPage({ params }: PageProps<"/staff/contracts/[companyId]">) {
   const { userId } = await requireCompanyStaffRole();
@@ -111,43 +105,6 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
         })),
       }
     : null;
-
-  // 契約中・過去分も同意前と同じ全文閲覧モーダルをいつでも開けるよう、
-  // pendingContractsと同じTemplate形のtemplateDetailを両方に持たせる。
-  function buildTemplateDetail(c: (typeof allContracts)[number]) {
-    return {
-      id: c.template.id,
-      title: c.template.title,
-      employmentType: c.template.employmentType,
-      workplaceType: c.template.workplaceType,
-      workplaceNote: c.template.workplaceNote,
-      clientName: null,
-      jobDescription: c.template.jobDescription,
-      scheduleType: c.template.scheduleType,
-      workStartTime: c.template.workStartTime,
-      workEndTime: c.template.workEndTime,
-      actualWorkMinutes: c.template.actualWorkMinutes,
-      breakMinutes: c.template.breakMinutes,
-      hasOvertime: c.template.hasOvertime,
-      requireIdDocument: c.template.requireIdDocument,
-      requireBankInfo: c.template.requireBankInfo,
-      overtimeNote: c.template.overtimeNote,
-      fixedWeekdays: c.template.fixedWeekdays,
-      shiftPatternNote: c.template.shiftPatternNote,
-      restNote: c.template.restNote,
-      wageType: c.template.wageType,
-      wageAmount: c.wageAmountSnapshot,
-      paymentClosingDay: c.template.paymentClosingDay,
-      paymentDay: c.template.paymentDay,
-      paymentMethod: c.template.paymentMethod,
-      contractPeriodType: c.template.contractPeriodType,
-      contractStartDate: (c.contractStartDate ?? c.template.contractStartDate).toISOString().slice(0, 10),
-      contractEndDate: (c.contractEndDate ?? c.template.contractEndDate)?.toISOString().slice(0, 10) ?? null,
-      extraItems: (c.template.extraItems as { label: string; value: string }[] | null) ?? [],
-      status: c.template.status,
-      contractedStaffNames: [] as string[],
-    };
-  }
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-10">
