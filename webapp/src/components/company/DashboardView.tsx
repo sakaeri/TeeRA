@@ -32,6 +32,7 @@ import {
   type ClientOption,
 } from "@/components/company/ContractsView";
 import { ImageDropzone } from "@/components/ImageDropzone";
+import { PromoImagePicker } from "@/components/PromoImagePicker";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useClickOutside } from "@/lib/useClickOutside";
 
@@ -133,8 +134,8 @@ type DuePaidLeaveGrant = {
 type PromoItem = {
   id: string;
   imageUrl: string;
-  imageUrl2: string | null;
-  imageUrl3: string | null;
+  // 画像（最大5枚、1枚目＝imageUrl）
+  imageUrls: string[];
   name: string;
   pointsCost: number;
   stock: number;
@@ -750,9 +751,8 @@ function TodoModal({
 
 function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onClose: () => void }) {
   const [pending, startTransition] = useTransition();
-  const [imageUrl, setImageUrl] = useState(editingItem?.imageUrl ?? "");
-  const [imageUrl2, setImageUrl2] = useState(editingItem?.imageUrl2 ?? "");
-  const [imageUrl3, setImageUrl3] = useState(editingItem?.imageUrl3 ?? "");
+  const [imageUrls, setImageUrls] = useState<string[]>(editingItem?.imageUrls ?? []);
+  const [uploading, setUploading] = useState(false);
   const [name, setName] = useState(editingItem?.name ?? "");
   const [pointsCost, setPointsCost] = useState(editingItem ? String(editingItem.pointsCost) : "");
   const [stock, setStock] = useState(editingItem ? String(editingItem.stock) : "");
@@ -761,7 +761,7 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
   const [showInfo, setShowInfo] = useState(false);
   const infoRef = useClickOutside<HTMLDivElement>(showInfo, () => setShowInfo(false));
 
-  const canSubmit = Boolean(imageUrl) && Boolean(name) && Boolean(pointsCost) && Boolean(stock);
+  const canSubmit = imageUrls.length > 0 && !uploading && Boolean(name) && Boolean(pointsCost) && Boolean(stock);
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
@@ -794,12 +794,11 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <ImageDropzone label="商品画像" imageUrl={imageUrl} onChange={setImageUrl} required size="md" />
-            <div className="grid grid-cols-2 gap-2">
-              <ImageDropzone label="画像2（任意）" imageUrl={imageUrl2} onChange={setImageUrl2} size="sm" />
-              <ImageDropzone label="画像3（任意）" imageUrl={imageUrl3} onChange={setImageUrl3} size="sm" />
-            </div>
+          <div className="flex flex-col gap-1 text-xs">
+            <span>
+              商品画像<span className="text-red-600"> *</span>
+            </span>
+            <PromoImagePicker value={imageUrls} onChange={setImageUrls} onUploadingChange={setUploading} />
           </div>
           <div className="flex flex-col gap-3">
             <label className="flex flex-col gap-1 text-xs">
@@ -859,9 +858,7 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
           onClick={() =>
             startTransition(async () => {
               const payload = {
-                imageUrl,
-                imageUrl2: imageUrl2 || undefined,
-                imageUrl3: imageUrl3 || undefined,
+                imageUrls,
                 name,
                 pointsCost: Number(pointsCost),
                 stock: Number(stock),

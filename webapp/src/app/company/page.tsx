@@ -17,6 +17,7 @@ import { listTemplates, listUploadOnlyTemplates, sortTemplatesByUsage } from "@/
 import { listClients } from "@/lib/domain/relationships";
 import { prisma } from "@/lib/prisma";
 import { DashboardView } from "@/components/company/DashboardView";
+import { promoImageUrls } from "@/lib/promoImages";
 import { CompanyAnnouncementsCard } from "@/components/company/CompanyAnnouncementsCard";
 import { listCompanyAnnouncements, listAnnouncementCandidates } from "@/lib/domain/companyAnnouncements";
 
@@ -135,8 +136,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
         promoItems={promoItems.map((p) => ({
           id: p.id,
           imageUrl: p.imageUrl,
-          imageUrl2: p.imageUrl2,
-          imageUrl3: p.imageUrl3,
+          imageUrls: promoImageUrls(p),
           name: p.name,
           pointsCost: p.pointsCost,
           stock: p.stock,

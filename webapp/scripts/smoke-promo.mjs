@@ -44,8 +44,8 @@ try {
   // local sandbox — the /api/upload route itself is unchanged by this UI
   // redesign and already verified working in production)
   psql(
-    `insert into "PromoItem" (id, "companyId", "imageUrl", "imageUrl2", "imageUrl3", name, "pointsCost", stock, description, "createdAt") ` +
-      `values (gen_random_uuid()::text, '${companyId}', 'https://example.com/mug1.png', 'https://example.com/mug2.png', 'https://example.com/mug3.png', 'オリジナルタオル', 1, 2, '夏用タオル', now());`,
+    `insert into "PromoItem" (id, "companyId", "imageUrl", "imageUrl2", "imageUrl3", "imageUrl4", "imageUrl5", name, "pointsCost", stock, description, "createdAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', 'https://example.com/mug1.png', 'https://example.com/mug2.png', 'https://example.com/mug3.png', 'https://example.com/mug4.png', 'https://example.com/mug5.png', 'オリジナルタオル', 1, 2, '夏用タオル', now());`,
   );
   const itemId = psql(`select id from "PromoItem" where "companyId"='${companyId}' and name='オリジナルタオル';`);
 
@@ -61,11 +61,21 @@ try {
   body = await admin.textContent("body");
   log("edit modal pre-filled", body.includes("販促品を編集") && body.includes("夏用タオル"));
 
+  // 画像は最大5枚。お知らせの添付と同じく並べて表示し、✕で外せる（5枚あると追加できない）
+  log("編集画面に登録済みの画像が5枚並ぶ", (await admin.locator("img[alt^='商品画像']").count()) === 5);
+  log("5枚あると「画像を添付」は押せない", await admin.getByRole("button", { name: /画像を添付/ }).isDisabled());
+  await admin.getByRole("button", { name: "商品画像5を外す" }).click();
+  log("✕で外すと4枚になり、また添付できる", (await admin.locator("img[alt^='商品画像']").count()) === 4 && !(await admin.getByRole("button", { name: /画像を添付/ }).isDisabled()));
+
   await admin.fill('input[placeholder="例：オリジナルタオル"]', "オリジナルタオルSサイズ");
   await admin.getByRole("button", { name: "保存する" }).click();
   await admin.waitForTimeout(600);
   body = await admin.textContent("body");
   log("edit saved, new name shown in list", body.includes("オリジナルタオルSサイズ"));
+  log(
+    "外した画像は保存すると消える（4枚目まで残る）",
+    psql(`select coalesce("imageUrl4",'') || '|' || coalesce("imageUrl5",'') from "PromoItem" where id='${itemId}';`) === "https://example.com/mug4.png|",
+  );
 
   // invite + register staff
   await admin.click("text=スタッフ名簿");
@@ -135,10 +145,10 @@ try {
   body = await staff.textContent("body");
   log("detail popup opens with shipping form", body.includes("お届け先を入力して交換してください"));
 
-  // ①: 3 images registered → ＜＞ carousel with dot indicators, not a stacked grid
+  // ①: 4 images registered → ＜＞ carousel with dot indicators, not a stacked grid
   const modalImg = staff.locator("div.relative.mb-3 img[alt='']").first();
   const firstSrc = await modalImg.getAttribute("src");
-  log("carousel shows 3 dot indicators", (await staff.locator("button[aria-label$='枚目の画像を表示']").count()) === 3);
+  log("carousel shows 4 dot indicators", (await staff.locator("button[aria-label$='枚目の画像を表示']").count()) === 4);
   await staff.getByRole("button", { name: "次の画像" }).click();
   await staff.waitForTimeout(200);
   const secondSrc = await modalImg.getAttribute("src");
