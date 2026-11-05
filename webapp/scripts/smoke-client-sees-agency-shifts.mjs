@@ -135,10 +135,21 @@ try {
   log("派遣会社のラベルは勤務先（依頼主名）のまま", (await agencyRow.innerText()).includes(clientName));
   log("派遣会社は今まで通り解除できる", (await agencyRow.getByRole("button", { name: "シフトを解除" }).count()) === 1);
 
+  // --- 派遣会社がアサインを解除したら、依頼主の履歴にも残る ---
+  psql(`update "Shift" set status='CANCELLED', "updatedAt"=now() where id='${shiftId}';`);
+  panel = await openDay(client);
+  log("解除したシフトは依頼主のスタッフシフトからは消える", (await panel.locator("li", { hasText: "派遣キャディ花子" }).count()) === 0);
+  await panel.getByRole("button", { name: /変更履歴（1件）/ }).click();
+  await client.waitForTimeout(300);
+  log("依頼主の変更履歴に、派遣会社が解除したスタッフが残る", (await panel.innerText()).includes("派遣キャディ花子"));
+
   // --- 関係のない会社 ---
   await outsider.goto(`http://localhost:3000/company/calendar?y=${ty}&m=${tm}`);
   await outsider.waitForTimeout(900);
   log("関係のない会社のカレンダーには出ない", !(await outsider.locator("main").innerText()).includes("派遣キャディ花子"));
+  await outsider.locator("main button", { has: outsider.locator(`span:text-is("${td}")`) }).first().click();
+  await outsider.waitForTimeout(500);
+  log("関係のない会社の履歴にも出ない", !(await outsider.locator("div.fixed.inset-0.z-20").last().innerText()).includes("変更履歴"));
 
   console.log(process.exitCode ? "CLIENT SEES AGENCY SHIFTS SMOKE TEST HAD FAILURES" : "CLIENT SEES AGENCY SHIFTS SMOKE TEST PASSED");
 } finally {
