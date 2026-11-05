@@ -1372,7 +1372,7 @@ function TodoSection({
   return (
     <section className="rounded-2xl border border-border bg-white/60 p-3 sm:p-6">
       {/* スマホでも5つのタブが横にはみ出さないよう、均等割りにして文字を少し小さくする */}
-      <div className="mb-3 flex border-b border-border sm:gap-1">
+      <div data-dashboard-tabs className="mb-3 flex border-b border-border sm:gap-1">
         {[
           { key: "active", label: "やること" },
           ...(announcementsPanel ? [{ key: "announcements", label: "お知らせ" }] : []),

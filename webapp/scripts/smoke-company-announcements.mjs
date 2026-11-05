@@ -135,6 +135,7 @@ try {
     "個別は選んだ人だけ（派遣スタッフも選べる）",
     noticeFor(realStaffId, "個別のお知らせ") === "1" && noticeFor(otherStaff, "個別のお知らせ") === "0" && noticeFor(agencyStaff, "個別のお知らせ") === "1",
   );
+  await admin.locator("#announcements").getByText("個別（2人）").waitFor({ timeout: 15000 }).catch(() => {});
   let card = await admin.locator("#announcements").innerText();
   log("会社側の一覧に宛先が出る", card.includes("チームA") && card.includes("個別（2人）") && card.includes("自社スタッフのみ"));
   log("既読の人数は出さない", !card.includes("既読"));

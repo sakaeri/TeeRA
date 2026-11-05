@@ -78,7 +78,7 @@ try {
     !(await page.getByText("契約書を確認してください").isVisible().catch(() => false)),
   );
 
-  await page.locator("div.mb-3.flex.gap-1").getByText("解決済み", { exact: true }).click();
+  await page.locator("[data-dashboard-tabs]").getByText("解決済み", { exact: true }).click();
   body = await page.textContent("body");
   log("todo appears in 解決済み tab", body.includes("契約書を確認してください"));
   log(
@@ -103,7 +103,7 @@ try {
   body = await page.textContent("body");
   log("解決済み tab から消える（未対応に戻した後）", !body.includes("コメント（1）"));
 
-  await page.locator("div.mb-3.flex.gap-1").getByText("やること", { exact: true }).click();
+  await page.locator("[data-dashboard-tabs]").getByText("やること", { exact: true }).click();
   body = await page.textContent("body");
   log("未対応に戻したtodoが「やること」タブに再び表示される", body.includes("契約書を確認してください"));
 
