@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
-import { resolveRateVersion, resolveContractWageVersion, pickStaffTaskRate } from "@/lib/domain/contracts";
+import { resolveRateVersion, resolveContractWageVersion, pickStaffTaskRate, isRateEndedAt } from "@/lib/domain/contracts";
 import { isWeekendOrHoliday } from "@/lib/holidays";
 import { recordPaidLeaveUsageDelta } from "@/lib/domain/paidLeave";
 import { hasRemainingPdfQuota } from "@/lib/domain/plans";
@@ -282,7 +282,9 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
       // 一致する場合は「設定漏れ」ではなく基本給がまさにその業務のために
       // 定められたものなので、警告は出さない。
       const isBaseContractTask = effectiveTaskName != null && effectiveTaskName === baseContract?.template.jobDescription;
-      if (!matchedWage && baseWageVersion && effectiveTaskName && !isBaseContractTask) {
+      // 個別単価を「終了」にしている場合も、意図して基本給に戻したので警告しない
+      const rateEnded = matchedRow ? isRateEndedAt(matchedRow.versions, r.shift.date) : false;
+      if (!matchedWage && baseWageVersion && effectiveTaskName && !isBaseContractTask && !rateEnded) {
         unresolved.push({
           shiftId: r.shiftId,
           workReportId: r.id,

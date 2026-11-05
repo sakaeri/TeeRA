@@ -726,6 +726,31 @@ export async function addStaffTaskRateVersion(params: {
   });
 }
 
+// 個別単価を「この日で終了」にする（wageType/amountがnullのバージョンを積む）。
+// その日以降は契約書の基本給で計算され、それより前の分は今までの単価のまま。
+// 使用済みで削除できない単価も、これで使わないようにできる（再契約のときなど）。
+export async function endStaffTaskRate(params: { staffTaskRateId: string; effectiveFrom: Date; createdByUserId: string }) {
+  return prisma.staffTaskRateVersion.create({
+    data: {
+      staffTaskRateId: params.staffTaskRateId,
+      wageType: null,
+      amount: null,
+      holidayAmount: null,
+      effectiveFrom: params.effectiveFrom,
+      createdByUserId: params.createdByUserId,
+    },
+  });
+}
+
+// その日時点で、個別単価が「終了」になっているか（終了のバージョンが有効か）
+export function isRateEndedAt<T extends { wageType: WageType | null; effectiveFrom: Date }>(versions: T[], asOf: Date) {
+  let active: T | null = null;
+  for (const v of versions) {
+    if (v.effectiveFrom <= asOf && (!active || v.effectiveFrom >= active.effectiveFrom)) active = v;
+  }
+  return Boolean(active && active.wageType === null);
+}
+
 // 承認済みの実績シフト（出勤した・承認済み）でこの単価が実際に参照されて
 // いるか（pickStaffTaskRateの解決結果がこの行と一致するか）を判定する。
 // 使用済みなら削除不可、未使用ならいつでも削除できる（「終了する」機能は

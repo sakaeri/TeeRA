@@ -15,6 +15,7 @@ import {
   deletePlacementTaskName,
   addStaffTaskRateVersion,
   deleteStaffTaskRate,
+  endStaffTaskRate,
   generateStaffContractFromNewTemplate,
   generateStaffContractFromNewTemplateViaUpload,
   startStaffContractFromUpload,
@@ -259,6 +260,30 @@ export async function addStaffTaskRateVersionAction(input: {
   revalidatePath("/company/settings");
   revalidatePath("/company/roster");
   return version;
+}
+
+// 個別単価を「この日で終了」にする。その日以降は契約書の基本給で計算する（履歴は残る）
+export async function endStaffTaskRateAction(staffTaskRateId: string, effectiveFrom: string) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) throw new Error("invalid_date");
+  const rate = await prisma.staffTaskRate.findFirstOrThrow({
+    where: { id: staffTaskRateId, companyId: membership.companyId },
+  });
+  const staffTeamIds = await getStaffTeamIds(rate.staffUserId);
+  if (!canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
+  await endStaffTaskRate({
+    staffTaskRateId: rate.id,
+    effectiveFrom: new Date(`${effectiveFrom}T00:00:00.000Z`),
+    createdByUserId: userId,
+  });
+  const workplaceLabel = rate.companyRelationshipId ? await relationshipLabel(rate.companyRelationshipId) : "勤務先問わず";
+  await createStaffNotice({
+    companyId: membership.companyId,
+    staffUserId: rate.staffUserId,
+    message: `「${rate.taskName}」（${workplaceLabel}）の個別の単価は${effectiveFrom}で終了し、以降は契約書の基本給で計算されます`,
+  });
+  revalidatePath("/company/settings");
+  revalidatePath("/company/roster");
 }
 
 export async function deleteStaffTaskRateAction(staffTaskRateId: string) {
