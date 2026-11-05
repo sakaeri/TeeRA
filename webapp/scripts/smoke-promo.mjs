@@ -51,7 +51,7 @@ try {
 
   // admin: item appears in list
   await admin.goto("http://localhost:3000/company");
-  await admin.locator("div.mb-3.flex.gap-1").getByText("販促品", { exact: true }).click();
+  await admin.locator("[data-dashboard-tabs]").getByText("販促品", { exact: true }).click();
   let body = await admin.textContent("body");
   log("seeded promo item appears in list", body.includes("オリジナルタオル"));
 
@@ -168,7 +168,7 @@ try {
 
   // admin sees reduced stock via edit modal
   await admin.goto("http://localhost:3000/company");
-  await admin.locator("div.mb-3.flex.gap-1").getByText("販促品", { exact: true }).click();
+  await admin.locator("[data-dashboard-tabs]").getByText("販促品", { exact: true }).click();
   await admin.getByRole("button", { name: "編集" }).click();
   await admin.waitForTimeout(300);
   const stockValue = await admin.locator('input[placeholder="例：20"]').inputValue();
@@ -177,7 +177,7 @@ try {
   await admin.waitForTimeout(200);
 
   // admin: order history, expand row, see shipping info, mark shipped via confirm popup
-  await admin.locator("div.mb-3.flex.gap-1").getByText("注文履歴", { exact: true }).click();
+  await admin.locator("[data-dashboard-tabs]").getByText("注文履歴", { exact: true }).click();
   await admin.waitForTimeout(300);
   body = await admin.textContent("body");
   log("admin sees pending shipment", body.includes("販促品スタッフ") && body.includes("発送待ち"));
@@ -230,7 +230,7 @@ try {
 
   // delete via confirm popup
   await admin.goto("http://localhost:3000/company");
-  await admin.locator("div.mb-3.flex.gap-1").getByText("販促品", { exact: true }).click();
+  await admin.locator("[data-dashboard-tabs]").getByText("販促品", { exact: true }).click();
   await admin.getByRole("button", { name: "編集" }).click();
   await admin.waitForTimeout(300);
   await admin.click("text=この販促品を削除する");

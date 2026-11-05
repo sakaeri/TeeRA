@@ -34,7 +34,10 @@ export function CompanyAnnouncementsCard({
   staffOptions,
   canPostToAll,
   initialOpen = false,
+  embedded = false,
 }: {
+  // trueならダッシュボードの「お知らせ」タブの中に入れる（枠と見出しを付けない）
+  embedded?: boolean;
   announcements: Announcement[];
   // 宛先に選べるチーム（マネージャーは自分のチームだけ）
   teams: { id: string; name: string }[];
@@ -52,9 +55,16 @@ export function CompanyAnnouncementsCard({
   if (!canPostToAll && teams.length === 0) return null;
 
   return (
-    <section id="announcements" className="mt-6 scroll-mt-20 rounded-2xl border border-border bg-white/60 p-5">
+    <section
+      id="announcements"
+      className={embedded ? "scroll-mt-20" : "mt-6 scroll-mt-20 rounded-2xl border border-border bg-white/60 p-5"}
+    >
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="font-serif-jp text-lg font-bold text-primary">スタッフへのお知らせ</h2>
+        {embedded ? (
+          <p className="text-xs text-muted">スタッフに出したお知らせです。出すとプッシュ通知が届きます。</p>
+        ) : (
+          <h2 className="font-serif-jp text-lg font-bold text-primary">スタッフへのお知らせ</h2>
+        )}
         {!showForm ? (
           <button
             type="button"

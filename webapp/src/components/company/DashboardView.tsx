@@ -153,7 +153,7 @@ type PromoOrder = {
   shippingPostalCode: string | null;
 };
 
-type DashboardTab = "active" | "resolved" | "promoList" | "promoOrders";
+type DashboardTab = "active" | "announcements" | "resolved" | "promoList" | "promoOrders";
 
 type PopupKind = "shortage" | "unconfirmed" | "reports" | "contracts" | "paidLeave";
 
@@ -443,7 +443,10 @@ export function DashboardView({
   initialTab,
   initialOpenPopup,
   initialReportDetailId,
+  announcementsPanel,
 }: {
+  // 「お知らせ」タブの中身（スタッフへのお知らせ）。出せない人にはタブ自体を出さない
+  announcementsPanel?: ReactNode;
   kpis: Kpis;
   autoTodos: AutoTodo[];
   openTodos: OpenTodo[];
@@ -543,6 +546,8 @@ export function DashboardView({
         promoItems={promoItems}
         promoOrders={promoOrders}
         onEditPromoItem={setEditingPromoItem}
+        onAddPromoItem={() => setShowPromoModal(true)}
+        announcementsPanel={announcementsPanel}
       />
 
       {showPromoModal ? <PromoItemModal onClose={() => setShowPromoModal(false)} /> : null}
@@ -1336,7 +1341,11 @@ function TodoSection({
   promoItems,
   promoOrders,
   onEditPromoItem,
+  onAddPromoItem,
+  announcementsPanel,
 }: {
+  onAddPromoItem: () => void;
+  announcementsPanel?: ReactNode;
   tab: DashboardTab;
   setTab: (t: DashboardTab) => void;
   autoTodos: AutoTodo[];
@@ -1362,9 +1371,11 @@ function TodoSection({
 
   return (
     <section className="rounded-2xl border border-border bg-white/60 p-3 sm:p-6">
-      <div className="mb-3 flex gap-1 overflow-x-auto border-b border-border">
+      {/* スマホでも5つのタブが横にはみ出さないよう、均等割りにして文字を少し小さくする */}
+      <div data-dashboard-tabs className="mb-3 flex border-b border-border sm:gap-1">
         {[
           { key: "active", label: "やること" },
+          ...(announcementsPanel ? [{ key: "announcements", label: "お知らせ" }] : []),
           { key: "resolved", label: "解決済み" },
           { key: "promoList", label: "販促品" },
           { key: "promoOrders", label: "注文履歴" },
@@ -1373,7 +1384,7 @@ function TodoSection({
             key={t.key}
             type="button"
             onClick={() => setTab(t.key as DashboardTab)}
-            className={`shrink-0 whitespace-nowrap border-b-2 px-2 py-2 text-sm font-semibold sm:px-3 ${tab === t.key ? "border-accent text-primary" : "border-transparent text-muted"}`}
+            className={`min-w-0 flex-1 whitespace-nowrap border-b-2 px-0.5 py-2 text-[13px] font-semibold sm:flex-none sm:px-3 sm:text-sm ${tab === t.key ? "border-accent text-primary" : "border-transparent text-muted"}`}
           >
             {t.label}
           </button>
@@ -1533,9 +1544,20 @@ function TodoSection({
         </ul>
       ) : null}
 
+      {tab === "announcements" && announcementsPanel ? announcementsPanel : null}
+
       {tab === "promoList" ? (
         <div>
-          <p className="mb-3 text-xs text-muted">登録済みの販促品一覧です（{promoItems.length}件）</p>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-xs text-muted">登録済みの販促品一覧です（{promoItems.length}件）</p>
+            <button
+              type="button"
+              onClick={onAddPromoItem}
+              className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground"
+            >
+              ＋販促品を登録
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {promoItems.map((p) => (
               <div key={p.id} className="flex flex-col gap-2">
