@@ -143,11 +143,18 @@ try {
   log("通知したお知らせには「通知済み」と出る", (await panel.innerText()).includes("通知済み"));
 
   // --- 派遣会社は見るだけ ---
+  psql(
+    `update "PublicRecruitment" set note='集合は7時にクラブハウス前', "extraItems"='[{"label":"持ち物","value":"帽子・タオル"}]'::jsonb where id='${recruitmentId}';`,
+  );
   panel = await openDay(agency);
   await panel.getByRole("button", { name: "オーダー", exact: true }).click();
   await agency.waitForTimeout(300);
   const agencyText = await panel.innerText();
   log("派遣会社は依頼主のオーダーのお知らせを見られる", agencyText.includes("雨の場合はレインウェアを持参してください"));
+  log(
+    "派遣会社のオーダーのタブに、依頼主が書いた備考と追加の項目が出る",
+    agencyText.includes("備考：集合は7時にクラブハウス前") && agencyText.includes("持ち物：帽子・タオル"),
+  );
   log("派遣会社は書き足せない", (await panel.getByRole("button", { name: "＋お知らせを追加" }).count()) === 0);
   log("派遣会社には削除ボタンが出ない", (await panel.getByRole("button", { name: "削除", exact: true }).count()) === 0);
 
