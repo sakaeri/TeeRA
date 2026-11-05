@@ -7,6 +7,7 @@ import {
   resolveContractWageVersion,
   resolveRateVersion,
   excludeBaselineVersion,
+  isRateEndedAt,
 } from "@/lib/domain/contracts";
 import { listClients, listStaffVisibleRelationshipNotes } from "@/lib/domain/relationships";
 import { todayJst } from "@/lib/date";
@@ -164,7 +165,9 @@ export default async function StaffCompanyContractsPage({ params }: PageProps<"/
               : "勤務先問わず",
             currentLabel: current
           ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円${current.holidayAmount != null ? `／土日祝${current.holidayAmount}円` : ""}`
-          : "単価未設定",
+          : isRateEndedAt(r.versions, rateToday)
+            ? "終了（基本給で計算）"
+            : "単価未設定",
             versions: excludeBaselineVersion(r.versions).map((v) => ({
               id: v.id,
               label:

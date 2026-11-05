@@ -24,6 +24,7 @@ import {
 import {
   addStaffTaskRateVersionAction,
   deleteStaffTaskRateAction,
+  endStaffTaskRateAction,
   updateStaffContractWageAction,
   endStaffContractAction,
 } from "@/app/company/contracts/actions";
@@ -51,6 +52,7 @@ type StaffTaskRate = {
   companyRelationshipId: string | null;
   workplaceLabel: string;
   currentLabel: string;
+  ended?: boolean;
   versions: { id: string; label: string; effectiveFrom: string }[];
 };
 
@@ -1788,6 +1790,9 @@ function StaffTaskRatesTab({
   const [amendEffectiveFrom, setAmendEffectiveFrom] = useState(todayJst());
   const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null);
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<StaffTaskRate | null>(null);
+  // 「終了」：この日以降は契約書の基本給で計算する（再契約で前の単価を使わないときなど）
+  const [endingRate, setEndingRate] = useState<StaffTaskRate | null>(null);
+  const [endDate, setEndDate] = useState(todayJst());
   const [showNewForm, setShowNewForm] = useState(false);
   const [newTaskNameMode, setNewTaskNameMode] = useState<"pick" | "custom">("custom");
   const [newTaskName, setNewTaskName] = useState("");
@@ -1844,6 +1849,14 @@ function StaffTaskRatesTab({
       } catch {
         setDeleteError({ id: r.id, message: "この業務内容は給料計算の実績で使用されているため削除できません。" });
       }
+    });
+  }
+
+  function submitEnd(r: StaffTaskRate) {
+    startTransition(async () => {
+      await endStaffTaskRateAction(r.id, endDate);
+      setEndingRate(null);
+      await onChanged();
     });
   }
 
@@ -1936,6 +1949,19 @@ function StaffTaskRatesTab({
               <button type="button" onClick={() => startAmend(r)} className="rounded-md border border-primary/40 px-2.5 py-1 font-semibold text-primary hover:bg-primary/5">
                 単価を変更
               </button>
+              {!r.ended ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    setEndDate(todayJst());
+                    setEndingRate(r);
+                  }}
+                  className="text-muted hover:text-primary disabled:opacity-60"
+                >
+                  終了
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={pending}
@@ -1974,6 +2000,52 @@ function StaffTaskRatesTab({
           }}
           onCancel={() => setDeleteConfirmTarget(null)}
         />
+      ) : null}
+
+      {endingRate ? (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEndingRate(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-label="単価を終了"
+            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="font-serif-jp text-base font-bold text-primary">
+                単価を終了（{endingRate.taskName} ／ {endingRate.workplaceLabel}）
+              </h4>
+              <button type="button" onClick={() => setEndingRate(null)} aria-label="閉じる" className="text-muted hover:text-primary">
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-muted">
+              この日以降の勤務は、契約書の基本給で計算します。それより前の分は今までの単価のままで、履歴も残ります。スタッフにはお知らせが届きます。
+            </p>
+            <label className="mt-3 flex flex-col gap-1 text-xs">
+              <span className="text-muted">終了する日（この日から基本給）</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={pending || !endDate}
+              onClick={() => submitEnd(endingRate)}
+              className="mt-3 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              終了する
+            </button>
+          </div>
+        </div>
       ) : null}
 
       {amendingRate ? (

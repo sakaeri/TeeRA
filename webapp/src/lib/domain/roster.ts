@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { reportDisplay, isReportSubmitted } from "@/lib/workReportDisplay";
 import { createInvite } from "@/lib/domain/invites";
 import { todayJst, todayJstParts } from "@/lib/date";
-import { resolveRateVersion, resolveContractWageVersion, excludeBaselineVersion } from "@/lib/domain/contracts";
+import { resolveRateVersion, resolveContractWageVersion, excludeBaselineVersion, isRateEndedAt } from "@/lib/domain/contracts";
 import { getTotals } from "@/lib/domain/payroll";
 import { getPaidLeaveInfo } from "@/lib/domain/paidLeave";
 import type { TeamRole } from "@/generated/prisma/enums";
@@ -488,7 +488,11 @@ export async function getStaffMonthDetail(params: {
           : "勤務先問わず",
         currentLabel: current
           ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円${current.holidayAmount != null ? `／土日祝${current.holidayAmount}円` : ""}`
-          : "単価未設定",
+          : isRateEndedAt(r.versions, today)
+            ? "終了（基本給で計算）"
+            : "単価未設定",
+        // 今日時点で終了している、または終了日を先に入れてある（＝もう終了の操作は要らない）
+        ended: r.versions.length > 0 && r.versions[0].wageType === null,
         versions: excludeBaselineVersion(r.versions).map((v) => ({
           id: v.id,
           label:
