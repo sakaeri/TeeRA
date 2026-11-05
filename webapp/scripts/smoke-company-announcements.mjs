@@ -118,7 +118,7 @@ try {
   log("お知らせはダッシュボードのタブ（やること・お知らせ・解決済み・販促品・注文履歴）の2番目に並ぶ", tabLabels.join(",") === "やること,お知らせ,解決済み,販促品,注文履歴");
   await admin.getByRole("button", { name: "販促品", exact: true }).click();
   await admin.getByRole("button", { name: "＋販促品を登録" }).click();
-  log("販促品のタブから販促品の登録画面が開く", await admin.getByText("画像2（任意）").isVisible());
+  log("販促品のタブから販促品の登録画面が開く", await admin.getByRole("button", { name: /画像を添付（5枚/ }).isVisible());
 
   await post({ title: "全員へのお知らせ", body: "年末年始は12/29〜1/3お休みです" });
   log(
@@ -194,12 +194,14 @@ try {
   psql(`delete from "NoteAttachment" where id in ('${attId}', '${att2Id}');`);
   await admin.goto("http://localhost:3000/company");
   await admin.getByRole("button", { name: "お知らせ", exact: true }).click();
-  await admin.locator("#announcements li", { hasText: "全員へのお知らせ" }).getByRole("button", { name: "編集" }).click();
+  await admin.locator("#announcements li", { hasText: "全員へのお知らせ" }).getByRole("button", { name: /を編集$/ }).click();
   await admin.getByLabel("本文").fill("年末年始は12/28〜1/4お休みです");
   await admin.getByRole("button", { name: "保存する" }).click();
   await admin.waitForTimeout(1200);
   card = await admin.locator("#announcements").innerText();
-  log("会社側に（編集済み）が出る", card.includes("（編集済み）") && card.includes("12/28〜1/4"));
+  log("一覧は本文を出さず、タイトル・日付・宛先だけ（編集済み）", card.includes("（編集済み）") && !card.includes("12/28〜1/4"));
+  await admin.locator("#announcements li button", { hasText: "全員へのお知らせ" }).first().click();
+  log("押すと本文が開く", (await admin.locator("#announcements").innerText()).includes("12/28〜1/4"));
   await staff.goto("http://localhost:3000/staff/notices");
   await staff.locator("main li button", { hasText: "全員へのお知らせ" }).click();
   await staff.waitForTimeout(500);
@@ -217,8 +219,11 @@ try {
   log("未読が無いとホームのお知らせ欄は出ない", !home.includes("お知らせ（未読"));
 
   // 削除
+  // 削除は鉛筆（編集）のポップアップの中から
+  log("一覧に削除ボタンは出さない", (await admin.locator("#announcements li").getByRole("button", { name: "削除", exact: true }).count()) === 0);
+  await admin.locator("#announcements li", { hasText: "個別のお知らせ" }).getByRole("button", { name: /を編集$/ }).click();
   admin.once("dialog", (d) => d.accept());
-  await admin.locator("#announcements li", { hasText: "個別のお知らせ" }).getByRole("button", { name: "削除" }).click();
+  await admin.getByRole("dialog", { name: "お知らせを編集" }).getByRole("button", { name: "このお知らせを削除する" }).click();
   await admin.waitForTimeout(1000);
   log("削除するとスタッフのお知らせも消える", noticeFor(realStaffId, "個別のお知らせ") === "0" && noticeFor(agencyStaff, "個別のお知らせ") === "0");
   await staff.goto("http://localhost:3000/staff/notices");

@@ -49,6 +49,7 @@ export function CompanyAnnouncementsCard({
 }) {
   const [showForm, setShowForm] = useState(initialOpen);
   const [editing, setEditing] = useState<Announcement | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<string | null>(null);
 
@@ -100,39 +101,42 @@ export function CompanyAnnouncementsCard({
         <p className="text-sm text-muted">まだお知らせはありません。</p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {announcements.map((a) => (
-            <li key={a.id} className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
+          {announcements.map((a) => {
+            const isOpen = openId === a.id;
+            return (
+            <li key={a.id} className="rounded-xl border border-border bg-white text-sm">
+              {/* 一覧はタイトルと日付・宛先だけ。押すと本文と添付が開く。編集・削除は鉛筆から */}
+              <div className="flex items-start gap-2 px-3 py-2.5">
+                <button
+                  type="button"
+                  onClick={() => setOpenId(isOpen ? null : a.id)}
+                  aria-expanded={isOpen}
+                  className="min-w-0 flex-1 text-left"
+                >
                   <p className="font-semibold">{a.title}</p>
-                  {a.body ? <p className="mt-0.5 whitespace-pre-wrap break-words text-xs text-foreground/80">{a.body}</p> : null}
-                  <NoteAttachmentList attachments={a.attachments.map((x) => x.view)} />
-                  <p className="mt-1 text-xs text-muted">
+                  <p className="mt-0.5 text-xs text-muted">
                     {formatDate(a.createdAt)} ／ {a.audienceLabel}
                     {a.edited ? "（編集済み）" : ""}
+                    {a.attachments.length > 0 ? ` ／ 添付${a.attachments.length}件` : ""}
                   </p>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setEditing(a)}
-                    className="text-xs font-semibold text-primary"
-                  >
-                    編集
-                  </button>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => {
-                      if (!window.confirm(`「${a.title}」を削除しますか？スタッフのお知らせからも消えます。`)) return;
-                      startTransition(() => deleteCompanyAnnouncementAction(a.id));
-                    }}
-                    className="text-xs font-semibold text-red-600 disabled:opacity-60"
-                  >
-                    削除
-                  </button>
-                </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditing(a)}
+                  aria-label={`「${a.title}」を編集`}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted hover:bg-background hover:text-primary"
+                >
+                  <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden="true">
+                    <path d="M13.5 3.5l3 3L7 16H4v-3l9.5-9.5z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                  </svg>
+                </button>
               </div>
+              {isOpen ? (
+                <div className="border-t border-border/60 px-3 pb-3 pt-2">
+                  {a.body ? <p className="whitespace-pre-wrap break-words text-xs text-foreground/80">{a.body}</p> : null}
+                  <NoteAttachmentList attachments={a.attachments.map((x) => x.view)} />
+                </div>
+              ) : null}
               {editing?.id === a.id ? (
                 <FormModal title="お知らせを編集" onClose={() => setEditing(null)}>
                   <AnnouncementForm
@@ -144,10 +148,25 @@ export function CompanyAnnouncementsCard({
                     onCancel={() => setEditing(null)}
                     onDone={() => setEditing(null)}
                   />
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => {
+                      if (!window.confirm(`「${a.title}」を削除しますか？スタッフのお知らせからも消えます。`)) return;
+                      startTransition(async () => {
+                        await deleteCompanyAnnouncementAction(a.id);
+                        setEditing(null);
+                      });
+                    }}
+                    className="mt-4 w-full text-center text-sm text-red-600 disabled:opacity-60"
+                  >
+                    このお知らせを削除する
+                  </button>
                 </FormModal>
               ) : null}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </section>
