@@ -59,7 +59,8 @@ try {
   await deleteButton.click();
   await page.waitForTimeout(200);
   await page.getByRole("button", { name: "削除する" }).click();
-  await page.waitForTimeout(600);
+  // 削除が終わってパネルが閉じるまで待つ（固定の待ち時間だと間に合わないことがある）
+  await panel.waitFor({ state: "detached", timeout: 15000 }).catch(() => {});
 
   const remaining = psql(`select count(*) from "CompanyRelationship" where id='${relId}';`);
   log("削除後、そのCompanyRelationshipは消えている", remaining === "0");
@@ -180,22 +181,10 @@ try {
   await page.click("text=誤連携取消確認先株式会社");
   await page.waitForTimeout(300);
   panel = page.locator("div.fixed.inset-0.z-30").last();
-  log(
-    "相手が本アカウント連携済みでも稼働実績が無ければ削除ボタンが出る",
-    (await panel.getByRole("button", { name: "取引先情報を削除" }).count()) === 1,
-  );
-  await panel.getByRole("button", { name: "取引先情報を削除" }).click();
-  await page.waitForTimeout(200);
-  errorBody = await page.textContent("body");
-  log(
-    "確認ダイアログが連携解除であることに言及する",
-    errorBody.includes("連携を解除") || errorBody.includes("紐付けも解除"),
-  );
-  await page.getByRole("button", { name: "削除する" }).click();
-  await page.waitForTimeout(600);
-
-  const realRelGone = psql(`select count(*) from "CompanyRelationship" where id='${realRelId}';`);
-  log("本アカウント連携済みでも稼働実績が無ければ実際に削除できる", realRelGone === "0");
+  // 本アカウントで連携している相手は削除できない（「連携を終了する」だけ。並べて出さない）
+  log("本アカウント連携済みの取引先には削除ボタンを出さない", (await panel.getByRole("button", { name: "取引先情報を削除" }).count()) === 0);
+  log("本アカウント連携済みの取引先には「連携を終了する」が出る", (await panel.getByRole("button", { name: "連携を終了する" }).count()) === 1);
+  log("関係は残っている", psql(`select count(*) from "CompanyRelationship" where id='${realRelId}';`) === "1");
 
   // --- 表示順: バナー(本アカウント連携案内)が先、チームバッジが後 ---
   // 依頼主にはisProxyバナーが出るので、その並び順を確認する

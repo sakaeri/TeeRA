@@ -429,7 +429,8 @@ export function ClientDetailPanel({
                     </button>
                   )
                 ) : null}
-                {data.isOwner ? (
+                {/* 削除は仮アカウントの取引先だけ。本アカウントで連携している相手は「連携を終了する」で止める */}
+                {data.isOwner && data.isProxy ? (
                   <button
                     type="button"
                     onClick={() => setShowDeleteConfirm(true)}

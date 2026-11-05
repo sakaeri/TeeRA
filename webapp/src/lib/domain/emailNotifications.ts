@@ -157,6 +157,21 @@ export async function notifyCompanyOfRecruitmentEntry(params: { recruitmentId: s
     body: `${staff.name}さん・${m}/${d} ${recruitment.title}（${recruitment.entries.length}/${recruitment.maxEntries}名）`,
     url: `/company/calendar?date=${date}`,
   });
+  // 派遣会社から配属されているスタッフが自分でエントリーした場合（シフトは派遣会社名義）は、
+  // 派遣会社の本部にも知らせる
+  const shift = await prisma.shift.findFirst({
+    where: { publicRecruitmentId: recruitment.id, staffUserId: params.staffUserId, status: "CONFIRMED" },
+    orderBy: { createdAt: "desc" },
+    select: { companyId: true },
+  });
+  if (shift && shift.companyId !== recruitment.companyId) {
+    const company = await prisma.company.findUnique({ where: { id: recruitment.companyId }, select: { name: true } });
+    await sendPushToUsers(await companyAdminUserIds(shift.companyId), {
+      title: "依頼主のオーダーにエントリーがありました",
+      body: `${staff.name}さん・${m}/${d} ${company?.name ?? "依頼主"} ${recruitment.title}`,
+      url: `/company/calendar?date=${date}`,
+    });
+  }
 }
 
 // ③販促品の受注が入ったら即メール。
