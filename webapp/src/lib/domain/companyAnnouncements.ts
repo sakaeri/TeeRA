@@ -212,3 +212,66 @@ export async function deleteCompanyAnnouncement(companyId: string, announcementI
   await prisma.companyAnnouncement.delete({ where: { id: current.id } });
   await deleteNoteAttachmentFiles(current.attachments.map((a) => a.url));
 }
+
+// あとから入ったスタッフにも、宛先に当てはまる過去のお知らせを届ける。お知らせは出した時点の
+// 宛先に1件ずつ作るので、その後に入社・配属・チーム加入した人には無い。スタッフのお知らせを
+// 開く（数える）たびに、まだ持っていない分だけ足す（プッシュ通知はしない・未読・日付は元のまま）。
+// 対象は宛先が全スタッフ／自社スタッフのみ／チーム指定のもの（個別指定は対象外）で、掲載期限を
+// 過ぎたものは足さない。宛先の判定は出したときと同じ（自社スタッフのみ＝派遣スタッフを除く）。
+export async function syncPastAnnouncementsForStaff(staffUserId: string) {
+  const [memberships, placements, teamMemberships] = await Promise.all([
+    prisma.companyMembership.findMany({
+      where: { userId: staffUserId, OR: [{ role: "STAFF" }, { canWorkShifts: true }], user: { isProxy: false } },
+      select: { companyId: true, viaAgencyRelationshipId: true },
+    }),
+    prisma.staffPlacement.findMany({
+      where: { staffUserId, active: true, companyRelationship: { status: "ACTIVE", clientCompanyId: { not: null } }, staff: { isProxy: false } },
+      select: { companyRelationship: { select: { clientCompanyId: true } } },
+    }),
+    prisma.teamMembership.findMany({ where: { userId: staffUserId }, select: { teamId: true } }),
+  ]);
+  // 会社ごとに「派遣スタッフとして入っているか」
+  const isAgencyIn = new Map<string, boolean>();
+  for (const m of memberships) isAgencyIn.set(m.companyId, Boolean(m.viaAgencyRelationshipId));
+  for (const p of placements) {
+    const companyId = p.companyRelationship.clientCompanyId;
+    if (companyId && !isAgencyIn.has(companyId)) isAgencyIn.set(companyId, true);
+  }
+  if (isAgencyIn.size === 0) return 0;
+  const myTeams = new Set(teamMemberships.map((t) => t.teamId));
+
+  const today = new Date(new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)); // 日本時間の今日
+  const missing = await prisma.companyAnnouncement.findMany({
+    where: {
+      companyId: { in: [...isAgencyIn.keys()] },
+      audience: { in: ["ALL", "OWN", "TEAMS"] },
+      OR: [{ expiresOn: null }, { expiresOn: { gte: today } }],
+      notices: { none: { staffUserId } },
+    },
+    select: { id: true, companyId: true, audience: true, teamIds: true, teamId: true, includeAgencyStaff: true, title: true, body: true, createdAt: true },
+  });
+  const deliver = missing.filter((a) => {
+    const agency = isAgencyIn.get(a.companyId) ?? false;
+    // 以前の版のお知らせ（チーム1つ・派遣スタッフを含めない）も同じ考え方で判定する
+    if (a.teamId && !myTeams.has(a.teamId)) return false;
+    if (agency && !a.includeAgencyStaff) return false;
+    if (a.audience === "OWN") return !agency;
+    if (a.audience === "TEAMS") {
+      const teamIds = Array.isArray(a.teamIds) ? (a.teamIds as string[]) : [];
+      return teamIds.some((id) => myTeams.has(id));
+    }
+    return true;
+  });
+  if (deliver.length === 0) return 0;
+  const result = await prisma.staffNotice.createMany({
+    data: deliver.map((a) => ({
+      companyId: a.companyId,
+      staffUserId,
+      message: noticeMessage(a.title, a.body),
+      companyAnnouncementId: a.id,
+      createdAt: a.createdAt,
+    })),
+    skipDuplicates: true,
+  });
+  return result.count;
+}
