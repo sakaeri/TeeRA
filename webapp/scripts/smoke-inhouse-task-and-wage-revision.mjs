@@ -135,7 +135,8 @@ try {
   const wageAmountSnapshotBefore = psql(`select "wageAmountSnapshot" from "StaffContract" where id='${staffContractId}';`);
 
   // 改定は翌日から有効、にして日付解決（過去日は旧単価のまま／改定日以降は新単価）を検証する
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  // 日本時間の「明日」（UTCで計算すると、日本時間の0〜9時は「今日」になってしまい失敗していた）
+  const tomorrow = new Date(Date.now() + (9 + 24) * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   await baseWageRow.getByRole("button", { name: "改定" }).click();
   await admin.waitForTimeout(150);

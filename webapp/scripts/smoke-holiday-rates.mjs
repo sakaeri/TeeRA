@@ -78,6 +78,8 @@ try {
   await newRateModal.locator('input[placeholder*="業務内容"]').fill("キャディ");
   await newRateModal.locator('input[placeholder="金額"]').fill("2000");
   await newRateModal.locator('input[placeholder="土日祝（任意）"]').fill("2500");
+  // 単価の開始日は今日が既定なので、11/3・11/4の勤務より前（11/1）にしておく（今日の日付に左右されないように）
+  await newRateModal.locator('input[type="date"]').first().fill("2026-11-01");
   await newRateModal.getByRole("button", { name: "追加", exact: true }).click();
   await page.waitForTimeout(800);
   const clientText = await clientPanel.innerText();
@@ -103,6 +105,7 @@ try {
   else await staffRateModal.locator("select").first().selectOption("キャディ");
   await staffRateModal.locator('input[placeholder="金額"]').fill("1200");
   await staffRateModal.locator('input[placeholder="土日祝（任意）"]').fill("1500");
+  await staffRateModal.locator('input[type="date"]').first().fill("2026-11-01");
   await staffRateModal.getByRole("button", { name: "追加", exact: true }).click();
   await page.waitForTimeout(800);
   log("業務内容単価タブに平日・土日祝の単価が出る", (await staffPanel.innerText()).includes("時給1200円／土日祝1500円"));
