@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { chromium } from "playwright-core";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { openContractSignStep, submitContractConsent } from "./_lib/contractConsent.mjs";
 
 // 身分証・振込先の必須化（既定でオン）とは関係ない確認なので、この確認で作った会社では必須を外す
 // （外すと、以前と同じく「契約内容の確認 → 身分証 → 振込先」の順になる）
@@ -86,7 +87,7 @@ try {
   await staff.goto("http://localhost:3000/staff");
   await popup.waitFor({ timeout: 15000 });
   log("ホームでもポップアップが出る", (await popup.innerText()).includes("離脱防止株式会社"));
-  log("ポップアップに✕は無い", (await popup.getByRole("button").count()) === 0);
+  log("ポップアップに✕（閉じるボタン）は無い", (await popup.getByRole("button", { name: /✕|閉じる/ }).count()) === 0);
   await staff.goto("http://localhost:3000/staff/recruitments");
   await popup.waitFor({ timeout: 15000 });
   log("募集の画面でもポップアップが出る", true);
@@ -97,15 +98,9 @@ try {
   execSync(
     `PGPASSWORD=postgres psql -h localhost -U postgres -d teera -c "update \\"User\\" set address='東京都品川区1-1-1', \\"phoneNumber\\"='03-1111-2222' where email='${staffEmail}';"`,
   );
-  await popup.getByRole("link", { name: "契約書を確認する" }).click();
-  await staff.waitForURL(/\/staff\/contracts\//);
-  await staff.waitForTimeout(500);
-  log("ボタンで契約書の画面に進み、そこではポップアップが出ない", (await popup.count()) === 0);
-
-  // 同意すると通常のナビゲーションに戻る
-  await staff.getByRole("button", { name: "契約書の全文を確認する" }).click();
-  await staff.waitForTimeout(300);
-  const consentModal = staff.locator("div.fixed.inset-0.z-30").last();
+  // ポップアップのボタンで、画面を移らずにその場で契約書の流れが開く
+  const consentModal = await openContractSignStep(staff);
+  log("ボタンでその場で契約書が開く（画面は移らない）", staff.url().endsWith("/staff/recruitments"));
   await consentModal.locator('label:has-text("氏名") input').fill("離脱防止花子");
   log(
     "登録済みの住所・電話番号が最初から入っている",
@@ -114,9 +109,8 @@ try {
   );
   // 手直しもできる（直した内容は登録済みの住所にも反映される）
   await consentModal.locator('label:has-text("住所") input').fill("東京都品川区6-6-6");
-  await consentModal.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
   // 同意の処理（控えのPDF・メール・住所の反映）が終わって閉じるまで待つ
-  await staff.getByRole("button", { name: "内容を確認しました（同意する）" }).waitFor({ state: "detached", timeout: 30000 });
+  await submitContractConsent(staff, consentModal);
 
   await staff.goto("http://localhost:3000/staff/timecard");
   await staff.waitForTimeout(800);

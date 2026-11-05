@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { openContractSignStep, submitContractConsent } from "./_lib/contractConsent.mjs";
 
 // 身分証・振込先の必須化（既定でオン）とは関係ない確認なので、この確認で作った会社では必須を外す
 // （外すと、以前と同じく「契約内容の確認 → 身分証 → 振込先」の順になる）
@@ -180,13 +181,11 @@ try {
   disableRequiredDocuments();
   await staff.goto(`http://localhost:3000/staff/contracts/${companyId}`);
   await staff.waitForTimeout(500);
-  await staff.getByRole("button", { name: "契約書の全文を確認する" }).click();
-  await staff.waitForTimeout(300);
-  const consentModal = staff.locator("div.fixed.inset-0.z-30").last();
+  const consentModal = await openContractSignStep(staff);
   await consentModal.locator('label:has-text("氏名") input').fill("契約管理花子");
   await consentModal.locator('label:has-text("住所") input').fill("東京都新宿区4-4-4");
   await consentModal.locator('label:has-text("電話番号") input').fill("090-7777-8888");
-  await consentModal.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
+  await submitContractConsent(staff, consentModal);
   await staff.waitForTimeout(600);
 
   const activeCount = psql(

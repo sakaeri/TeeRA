@@ -3,7 +3,9 @@
 import { NoteAttachmentList, NoteAttachmentPicker } from "@/components/NoteAttachments";
 import type { NoteAttachmentInput, NoteAttachmentView } from "@/lib/noteAttachments";
 import { useState, useTransition } from "react";
-import { consentContractAction } from "@/app/staff/contracts/actions";
+import { useRouter } from "next/navigation";
+import { ContractConsentWizard, type ContractConsentData } from "@/components/staff/ContractConsentWizard";
+import { loadContractConsentAction } from "@/app/staff/contracts/actions";
 import {
   updateMyIdDocumentAction,
   updateMyBankInfoAction,
@@ -73,29 +75,6 @@ type Workplace = {
   emergencyContact: string | null;
   notes: { id: string; content: string; createdAt: string; attachments: NoteAttachmentView[] }[];
 };
-
-type WizardStep = "review" | "id" | "bank" | "done";
-
-// 手続きの順番：契約書で必須にしている書類（未提出のもの）→ 契約内容の確認・同意 →
-// 必須ではない書類（未提出のもの・任意）→ 完了
-function buildWizardSteps(p: {
-  idDocumentFrontUrl: string | null;
-  idDocumentBackUrl: string | null;
-  bankInfo: BankInfo;
-  requireIdDocument: boolean;
-  requireBankInfo: boolean;
-}): WizardStep[] {
-  const idMissing = !(p.idDocumentFrontUrl && p.idDocumentBackUrl);
-  const bankMissing = !(p.bankInfo.bankName.trim() && p.bankInfo.accountNumber.trim() && p.bankInfo.accountHolderName.trim());
-  const steps: WizardStep[] = [];
-  if (p.requireIdDocument && idMissing) steps.push("id");
-  if (p.requireBankInfo && bankMissing) steps.push("bank");
-  steps.push("review");
-  if (!p.requireIdDocument && idMissing) steps.push("id");
-  if (!p.requireBankInfo && bankMissing) steps.push("bank");
-  steps.push("done");
-  return steps;
-}
 
 // 業務内容単価を勤務先ごとにグループ化する（同じ勤務先でも業務内容ごとに
 // 単価が違うことがあるため、勤務先→業務内容の階層で見せる）。同名の勤務先
@@ -182,73 +161,30 @@ export function StaffContractsView({
     partyAddress?: string | null;
     partyPhoneNumber?: string | null;
   } | null>(null);
-  const [consentPending, setConsentPending] = useState(false);
-  const [consentError, setConsentError] = useState<string | null>(null);
   const [openWorkplaceId, setOpenWorkplaceId] = useState<string | null>(null);
   const [newNoteContent, setNewNoteContent] = useState("");
   const [newNoteAttachments, setNewNoteAttachments] = useState<NoteAttachmentInput[]>([]);
   const [noteUploading, setNoteUploading] = useState(false);
 
-  // 同意アクションはrevalidatePathでこのページのサーバーデータを更新する
-  // ため、pendingContractsのpropsはウィザードの途中でも変わりうる。ウィザ
-  // ードの進行状態がその変化に巻き込まれて消えてしまわないよう、対象一覧は
-  // マウント時に一度だけ固定し、以後はローカルのインデックスだけで進める。
-  const [queue] = useState(() => pendingContracts);
-  const [queueIndex, setQueueIndex] = useState(0);
-  const activePending = queue[queueIndex] ?? null;
-  const [wizardSteps, setWizardSteps] = useState<WizardStep[]>(() =>
-    buildWizardSteps({
-      idDocumentFrontUrl,
-      idDocumentBackUrl,
-      bankInfo,
-      requireIdDocument: pendingContracts[0]?.requireIdDocument ?? false,
-      requireBankInfo: pendingContracts[0]?.requireBankInfo ?? false,
-    }),
-  );
-  const [wizardIndex, setWizardIndex] = useState(0);
-  const wizardStep: WizardStep = wizardSteps[wizardIndex] ?? "done";
-  const [showDetail, setShowDetail] = useState(false);
+  // 確認待ちの契約書は、ポップアップと同じ流れ（内容 → 身分証 → 振込先 → 署名）をその場で開く
+  // 開くたびに最新の内容（途中で保存した振込先など）を読み込む
+  const [consentData, setConsentData] = useState<ContractConsentData | null>(null);
+  const [consentLoading, setConsentLoading] = useState(false);
+  const router = useRouter();
+
+  async function openConsent() {
+    setConsentLoading(true);
+    try {
+      const data = await loadContractConsentAction(companyId);
+      if (data && data.contracts.length > 0) setConsentData(data);
+      else router.refresh();
+    } finally {
+      setConsentLoading(false);
+    }
+  }
 
   const currentContracts = myContracts.filter((c) => c.status !== "ENDED");
   const pastContracts = myContracts.filter((c) => c.status === "ENDED");
-
-  function idComplete() {
-    return frontUrl !== "" && backUrl !== "";
-  }
-  function bankComplete() {
-    return bankName.trim() !== "" && accountNumber.trim() !== "" && accountHolderName.trim() !== "";
-  }
-  function goNextStep() {
-    setWizardIndex((i) => i + 1);
-  }
-  // 番号は手続きの並び順で固定（必須の書類が先：①身分証 ②振込先 ③確認 ④完了／
-  // それ以外：①確認 ②身分証 ③振込先 ④完了）。済んでいて飛ばした手順の番号は欠番のまま
-  const canonicalOrder: WizardStep[] =
-    wizardSteps[0] === "review" ? ["review", "id", "bank", "done"] : ["id", "bank", "review", "done"];
-  const stepNumber = ["①", "②", "③", "④"][canonicalOrder.indexOf(wizardStep)] ?? "";
-  const stepIsRequired = (step: "id" | "bank") =>
-    step === "id" ? !!activePending?.requireIdDocument : !!activePending?.requireBankInfo;
-
-  function handleConsent(party: { name: string; address: string; phoneNumber: string }) {
-    if (!activePending) return;
-    const id = activePending.id;
-    setConsentError(null);
-    setConsentPending(true);
-    startTransition(async () => {
-      try {
-        await consentContractAction(id, companyId, party);
-        // 同意のときに直した住所・電話番号は、登録済みの内容にも反映される
-        setAddress(party.address);
-        setPhoneNumber(party.phoneNumber);
-        setShowDetail(false);
-        goNextStep();
-      } catch {
-        setConsentError("同意できませんでした。もう一度お試しください。");
-      } finally {
-        setConsentPending(false);
-      }
-    });
-  }
 
   function uploadIdDocument(side: "front" | "back", url: string) {
     if (side === "front") setFrontUrl(url);
@@ -256,17 +192,13 @@ export function StaffContractsView({
     startTransition(() => updateMyIdDocumentAction(companyId, side, url));
   }
 
-  function submitBankInfo(advance: boolean) {
+  function submitBankInfo() {
     setSaved(false);
     startTransition(async () => {
       await updateMyBankInfoAction(companyId, { bankName, branchName, accountType, accountNumber, accountHolderName });
-      if (advance) {
-        goNextStep();
-      } else {
-        setSaved(true);
-        setBankEditing(false);
-        setTimeout(() => setSaved(false), 2000);
-      }
+      setSaved(true);
+      setBankEditing(false);
+      setTimeout(() => setSaved(false), 2000);
     });
   }
 
@@ -275,24 +207,6 @@ export function StaffContractsView({
       await updateMyAddressPhoneAction(companyId, { address, phoneNumber });
       setAddressEditing(false);
     });
-  }
-
-  // 次の契約書へ。その契約書で必須の書類がまだなら先に出してもらい、済んでいれば確認・同意だけ
-  // （任意の書類はひとつ前の契約書で案内済みなので、もう一度は出さない）
-  function finishWizard() {
-    const next = queue[queueIndex + 1];
-    setQueueIndex((i) => i + 1);
-    const steps = next
-      ? buildWizardSteps({
-          idDocumentFrontUrl: frontUrl || null,
-          idDocumentBackUrl: backUrl || null,
-          bankInfo: { ...bankInfo, bankName, accountNumber, accountHolderName },
-          requireIdDocument: next.requireIdDocument,
-          requireBankInfo: next.requireBankInfo,
-        }).filter((step, i, all) => step === "done" || i < all.indexOf("review") + 1)
-      : (["done"] as WizardStep[]);
-    setWizardSteps(steps);
-    setWizardIndex(0);
   }
 
   function submitNewNote(workplaceCompanyRelationshipId: string) {
@@ -307,161 +221,39 @@ export function StaffContractsView({
 
   return (
     <div className="flex flex-col gap-8">
-      {activePending ? (
+      {pendingContracts.length > 0 ? (
         <section className="rounded-2xl border-2 border-primary bg-white p-6">
           <p className="mb-1 text-xs font-semibold text-primary">新しい契約書があります</p>
-          <h2 className="mb-4 font-serif-jp text-lg font-bold text-primary">
-            {stepNumber}{" "}
-            {wizardStep === "review"
-              ? "契約内容を確認"
-              : wizardStep === "id"
-                ? "本人確認書類を提出"
-                : wizardStep === "bank"
-                  ? "振込先情報を入力"
-                  : "完了"}
-          </h2>
-
-          {wizardStep === "review" ? (
-            <div className="flex flex-col gap-3">
-              <div className="rounded-lg border border-border/60 p-3 text-sm">
-                <p className="font-semibold">{activePending.title}</p>
-                <p className="text-muted">
-                  {WAGE_TYPE_LABEL[activePending.templateDetail.wageType]} {activePending.templateDetail.wageAmount}円
-                </p>
-                <p className="text-xs text-muted">契約開始日: {activePending.templateDetail.contractStartDate}</p>
-              </div>
-              <p className="text-xs text-muted">
-                全文の最後に氏名・住所・電話番号の入力欄があります。内容を確認し、同意してください。
-              </p>
-              <button
-                type="button"
-                onClick={() => setShowDetail(true)}
-                className="mt-2 self-start rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground"
-              >
-                契約書の全文を確認する
-              </button>
-            </div>
-          ) : null}
-
-          {wizardStep === "id" ? (
-            <div className="flex flex-col gap-3">
-              <p className="text-xs text-muted">
-                運転免許証など、両面の写真を提出してください。
-                {stepIsRequired("id") ? `${companyName}では、契約書に同意する前に提出が必要です。` : ""}
-              </p>
-              <div className="flex gap-6">
-                <div className="w-40">
-                  <ImageDropzone label="表面" required imageUrl={frontUrl} onChange={(url) => uploadIdDocument("front", url)} />
-                </div>
-                <div className="w-40">
-                  <ImageDropzone label="裏面" required imageUrl={backUrl} onChange={(url) => uploadIdDocument("back", url)} />
-                </div>
-              </div>
-              <button
-                type="button"
-                disabled={!idComplete()}
-                onClick={goNextStep}
-                className="mt-2 self-start rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-              >
-                次へ
-              </button>
-            </div>
-          ) : null}
-
-          {wizardStep === "bank" ? (
-            <div className="flex flex-col gap-3">
-              {stepIsRequired("bank") ? (
-                <p className="text-xs text-muted">{companyName}では、契約書に同意する前に振込先の登録が必要です。</p>
-              ) : null}
-              <label className="flex flex-col gap-1 text-xs">
-                <span className="text-muted">銀行名</span>
-                <input
-                  type="text"
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
-                  className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs">
-                <span className="text-muted">支店名</span>
-                <input
-                  type="text"
-                  value={branchName}
-                  onChange={(e) => setBranchName(e.target.value)}
-                  className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs">
-                <span className="text-muted">口座種別</span>
-                <select
-                  value={accountType}
-                  onChange={(e) => setAccountType(e.target.value)}
-                  className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
-                >
-                  <option value="">未選択</option>
-                  <option value="普通">普通</option>
-                  <option value="当座">当座</option>
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-xs">
-                <span className="text-muted">口座番号</span>
-                <input
-                  type="text"
-                  value={accountNumber}
-                  onChange={(e) => setAccountNumber(e.target.value)}
-                  className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs">
-                <span className="text-muted">口座名義</span>
-                <input
-                  type="text"
-                  value={accountHolderName}
-                  onChange={(e) => setAccountHolderName(e.target.value)}
-                  className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
-                />
-              </label>
-              <button
-                type="button"
-                disabled={pending || !bankComplete()}
-                onClick={() => submitBankInfo(true)}
-                className="mt-2 self-start rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-              >
-                次へ
-              </button>
-            </div>
-          ) : null}
-
-          {wizardStep === "done" ? (
-            <div className="flex flex-col gap-3">
-              <p className="text-sm">お疲れ様でした。手続きは以上です。</p>
-              <button
-                type="button"
-                onClick={finishWizard}
-                className="self-start rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground"
-              >
-                閉じる
-              </button>
-            </div>
-          ) : null}
+          <ul className="mb-3 flex flex-col gap-1 text-sm">
+            {pendingContracts.map((c) => (
+              <li key={c.id}>
+                <span className="font-semibold">{c.title}</span>
+                <span className="ml-2 text-muted">
+                  {WAGE_TYPE_LABEL[c.templateDetail.wageType]}
+                  {c.templateDetail.wageAmount}円
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mb-3 text-xs text-muted">契約書の内容・身分証明書・振込先情報・署名を順番に確認して同意してください。</p>
+          <button
+            type="button"
+            disabled={consentLoading}
+            onClick={openConsent}
+            className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            {consentLoading ? "開いています…" : "契約書を確認する"}
+          </button>
         </section>
       ) : null}
 
-      {showDetail && activePending ? (
-        <TemplateModal
-          readOnly
-          companyName={companyName}
-          clients={[]}
-          editingTemplate={activePending.templateDetail}
-          viewingStaff={{ name: myName }}
-          consentForm={{
-            pending: consentPending,
-            error: consentError,
-            onConsent: handleConsent,
-            initialAddress: address,
-            initialPhoneNumber: phoneNumber,
-          }}
-          onClose={() => setShowDetail(false)}
+      {consentData ? (
+        <ContractConsentWizard
+          data={consentData}
+          // 流れの中で保存した書類・振込先・住所を、この画面の表示（入力欄の初期値）にも
+          // 反映するため、閉じたら読み込み直す
+          onClose={() => window.location.reload()}
+          onFinished={() => window.location.reload()}
         />
       ) : null}
 
@@ -852,7 +644,7 @@ export function StaffContractsView({
             <button
               type="button"
               disabled={pending}
-              onClick={() => submitBankInfo(false)}
+              onClick={submitBankInfo}
               className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
               保存する

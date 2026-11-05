@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { openContractSignStep, submitContractConsent } from "./_lib/contractConsent.mjs";
 
 // 身分証・振込先の必須化（既定でオン）とは関係ない確認なので、この確認で作った会社では必須を外す
 // （外すと、以前と同じく「契約内容の確認 → 身分証 → 振込先」の順になる）
@@ -92,9 +93,7 @@ try {
   disableRequiredDocuments();
   await staff.goto(`http://localhost:3000/staff/contracts/${companyId}`);
   await staff.waitForTimeout(500);
-  await staff.getByRole("button", { name: "契約書の全文を確認する" }).click();
-  await admin.waitForTimeout(200);
-  const consentModal = staff.locator("div.fixed.inset-0.z-30").last();
+  const consentModal = await openContractSignStep(staff);
 
   // ❶ regression check: the "*" sits on the same line as the label text
   const nameLabelSpan = consentModal.locator("label:has-text('氏名') span").first();
@@ -107,7 +106,7 @@ try {
 
   await consentModal.locator('label:has-text("住所") input').fill("東京都渋谷区1-1-1");
   await consentModal.locator('label:has-text("電話番号") input').fill("090-1111-2222");
-  await consentModal.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
+  await submitContractConsent(staff, consentModal);
   await admin.waitForTimeout(800);
 
   // ❷ pinned block should now reflect the staff-entered address/phone, with no history entry yet (first time)

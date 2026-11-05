@@ -5,7 +5,7 @@ import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 // 身分証・振込先の提出を必須にする（契約書テンプレートごとの設定。既定でオン）：
 // ・未提出のスタッフは、ホームに「登録してください」が出て、アイコンの数字にも数える
 // ・本部のダッシュボードの「契約書未確認」のカードに合算され、その一覧に未提出の書類が出る
-// ・契約書の手続きは、必須の書類が先（身分証→振込先→契約内容の確認・同意）
+// ・契約書の手続きは、その場で 契約書の内容 → 身分証 → 振込先 → 署名 の順
 // ・テンプレートの編集で必須を外すと、未提出として出なくなる
 // ・契約書がまだないスタッフには、お願いを出さない
 
@@ -109,32 +109,40 @@ try {
     popupText.includes("書類スタッフ") && popupText.includes("身分証未提出") && popupText.includes("振込先未提出"),
   );
 
-  // --- スタッフ：契約書の手続きは身分証→振込先→確認の順 ---
+  // --- スタッフ：契約書の内容 → 身分証 → 振込先 → 署名 の順に、その場で進める ---
   await staff.goto(`http://localhost:3000/staff/contracts/${companyId}`);
-  await staff.getByText("本人確認書類を提出").first().waitFor({ timeout: 15000 });
-  let body = await staff.textContent("body");
-  log("最初の手続きは① 本人確認書類の提出（契約内容の確認より先）", body.includes("① 本人確認書類を提出") && body.includes("契約書に同意する前に提出が必要"));
+  await staff.getByRole("button", { name: "契約書を確認する" }).click();
+  const wizard = staff.getByRole("dialog", { name: "契約書の確認" });
+  await wizard.waitFor({ timeout: 15000 });
+  log("必須の書類がある契約書は4手順（1/4 契約書の内容から）", (await wizard.innerText()).includes("1/4 契約書の内容"));
+  await wizard.getByRole("button", { name: "次へ", exact: true }).click();
+  log(
+    "2/4 身分証明書の添付：未提出のうちは次へ進めない",
+    (await wizard.innerText()).includes("2/4 身分証明書の添付") && (await wizard.getByRole("button", { name: "次へ", exact: true }).isDisabled()),
+  );
 
-  // 身分証を出した（ことにする）→ 振込先 → 確認・同意
+  // 身分証を出した（ことにする。アップロード先はローカルに無いため）→ 開き直すと提出済みとして読み込まれる
   psql(`update "CompanyMembership" set "idDocumentFrontUrl"='https://example.com/f.png', "idDocumentBackUrl"='https://example.com/b.png' where "userId"='${staffUserId}' and "companyId"='${companyId}';`);
-  await staff.reload();
-  await staff.getByText("② 振込先情報を入力").waitFor({ timeout: 15000 });
-  log("身分証が済んでいれば② 振込先から始まる", true);
-  const wizard = staff.locator("section.border-primary");
+  await wizard.getByRole("button", { name: "閉じる" }).click();
+  await staff.waitForLoadState("load");
+  await staff.getByRole("button", { name: "契約書を確認する" }).click();
+  await wizard.waitFor({ timeout: 15000 });
+  await wizard.getByRole("button", { name: "次へ", exact: true }).click();
+  log("提出済みの身分証は「提出済み」として読み込まれる", (await wizard.innerText()).includes("提出済み"));
+  await wizard.getByRole("button", { name: "次へ", exact: true }).click();
+  await wizard.getByText("3/4 振込先情報").waitFor({ timeout: 15000 });
   await wizard.locator('label:has-text("銀行名") input').fill("書類銀行");
   await wizard.locator('label:has-text("支店名") input').fill("本店");
   await wizard.locator('label:has-text("口座番号") input').fill("1234567");
   await wizard.locator('label:has-text("口座名義") input').fill("ショルイ スタッフ");
-  await wizard.getByRole("button", { name: "次へ" }).click();
-  await staff.getByText("③ 契約内容を確認").waitFor({ timeout: 15000 });
-  log("振込先を入れると③ 契約内容の確認に進む", true);
-  await staff.getByRole("button", { name: "契約書の全文を確認する" }).click();
-  const consentModal = staff.locator("div.fixed.inset-0.z-30").last();
-  await consentModal.locator('label:has-text("氏名") input').fill("書類スタッフ");
-  await consentModal.locator('label:has-text("住所") input').fill("東京都港区1-1-1");
-  await consentModal.locator('label:has-text("電話番号") input').fill("090-0000-1111");
-  await consentModal.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
-  await staff.getByText("④ 完了").waitFor({ timeout: 15000 });
+  await wizard.getByRole("button", { name: "次へ", exact: true }).click();
+  await wizard.getByText("4/4 署名").waitFor({ timeout: 15000 });
+  log("振込先を入れると4/4 署名に進む", true);
+  await wizard.locator('label:has-text("氏名") input').fill("書類スタッフ");
+  await wizard.locator('label:has-text("住所") input').fill("東京都港区1-1-1");
+  await wizard.locator('label:has-text("電話番号") input').fill("090-0000-1111");
+  await wizard.getByRole("button", { name: "内容を確認しました（同意する）" }).click();
+  await wizard.waitFor({ state: "detached", timeout: 30000 });
   log("書類がそろえば契約書に同意できる", psql(`select status from "StaffContract" where "staffUserId"='${staffUserId}';`) === "ACTIVE");
 
   await staff.goto("http://localhost:3000/staff");

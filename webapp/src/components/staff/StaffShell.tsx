@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { Toaster } from "@/components/Toast";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { loadContractConsentAction } from "@/app/staff/contracts/actions";
+import { ContractConsentWizard, type ContractConsentData } from "@/components/staff/ContractConsentWizard";
 import { logoutAction } from "@/app/actions/auth";
 import { useClickOutside } from "@/lib/useClickOutside";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
@@ -250,9 +252,41 @@ export function StaffShell({
   );
 }
 
-// 確認待ちの契約書があるときのポップアップ。✕では閉じられず、契約書の画面に進んでもらう
-// （どの画面を開いてもこのポップアップが前に出るので、止まっている理由が分かる）
+// 確認待ちの契約書があるときのポップアップ。✕では閉じられない。「契約書を確認する」で
+// その場で契約書を開き、内容 → 身分証 → 振込先 → 署名まで済ませる（設定の画面には移らない）
 function PendingContractPopup({ companies }: { companies: { id: string; name: string }[] }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [wizard, setWizard] = useState<ContractConsentData | null>(null);
+
+  async function open(companyId: string) {
+    setError(null);
+    setLoading(companyId);
+    try {
+      const data = await loadContractConsentAction(companyId);
+      if (data && data.contracts.length > 0) setWizard(data);
+      else router.refresh();
+    } catch {
+      setError("契約書を開けませんでした。もう一度お試しください。");
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  if (wizard) {
+    return (
+      <ContractConsentWizard
+        data={wizard}
+        onClose={() => setWizard(null)}
+        onFinished={() => {
+          setWizard(null);
+          router.refresh();
+        }}
+      />
+    );
+  }
+
   return (
     <div
       role="dialog"
@@ -267,16 +301,23 @@ function PendingContractPopup({ companies }: { companies: { id: string; name: st
         </p>
         <div className="mt-4 flex flex-col gap-2">
           {companies.map((c) => (
-            <Link
+            <button
               key={c.id}
-              href={`/staff/contracts/${c.id}`}
-              className="rounded-lg bg-primary px-4 py-2.5 text-center text-sm font-semibold text-primary-foreground"
+              type="button"
+              disabled={loading !== null}
+              onClick={() => open(c.id)}
+              className="rounded-lg bg-primary px-4 py-2.5 text-center text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
-              {companies.length > 1 ? `${c.name}の契約書を確認する` : "契約書を確認する"}
-            </Link>
+              {loading === c.id
+                ? "開いています…"
+                : companies.length > 1
+                  ? `${c.name}の契約書を確認する`
+                  : "契約書を確認する"}
+            </button>
           ))}
         </div>
         {companies.length === 1 ? <p className="mt-2 text-center text-xs text-muted">{companies[0].name}</p> : null}
+        {error ? <p className="mt-2 text-center text-xs text-red-600">{error}</p> : null}
       </div>
     </div>
   );
