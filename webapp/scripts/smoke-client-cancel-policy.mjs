@@ -253,15 +253,37 @@ try {
   );
   log("「調整中にする」を選ぶと調整中になる", psql(`select status from "Shift" where id='${phoneShiftId}';`) === "ON_HOLD");
 
-  // --- 調整中のシフトを「休みにする」 ---
+  // --- 調整中のシフトの×も同じ「シフトを解除しますか？」の画面（依頼主都合・キャンセル料が最初から入っている） ---
   await agency.goto(`http://localhost:3000/company/calendar?date=${tomorrow}`);
-  await agency.waitForTimeout(800);
   await agency.getByRole("button", { name: "シフトを解除" }).first().click();
-  await agency.waitForTimeout(800);
-  cancelModal = agency.locator("div.fixed.inset-0").last();
-  await cancelModal.getByRole("button", { name: "休みにする" }).click();
-  await agency.waitForTimeout(800);
+  cancelModal = agency.locator("div.fixed.inset-0", { hasText: "シフトを解除しますか？" }).last();
+  await cancelModal.getByLabel("依頼主都合（電話などで取り消しを受けた）").waitFor({ timeout: 15000 });
+  await cancelModal.locator('input[type="number"]').waitFor({ timeout: 15000 });
+  log("調整中のシフトも理由の選択画面になり、依頼主都合が選ばれている", await cancelModal.getByLabel("依頼主都合（電話などで取り消しを受けた）").isChecked());
+  log("記録済みのキャンセル料が入っている", (await cancelModal.locator('input[type="number"]').inputValue()) === "5000");
+  log("調整中の旨が書かれる", (await cancelModal.innerText()).includes("調整中です"));
+  await cancelModal.getByRole("button", { name: "解除する" }).click();
+  await cancelModal.waitFor({ state: "detached", timeout: 15000 });
   log("調整中のシフトを休みにできる", psql(`select status from "Shift" where id='${phoneShiftId}';`) === "CANCELLED");
+  log("依頼主取消の記録（5000円）はそのまま", psql(`select source || '|' || "feeAmount" from "ShiftCancellation" where "shiftId"='${phoneShiftId}';`) === "CLIENT_REPORTED|5000");
+
+  // 依頼主が削除して調整中になったシフトを「自社都合」で解除 → 依頼主取消の記録は自社都合に変わる
+  const appHeldId = psql(
+    `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${agencyCompanyId}', '${staffUserId}', 'CLIENT', '${relId}', '削除調整中テスト', '${tomorrow}', '06:00', '07:00', false, false, 'ON_HOLD', 'ASSIGN', now(), now()) returning id) select id from ins;`,
+  );
+  psql(`insert into "ShiftCancellation" (id, "shiftId", "cancelledByCompanyId", source, "feeAmount", "ruleBlocked") values (gen_random_uuid()::text, '${appHeldId}', '${clientCompanyId}', 'CLIENT_APP', 4000, true);`);
+  await agency.goto(`http://localhost:3000/company/calendar?date=${tomorrow}`);
+  await agency.getByRole("button", { name: "シフトを解除" }).first().click();
+  cancelModal = agency.locator("div.fixed.inset-0", { hasText: "シフトを解除しますか？" }).last();
+  await cancelModal.getByText("オーダーを削除しました").waitFor({ timeout: 15000 });
+  log("依頼主が削除した旨と「規定ではキャンセル不可」が書かれる", (await cancelModal.innerText()).includes("規定ではキャンセル不可"));
+  await cancelModal.getByLabel("自社都合").check();
+  await cancelModal.getByRole("button", { name: "解除する" }).click();
+  await cancelModal.waitFor({ state: "detached", timeout: 15000 });
+  log(
+    "自社都合を選ぶと休みになり、依頼主取消の記録は自社都合（キャンセル料なし）に変わる",
+    psql(`select s.status || '|' || c.source || '|' || c."feeAmount" || '|' || c."ruleBlocked" from "Shift" s join "ShiftCancellation" c on c."shiftId"=s.id where s.id='${appHeldId}';`) === "CANCELLED|AGENCY_OWN|0|false",
+  );
 
   // --- 変更履歴に勤務先・取り消しの理由・キャンセル料が出る ---
   // 自社都合の解除も1件作っておく（社内シフトは理由を選ばずに解除できる）
