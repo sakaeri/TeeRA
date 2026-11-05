@@ -59,7 +59,8 @@ try {
   await admin.waitForTimeout(300);
   log("兼務フラグON後は/staffに入れる（会社に戻されない）", admin.url().endsWith("/staff"));
   let mainText = await admin.locator("main").textContent();
-  log("スタッフ側のシフトカレンダー画面が表示される", mainText.includes("シフトカレンダー"));
+  // 画面タイトルは外したので、カレンダーの年月の見出しで確かめる
+  log("スタッフ側のシフトカレンダー画面が表示される", /\d{4}年\d{1,2}月/.test(mainText));
 
   // --- 兼務（role≠STAFF）のまま所属先設定を開いてもクラッシュしない ---
   // （findFirstOrThrowにrole:"STAFF"を条件に含めていたため、兼務ユーザーが
@@ -67,7 +68,8 @@ try {
   await admin.goto("http://localhost:3000/staff/contracts");
   await admin.waitForTimeout(400);
   const contractsText = await admin.locator("main").textContent();
-  log("兼務ユーザーでも所属先設定画面がクラッシュせず開ける", contractsText.includes("所属先設定"));
+  // 画面タイトルは外したので、所属先の一覧に自社の名前が出ることで確かめる
+  log("兼務ユーザーでも所属先設定画面がクラッシュせず開ける", contractsText.includes(companyName));
 
   await admin.click('button[aria-label="プロフィールメニュー"]');
   await admin.waitForTimeout(200);
@@ -97,6 +99,8 @@ try {
     await assignModal.getByRole("button", { name: "この業務内容を追加して次へ" }).click();
     await admin.waitForTimeout(300);
   }
+  // スタッフの選択肢が出るまで待つ（固定の待ち時間だと表示前に読んでしまうことがある）
+  await assignModal.getByText(adminName).first().waitFor({ timeout: 15000 }).catch(() => {});
   const staffPickerText = await assignModal.textContent();
   log("シフト割当の選択肢に兼務管理者の名前が出る", staffPickerText.includes(adminName));
   await admin.keyboard.press("Escape");

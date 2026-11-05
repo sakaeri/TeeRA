@@ -61,6 +61,9 @@ try {
         `'PART_TIME', 'INHOUSE', 'キャディ業務', 'SHIFT', 'DAILY', 9000, 'FIXED_TERM', current_date - interval '30 day', ` +
         `${endDateExpr}, 'LOCKED', now()) returning id) select id from ins;`,
     );
+    // 身分証・振込先の必須（既定でオン）とは関係ない確認なので、ここでは外す
+    // （外さないと、全員が「身分証未提出・振込先未提出」としてポップアップに並ぶ）
+    psql(`update "ContractTemplate" set "requireIdDocument"=false, "requireBankInfo"=false where id='${templateId}';`);
     psql(
       `insert into "StaffContract" (id, "templateId", "staffUserId", "wageAmountSnapshot", "contractStartDate", ` +
         `"contractEndDate", status, "consentedAt", "updatedAt") values (gen_random_uuid()::text, '${templateId}', ` +
