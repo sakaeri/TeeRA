@@ -1,5 +1,6 @@
 // 依頼主がオーダーを取り消した時、派遣元が依頼主×業務内容ごとに設定した
-// キャンセル規定（キャンセル不可／締切後キャンセル料）が守られることを確認する。
+// キャンセル規定（キャンセル不可／締切後キャンセル料）で判定した結果が、派遣元側に
+// 「依頼主取消」として記録されることを確認する（依頼主の削除は止めない）。
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
@@ -152,8 +153,10 @@ try {
   }
   let confirm = await openDeleteConfirm();
   let confirmText = await confirm.textContent();
-  log("キャンセル不可の場合、取り消せない旨と対象スタッフが表示される", confirmText.includes("取り消せません") && confirmText.includes("派遣スタッフ"));
-  log("キャンセル不可の場合、削除ボタンが押せない", await confirm.getByRole("button", { name: "削除する" }).isDisabled());
+  log("規定がキャンセル不可でも、依頼主の削除は止めない（取り消せない旨は出さない）", !confirmText.includes("取り消せません"));
+  log("削除ボタンは押せる", !(await confirm.getByRole("button", { name: "削除する" }).isDisabled()));
+  log("派遣会社に通知される旨が出る", confirmText.includes("派遣会社に通知されます"));
+  await confirm.getByRole("button", { name: "キャンセル", exact: true }).click();
 
   // --- agency: この業務内容だけ「締切後はキャンセル料」の例外にする(締切は30日前＝もう過ぎている) ---
   await agency.goto("http://localhost:3000/company/roster");
@@ -185,11 +188,8 @@ try {
   log("例外がキャンセル規定の欄に業務内容名つきで出る", (await clientPanel.textContent()).includes("取消テスト業務：30日前00:00以降はキャンセル料5000円/人"));
   confirm = await openDeleteConfirm();
   confirmText = await confirm.textContent();
-  log("締切後はキャンセル料の合計が表示される", confirmText.includes("キャンセル料 合計5,000円"));
-  const deleteBtn = confirm.getByRole("button", { name: "削除する" });
-  log("了承のチェックを入れるまで削除できない", await deleteBtn.isDisabled());
-  await confirm.getByLabel("キャンセル料がかかることを了承して取り消す").check();
-  await deleteBtn.click();
+  log("依頼主にはキャンセル料の確認を出さない", !confirmText.includes("キャンセル料"));
+  await confirm.getByRole("button", { name: "削除する" }).click();
   await client.waitForTimeout(1000);
 
   log("オーダーが削除される", psql(`select status from "PublicRecruitment" where id='${recruitmentId}';`) === "DELETED");
@@ -301,7 +301,8 @@ try {
   const heldShiftId = psql(
     `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", "taskName", date, "startTime", "endTime", "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${agencyCompanyId}', '${staffUserId}', 'CLIENT', '${relId}', '調整中テスト', '${tomorrow}', '21:00', '22:00', false, false, 'ON_HOLD', 'ASSIGN', now(), now()) returning id) select id from ins;`,
   );
-  psql(`insert into "ShiftCancellation" (id, "shiftId", "cancelledByCompanyId", source, "feeAmount") values (gen_random_uuid()::text, '${heldShiftId}', '${clientCompanyId}', 'CLIENT_APP', 0);`);
+  // 規定では「キャンセル不可」だったが依頼主がオーダーを削除した取り消し（請求のメモとして出す）
+  psql(`insert into "ShiftCancellation" (id, "shiftId", "cancelledByCompanyId", source, "feeAmount", "ruleBlocked") values (gen_random_uuid()::text, '${heldShiftId}', '${clientCompanyId}', 'CLIENT_APP', 0, true);`);
   await agency.goto(`http://localhost:3000/company/calendar?date=${tomorrow}`);
   await agency.waitForTimeout(800);
   const heldModal = agency.locator("div.fixed.inset-0.z-20").last();
@@ -309,6 +310,7 @@ try {
   await agency.waitForTimeout(300);
   const heldHistory = await heldModal.locator("ul").last().innerText();
   log("調整中のシフトも変更履歴に「調整中」で出る", heldHistory.includes("調整中テスト → 調整中") && heldHistory.includes("依頼主取消（アプリ）"));
+  log("規定ではキャンセル不可だった取り消しは、派遣元の履歴にその旨が出る", heldHistory.includes("規定ではキャンセル不可"));
 
   // --- agency invoice for that month contains the キャンセル料 line ---
   const month = psql(`select to_char(date, 'YYYY-MM') from "Shift" where id='${shiftId}';`);
