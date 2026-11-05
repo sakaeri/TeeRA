@@ -112,6 +112,11 @@ try {
   await staff.waitForTimeout(200);
   staffBody = await recruitmentItem.innerText();
   log("expanded detail shows 業務内容", staffBody.includes(recruitmentTitle));
+  const adminUserId = psql(`select id from "User" where email='${adminEmail}';`);
+  const pushEndpoint = `http://127.0.0.1:9/push-test-${Date.now()}`;
+  psql(
+    `insert into "PushSubscription" (id, "userId", endpoint, p256dh, auth) values (gen_random_uuid()::text, '${adminUserId}', '${pushEndpoint}', 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM', 'tBHItJI5svbpez7KI4CCXg');`,
+  );
   await recruitmentItem.getByRole("button", { name: "応募する" }).click();
   // 確認のポップアップで「応募する」
   await recruitmentItem.page().locator("div.fixed.inset-0.z-40").getByRole("button", { name: "応募する" }).click();
@@ -119,6 +124,10 @@ try {
   // 応募済みの募集は一覧から消える仕様（他セッションの変更）— バッジで
   // 残すのではなく丸ごと非表示にする。
   log("応募済みの募集は一覧から消える", (await recruitmentItem.count()) === 0);
+  // 応募があると、募集を出した会社（チームの無い募集は本部の管理者）へプッシュ通知を送る
+  // （管理者の端末として届かない宛先を登録しておき、そこへ送ろうとしたことをログで確かめる）
+  const devLog = execSync("tail -c 200000 /tmp/nextdev.log").toString();
+  log("応募があると本部の管理者の端末にプッシュ通知を送る", devLog.includes(pushEndpoint));
 
   const balanceAfterApply = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
   log("balance unchanged on apply (order entries stay free)", balanceAfterApply === 100);

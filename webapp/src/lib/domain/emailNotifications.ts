@@ -137,6 +137,28 @@ export async function notifyCompanyOfWorkReportSubmission(workReportId: string) 
   });
 }
 
+// 募集（オーダー）にスタッフが応募したら、募集を出したチームのマネージャー・リーダー
+// （チームの無い募集は本部の管理者・編集者）へプッシュ通知だけ送る（メールは送らない）。
+// 押すとカレンダーのその日の詳細が開く。
+export async function notifyCompanyOfRecruitmentEntry(params: { recruitmentId: string; staffUserId: string }) {
+  const recruitment = await prisma.publicRecruitment.findUnique({
+    where: { id: params.recruitmentId },
+    include: { entries: { where: { status: { not: "REJECTED" } }, select: { id: true } } },
+  });
+  const staff = await prisma.user.findUnique({ where: { id: params.staffUserId }, select: { name: true } });
+  if (!recruitment || !staff) return;
+  const date = recruitment.date.toISOString().slice(0, 10);
+  const [, m, d] = date.split("-").map(Number);
+  const pushTargetUserIds = recruitment.teamId
+    ? await teamManagerUserIds(recruitment.teamId)
+    : await companyAdminUserIds(recruitment.companyId);
+  await sendPushToUsers(pushTargetUserIds, {
+    title: "募集に応募がありました",
+    body: `${staff.name}さん・${m}/${d} ${recruitment.title}（${recruitment.entries.length}/${recruitment.maxEntries}名）`,
+    url: `/company/calendar?date=${date}`,
+  });
+}
+
 // ③販促品の受注が入ったら即メール。
 export async function notifyCompanyOfPromoOrder(redemptionId: string) {
   const redemption = await prisma.promoRedemption.findUnique({

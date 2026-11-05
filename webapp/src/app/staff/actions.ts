@@ -15,7 +15,7 @@ import {
   confirmCorrectedWorkReport,
   disputeCorrectedWorkReport,
 } from "@/lib/domain/workReports";
-import { notifyCompanyOfWorkReportSubmission } from "@/lib/domain/emailNotifications";
+import { notifyCompanyOfWorkReportSubmission, notifyCompanyOfRecruitmentEntry } from "@/lib/domain/emailNotifications";
 import { markStaffNoticeRead, markAllStaffNoticesRead } from "@/lib/domain/notices";
 import { updateMembershipIdDocument, updateMembershipBankInfo, updateStaffAddressPhone } from "@/lib/domain/roster";
 import { addStaffRelationshipNote } from "@/lib/domain/relationships";
@@ -299,6 +299,10 @@ export async function applyToRecruitmentAction(recruitmentId: string) {
     }
     throw error;
   }
+  // 募集を出した会社へプッシュ通知（送れなくても応募自体は成立させる）
+  await notifyCompanyOfRecruitmentEntry({ recruitmentId, staffUserId: userId }).catch((err) =>
+    console.error("[notify] recruitment entry push failed", err),
+  );
   revalidatePath("/staff/recruitments");
   revalidatePath("/staff");
   return { error: null };
