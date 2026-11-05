@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { noteAttachmentView } from "@/lib/noteAttachments";
+import { syncPastAnnouncementsForStaff } from "@/lib/domain/companyAnnouncements";
 
 // スタッフ向けの一方向のお知らせ（例：個別単価の変更・終了）。同意は求めず、
 // 既読管理のみ。給与計算はこれとは無関係に、シフト日付時点で有効な単価で
@@ -13,6 +14,7 @@ export async function createStaffNotice(params: { companyId: string; staffUserId
 // 会社からのお知らせ（ダッシュボードで出したもの）はタイトル・本文・添付を、それ以外
 // （単価の変更・募集の追加のお知らせなど）は本文の1行目をタイトルとして返す。
 export async function listAllStaffNotices(staffUserId: string, options: { take?: number; unreadOnly?: boolean } = {}) {
+  await syncPastAnnouncementsForStaff(staffUserId);
   const rows = await prisma.staffNotice.findMany({
     where: { staffUserId, ...(options.unreadOnly ? { readAt: null } : {}) },
     include: {
@@ -44,6 +46,7 @@ export async function listAllStaffNotices(staffUserId: string, options: { take?:
 }
 
 export async function countUnreadStaffNotices(staffUserId: string) {
+  await syncPastAnnouncementsForStaff(staffUserId);
   return prisma.staffNotice.count({ where: { staffUserId, readAt: null } });
 }
 

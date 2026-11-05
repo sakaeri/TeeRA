@@ -653,6 +653,7 @@ model StaffNotice {
   recruitmentAnnouncement RecruitmentAnnouncement? @relation(fields: [recruitmentAnnouncementId], references: [id], onDelete: Cascade)
   companyAnnouncement     CompanyAnnouncement?     @relation(fields: [companyAnnouncementId], references: [id], onDelete: Cascade)
 
+  @@unique([staffUserId, companyAnnouncementId])
   @@index([staffUserId, readAt])
   @@index([recruitmentAnnouncementId])
   @@index([companyAnnouncementId])

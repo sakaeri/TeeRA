@@ -155,6 +155,8 @@ try {
     `insert into "NoteAttachment" (id, "companyAnnouncementId", url, "fileName", "contentType", size, "createdAt") values (gen_random_uuid()::text, '${teamOnlyId}', 'http://localhost:3000/does-not-exist.png', '別紙.png', 'image/png', 100, now()) returning id;`,
   );
   // 「チームAだけ」を本物のスタッフが受け取っていないことにして、開けないのを確かめる
+  // （チームAからも外す。チームにいるままだと、あとから入った人向けに過去のお知らせとして足される）
+  psql(`delete from "TeamMembership" where "teamId"='${teamA}' and "userId"='${realStaffId}';`);
   psql(`delete from "StaffNotice" where "companyAnnouncementId"='${teamOnlyId}' and "staffUserId"='${realStaffId}';`);
   const s1 = (await staff.request.get(`http://localhost:3000/api/note-attachments/${attId}`)).status();
   const s2 = (await staff.request.get(`http://localhost:3000/api/note-attachments/${att2Id}`)).status();
