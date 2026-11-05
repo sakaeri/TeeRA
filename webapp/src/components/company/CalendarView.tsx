@@ -189,6 +189,9 @@ type ClientRecruitmentRow = {
   endTime: string | null;
   maxEntries: number;
   filled: number;
+  // 依頼主が書いた備考と、追加の項目（勤務地・持ち物など）
+  note: string | null;
+  extraItems: { label: string; value: string }[];
   announcements: AnnouncementRow[];
 };
 
@@ -3155,6 +3158,19 @@ function ClientOrderRow({
           {order.filled}/{order.maxEntries}名
         </span>
       </div>
+      {/* 依頼主が書いた備考・追加の項目（派遣会社がスタッフに伝えるため） */}
+      {order.note || order.extraItems.some((i) => i.value.trim()) ? (
+        <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted">
+          {order.extraItems
+            .filter((i) => i.value.trim())
+            .map((i) => (
+              <p key={i.label} className="whitespace-pre-wrap break-words">
+                {i.label}：{i.value}
+              </p>
+            ))}
+          {order.note ? <p className="whitespace-pre-wrap break-words">備考：{order.note}</p> : null}
+        </div>
+      ) : null}
       {/* 依頼主が書き足したお知らせ（派遣会社は見るだけ） */}
       <RecruitmentAnnouncements announcements={order.announcements} />
 

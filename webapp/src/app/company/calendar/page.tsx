@@ -218,6 +218,8 @@ export default async function CompanyCalendarPage({
           endTime: r.endTime,
           maxEntries: r.maxEntries,
           filled: r.entries.filter((e) => e.status !== "REJECTED").length,
+          note: r.note,
+          extraItems: (r.extraItems as { label: string; value: string }[] | null) ?? [],
           announcements: r.announcements.map((a) => ({
             id: a.id,
             body: a.body,
