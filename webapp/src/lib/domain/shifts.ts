@@ -556,6 +556,8 @@ export async function cancelShift(params: {
   clientCancellationFee?: number;
   // trueなら休みにせず「調整中」にして、振り替えるかどうかを後で決める
   holdForReassignment?: boolean;
+  // 理由（依頼主都合／自社都合）を選んだ解除か。調整中のシフトで自社都合を見分けるのに使う
+  reasonGiven?: boolean;
 }) {
   return prisma.$transaction(async (tx) => {
     const shift = await tx.shift.findUniqueOrThrow({ where: { id: params.shiftId } });
@@ -570,9 +572,23 @@ export async function cancelShift(params: {
       throw new Error("shift_in_past");
     }
 
-    // 調整中のシフトを「休みにする」— 依頼主の取り消し時点で枠の解放やキャンセル
-    // 料の記録は済んでいるので、状態を変えるだけ。
+    // 調整中のシフト — 依頼主の取り消し時点で枠の解放やキャンセル料の記録は済んで
+    // いる。依頼主都合ならキャンセル料を直して休みにする（holdなら調整中のまま）。
+    // 自社都合を選んだら依頼主取消の記録を自社都合（キャンセル料なし）に変えて休みにする。
     if (shift.status === "ON_HOLD") {
+      const ownReason = params.clientCancellationFee === undefined && params.reasonGiven;
+      if (ownReason) {
+        await tx.shiftCancellation.updateMany({
+          where: { shiftId: shift.id },
+          data: { source: "AGENCY_OWN", feeAmount: 0, ruleBlocked: false, cancelledByCompanyId: params.actorCompanyId, cancelledByUserId: params.actorUserId },
+        });
+      } else if (params.clientCancellationFee !== undefined) {
+        await tx.shiftCancellation.updateMany({
+          where: { shiftId: shift.id },
+          data: { feeAmount: Math.max(0, Math.round(params.clientCancellationFee)) },
+        });
+      }
+      if (!ownReason && params.holdForReassignment) return shift;
       return tx.shift.update({ where: { id: shift.id }, data: { status: "CANCELLED" } });
     }
 

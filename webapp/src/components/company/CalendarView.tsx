@@ -2930,8 +2930,8 @@ type ShiftCancelPreview = Awaited<ReturnType<typeof previewShiftCancellationActi
 
 // 解除の確認。依頼主の現場のシフトは理由（依頼主都合／自社都合）を毎回選ばせ、
 // 依頼主都合ならキャンセル規定からキャンセル料を計算して記録する（電話で取り
-// 消しを受けた場合もキャンセル料の計算と請求のために残す）。調整中のシフトは
-// 「休みにする」だけ。
+// 消しを受けた場合もキャンセル料の計算と請求のために残す）。調整中のシフト（依頼主の
+// 取り消し済み）も同じ画面で、依頼主都合とキャンセル料が最初から入っている。
 function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName: string }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -2951,8 +2951,14 @@ function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName:
       try {
         const p = await previewShiftCancellationAction(shiftId);
         setPreview(p);
-        setFee(String(p.suggestedFee));
-        setHandling(p.defaultStaffHandling);
+        if (p.status === "ON_HOLD") {
+          setReason("CLIENT");
+          setFee(String(p.recordedFee ?? 0));
+          setHandling("RELEASE");
+        } else {
+          setFee(String(p.suggestedFee));
+          setHandling(p.defaultStaffHandling);
+        }
       } catch {
         setError("シフトの情報を取得できませんでした。");
       }
@@ -2960,22 +2966,20 @@ function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName:
   }
 
   const isHeld = preview?.status === "ON_HOLD";
-  const needsReason = Boolean(preview?.isClientShift) && !isHeld;
-  const releasing = isHeld || (needsReason ? reason === "OWN" || handling === "RELEASE" : true);
+  const needsReason = Boolean(preview?.isClientShift) || isHeld;
+  const releasing = needsReason ? reason === "OWN" || handling === "RELEASE" : true;
 
   function confirm() {
     setError(null);
     startTransition(async () => {
       const result = await cancelShiftAction(
         shiftId,
-        isHeld
-          ? { notifyStaff }
-          : {
-              reason: needsReason ? (reason ?? undefined) : "OWN",
-              feeAmount: reason === "CLIENT" ? Number(fee) || 0 : undefined,
-              hold: reason === "CLIENT" && handling === "HOLD",
-              notifyStaff: releasing && notifyStaff,
-            },
+        {
+          reason: needsReason ? (reason ?? undefined) : "OWN",
+          feeAmount: reason === "CLIENT" ? Number(fee) || 0 : undefined,
+          hold: reason === "CLIENT" && handling === "HOLD",
+          notifyStaff: releasing && notifyStaff,
+        },
       );
       if (result.status === "error") {
         setError(result.reason);
@@ -2997,15 +3001,21 @@ function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName:
         ✕
       </button>
       {open ? (
-        <Modal title={isHeld ? "このシフトを休みにしますか？" : "シフトを解除しますか？"} onClose={() => setOpen(false)}>
+        <Modal title="シフトを解除しますか？" onClose={() => setOpen(false)}>
           {!preview && !error ? <p className="mb-4 text-sm text-muted">読み込み中…</p> : null}
           {preview ? (
             <div className="mb-4 flex flex-col gap-3 text-sm">
               <p className="text-muted">
-                {isHeld
-                  ? `${staffName}さんのこのシフトは、依頼主の取り消しで調整中です。振り替え先が無ければ休みにします。`
-                  : `${staffName}さんのこのシフトを解除します。この操作は元に戻せません。`}
+                {`${staffName}さんのこのシフトを解除します。この操作は元に戻せません。`}
               </p>
+              {isHeld ? (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  {preview.recordedSource === "CLIENT_APP"
+                    ? `${preview.clientName ?? "依頼主"}がオーダーを削除しました（調整中）。`
+                    : "依頼主の取り消しを受けて調整中です。"}
+                  {preview.recordedRuleBlocked ? "規定ではキャンセル不可の日でした。" : ""}
+                </p>
+              ) : null}
 
               {needsReason ? (
                 <fieldset className="flex flex-col gap-1">
@@ -3045,7 +3055,7 @@ function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName:
                     <legend className="mb-1 font-semibold text-muted">スタッフの扱い</legend>
                     <label className="flex items-center gap-2">
                       <input type="radio" name={`handling-${shiftId}`} checked={handling === "HOLD"} onChange={() => setHandling("HOLD")} />
-                      調整中にしておく（あとで振り替えるか休みにするかを決める）
+                      {isHeld ? "調整中のまま（あとで振り替える）" : "調整中にしておく（あとで振り替えるか休みにするかを決める）"}
                     </label>
                     <label className="flex items-center gap-2">
                       <input type="radio" name={`handling-${shiftId}`} checked={handling === "RELEASE"} onChange={() => setHandling("RELEASE")} />
@@ -3074,7 +3084,7 @@ function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName:
               onClick={confirm}
               className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
-              {isHeld ? "休みにする" : needsReason && reason === "CLIENT" && handling === "HOLD" ? "調整中にする" : "解除する"}
+              {needsReason && reason === "CLIENT" && handling === "HOLD" ? (isHeld ? "調整中のままにする" : "調整中にする") : "解除する"}
             </button>
           </div>
         </Modal>

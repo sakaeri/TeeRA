@@ -334,6 +334,10 @@ export async function previewShiftCancellationAction(shiftId: string) {
     evaluationKind: preview.evaluation.kind,
     suggestedFee: preview.evaluation.kind === "fee" ? preview.evaluation.amount : 0,
     defaultStaffHandling: preview.defaultStaffHandling,
+    // 調整中（依頼主の取り消し済み）のシフトなら、記録済みの依頼主取消の内容
+    recordedSource: preview.shift.cancellation?.source ?? null,
+    recordedFee: preview.shift.cancellation?.feeAmount ?? null,
+    recordedRuleBlocked: preview.shift.cancellation?.ruleBlocked ?? false,
   };
 }
 
@@ -345,7 +349,8 @@ const CANCEL_SHIFT_ERROR_LABEL: Record<string, string> = {
 };
 
 // reason: "CLIENT"＝依頼主都合（電話等で受けた取り消し。キャンセル料を記録し、
-// 請求書に載せる）、"OWN"＝自社都合。調整中のシフトを休みにする時は不要。
+// 請求書に載せる）、"OWN"＝自社都合。調整中のシフトでは、依頼主都合ならキャンセル料を
+// 直して休みにする（または調整中のまま）、自社都合なら依頼主取消の記録を自社都合に変える。
 export async function cancelShiftAction(
   shiftId: string,
   options: { reason?: "CLIENT" | "OWN"; feeAmount?: number; hold?: boolean; notifyStaff?: boolean } = {},
@@ -364,6 +369,7 @@ export async function cancelShiftAction(
       actorUserId: userId,
       clientCancellationFee: options.reason === "CLIENT" ? (options.feeAmount ?? 0) : undefined,
       holdForReassignment: options.hold ?? false,
+      reasonGiven: options.reason !== undefined,
     });
     if (updated.status === "CANCELLED" && options.notifyStaff) {
       await notifyStaffShiftReleased({
