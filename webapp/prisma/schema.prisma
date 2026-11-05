@@ -567,6 +567,9 @@ model ShiftCancellation {
   cancelledByUserId    String?
   source               CancellationSource @default(CLIENT_APP)
   feeAmount            Int                @default(0)
+  // 派遣会社のキャンセル規定では「キャンセル不可」だったが、依頼主がオーダーを削除して取り消された
+  // （請求のメモとして派遣会社側に出す）
+  ruleBlocked          Boolean            @default(false)
   createdAt            DateTime           @default(now())
 
   shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)

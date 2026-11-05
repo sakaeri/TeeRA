@@ -294,7 +294,7 @@ function historyWorkplaceLabel(
 }
 
 // 取り消しの理由とキャンセル料。記録の無い（この機能より前の）取り消しは空。
-function historyReasonLabel(c: { source: string; feeAmount: number } | null) {
+function historyReasonLabel(c: { source: string; feeAmount: number; ruleBlocked: boolean } | null) {
   if (!c) return null;
   const reason =
     c.source === "CLIENT_APP"
@@ -304,5 +304,8 @@ function historyReasonLabel(c: { source: string; feeAmount: number } | null) {
         : c.source === "STAFF_REPORTED"
           ? "勤務先キャンセル（スタッフ報告）"
           : "自社都合";
-  return c.feeAmount > 0 ? `${reason}・キャンセル料 ${c.feeAmount.toLocaleString()}円` : reason;
+  // 請求のメモ：規定のキャンセル料、または規定では「キャンセル不可」だったこと
+  if (c.feeAmount > 0) return `${reason}・キャンセル料 ${c.feeAmount.toLocaleString()}円`;
+  if (c.ruleBlocked) return `${reason}・規定ではキャンセル不可`;
+  return reason;
 }

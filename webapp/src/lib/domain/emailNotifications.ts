@@ -565,7 +565,12 @@ export async function notifyAgencyOfClientCancellation(params: {
     const company = await prisma.company.findUnique({ where: { id: agencyCompanyId } });
     if (!company) continue;
     const lines = impacts.map((i) => {
-      const fee = i.evaluation.kind === "fee" ? `（キャンセル料${i.evaluation.amount.toLocaleString()}円）` : "";
+      const fee =
+        i.evaluation.kind === "fee"
+          ? `（キャンセル料${i.evaluation.amount.toLocaleString()}円）`
+          : i.evaluation.kind === "blocked"
+            ? "（規定ではキャンセル不可）"
+            : "";
       const handling = i.staffHandling === "HOLD" ? "（調整中：振り替えるか休みにするかを決めてください）" : "（休み）";
       return `${i.date.toISOString().slice(0, 10)} ${i.staffName}さん${i.taskName ? `・${i.taskName}` : ""}${fee}${handling}`;
     });

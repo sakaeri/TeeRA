@@ -239,36 +239,19 @@ export async function updateMaxEntriesAction(recruitmentId: string, newMaxEntrie
 
 // 削除（取り消し）する前に、派遣元のスタッフ分がキャンセル規定でどう扱われる
 // かを見せるための確認用。取り消せない分・キャンセル料がかかる分を返す。
-export async function previewRecruitmentCancellationAction(recruitmentId: string) {
-  const { membership } = await requireCompanyAdminOrEditor();
-  const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: recruitmentId } });
-  if (recruitment.companyId !== membership.companyId) throw new Error("forbidden");
-  if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
-
-  const impacts = await listRecruitmentCancelImpacts(prisma, recruitmentId);
-  return impacts.map((i) => ({
-    staffName: i.staffName,
-    agencyName: i.agencyName,
-    kind: i.evaluation.kind,
-    feeAmount: i.evaluation.kind === "fee" ? i.evaluation.amount : 0,
-  }));
-}
-
 const DELETE_RECRUITMENT_ERROR_LABEL: Record<string, string> = {
-  cancel_not_allowed: "派遣会社とのキャンセル規定により、取り消せないスタッフが含まれています。",
-  cancel_fee_not_accepted: "キャンセル料がかかります。内容を確認してから取り消してください。",
   recruitment_in_past: "日付が過ぎた募集は削除できません。",
   forbidden: "権限がありません。",
 };
 
-export async function deleteRecruitmentAction(recruitmentId: string, acceptFees = false) {
+export async function deleteRecruitmentAction(recruitmentId: string) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: recruitmentId } });
   if (recruitment.companyId !== membership.companyId) throw new Error("forbidden");
   if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
 
   try {
-    const result = await deleteRecruitment({ recruitmentId, updatedByUserId: userId, acceptFees });
+    const result = await deleteRecruitment({ recruitmentId, updatedByUserId: userId });
     if (result.cancelledAgencyShifts.length > 0) {
       const company = await prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } });
       await notifyAgencyOfClientCancellation({ clientName: company.name, impacts: result.cancelledAgencyShifts }).catch(

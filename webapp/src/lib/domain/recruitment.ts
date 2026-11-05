@@ -240,15 +240,11 @@ export async function settlePastRecruitments(companyId: string) {
 // 枠が無効になるので、現在ロック中のTee(recruitment.lockedTee)は全額返金
 // する(「未使用分だけ」ではない — 確定していた枠も削除で無効になるため)。
 // オーダーはそもそもロックが無いので返金も発生しない。
-// 派遣元（別会社）のスタッフが入っている場合は、派遣元が依頼主×業務内容ごとに
-// 設定したキャンセル規定に従う — 取り消せない分があれば削除自体を止め、
-// キャンセル料がかかる分は依頼主が了承した（acceptFees）時だけ取り消して
-// ShiftCancellationに記録する（その月の請求書に明細として載る）。
-export async function deleteRecruitment(params: {
-  recruitmentId: string;
-  updatedByUserId: string;
-  acceptFees?: boolean;
-}) {
+// 派遣元（別会社）のスタッフが入っている場合も、削除は止めない。派遣元が依頼主×業務内容
+// ごとに設定したキャンセル規定で判定した結果を「依頼主取消」としてShiftCancellationに記録し、
+// 派遣元が請求のメモとして使う（キャンセル料はその月の請求書に明細として載る。規定で
+// 「キャンセル不可」だった分は ruleBlocked として残す）。
+export async function deleteRecruitment(params: { recruitmentId: string; updatedByUserId: string }) {
   return prisma.$transaction(async (tx) => {
     const recruitment = await tx.publicRecruitment.findUniqueOrThrow({
       where: { id: params.recruitmentId },
@@ -258,12 +254,6 @@ export async function deleteRecruitment(params: {
     }
 
     const impacts = await listRecruitmentCancelImpacts(tx, recruitment.id);
-    if (impacts.some((i) => i.evaluation.kind === "blocked")) {
-      throw new Error("cancel_not_allowed");
-    }
-    if (impacts.some((i) => i.evaluation.kind === "fee") && !params.acceptFees) {
-      throw new Error("cancel_fee_not_accepted");
-    }
     for (const impact of impacts) {
       await tx.shiftCancellation.create({
         data: {
@@ -271,6 +261,7 @@ export async function deleteRecruitment(params: {
           cancelledByCompanyId: recruitment.companyId,
           cancelledByUserId: params.updatedByUserId,
           feeAmount: impact.evaluation.kind === "fee" ? impact.evaluation.amount : 0,
+          ruleBlocked: impact.evaluation.kind === "blocked",
         },
       });
       // 「調整中」の扱いのシフトは取り消さずに保留し、派遣元が振り替えるか
