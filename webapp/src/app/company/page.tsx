@@ -77,7 +77,9 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
   const duePaidLeaveGrants = dashboardData.duePaidLeaveGrants;
 
   const currentUserName = audience.find((a) => a.userId === userId)?.name ?? "";
-  const initialTab = open === "promoOrders" ? ("promoOrders" as const) : undefined;
+  // 「お知らせを作成」（?announce=1）からはお知らせのタブを開く
+  const initialTab =
+    open === "promoOrders" ? ("promoOrders" as const) : sp.announce === "1" ? ("announcements" as const) : undefined;
   // "expiring"は契約満了間近ポップアップが契約書未確認ポップアップに統合
   // される前の旧リンク（やることリストの履歴等）向けの後方互換。
   const initialOpenPopup =
@@ -108,7 +110,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
       <DashboardView
-        key={`${open ?? "default"}-${reportId ?? ""}`}
+        key={`${open ?? "default"}-${reportId ?? ""}-${sp.announce ?? ""}`}
         kpis={kpis}
         autoTodos={autoTodos}
         openTodos={openTodos.map((t) => ({
@@ -212,14 +214,19 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
         initialTab={initialTab}
         initialOpenPopup={initialOpenPopup}
         initialReportDetailId={initialReportDetailId}
-      />
-      <CompanyAnnouncementsCard
-        key={sp.announce === "1" ? "announce" : "default"}
-        announcements={announcements}
-        teams={announcementTeams}
-        staffOptions={announcementStaff}
-        canPostToAll={canPostToAll}
-        initialOpen={sp.announce === "1"}
+        announcementsPanel={
+          canPostToAll || announcementTeams.length > 0 ? (
+            <CompanyAnnouncementsCard
+              key={sp.announce === "1" ? "announce" : "default"}
+              announcements={announcements}
+              teams={announcementTeams}
+              staffOptions={announcementStaff}
+              canPostToAll={canPostToAll}
+              initialOpen={sp.announce === "1"}
+              embedded
+            />
+          ) : undefined
+        }
       />
     </main>
   );

@@ -86,6 +86,8 @@ try {
 
   const post = async ({ title, body, audience, teams = [], people = [] }) => {
     await admin.goto("http://localhost:3000/company");
+    await admin.getByRole("button", { name: "お知らせ", exact: true }).click();
+  await admin.getByRole("button", { name: "お知らせ", exact: true }).click();
     await admin.getByRole("button", { name: "＋お知らせを作成" }).click();
     await admin.getByLabel("件名（必須）").fill(title);
     if (body) await admin.getByLabel("本文").fill(body);
@@ -102,6 +104,16 @@ try {
   // ダッシュボードの「よく使う操作」から開ける
   await admin.goto("http://localhost:3000/company?announce=1#announcements");
   log("「お知らせを作成」で入力欄が開いた状態になる", (await admin.getByLabel("件名（必須）").count()) === 1);
+  const tabLabels = await admin
+    .locator("section", { has: admin.getByRole("button", { name: "解決済み", exact: true }) })
+    .last()
+    .locator("> div").first()
+    .getByRole("button")
+    .allInnerTexts();
+  log("お知らせはダッシュボードのタブ（やること・お知らせ・解決済み・販促品・注文履歴）の2番目に並ぶ", tabLabels.join(",") === "やること,お知らせ,解決済み,販促品,注文履歴");
+  await admin.getByRole("button", { name: "販促品", exact: true }).click();
+  await admin.getByRole("button", { name: "＋販促品を登録" }).click();
+  log("販促品のタブから販促品の登録画面が開く", await admin.getByText("画像2（任意）").isVisible());
 
   await post({ title: "全員へのお知らせ", body: "年末年始は12/29〜1/3お休みです" });
   log(
@@ -175,6 +187,7 @@ try {
   // 会社側で直す → スタッフにも反映（編集済み）。仮の添付（保存先が本物でない）は外しておく
   psql(`delete from "NoteAttachment" where id in ('${attId}', '${att2Id}');`);
   await admin.goto("http://localhost:3000/company");
+  await admin.getByRole("button", { name: "お知らせ", exact: true }).click();
   await admin.locator("#announcements li", { hasText: "全員へのお知らせ" }).getByRole("button", { name: "編集" }).click();
   await admin.getByLabel("本文").fill("年末年始は12/28〜1/4お休みです");
   await admin.getByRole("button", { name: "保存する" }).click();

@@ -153,7 +153,7 @@ type PromoOrder = {
   shippingPostalCode: string | null;
 };
 
-type DashboardTab = "active" | "resolved" | "promoList" | "promoOrders";
+type DashboardTab = "active" | "announcements" | "resolved" | "promoList" | "promoOrders";
 
 type PopupKind = "shortage" | "unconfirmed" | "reports" | "contracts" | "paidLeave";
 
@@ -443,7 +443,10 @@ export function DashboardView({
   initialTab,
   initialOpenPopup,
   initialReportDetailId,
+  announcementsPanel,
 }: {
+  // 「お知らせ」タブの中身（スタッフへのお知らせ）。出せない人にはタブ自体を出さない
+  announcementsPanel?: ReactNode;
   kpis: Kpis;
   autoTodos: AutoTodo[];
   openTodos: OpenTodo[];
@@ -543,6 +546,8 @@ export function DashboardView({
         promoItems={promoItems}
         promoOrders={promoOrders}
         onEditPromoItem={setEditingPromoItem}
+        onAddPromoItem={() => setShowPromoModal(true)}
+        announcementsPanel={announcementsPanel}
       />
 
       {showPromoModal ? <PromoItemModal onClose={() => setShowPromoModal(false)} /> : null}
@@ -1336,7 +1341,11 @@ function TodoSection({
   promoItems,
   promoOrders,
   onEditPromoItem,
+  onAddPromoItem,
+  announcementsPanel,
 }: {
+  onAddPromoItem: () => void;
+  announcementsPanel?: ReactNode;
   tab: DashboardTab;
   setTab: (t: DashboardTab) => void;
   autoTodos: AutoTodo[];
@@ -1365,6 +1374,7 @@ function TodoSection({
       <div className="mb-3 flex gap-1 overflow-x-auto border-b border-border">
         {[
           { key: "active", label: "やること" },
+          ...(announcementsPanel ? [{ key: "announcements", label: "お知らせ" }] : []),
           { key: "resolved", label: "解決済み" },
           { key: "promoList", label: "販促品" },
           { key: "promoOrders", label: "注文履歴" },
@@ -1533,9 +1543,20 @@ function TodoSection({
         </ul>
       ) : null}
 
+      {tab === "announcements" && announcementsPanel ? announcementsPanel : null}
+
       {tab === "promoList" ? (
         <div>
-          <p className="mb-3 text-xs text-muted">登録済みの販促品一覧です（{promoItems.length}件）</p>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-xs text-muted">登録済みの販促品一覧です（{promoItems.length}件）</p>
+            <button
+              type="button"
+              onClick={onAddPromoItem}
+              className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground"
+            >
+              ＋販促品を登録
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {promoItems.map((p) => (
               <div key={p.id} className="flex flex-col gap-2">
