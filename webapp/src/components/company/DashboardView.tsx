@@ -1371,7 +1371,8 @@ function TodoSection({
 
   return (
     <section className="rounded-2xl border border-border bg-white/60 p-3 sm:p-6">
-      <div className="mb-3 flex gap-1 overflow-x-auto border-b border-border">
+      {/* スマホでも5つのタブが横にはみ出さないよう、均等割りにして文字を少し小さくする */}
+      <div className="mb-3 flex border-b border-border sm:gap-1">
         {[
           { key: "active", label: "やること" },
           ...(announcementsPanel ? [{ key: "announcements", label: "お知らせ" }] : []),
@@ -1383,7 +1384,7 @@ function TodoSection({
             key={t.key}
             type="button"
             onClick={() => setTab(t.key as DashboardTab)}
-            className={`shrink-0 whitespace-nowrap border-b-2 px-2 py-2 text-sm font-semibold sm:px-3 ${tab === t.key ? "border-accent text-primary" : "border-transparent text-muted"}`}
+            className={`min-w-0 flex-1 whitespace-nowrap border-b-2 px-0.5 py-2 text-[13px] font-semibold sm:flex-none sm:px-3 sm:text-sm ${tab === t.key ? "border-accent text-primary" : "border-transparent text-muted"}`}
           >
             {t.label}
           </button>
