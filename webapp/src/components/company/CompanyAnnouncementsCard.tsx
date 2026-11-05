@@ -61,7 +61,7 @@ export function CompanyAnnouncementsCard({
     >
       <div className="mb-3 flex items-center justify-between gap-2">
         {embedded ? (
-          <p className="text-xs text-muted">スタッフに出したお知らせです。出すとプッシュ通知が届きます。</p>
+          <span />
         ) : (
           <h2 className="font-serif-jp text-lg font-bold text-primary">スタッフへのお知らせ</h2>
         )}
@@ -81,17 +81,19 @@ export function CompanyAnnouncementsCard({
       {result ? <p className="mb-2 text-xs text-emerald-700">{result}</p> : null}
 
       {showForm ? (
-        <AnnouncementForm
-          mode="create"
-          teams={teams}
-          staffOptions={staffOptions}
-          canPostToAll={canPostToAll}
-          onCancel={() => setShowForm(false)}
-          onDone={(message) => {
-            setResult(message);
-            setShowForm(false);
-          }}
-        />
+        <FormModal title="お知らせを作成" onClose={() => setShowForm(false)}>
+          <AnnouncementForm
+            mode="create"
+            teams={teams}
+            staffOptions={staffOptions}
+            canPostToAll={canPostToAll}
+            onCancel={() => setShowForm(false)}
+            onDone={(message) => {
+              setResult(message);
+              setShowForm(false);
+            }}
+          />
+        </FormModal>
       ) : null}
 
       {announcements.length === 0 ? (
@@ -132,7 +134,7 @@ export function CompanyAnnouncementsCard({
                 </div>
               </div>
               {editing?.id === a.id ? (
-                <div className="mt-3">
+                <FormModal title="お知らせを編集" onClose={() => setEditing(null)}>
                   <AnnouncementForm
                     mode="edit"
                     announcement={a}
@@ -142,13 +144,35 @@ export function CompanyAnnouncementsCard({
                     onCancel={() => setEditing(null)}
                     onDone={() => setEditing(null)}
                   />
-                </div>
+                </FormModal>
               ) : null}
             </li>
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+// 作成・編集のフォームはポップアップで開く（一覧の上に重ねて、本文はスクロール）
+function FormModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div role="dialog" aria-modal="true" aria-label={title} className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-lg">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <h3 className="font-serif-jp text-base font-bold text-primary">{title}</h3>
+          <button type="button" onClick={onClose} aria-label="閉じる" className="text-muted hover:text-primary">
+            ✕
+          </button>
+        </div>
+        <div className="min-h-0 overflow-y-auto p-5">{children}</div>
+      </div>
+    </div>
   );
 }
 
@@ -212,7 +236,7 @@ function AnnouncementForm({
   const filteredStaff = staffOptions.filter((s) => !staffQuery.trim() || s.name.includes(staffQuery.trim()));
 
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-xl border border-border bg-white p-4">
+    <div className="flex flex-col gap-3">
       <label className="flex flex-col gap-1 text-xs">
         件名（必須）
         <input

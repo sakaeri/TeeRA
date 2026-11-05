@@ -103,7 +103,12 @@ try {
 
   // ダッシュボードの「よく使う操作」から開ける
   await admin.goto("http://localhost:3000/company?announce=1#announcements");
-  log("「お知らせを作成」で入力欄が開いた状態になる", (await admin.getByLabel("件名（必須）").count()) === 1);
+  log(
+    "「お知らせを作成」で作成のポップアップが開いた状態になる",
+    (await admin.getByRole("dialog", { name: "お知らせを作成" }).getByLabel("件名（必須）").count()) === 1,
+  );
+  log("お知らせのタブに説明文は出さない", !(await admin.locator("#announcements").innerText()).includes("スタッフに出したお知らせです"));
+  await admin.getByRole("dialog", { name: "お知らせを作成" }).getByRole("button", { name: "閉じる" }).click();
   const tabLabels = await admin
     .locator("section", { has: admin.getByRole("button", { name: "解決済み", exact: true }) })
     .last()
