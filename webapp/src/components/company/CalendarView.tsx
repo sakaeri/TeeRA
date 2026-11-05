@@ -1159,7 +1159,11 @@ function DayDetailModal({
                         <span className="w-fit rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">未報告</span>
                       )}
                       {/* 派遣会社名義のシフトは派遣会社が解除する（依頼主からは消せない） */}
-                      {isPastDay || !s.ownShift ? null : <CancelShiftButton shiftId={s.id} staffName={s.staffName} />}
+                      {isPastDay ? null : s.ownShift ? (
+                        <CancelShiftButton shiftId={s.id} staffName={s.staffName} />
+                      ) : (
+                        <span className="text-[11px] text-muted">解除は派遣会社へ</span>
+                      )}
                       </div>
                     </div>
                   </li>

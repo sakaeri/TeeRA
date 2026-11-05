@@ -470,6 +470,31 @@ async function isStaffAlreadyKnownToCompany(companyId: string, staffUserId: stri
 
 // スタッフの応募/管理者アサインの対象になれるか: 自社所属、配属記録あり、
 // または募集自体がvisibility=PUBLIC（誰でも応募可）のいずれか。
+// 募集を出した会社（依頼主）の所属ではなく、派遣会社からの配属で応募する場合の
+// その派遣関係（依頼主の所属スタッフなら null — 今まで通り依頼主のシフトにする）
+async function findAgencyPlacementForApply(tx: Tx, recruitmentCompanyId: string, staffUserId: string) {
+  const ownMembership = await tx.companyMembership.findUnique({
+    where: { userId_companyId: { userId: staffUserId, companyId: recruitmentCompanyId } },
+  });
+  if (ownMembership) return null;
+  const placement = await tx.staffPlacement.findFirst({
+    where: {
+      staffUserId,
+      active: true,
+      companyRelationship: { clientCompanyId: recruitmentCompanyId, status: "ACTIVE" },
+    },
+    include: { companyRelationship: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const agencyCompanyId = placement?.companyRelationship.agencyCompanyId;
+  if (!placement || !agencyCompanyId) return null;
+  // 派遣会社にも所属していること（配属は派遣会社の所属スタッフに付くもの）
+  const agencyMembership = await tx.companyMembership.findUnique({
+    where: { userId_companyId: { userId: staffUserId, companyId: agencyCompanyId } },
+  });
+  return agencyMembership ? { id: placement.companyRelationship.id, agencyCompanyId } : null;
+}
+
 async function isStaffEligibleForRecruitment(params: {
   recruitmentCompanyId: string;
   recruitmentVisibility: "ORDER" | "PUBLIC";
@@ -739,21 +764,62 @@ export async function applyToRecruitment(params: { recruitmentId: string; staffU
 
     const entry = await upsertRecruitmentEntry(tx, recruitment.id, params.staffUserId);
 
+    // 依頼主の所属ではなく、派遣会社から配属されているスタッフが自分でエントリーした
+    // 場合は、派遣会社がアサインしたときと同じく「派遣会社のシフト」として作る。
+    // 依頼主のシフトとして作ると、スタッフ本人と派遣会社のカレンダーに載らず、
+    // 派遣会社の給料計算・請求書にも入らないため。
+    const placementRelationship = await findAgencyPlacementForApply(tx, recruitment.companyId, params.staffUserId);
+    if (placementRelationship) {
+      const existingTaskName = await tx.companyPlacementRate.findFirst({
+        where: {
+          companyId: placementRelationship.agencyCompanyId,
+          companyRelationshipId: placementRelationship.id,
+          taskName: recruitment.title,
+        },
+      });
+      if (!existingTaskName) {
+        await tx.companyPlacementRate.create({
+          data: {
+            companyId: placementRelationship.agencyCompanyId,
+            companyRelationshipId: placementRelationship.id,
+            taskName: recruitment.title,
+          },
+        });
+      }
+    }
+
     const shift = await tx.shift.create({
-      data: {
-        companyId: recruitment.companyId,
-        teamId: recruitment.teamId,
-        staffUserId: params.staffUserId,
-        source: "INHOUSE",
-        date: recruitment.date,
-        startTime: recruitment.startTime,
-        endTime: recruitment.endTime,
-        isAllDay: false,
-        isUndecided: recruitment.isUndecided,
-        note: recruitment.title,
-        createdVia: "PUBLIC_RECRUIT_ENTRY",
-        publicRecruitmentId: recruitment.id,
-      },
+      data: placementRelationship
+        ? {
+            companyId: placementRelationship.agencyCompanyId,
+            teamId: null,
+            staffUserId: params.staffUserId,
+            source: "CLIENT",
+            companyRelationshipId: placementRelationship.id,
+            taskName: recruitment.title,
+            date: recruitment.date,
+            startTime: recruitment.startTime,
+            endTime: recruitment.endTime,
+            isAllDay: false,
+            isUndecided: recruitment.isUndecided,
+            note: recruitment.title,
+            createdVia: "PUBLIC_RECRUIT_ENTRY",
+            publicRecruitmentId: recruitment.id,
+          }
+        : {
+            companyId: recruitment.companyId,
+            teamId: recruitment.teamId,
+            staffUserId: params.staffUserId,
+            source: "INHOUSE",
+            date: recruitment.date,
+            startTime: recruitment.startTime,
+            endTime: recruitment.endTime,
+            isAllDay: false,
+            isUndecided: recruitment.isUndecided,
+            note: recruitment.title,
+            createdVia: "PUBLIC_RECRUIT_ENTRY",
+            publicRecruitmentId: recruitment.id,
+          },
     });
     await releaseHeldShiftsOnReassign(tx, params.staffUserId, recruitment.date);
 
