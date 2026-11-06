@@ -16,6 +16,7 @@ import {
 } from "@/lib/email";
 import type { RecruitmentCancelImpact } from "@/lib/domain/cancellation";
 import { sendPushToUser, sendPushToUsers } from "@/lib/push";
+import { createEmailLoginUrl } from "@/lib/domain/accountSecurity";
 
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const APPROVE_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7日
@@ -29,6 +30,21 @@ function hashToken(token: string) {
 function absoluteUrl(path: string) {
   const base = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   return `${base}${path}`;
+}
+
+// 本人宛てのメールのボタン：押したらそのまま本人としてログインして開く（24時間有効）
+function personalUrl(userId: string, path: string) {
+  return createEmailLoginUrl(userId, path);
+}
+
+// 会社・チームの通知先メール宛てのボタン。通知先がその会社に所属する人のログイン用メールと
+// 同じなら、その人としてそのまま開けるようにする（共有の受信箱なら、今まで通りログインして開く）。
+async function inboxUrl(companyId: string, email: string, path: string) {
+  const user = await prisma.user.findFirst({
+    where: { email, isProxy: false, companyMemberships: { some: { companyId } } },
+    select: { id: true },
+  });
+  return user ? createEmailLoginUrl(user.id, path) : absoluteUrl(path);
 }
 
 function shiftTimeLabel(shift: { isAllDay: boolean; isUndecided: boolean; startTime: string | null; endTime: string | null }) {
@@ -189,7 +205,7 @@ export async function notifyCompanyOfPromoOrder(redemptionId: string) {
     companyName: company.name,
     staffName: redemption.staff.name,
     itemName: redemption.promoItem.name,
-    reviewUrl: absoluteUrl("/company/settings?tab=promo"),
+    reviewUrl: await inboxUrl(company.id, company.notificationEmail, "/company/settings?tab=promo"),
   });
 }
 
@@ -273,7 +289,12 @@ export async function runShiftRequestDigest() {
     // 個別に届ける（本部は全体件数だけ把握できればよく、関係ないチームの
     // 内訳で受信箱・プッシュが埋まらないようにする）。
     if (company.notificationEmail) {
-      await sendShiftRequestDigestEmail(company.notificationEmail, company.name, totalCount, absoluteUrl(digestUrl));
+      await sendShiftRequestDigestEmail(
+        company.notificationEmail,
+        company.name,
+        totalCount,
+        await inboxUrl(company.id, company.notificationEmail, digestUrl),
+      );
     }
     await sendPushToUsers(await companyAdminUserIds(company.id), {
       title: "未確定のシフト希望があります",
@@ -301,7 +322,7 @@ export async function runShiftRequestDigest() {
       if (!team) continue;
       const label = `${company.name}（${team.name}）`;
       if (team.notificationEmail) {
-        await sendShiftRequestDigestEmail(team.notificationEmail, label, count, absoluteUrl(digestUrl));
+        await sendShiftRequestDigestEmail(team.notificationEmail, label, count, await inboxUrl(company.id, team.notificationEmail, digestUrl));
       }
       // マネージャー/リーダーには、プッシュ通知を受け取れる端末があればプッシュで、
       // 無ければ本人のメールアドレスに送る（チームの通知メール未設定でも届くように）
@@ -319,11 +340,11 @@ export async function runShiftRequestDigest() {
       });
       const mailTargets = await prisma.user.findMany({
         where: { id: { in: managerIds.filter((id) => !pushIds.has(id)) }, isProxy: false },
-        select: { email: true },
+        select: { id: true, email: true },
       });
       for (const user of mailTargets) {
         if (user.email === team.notificationEmail) continue;
-        await sendShiftRequestDigestEmail(user.email, label, count, absoluteUrl(digestUrl));
+        await sendShiftRequestDigestEmail(user.email, label, count, await personalUrl(user.id, digestUrl));
       }
     }
   }
@@ -376,7 +397,7 @@ export async function runShiftStartReminders(now = new Date()) {
       date: shift.date.toISOString().slice(0, 10),
       timeLabel: shiftTimeLabel(shift),
       taskLabel: shift.taskName,
-      appUrl: absoluteUrl("/staff/timecard"),
+      appUrl: await personalUrl(shift.staffUserId, "/staff/timecard"),
       ...recruitmentEmailDetails(shift.publicRecruitment),
     });
     await sendPushToUser(shift.staffUserId, {
@@ -411,7 +432,7 @@ export async function runShiftStartReminders(now = new Date()) {
         date: shift.date.toISOString().slice(0, 10),
         timeLabel: shiftTimeLabel(shift),
         taskLabel: shift.taskName,
-        appUrl: absoluteUrl("/staff/timecard"),
+        appUrl: await personalUrl(shift.staffUserId, "/staff/timecard"),
         isAllDay: true,
         ...recruitmentEmailDetails(shift.publicRecruitment),
       });
@@ -511,16 +532,16 @@ export async function runUnsubmittedWorkReportReminders() {
     include: { staff: true },
   });
 
-  const byStaff = new Map<string, { email: string; name: string; count: number }>();
+  const byStaff = new Map<string, { userId: string; email: string; name: string; count: number }>();
   for (const shift of shifts) {
     if (shift.staff.isProxy) continue;
-    const entry = byStaff.get(shift.staffUserId) ?? { email: shift.staff.email, name: shift.staff.name, count: 0 };
+    const entry = byStaff.get(shift.staffUserId) ?? { userId: shift.staffUserId, email: shift.staff.email, name: shift.staff.name, count: 0 };
     entry.count += 1;
     byStaff.set(shift.staffUserId, entry);
   }
 
-  for (const { email, name, count } of byStaff.values()) {
-    await sendUnsubmittedWorkReportReminderEmail(email, name, count, absoluteUrl("/staff/timecard"));
+  for (const { userId, email, name, count } of byStaff.values()) {
+    await sendUnsubmittedWorkReportReminderEmail(email, name, count, await personalUrl(userId, "/staff/timecard"));
   }
 }
 
@@ -531,10 +552,11 @@ export async function runContractConsentReminders() {
     include: { staff: true, template: { include: { company: true } } },
   });
 
-  const byStaff = new Map<string, { email: string; name: string; companyNames: Set<string> }>();
+  const byStaff = new Map<string, { userId: string; email: string; name: string; companyNames: Set<string> }>();
   for (const contract of pending) {
     if (contract.staff.isProxy) continue;
     const entry = byStaff.get(contract.staffUserId) ?? {
+      userId: contract.staffUserId,
       email: contract.staff.email,
       name: contract.staff.name,
       companyNames: new Set<string>(),
@@ -543,8 +565,8 @@ export async function runContractConsentReminders() {
     byStaff.set(contract.staffUserId, entry);
   }
 
-  for (const { email, name, companyNames } of byStaff.values()) {
-    await sendContractConsentReminderEmail(email, name, Array.from(companyNames), absoluteUrl("/staff/contracts"));
+  for (const { userId, email, name, companyNames } of byStaff.values()) {
+    await sendContractConsentReminderEmail(email, name, Array.from(companyNames), await personalUrl(userId, "/staff/contracts"));
   }
 }
 
@@ -581,7 +603,7 @@ export async function notifyAgencyOfClientCancellation(params: {
         clientName: params.clientName,
         lines,
         totalFee,
-        reviewUrl: absoluteUrl("/company/calendar"),
+        reviewUrl: await inboxUrl(company.id, company.notificationEmail, "/company/calendar"),
       });
     }
     await sendPushToUsers(await companyAdminUserIds(agencyCompanyId), {
@@ -647,7 +669,7 @@ export async function notifyStaffShiftTimeChanged(params: {
     timeLabel: newLabel,
     previousTimeLabel: decided ? null : previousLabel,
     taskLabel: shift.taskName,
-    appUrl: absoluteUrl("/staff"),
+    appUrl: await personalUrl(shift.staffUserId, "/staff"),
   });
 }
 
@@ -685,7 +707,7 @@ export async function notifyAgencyOfClientTimeChanges(
         companyName: company.name,
         clientName,
         lines,
-        reviewUrl: absoluteUrl("/company/calendar"),
+        reviewUrl: await inboxUrl(company.id, company.notificationEmail, "/company/calendar"),
       });
     }
     await sendPushToUsers(await companyAdminUserIds(agencyCompanyId), {
@@ -716,15 +738,15 @@ export async function notifyRecruitmentAnnouncement(params: {
     url: "/staff",
   });
   const mailTargets = await prisma.user.findMany({
-    where: { id: { in: params.recipientIds.filter((id) => !pushIds.has(id)) } },
-    select: { email: true, name: true },
+    where: { id: { in: params.recipientIds.filter((id) => !pushIds.has(id)) }, isProxy: false },
+    select: { id: true, email: true, name: true },
   });
   for (const user of mailTargets) {
     await sendRecruitmentAnnouncementEmail(user.email, {
       staffName: user.name,
       heading: params.heading,
       body: params.body,
-      appUrl: absoluteUrl("/staff"),
+      appUrl: await personalUrl(user.id, "/staff"),
     });
   }
 }
@@ -806,7 +828,7 @@ export async function runWorkReportDigests(now = new Date()) {
           approved: r.approvalStatus === "APPROVED",
         })),
         pendingCount: pending.filter((p) => destinationOf(p.shift.team) === dest).length,
-        reviewUrl: absoluteUrl("/company/settings?tab=workreports"),
+        reviewUrl: await inboxUrl(company.id, dest, "/company/settings?tab=workreports"),
       });
     }
     console.log(`[email-notif] work report digest company=${company.id} reports=${reports.length} destinations=${byDestination.size}`);

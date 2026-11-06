@@ -143,6 +143,30 @@ try {
     out.includes(`宛先=${mailStaffEmail} 件名=【TeeRA】出勤時間が変わりました（${tm}月${td}日`),
   );
 
+  // --- メールのボタンは、ログインしていないブラウザで押してもそのまま本人として開く（24時間） ---
+  const loginLink = out.match(/http:\/\/localhost:3000\/email-login\/[A-Za-z0-9_-]+/)?.[0];
+  log("メールのボタンは本人用のログイン付きリンクになっている", Boolean(loginLink));
+  const mailBrowser = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+  await mailBrowser.goto(loginLink);
+  await mailBrowser.waitForURL(/\/staff/, { timeout: 15000 }).catch(() => {});
+  log("ログイン画面を出さずにスタッフ画面が開く", new URL(mailBrowser.url()).pathname === "/staff");
+  const sessionInfo = await (await mailBrowser.request.get("http://localhost:3000/api/auth/session")).json();
+  log("宛先の本人としてログインしている", sessionInfo?.user?.email === mailStaffEmail);
+  await mailBrowser.goto(loginLink);
+  await mailBrowser.waitForURL(/\/staff/, { timeout: 15000 }).catch(() => {});
+  log("期限内は何度押しても開ける", new URL(mailBrowser.url()).pathname === "/staff");
+  const fresh = await (await browser.newContext()).newPage();
+  const token = loginLink.split("/").pop();
+  psql(`update "AccountActionToken" set "expiresAt"=now() - interval '1 minute' where kind='EMAIL_LOGIN' and "redirectTo"='/staff' and "userId"=(select id from "User" where email='${mailStaffEmail}');`);
+  await fresh.goto(loginLink);
+  await fresh.waitForURL(/\/login/, { timeout: 15000 }).catch(() => {});
+  log("24時間を過ぎたらログイン画面になり、ログイン後の戻り先はその画面", fresh.url().includes("/login") && decodeURIComponent(fresh.url()).includes("from=/staff"));
+  await fresh.goto(`http://localhost:3000/email-login/${token}x`);
+  log("でたらめな鍵ではログインできない", fresh.url().includes("/login"));
+  const direct = await fresh.request.post("http://localhost:3000/api/auth/callback/email-link", { form: { token } });
+  await fresh.goto("http://localhost:3000/staff");
+  log("期限切れの鍵でログインの入口を直接呼んでもログインできない", fresh.url().includes("/login") || direct.status() >= 400);
+
   console.log(process.exitCode ? "SHIFT TIME CHANGE SMOKE TEST HAD FAILURES" : "SHIFT TIME CHANGE SMOKE TEST PASSED");
 } finally {
   await browser.close();
