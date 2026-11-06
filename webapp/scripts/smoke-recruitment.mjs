@@ -144,8 +144,7 @@ try {
   );
   log("a Shift row was created for the applicant", shiftCount === 1);
 
-  // switch the order to 公開募集 (billing only starts here now) — 2 of 3
-  // slots remain unfilled, so 2 × 10 Tee should get locked.
+  // 公開募集はやめた：募集の編集に「公開募集に切り替える」は出ず、サーバー側でも受け付けない
   await admin.goto(`http://localhost:3000/company/calendar?date=${today}`);
   await admin.waitForTimeout(600);
   await admin
@@ -155,25 +154,13 @@ try {
     .click();
   await admin.waitForTimeout(300);
   await admin.locator(".fixed.inset-0.z-20").first().getByRole("button", { name: "編集" }).click();
-  await admin.waitForTimeout(300);
+  await admin.waitForTimeout(500);
   const editModal = admin.locator(".fixed.inset-0.z-20").nth(1);
-  await editModal.getByRole("button", { name: "公開募集に切り替える" }).click();
-  await editModal.locator('input[type="number"]').last().fill("1200");
-  // 所属外の応募者にも分かるよう、公開募集への切り替えには勤務地の入力が
-  // 必須になっている。
-  await editModal.getByRole("button", { name: "＋勤務地" }).click();
-  await editModal.locator("span:has-text('勤務地') + input").fill("東京都渋谷区1-2-3");
-  const confirmBoxes = editModal.locator('input[type="checkbox"]');
-  await confirmBoxes.nth(0).check();
-  await confirmBoxes.nth(1).check();
-  await confirmBoxes.nth(2).check();
-  await editModal.getByRole("button", { name: "公開募集を開始する" }).click();
-  await admin.waitForTimeout(700);
-
-  const afterSwitch = psql(`select visibility, "lockedTee" from "PublicRecruitment" where "companyId"='${companyId}' and title='${recruitmentTitle}';`);
-  log("switching to 公開募集 locks Tee only for the remaining 2 slots", afterSwitch === "PUBLIC|20");
-  const balanceAfterSwitch = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
-  log("balance debited by exactly the newly-locked amount (100 -> 80)", balanceAfterSwitch === 80);
+  log("募集の編集に「公開募集に切り替える」は出ない", (await editModal.getByRole("button", { name: "公開募集に切り替える" }).count()) === 0);
+  log(
+    "募集はオーダーのまま・Teeは動かない",
+    psql(`select visibility || '|' || "lockedTee" from "PublicRecruitment" where "companyId"='${companyId}' and title='${recruitmentTitle}';`) === "ORDER|0",
+  );
 
   console.log(process.exitCode ? "RECRUITMENT SMOKE TEST HAD FAILURES" : "RECRUITMENT SMOKE TEST PASSED");
 } catch (err) {

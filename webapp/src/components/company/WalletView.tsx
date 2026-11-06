@@ -136,22 +136,6 @@ export function WalletView({
         {usageOpen ? (
           <div className="border-t border-border">
             <UsageRow
-              label="公開募集の掲載"
-              detail={
-                <>
-                  1枠 10 Tee
-                  <br />
-                  未使用分は返金
-                </>
-              }
-              icon={
-                <>
-                  <path d="M3 8v4a1 1 0 001 1h1l7 3V4L5 7H4a1 1 0 00-1 1z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-                  <path d="M15 7.5a3 3 0 010 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                </>
-              }
-            />
-            <UsageRow
               label="給与明細の発行"
               detail="1件 1 Tee"
               icon={

@@ -78,24 +78,13 @@ try {
   const orderId = `recdet-ord-${suffix}`;
   insertRec(pubId, "イベントキャディ", "PUBLIC");
   insertRec(orderId, "通常キャディ", "ORDER");
-  psql(`insert into "RecruitmentAnnouncement" (id, "publicRecruitmentId", body, notified, "createdAt") values (gen_random_uuid()::text, '${pubId}', '雨天でも実施します', false, now());`);
+  psql(`insert into "RecruitmentAnnouncement" (id, "publicRecruitmentId", body, notified, "createdAt") values (gen_random_uuid()::text, '${orderId}', '雨天でも実施します', false, now());`);
 
-  // よそのスタッフB：公開募集の詳細がすべて出る
+  // 公開募集はやめた：よそのスタッフBの一覧には、他社の公開募集もオーダーも出ない
   await staffB.goto("http://localhost:3000/staff/recruitments");
-  const pubB = staffB.locator(`[data-testid="recruitment-${pubId}"]`);
-  await pubB.locator("button").first().click();
-  const textB = await pubB.innerText();
-  log("公開募集：時間が未定なら「未定」", textB.includes("未定"));
-  log("公開募集：給与が出る（日給30000円）", textB.includes("日給30000円"));
-  log("公開募集：その他の項目が出る（服装）", textB.includes("服装") && textB.includes("白いポロシャツ"));
-  log("公開募集：勤務地が出る", textB.includes("利府ゴルフ倶楽部"));
-  log("公開募集：備考が出る", textB.includes("集合は7時半です"));
-  log("公開募集：追加のお知らせが出る", textB.includes("雨天でも実施します"));
-  await pubB.getByRole("button", { name: "応募する" }).click();
-  const confirm = staffB.locator("div.fixed.inset-0.z-40");
-  log("応募する前に確認が出る", (await confirm.innerText()).includes("この募集に応募しますか？"));
-  await confirm.getByRole("button", { name: "やめる" }).click();
-  log("「やめる」で応募しない", psql(`select count(*) from "RecruitmentEntry" where "publicRecruitmentId"='${pubId}';`) === "0");
+  await staffB.waitForTimeout(800);
+  log("よその会社の公開募集は、所属していないスタッフの一覧に出ない", (await staffB.locator(`[data-testid="recruitment-${pubId}"]`).count()) === 0);
+  log("よその会社のオーダーも出ない", (await staffB.locator(`[data-testid="recruitment-${orderId}"]`).count()) === 0);
 
   // 所属スタッフA：自社の公開募集は詳細を開けない、オーダーは給与・その他の項目なし
   await staffA.goto("http://localhost:3000/staff/recruitments");
@@ -108,6 +97,12 @@ try {
   const ordText = await ordA.innerText();
   log("所属先の募集（オーダー）：備考は出る", ordText.includes("集合は7時半です"));
   log("所属先の募集（オーダー）：給与・その他の項目は出ない", !ordText.includes("30000") && !ordText.includes("服装"));
+  log("所属先の募集（オーダー）：追加のお知らせが出る", ordText.includes("雨天でも実施します"));
+  await ordA.getByRole("button", { name: "応募する" }).click();
+  const confirm = staffA.locator("div.fixed.inset-0.z-40");
+  log("応募する前に確認が出る", (await confirm.innerText()).includes("この募集に応募しますか？"));
+  await confirm.getByRole("button", { name: "やめる" }).click();
+  log("「やめる」で応募しない", psql(`select count(*) from "RecruitmentEntry" where "publicRecruitmentId"='${orderId}';`) === "0");
 } catch (e) {
   console.error(e);
   process.exitCode = 1;

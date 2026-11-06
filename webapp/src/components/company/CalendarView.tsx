@@ -1706,25 +1706,8 @@ function OrderEditModal({
           </div>
         ) : (
           <div className="flex flex-col gap-2 border-t border-border pt-3">
-            {recruitment.visibility === "ORDER" ? (
-              <button
-                type="button"
-                onClick={() => setShowPublicForm(true)}
-                className="flex items-center justify-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-100"
-              >
-                <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0">
-                  <path
-                    d="M3 10v4a1 1 0 001 1h2l3 4V5L6 9H4a1 1 0 00-1 1z"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinejoin="round"
-                  />
-                  <path d="M11 6.5l7-3v17l-7-3" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                  <path d="M7 15v2.5a1.5 1.5 0 003 0V16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                </svg>
-                公開募集に切り替える
-              </button>
-            ) : null}
+            {/* 公開募集（所属していない人への公開）はやめたので、切り替えボタンは出さない
+                （下の公開募集の設定フォームは、また始めるときのために残してある） */}
             <button
               type="button"
               disabled={pending}

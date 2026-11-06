@@ -200,22 +200,12 @@ try {
       `select 'autopl-public-rec-${runId}';`,
   ).split("\n").pop();
 
+  // 公開募集はやめた：関係の無い会社の公開募集は、スタッフの一覧に出ない（応募もできない）
   await staff.goto("http://localhost:3000/staff/recruitments");
-  await staff.waitForTimeout(300);
-  const publicRecItem = staff.locator(`[data-testid="recruitment-${publicRecId}"]`);
-  await publicRecItem.locator("button").first().click();
-  await staff.waitForTimeout(200);
-  await publicRecItem.getByRole("button", { name: "応募する" }).click();
-  // 確認のポップアップで「応募する」
-  await publicRecItem.page().locator("div.fixed.inset-0.z-40").getByRole("button", { name: "応募する" }).click();
-  await staff.waitForTimeout(600);
-
-  const publicApplyEntry = psql(`select count(*) from "RecruitmentEntry" where "publicRecruitmentId"='${publicRecId}' and "staffUserId"='${staffUserId}';`);
-  log("公開募集への応募が成立した", publicApplyEntry === "1");
-  const anyNewRelationshipToPublicCompany = psql(`select count(*) from "CompanyRelationship" where ("agencyCompanyId"='${agencyCompanyId}' and "clientCompanyId"='${publicCompanyId}') or ("clientCompanyId"='${agencyCompanyId}' and "agencyCompanyId"='${publicCompanyId}');`);
-  log("公開募集への応募で新しいCompanyRelationshipは作られない", anyNewRelationshipToPublicCompany === "0");
-  const totalPlacementsAfterPublicApply = psql(`select count(*) from "StaffPlacement" where "staffUserId"='${staffUserId}';`);
-  log("③ 公開募集への自己応募では配属記録が増えない（フリーのまま）", totalPlacementsAfterPublicApply === "2");
+  await staff.waitForTimeout(800);
+  log("関係の無い会社の公開募集はスタッフの一覧に出ない", (await staff.locator(`[data-testid="recruitment-${publicRecId}"]`).count()) === 0);
+  const totalPlacementsAfter = psql(`select count(*) from "StaffPlacement" where "staffUserId"='${staffUserId}';`);
+  log("③ 配属記録は増えない（フリーのまま）", totalPlacementsAfter === "2");
 
   console.log(process.exitCode ? "AUTO PLACEMENT SMOKE TEST HAD FAILURES" : "AUTO PLACEMENT SMOKE TEST PASSED");
 } catch (err) {

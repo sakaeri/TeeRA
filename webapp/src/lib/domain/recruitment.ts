@@ -396,10 +396,11 @@ export async function listOpenRecruitmentsForStaff(params: { companyId: string; 
       // 日付を過ぎたものは「応募する」を押しても失敗するだけなので、
       // 一覧から除外する（過去分がそのまま出ていた設計漏れ）。
       date: { gte: new Date(`${todayJst()}T00:00:00.000Z`) },
+      // 公開募集（所属していない人への公開）はやめたので、他社の公開募集は出さない
+      // （自社スタッフを他社で働かせる窓口にならないように）。自社と配属先のオーダーだけ。
       OR: [
         { companyId: params.companyId },
         { companyId: { in: clientCompanyIds }, visibility: "ORDER" },
-        { visibility: "PUBLIC" },
       ],
     },
     include: { entries: true, company: true, announcements: { orderBy: { createdAt: "asc" } } },
@@ -491,7 +492,8 @@ async function isStaffEligibleForRecruitment(params: {
   recruitmentVisibility: "ORDER" | "PUBLIC";
   staffUserId: string;
 }) {
-  if (params.recruitmentVisibility === "PUBLIC") return true;
+  void params.recruitmentVisibility;
+  // 公開募集はやめたので、公開中のまま残っている募集でも所属していない人はエントリーできない
   return isStaffAlreadyKnownToCompany(params.recruitmentCompanyId, params.staffUserId);
 }
 
