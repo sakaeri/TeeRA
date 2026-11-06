@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
-import { consumeMagicLinkForSignIn, consumeVerifiedPasswordStep } from "@/lib/domain/accountSecurity";
+import { consumeMagicLinkForSignIn, consumeVerifiedPasswordStep, findEmailLoginToken } from "@/lib/domain/accountSecurity";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: { strategy: "jwt" },
@@ -50,6 +50,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         } catch {
           return null;
         }
+      },
+    }),
+    // お知らせメールのボタン（/email-login/[token]）からのログイン。ここでも鍵を検証する
+    // （/api/auth/callback/email-linkへ直接送られても、有効な鍵がなければ通さない）。
+    Credentials({
+      id: "email-link",
+      credentials: {
+        token: { label: "Token", type: "text" },
+      },
+      authorize: async (credentials) => {
+        const token = credentials?.token;
+        if (typeof token !== "string" || !token) return null;
+        const found = await findEmailLoginToken(token);
+        if (!found) return null;
+        return { id: found.user.id, email: found.user.email, name: found.user.name };
       },
     }),
   ],

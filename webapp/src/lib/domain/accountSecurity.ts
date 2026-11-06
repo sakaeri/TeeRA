@@ -151,12 +151,16 @@ async function applyDuePendingPassword(userId: string) {
       passwordLockedUntil: null,
       sessionVersion: { increment: 1 },
     },
+  }).then(async (updated) => {
+    await revokeEmailLoginLinks(userId);
+    return updated;
   });
 }
 
 // 「すべての端末からログアウト」。今の端末も含めてログアウトされる。
 export async function logoutAllDevices(userId: string) {
   await prisma.user.update({ where: { id: userId }, data: { sessionVersion: { increment: 1 } } });
+  await revokeEmailLoginLinks(userId);
 }
 
 function formatJstDateTime(date: Date) {
@@ -218,6 +222,7 @@ export async function changePassword(userId: string, currentPassword: string, ne
     where: { id: userId },
     data: { passwordHash, sessionVersion: { increment: 1 } },
   });
+  await revokeEmailLoginLinks(userId);
 }
 
 // パスワード未設定の人が、アカウント設定から初めてパスワードを設定する
@@ -534,4 +539,48 @@ export async function peekPasswordStep(stepToken: string) {
     return null;
   }
   return { userId: record.userId, inviteToken: record.inviteToken, redirectTo: record.redirectTo };
+}
+
+// --- お知らせメールのボタン（ログイン済みで開く） -------------------------------
+// ホーム画面に追加したアプリとブラウザ（Safari・メールアプリ内）はログイン状態が別なので、
+// メールのボタンを押すと毎回ログインを求められてしまう。宛先本人専用の鍵をボタンに付け、
+// 押したらそのままログインして目的の画面を開く。24時間有効で、期限内は何度でも使える
+// （メールのセキュリティスキャナが先に開いても使えなくならないように）。パスワードの確認は
+// 飛ばす。すべての端末からログアウト・パスワード変更をしたら、出してある鍵は全部無効にする。
+const EMAIL_LOGIN_TTL_MS = 24 * 60 * 60 * 1000;
+
+export async function createEmailLoginUrl(userId: string, path: string) {
+  if (!path.startsWith("/") || path.startsWith("//")) throw new Error("invalid_path");
+  const token = generateToken();
+  await prisma.accountActionToken.create({
+    data: {
+      tokenHash: hashToken(token),
+      kind: "EMAIL_LOGIN",
+      userId,
+      redirectTo: path,
+      expiresAt: new Date(Date.now() + EMAIL_LOGIN_TTL_MS),
+    },
+  });
+  return absoluteUrl(`/email-login/${token}`);
+}
+
+// 鍵が有効なら宛先の本人と行き先を返す（期限切れ・無効ならnull）。
+export async function findEmailLoginToken(token: string) {
+  const record = await prisma.accountActionToken.findUnique({
+    where: { tokenHash: hashToken(token) },
+    include: { user: true },
+  });
+  if (!record || record.kind !== "EMAIL_LOGIN" || !record.user || record.expiresAt < new Date()) return null;
+  if (record.user.isProxy) return null;
+  return { user: record.user, redirectTo: record.redirectTo ?? "/home" };
+}
+
+// 行き先だけ（期限切れでも、ログイン画面からその画面へ戻すのに使う）
+export async function peekEmailLoginRedirect(token: string) {
+  const record = await prisma.accountActionToken.findUnique({ where: { tokenHash: hashToken(token) } });
+  return record?.kind === "EMAIL_LOGIN" ? record.redirectTo : null;
+}
+
+export async function revokeEmailLoginLinks(userId: string) {
+  await prisma.accountActionToken.deleteMany({ where: { userId, kind: "EMAIL_LOGIN" } });
 }

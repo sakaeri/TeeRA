@@ -731,6 +731,7 @@ enum AccountActionTokenKind {
   MAGIC_LINK
   LOGIN_PASSWORD_STEP // メールのリンクの後、パスワードを入れる2段階目（短時間だけ有効）
   PASSWORD_RESET_CANCEL // 申し込み中のパスワード再設定を取り消すリンク
+  EMAIL_LOGIN // お知らせメールのボタン — 宛先本人としてログインして目的の画面を開く（24時間・期限内は何度でも）
 }
 
 // パスワードリセット・メールアドレス変更確認用の使い捨てトークン。
