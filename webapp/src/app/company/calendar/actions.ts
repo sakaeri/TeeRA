@@ -156,6 +156,10 @@ export async function createPublicRecruitmentAction(input: {
   revalidatePath("/company/calendar");
 }
 
+// 公開募集（所属していないTeeRA利用者への公開）は受け付けない。すでに公開中の募集は
+// 日付が過ぎるまでそのまま残す（確定済みのシフト・Teeの精算は今まで通り）。
+const PUBLIC_RECRUITMENT_DISABLED = true;
+
 export async function openRecruitmentToPublicAction(input: {
   recruitmentId: string;
   remaining: number;
@@ -168,6 +172,8 @@ export async function openRecruitmentToPublicAction(input: {
   // 募集IDだけで他社の募集を操作できないよう、自社の募集であることを必ず確認する。
   if (recruitment.companyId !== membership.companyId) throw new Error("forbidden");
   if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
+  // 公開募集はやめた（自社スタッフを他社で働かせる窓口・知らない人のエントリーになるため）
+  if (PUBLIC_RECRUITMENT_DISABLED) return { error: "public_disabled" };
 
   try {
     const affordable = await affordableMaxEntries(membership.companyId);
@@ -206,6 +212,7 @@ export async function saveRecruitmentPublicDraftAction(input: {
   const recruitment = await prisma.publicRecruitment.findUniqueOrThrow({ where: { id: input.recruitmentId } });
   if (recruitment.companyId !== membership.companyId) throw new Error("forbidden");
   if (!canManageShifts(membership, recruitment.teamId)) throw new Error("forbidden");
+  if (PUBLIC_RECRUITMENT_DISABLED) throw new Error("public_disabled");
 
   await saveRecruitmentPublicDraft(input);
   revalidatePath("/company/calendar");

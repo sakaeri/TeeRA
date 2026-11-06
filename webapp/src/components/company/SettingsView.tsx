@@ -440,27 +440,8 @@ function HowToSection() {
             "「掲載する」→確認画面で内容を確かめて作成。自社スタッフ（配属済みの派遣スタッフを含む）のアプリの「募集」に表示され、各自が応募できる",
             "カレンダーの日付を開き「募集一覧」タブから、応募状況の確認や「スタッフを追加」での直接アサイン、「編集」での人数変更・削除ができる",
           ]}
-          note="ここまでの通常の募集は無料です。"
+          note="募集は無料です。"
         />
-        <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-start print:mt-1.5 print:block">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/howto/recruitment-public.png"
-            alt="公開募集の設定画面"
-            className="w-full rounded-xl border border-border sm:w-1/2 print:hidden"
-          />
-          <div className="flex-1 text-sm print:text-[10px] print:leading-snug">
-            <p className="mb-2 font-semibold text-primary print:mb-0.5">自社スタッフだけで足りない場合（公開募集）</p>
-            <ol className="list-decimal space-y-2 pl-5 print:space-y-0 print:pl-4">
-              <li>募集の「編集」から「公開募集に切り替える」を選ぶ</li>
-              <li>時給／日給と「勤務地」を入力する（所属していない人にも分かるよう、勤務地は必須です）。必要なら服装・持ち物・集合場所なども追加する</li>
-              <li>公開前の確認事項にすべてチェックを入れて「公開募集を開始する」</li>
-            </ol>
-            <p className="mt-3 text-xs text-muted print:mt-0.5 print:text-[10px]">
-              公開募集は1名につき10Teeがかかり、開始時に残り枠の分がまとめて確保（ロック）されます。自社スタッフ・配属済みスタッフで枠が埋まった分や、人数を減らした分・削除した募集・日付が過ぎても埋まらなかった枠のTeeは自動で返金されます。実際に消費されるのは、所属のない人で枠が埋まった分だけです。
-            </p>
-          </div>
-        </div>
       </SectionCard>
 
       <SectionCard id="howto-timecard" printPageBreak title="⑩タイムカード・業務報告（スタッフ側の画面）">
