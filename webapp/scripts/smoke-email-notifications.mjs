@@ -178,6 +178,11 @@ try {
   const approvalStatus = psql(`select "approvalStatus" from "WorkReport" where id='${workReportId}';`);
   log("実際にWorkReportがAPPROVEDになる", approvalStatus === "APPROVED");
 
+  // 全部承認済みなら、まとめメールは送らない（報告が届いていても）
+  const sizeBeforeNoPending = readFileSync(DEV_LOG_PATH, "utf8").length;
+  await runWorkReportDigest(companyId, Date.now() - 3600e3);
+  log("未承認が0件なら業務報告のまとめメールは送らない", !readServerLogSince(sizeBeforeNoPending).includes("業務報告のまとめ"));
+
   // 同じリンクをもう一度開くと「既に処理済み」
   await linkPage.goto(`http://localhost:3000/email-actions/approve-work-report/${rawToken}`);
   linkBody = await linkPage.textContent("body");

@@ -801,6 +801,9 @@ export async function runWorkReportDigests(now = new Date()) {
       byDestination.set(dest, [...(byDestination.get(dest) ?? []), r]);
     }
     for (const [dest, items] of byDestination) {
+      // 未承認の報告が1件も無ければ送らない（全部承認済みなら知らせることが無い）
+      const pendingCount = pending.filter((p) => destinationOf(p.shift.team) === dest).length;
+      if (pendingCount === 0) continue;
       // まだ承認していない報告には、メールからそのまま承認できるリンクを付ける（7日間有効）
       const approveUrls = new Map<string, string>();
       for (const r of items) {
@@ -827,7 +830,7 @@ export async function runWorkReportDigests(now = new Date()) {
           taskLabel: r.taskName ?? r.shift.taskName ?? "（未指定）",
           approved: r.approvalStatus === "APPROVED",
         })),
-        pendingCount: pending.filter((p) => destinationOf(p.shift.team) === dest).length,
+        pendingCount,
         reviewUrl: await inboxUrl(company.id, dest, "/company/settings?tab=workreports"),
       });
     }
