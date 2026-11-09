@@ -242,6 +242,16 @@ try {
       `values (gen_random_uuid()::text, '${templateId}', '${weeklyProxyId}', 1200, 'PENDING_CONSENT', now(), now());`,
   );
 
+  // 今日のシフト（まだ勤務中かもしれない）だけの人には、未提出のリマインドを送らない
+  const todayOnlyEmail = `cron-today-only-${suffix}@example.com`;
+  const todayOnlyId = psql(
+    `insert into "User" (id, email, "passwordHash", name, "updatedAt") values (gen_random_uuid()::text, '${todayOnlyEmail}', 'x', 'Cron今日だけ花子', now()) returning id;`,
+  );
+  psql(
+    `insert into "Shift" (id, "companyId", "staffUserId", source, date, "startTime", "endTime", status, "createdVia", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${reminderCompanyId}', '${todayOnlyId}', 'INHOUSE', current_date, '09:00', '17:00', 'CONFIRMED', 'ASSIGN', now());`,
+  );
+
   logStart = readFileSync(DEV_LOG_PATH, "utf8").length;
   const weeklyRes = await callCron("weekly-digest");
   await new Promise((r) => setTimeout(r, 500));
@@ -251,6 +261,7 @@ try {
   log("契約書の同意待ちリマインドがスタッフ本人に届く", weeklyLog.includes(weeklyStaffEmail) && weeklyLog.includes("契約書の確認"));
   log("週次リマインドにも宛名（○○様）が入る", weeklyLog.includes("Cron週次太郎様"));
   log("仮アカウントには未提出業務報告・契約同意の週次リマインドが送られない", !weeklyLog.includes("proxy.teera.internal"));
+  log("今日のシフトは未提出のリマインドに数えない（勤務中に届かない）", !weeklyLog.includes(todayOnlyEmail));
 
   console.log(process.exitCode ? "EMAIL NOTIFICATIONS CRON SMOKE TEST HAD FAILURES" : "EMAIL NOTIFICATIONS CRON SMOKE TEST PASSED");
 } catch (err) {
