@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes, createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { todayJst } from "@/lib/date";
+import { isMonthlyApprovalDeferred } from "@/lib/reportApprovalTiming";
 import {
   sendWorkReportDigestEmail,
   sendShiftRequestDigestEmail,
@@ -785,14 +786,25 @@ export async function runWorkReportDigests(now = new Date()) {
     const [reports, pending] = await Promise.all([
       prisma.workReport.findMany({
         where: { submittedAt: { gt: since, lte: now }, shift: { companyId: company.id } },
-        include: { staff: true, shift: { include: { team: true } } },
+        include: { staff: true, shift: { include: { team: true, companyRelationship: true } } },
         orderBy: [{ shift: { date: "asc" } }, { submittedAt: "asc" }],
       }),
       prisma.workReport.findMany({
         where: { submittedAt: { not: null }, approvalStatus: "PENDING", shift: { companyId: company.id } },
-        select: { shift: { select: { team: { select: { notificationEmail: true } } } } },
+        select: {
+          shift: {
+            select: { date: true, team: { select: { notificationEmail: true } }, companyRelationship: { select: { reportApprovalTiming: true, clientCompanyId: true } } },
+          },
+        },
       }),
-    ]);
+    ]).then(([all, allPending]) => {
+      // 承認を「月末にまとめて」にしている仮の依頼主の、月の途中の分はまとめメールに入れない
+      const today = todayJst();
+      return [
+        all.filter((r) => !isMonthlyApprovalDeferred(r.shift.companyRelationship, r.shift.date, today)),
+        allPending.filter((p) => !isMonthlyApprovalDeferred(p.shift.companyRelationship, p.shift.date, today)),
+      ] as const;
+    });
 
     const destinationOf = (team: { notificationEmail: string | null } | null) =>
       team?.notificationEmail || company.notificationEmail;

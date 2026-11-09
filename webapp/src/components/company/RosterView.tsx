@@ -168,6 +168,7 @@ export function RosterView({
   const sortedAgencies = [...filteredAgencies].sort((a, b) => b.monthlyShiftCount - a.monthlyShiftCount);
   const totalCount = tab === "staff" ? ownStaff.length : tab === "clients" ? clients.length : agencies.length;
   const shownCount = tab === "staff" ? filteredStaff.length : tab === "clients" ? filteredClients.length : filteredAgencies.length;
+  const [proxyApprovalTiming, setProxyApprovalTiming] = useState<"EACH" | "MONTHLY">("EACH");
   const [proxyNamePromptFor, setProxyNamePromptFor] = useState<
     "client" | "agency" | "staff" | null
   >(null);
@@ -203,7 +204,8 @@ export function RosterView({
       if (kind === "staff") {
         await createProxyStaffAction(proxyNameInput.trim(), proxyStaffTeamId);
       } else if (kind === "client") {
-        await addClientAction(proxyNameInput.trim(), proxyTeamId || undefined);
+        await addClientAction(proxyNameInput.trim(), proxyTeamId || undefined, proxyApprovalTiming);
+        setProxyApprovalTiming("EACH");
         setTab("clients");
       } else {
         await addAgencyAction(proxyNameInput.trim(), proxyTeamId || undefined);
@@ -430,6 +432,19 @@ export function RosterView({
                       {t.name}
                     </option>
                   ))}
+                </select>
+              </div>
+            ) : null}
+            {proxyNamePromptFor === "client" ? (
+              <div className="mb-4">
+                <label className="mb-1 block text-xs text-muted">業務報告の承認（依頼主に確認するタイミング）</label>
+                <select
+                  value={proxyApprovalTiming}
+                  onChange={(e) => setProxyApprovalTiming(e.target.value as "EACH" | "MONTHLY")}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                >
+                  <option value="EACH">その都度承認する</option>
+                  <option value="MONTHLY">月末にまとめて承認する</option>
                 </select>
               </div>
             ) : null}

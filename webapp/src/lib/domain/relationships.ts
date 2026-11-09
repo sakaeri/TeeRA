@@ -170,6 +170,7 @@ export async function activateAgencyModuleWithProxyClient(params: {
   companyId: string;
   proxyName: string;
   teamId?: string;
+  reportApprovalTiming?: "EACH" | "MONTHLY";
 }) {
   return prisma.$transaction(async (tx) => {
     await tx.company.update({
@@ -182,6 +183,7 @@ export async function activateAgencyModuleWithProxyClient(params: {
         agencyCompanyId: params.companyId,
         clientCompanyId: null,
         proxyName: params.proxyName,
+        reportApprovalTiming: params.reportApprovalTiming ?? "EACH",
       },
     });
     if (params.teamId) {
@@ -222,7 +224,7 @@ export async function activateDispatchModuleWithProxyAgency(params: {
   });
 }
 
-export async function addRealClient(params: { companyId: string; proxyName: string; teamId?: string }) {
+export async function addRealClient(params: { companyId: string; proxyName: string; teamId?: string; reportApprovalTiming?: "EACH" | "MONTHLY" }) {
   return prisma.$transaction(async (tx) => {
     const relationship = await tx.companyRelationship.create({
       data: {
@@ -230,6 +232,7 @@ export async function addRealClient(params: { companyId: string; proxyName: stri
         agencyCompanyId: params.companyId,
         clientCompanyId: null,
         proxyName: params.proxyName,
+        reportApprovalTiming: params.reportApprovalTiming ?? "EACH",
       },
     });
     if (params.teamId) {
@@ -508,6 +511,7 @@ export async function getClientMonthDetail(params: {
     relationshipId: relationship.id,
     name: counterpartCompany?.name ?? relationship.proxyName ?? "",
     isProxy: !counterpartCompany,
+    reportApprovalTiming: relationship.reportApprovalTiming,
     // 削除ボタンの表示判定用 — 関係を作った側（招待の向きを選んだ側）だけが
     // 削除できる。相手が本アカウント連携済みでも、稼働実績が無ければ
     // 削除できる（deleteCompanyRelationship参照。招待の向きを間違えた場合の
@@ -733,4 +737,19 @@ export async function updateClientAddressPhone(params: {
       data: { clientAddress: address || null, clientPhoneNumber: phoneNumber || null },
     });
   }
+}
+
+// 業務報告の承認のタイミング（仮の依頼主の分を、その都度承認するか、月末にまとめて承認するか）。
+// 派遣会社側（関係を作った側）が、依頼主との契約のときに決めて設定する。
+export async function updateReportApprovalTiming(params: {
+  companyId: string;
+  companyRelationshipId: string;
+  timing: "EACH" | "MONTHLY";
+}) {
+  const relationship = await prisma.companyRelationship.findUniqueOrThrow({ where: { id: params.companyRelationshipId } });
+  if (relationship.agencyCompanyId !== params.companyId) throw new Error("forbidden");
+  return prisma.companyRelationship.update({
+    where: { id: relationship.id },
+    data: { reportApprovalTiming: params.timing },
+  });
 }

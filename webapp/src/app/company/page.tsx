@@ -38,6 +38,8 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
   const reportId = typeof sp.reportId === "string" ? sp.reportId : undefined;
   // やることリストのチームごとのまとめから開いたとき、そのチームの分だけに絞る
   const teamFilter = typeof sp.team === "string" ? sp.team : undefined;
+  // 「月末にまとめて」の依頼主の、その月の分（依頼主ID:YYYY-MM）
+  const groupFilter = typeof sp.group === "string" ? sp.group : undefined;
 
   const [
     companyDashboardData,
@@ -115,7 +117,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
       <DashboardView
-        key={`${open ?? "default"}-${reportId ?? ""}-${teamFilter ?? ""}-${sp.announce ?? ""}`}
+        key={`${open ?? "default"}-${reportId ?? ""}-${teamFilter ?? ""}-${groupFilter ?? ""}-${sp.announce ?? ""}`}
         kpis={kpis}
         autoTodos={autoTodos}
         openTodos={openTodos.map((t) => ({
@@ -219,6 +221,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
         initialOpenPopup={initialOpenPopup}
         initialReportDetailId={initialReportDetailId}
         initialTeamFilter={teamFilter}
+        initialGroupFilter={groupFilter}
         announcementsPanel={
           canPostToAll || announcementTeams.length > 0 ? (
             <CompanyAnnouncementsCard

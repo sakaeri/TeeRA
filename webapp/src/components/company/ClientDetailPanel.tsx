@@ -21,6 +21,7 @@ import {
   inviteAgencyTaggedStaffAction,
   setRelationshipStatusAction,
   updateProxyNameAction,
+  updateReportApprovalTimingAction,
 } from "@/app/company/actions";
 import {
   addPlacementRateVersionAction,
@@ -76,6 +77,7 @@ type ClientMonthDetail = {
   relationshipId: string;
   name: string;
   isProxy: boolean;
+  reportApprovalTiming: string;
   isOwner: boolean;
   canDeactivate: boolean;
   status: "ACTIVE" | "INACTIVE";
@@ -462,6 +464,10 @@ export function ClientDetailPanel({
                   </div>
                 )}
               </div>
+            ) : null}
+
+            {kind === "client" && data.isProxy ? (
+              <ReportApprovalTimingField relationshipId={relationshipId} initial={data.reportApprovalTiming} />
             ) : null}
 
             {kind === "client" ? (
@@ -1730,5 +1736,29 @@ function CancelRuleModal({
         </button>
       </div>
     </div>
+  );
+}
+
+// 業務報告の承認のタイミング（仮の依頼主の分）。契約のときに依頼主に聞いて決めておく
+function ReportApprovalTimingField({ relationshipId, initial }: { relationshipId: string; initial: string }) {
+  const [value, setValue] = useState(initial === "MONTHLY" ? "MONTHLY" : "EACH");
+  const [pending, startTransition] = useTransition();
+  return (
+    <label className="mb-4 flex flex-col gap-1 text-xs">
+      <span className="text-muted">業務報告の承認（依頼主に確認するタイミング）</span>
+      <select
+        value={value}
+        disabled={pending}
+        onChange={(e) => {
+          const next = e.target.value as "EACH" | "MONTHLY";
+          setValue(next);
+          startTransition(() => updateReportApprovalTimingAction(relationshipId, next));
+        }}
+        className="rounded-lg border border-border px-3 py-2 text-sm"
+      >
+        <option value="EACH">その都度承認する</option>
+        <option value="MONTHLY">月末にまとめて承認する（月の途中はやること・通知に出さない）</option>
+      </select>
+    </label>
   );
 }

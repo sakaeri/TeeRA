@@ -1,4 +1,5 @@
 import "server-only";
+import { isMonthlyApproval, isMonthlyApprovalDeferred } from "@/lib/reportApprovalTiming";
 import { prisma } from "@/lib/prisma";
 import { listPendingReportsForCompany } from "@/lib/domain/workReports";
 import { listStaffWithSummary } from "@/lib/domain/roster";
@@ -59,7 +60,7 @@ export async function loadDashboardData(companyId: string) {
   const [
     shortageRecruitments,
     allShiftRequests,
-    pendingReports,
+    allPendingReports,
     pendingContractStaff,
     expiringContractStaff,
     duePaidLeaveGrants,
@@ -98,6 +99,11 @@ export async function loadDashboardData(companyId: string) {
   // scalarリストなのでPrisma側の範囲フィルタでは絞り込めず、取得後にJSで
   // 判定する。
   const shiftRequests = allShiftRequests.filter((sr) => sr.dates.some((d) => d >= today));
+  // 承認を「月末にまとめて」にしている仮の依頼主の分は、月の途中は出さない（件数・やること・アイコンの数字）
+  const todayStr = todayJst();
+  const pendingReports = allPendingReports.filter(
+    (r) => !isMonthlyApprovalDeferred(r.shift.companyRelationship, r.shift.date, todayStr),
+  );
 
   return {
     shortageRecruitments,
@@ -225,6 +231,10 @@ export function computePendingReportEntries(data: DashboardData) {
   return data.pendingReports.map((r) => ({
     id: r.id,
     teamKey: r.shift.teamId ?? "none",
+    // 「月末にまとめて」の依頼主の分は、依頼主×月でまとめて開く・承認する
+    monthlyKey: isMonthlyApproval(r.shift.companyRelationship)
+      ? `${r.shift.companyRelationshipId}:${r.shift.date.toISOString().slice(0, 7)}`
+      : null,
     staffName: r.staff.name,
     teamName: r.shift.team?.name ?? null,
     date: r.shift.date.toISOString().slice(0, 10),
@@ -305,8 +315,28 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
     });
   }
 
+  // 「月末にまとめて」の依頼主の分（月が終わったもの）は、依頼主×月ごとに1行
+  const monthlyGroups = new Map<string, { name: string; month: string; count: number }>();
+  for (const r of pendingReports.filter((x) => isMonthlyApproval(x.shift.companyRelationship))) {
+    const month = r.shift.date.toISOString().slice(0, 7);
+    const key = `${r.shift.companyRelationshipId}:${month}`;
+    const g = monthlyGroups.get(key) ?? { name: r.shift.companyRelationship?.proxyName ?? "依頼主", month, count: 0 };
+    g.count += 1;
+    monthlyGroups.set(key, g);
+  }
+  for (const [key, g] of [...monthlyGroups.entries()].sort((a, b) => a[1].month.localeCompare(b[1].month))) {
+    items.push({
+      id: `report-monthly-${key}`,
+      kind: "業務報告",
+      text: `${g.name}の${Number(g.month.slice(5))}月分の業務報告が${g.count}件、未承認です`,
+      actionLabel: "一覧を見る",
+      actionHref: `/company?open=reports&group=${encodeURIComponent(key)}`,
+    });
+  }
+
   // 業務報告の未承認も、チームごとに1行にまとめる（一覧から1件ずつ確認・承認できる）
-  for (const group of groupByTeam(pendingReports.map((r) => ({ teamId: r.shift.teamId, teamName: r.shift.team?.name ?? null })))) {
+  const eachReports = pendingReports.filter((x) => !isMonthlyApproval(x.shift.companyRelationship));
+  for (const group of groupByTeam(eachReports.map((r) => ({ teamId: r.shift.teamId, teamName: r.shift.team?.name ?? null })))) {
     items.push({
       id: `report-team-${group.key}`,
       kind: "業務報告",

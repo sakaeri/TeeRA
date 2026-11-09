@@ -346,7 +346,9 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
               APPROVAL_PILL[shift.approvalStatus] ?? "bg-accent/20 text-accent"
             }`}
           >
-            {APPROVAL_LABEL[shift.approvalStatus] ?? shift.approvalStatus}
+            {shift.approvalStatus === "PENDING" && shift.monthlyApproval
+              ? "提出済み（月末にまとめて確認）"
+              : (APPROVAL_LABEL[shift.approvalStatus] ?? shift.approvalStatus)}
           </span>
         ) : null}
       </div>
