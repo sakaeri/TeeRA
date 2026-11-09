@@ -522,11 +522,13 @@ export async function runEveningUnsubmittedReminders(now = new Date()) {
 // ⑤未提出の業務報告リマインド（週次、スタッフ本人宛）— 出勤/退勤打刻済み
 // なのに提出（submittedAt）まで済んでいないシフトをスタッフごとに集計する。
 export async function runUnsubmittedWorkReportReminders() {
-  const todayEnd = new Date(`${todayJst()}T23:59:59.999Z`);
+  // 今日のシフトは対象にしない（朝に送るので、まだ勤務前・勤務中のシフトまで「未提出」と
+  // 数えてしまうため）。今日の分は退勤3時間後・20時のプッシュで知らせる。
+  const todayStart = new Date(`${todayJst()}T00:00:00.000Z`);
   const shifts = await prisma.shift.findMany({
     where: {
       status: "CONFIRMED",
-      date: { lte: todayEnd },
+      date: { lt: todayStart },
       OR: [{ workReport: null }, { workReport: { submittedAt: null } }],
     },
     include: { staff: true },
