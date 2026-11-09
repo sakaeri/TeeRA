@@ -168,6 +168,7 @@ model Company {
   inviteTokens         InviteToken[]
 
   @@index([name])
+  planChangeEvents PlanChangeEvent[]
 }
 
 model Team {
@@ -1472,8 +1473,26 @@ model StripeSubscription {
   stripeSubscriptionId    String?                  @unique
   planTier                PlanTier
   status                  StripeSubscriptionStatus @default(PENDING)
+  // このプランに申し込んだ人（プラン変更の履歴に出す）
+  createdByUserId         String?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+}
+
+// プランが変わった記録（Tee残高の「購入履歴・利用履歴」に一緒に出す）。
+// reason: CHANGED＝申し込みで変更、CANCELED＝解約で無料へ、PAST_DUE＝支払い失敗で無料へ、RESTORED＝支払いが戻った等
+model PlanChangeEvent {
+  id        String   @id @default(cuid())
+  companyId String
+  fromTier  PlanTier
+  toTier    PlanTier
+  reason    String
+  byUserId  String?
+  createdAt DateTime @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 

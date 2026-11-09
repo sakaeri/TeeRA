@@ -8,7 +8,7 @@ import { PLAN_YEN, type PaidPlanTier } from "@/lib/domain/plans";
 // wallet/actions.tsのcreateCheckoutSessionActionと同じ理由で、Stripe呼び出し
 // 部分は必ず捕まえてエラーを構造化データとして返す。
 export async function createSubscriptionCheckoutSessionAction(planTier: PaidPlanTier) {
-  const { membership } = await requireCompanyAdminOrEditor();
+  const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
   if (!(planTier in PLAN_YEN)) throw new Error("invalid_plan");
 
@@ -18,6 +18,7 @@ export async function createSubscriptionCheckoutSessionAction(planTier: PaidPlan
       companyId: membership.companyId,
       planTier,
       returnUrl: `${base}/company/wallet?checkout=return`,
+      createdByUserId: userId,
     });
     return { clientSecret: session.client_secret, error: null };
   } catch (error) {
