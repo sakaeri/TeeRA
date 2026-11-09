@@ -396,6 +396,9 @@ model CompanyRelationship {
   agencyCompanyId   String?
   clientCompanyId   String?
   proxyName         String?
+  // 業務報告の承認のタイミング（仮の依頼主＝依頼主がTeeRAを使っていない場合に、派遣会社が承認する分）。
+  // EACH＝その都度、MONTHLY＝月末にまとめて（月の途中はやること・アイコンの数字・まとめメールに出さない）
+  reportApprovalTiming String @default("EACH")
   status            RelationshipStatus @default(ACTIVE)
   createdAt         DateTime           @default(now())
   // 配属先のルール連絡先。配属先自身の住所（Company.address）は「本社所在

@@ -1,3 +1,4 @@
+import { isMonthlyApproval } from "@/lib/reportApprovalTiming";
 import { requireCompanyStaffRole, listMyMemberships } from "@/lib/auth/session";
 import { listOwnShiftsNeedingReport } from "@/lib/domain/workReports";
 import { listKnownTaskNames } from "@/lib/domain/contracts";
@@ -65,6 +66,7 @@ export default async function StaffTimecardPage() {
           comment: s.workReport?.comment ?? null,
           outcome: s.workReport?.outcome ?? null,
           approvalStatus: s.workReport?.approvalStatus ?? null,
+          monthlyApproval: isMonthlyApproval(s.companyRelationship),
           rejectionReason: s.workReport?.rejectionReason ?? null,
           computedMinutes: s.workReport?.computedMinutes ?? 0,
           submittedAt: s.workReport?.submittedAt?.toISOString() ?? null,

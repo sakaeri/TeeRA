@@ -38,7 +38,7 @@ import {
 } from "@/lib/domain/roster";
 import { setHireDate, grantPaidLeave, adjustPaidLeaveBalance, skipPaidLeaveGrant } from "@/lib/domain/paidLeave";
 import { earliestAllowedMonth, isBeforeCutoff } from "@/lib/date";
-import {
+import { updateReportApprovalTiming,
   activateAgencyModuleWithProxyClient,
   activateDispatchModuleWithProxyAgency,
   addRealClient,
@@ -162,7 +162,7 @@ export async function inviteProxyUpgradeAction(proxyUserId: string) {
   return absoluteInviteUrl(invite.token);
 }
 
-export async function addClientAction(proxyName: string, teamId?: string) {
+export async function addClientAction(proxyName: string, teamId?: string, reportApprovalTiming: "EACH" | "MONTHLY" = "EACH") {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
   if (teamId) await assertTeamOwnedByCompany(teamId, membership.companyId);
@@ -175,9 +175,10 @@ export async function addClientAction(proxyName: string, teamId?: string) {
       companyId: membership.companyId,
       proxyName,
       teamId,
+      reportApprovalTiming,
     });
   } else {
-    await addRealClient({ companyId: membership.companyId, proxyName, teamId });
+    await addRealClient({ companyId: membership.companyId, proxyName, teamId, reportApprovalTiming });
   }
   revalidatePath("/company/roster");
 }
@@ -919,5 +920,14 @@ export async function updateCompanyAnnouncementAction(
 export async function deleteCompanyAnnouncementAction(announcementId: string) {
   const { membership } = await assertCanEditAnnouncement(announcementId);
   await deleteCompanyAnnouncement(membership.companyId, announcementId);
+  revalidatePath("/company");
+}
+
+// 業務報告の承認のタイミング（その都度／月末にまとめて）を変える
+export async function updateReportApprovalTimingAction(companyRelationshipId: string, timing: "EACH" | "MONTHLY") {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await updateReportApprovalTiming({ companyId: membership.companyId, companyRelationshipId, timing });
+  revalidatePath("/company/roster");
   revalidatePath("/company");
 }

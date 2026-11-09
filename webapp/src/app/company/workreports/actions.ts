@@ -97,3 +97,22 @@ export async function correctWorkReportAction(input: {
     throw error;
   }
 }
+
+// 「月末にまとめて」の依頼主の分などを、一覧からまとめて承認する（1件ずつ同じ確認をして承認）
+export async function approveWorkReportsAction(workReportIds: string[]) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  let approved = 0;
+  for (const workReportId of workReportIds) {
+    try {
+      const report = await assertCanApprove(workReportId, membership.companyId, null);
+      if (!canManage(membership, report.shift.teamId)) continue;
+      await approveWorkReport({ workReportId, approverUserId: userId });
+      approved += 1;
+    } catch {
+      // 既に処理済みなどは飛ばす
+    }
+  }
+  revalidatePath("/company/settings");
+  revalidatePath("/company");
+  return { status: "ok" as const, approved };
+}

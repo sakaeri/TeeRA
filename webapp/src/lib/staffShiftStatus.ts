@@ -24,6 +24,8 @@ export type ShiftRow = {
   rejectionReason: string | null;
   computedMinutes: number;
   submittedAt: string | null;
+  // 業務報告の承認を「月末にまとめて」にしている依頼主の分（承認待ちの表示を変える）
+  monthlyApproval?: boolean;
 };
 
 // 「済み」＝欠勤/キャンセルとして報告済み、または業務報告を提出して

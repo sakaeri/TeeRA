@@ -17,7 +17,7 @@ import {
   deletePromoItemAction,
   markRedemptionShippedAction,
 } from "@/app/company/promo/actions";
-import { approveWorkReportAction, rejectWorkReportAction } from "@/app/company/workreports/actions";
+import { approveWorkReportsAction, approveWorkReportAction, rejectWorkReportAction } from "@/app/company/workreports/actions";
 import { WorkReportCorrectionForm } from "@/components/company/WorkReportCorrectionForm";
 import { UnscheduledBadge } from "@/components/company/WorkReportsQueue";
 import { skipStaffPaidLeaveGrantAction } from "@/app/company/actions";
@@ -102,6 +102,7 @@ type UnconfirmedShiftEntry = {
 type PendingReportEntry = {
   id: string;
   teamKey: string;
+  monthlyKey: string | null;
   staffName: string;
   teamName: string | null;
   date: string;
@@ -447,6 +448,7 @@ export function DashboardView({
   initialOpenPopup,
   initialReportDetailId,
   initialTeamFilter,
+  initialGroupFilter,
   announcementsPanel,
 }: {
   // 「お知らせ」タブの中身（スタッフへのお知らせ）。出せない人にはタブ自体を出さない
@@ -475,6 +477,7 @@ export function DashboardView({
   initialOpenPopup?: PopupKind;
   initialReportDetailId?: string;
   initialTeamFilter?: string;
+  initialGroupFilter?: string;
 }) {
   const [tab, setTab] = useState<DashboardTab>(initialTab ?? "active");
   const [showTodoForm, setShowTodoForm] = useState(false);
@@ -484,17 +487,21 @@ export function DashboardView({
   // やることリストのチームごとのまとめから開いたときだけ、そのチームの分に絞る（件数カードからは全部）
   const [teamFilter, setTeamFilter] = useState<string | null>(initialTeamFilter ?? null);
   const filterByTeam = <T extends { teamKey: string }>(rows: T[]) => (teamFilter ? rows.filter((r) => r.teamKey === teamFilter) : rows);
+  // 「月末にまとめて」の依頼主の、その月の分だけに絞る（やることリストのまとめから開いたとき）
+  const [groupFilter, setGroupFilter] = useState<string | null>(initialGroupFilter ?? null);
   function closePopup() {
     setOpenPopup(null);
     setTeamFilter(null);
+    setGroupFilter(null);
   }
   // 通知メール・プッシュから「未確定シフト」を開いた状態で来たときの指定（?open=unconfirmed）は
   // 一度開いたら消す（再読み込みで何度も開かないように）
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (url.searchParams.get("open") === "unconfirmed" || url.searchParams.has("team")) {
+    if (url.searchParams.get("open") === "unconfirmed" || url.searchParams.has("team") || url.searchParams.has("group")) {
       url.searchParams.delete("open");
       url.searchParams.delete("team");
+      url.searchParams.delete("group");
       window.history.replaceState(null, "", url);
     }
   }, []);
@@ -583,7 +590,8 @@ export function DashboardView({
       ) : null}
       {openPopup === "reports" ? (
         <PendingReportsPopup
-          entries={filterByTeam(pendingReportEntries)}
+          entries={groupFilter ? pendingReportEntries.filter((r) => r.monthlyKey === groupFilter) : filterByTeam(pendingReportEntries)}
+          allowBulkApprove={Boolean(groupFilter)}
           onSelect={(entry) => {
             closePopup();
             setReportDetail(entry);
@@ -1017,15 +1025,52 @@ function UnconfirmedShiftPopup({ entries, onClose }: { entries: UnconfirmedShift
 
 function PendingReportsPopup({
   entries,
+  allowBulkApprove,
   onSelect,
   onClose,
 }: {
   entries: PendingReportEntry[];
+  allowBulkApprove?: boolean;
   onSelect: (entry: PendingReportEntry) => void;
   onClose: () => void;
 }) {
+  const [pending, startTransition] = useTransition();
+  const [confirmBulk, setConfirmBulk] = useState(false);
   return (
     <PopupShell title="業務報告未承認" subtitle="確認して承認・差戻しを行ってください" onClose={onClose}>
+      {allowBulkApprove && entries.length > 0 ? (
+        confirmBulk ? (
+          <div className="flex flex-col gap-2 rounded-xl bg-background p-3 text-sm">
+            <p>この{entries.length}件をまとめて承認します。よろしいですか？</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setConfirmBulk(false)} className="flex-1 rounded-lg border border-border px-3 py-1.5 text-xs">
+                やめる
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    await approveWorkReportsAction(entries.map((e) => e.id));
+                    onClose();
+                  })
+                }
+                className="flex-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                まとめて承認する
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmBulk(true)}
+            className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+          >
+            {entries.length}件をまとめて承認
+          </button>
+        )
+      ) : null}
       {entries.map((r) => (
         <div key={r.id} className="flex items-center justify-between rounded-xl border border-border/60 p-4 text-sm">
           <div>
