@@ -91,7 +91,7 @@ try {
   log("clock-in only is not listed as a pending report", !adminBodyBeforeSubmit.includes("業務報告スタッフ"));
   await admin.goto("http://localhost:3000/company");
   adminBodyBeforeSubmit = await admin.innerText("body");
-  log("dashboard has no work report todo before submit", !adminBodyBeforeSubmit.includes("業務報告が未承認です"));
+  log("dashboard has no work report todo before submit", !adminBodyBeforeSubmit.includes("未承認の業務報告が"));
 
   // 出勤・退勤がほぼ同時（同じ分内）だと、分単位に丸められる打刻修正の
   // 仕組み上「実働0分」＝無効な時間帯として提出できなくなる（他セッション

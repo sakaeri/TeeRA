@@ -92,6 +92,7 @@ type ShortageEntry = {
 
 type UnconfirmedShiftEntry = {
   id: string;
+  teamKey: string;
   staffName: string;
   desire: string;
   dates: string[];
@@ -100,6 +101,7 @@ type UnconfirmedShiftEntry = {
 
 type PendingReportEntry = {
   id: string;
+  teamKey: string;
   staffName: string;
   teamName: string | null;
   date: string;
@@ -444,6 +446,7 @@ export function DashboardView({
   initialTab,
   initialOpenPopup,
   initialReportDetailId,
+  initialTeamFilter,
   announcementsPanel,
 }: {
   // 「お知らせ」タブの中身（スタッフへのお知らせ）。出せない人にはタブ自体を出さない
@@ -471,18 +474,27 @@ export function DashboardView({
   initialTab?: DashboardTab;
   initialOpenPopup?: PopupKind;
   initialReportDetailId?: string;
+  initialTeamFilter?: string;
 }) {
   const [tab, setTab] = useState<DashboardTab>(initialTab ?? "active");
   const [showTodoForm, setShowTodoForm] = useState(false);
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [editingPromoItem, setEditingPromoItem] = useState<PromoItem | null>(null);
   const [openPopup, setOpenPopup] = useState<PopupKind | null>(initialOpenPopup ?? null);
+  // やることリストのチームごとのまとめから開いたときだけ、そのチームの分に絞る（件数カードからは全部）
+  const [teamFilter, setTeamFilter] = useState<string | null>(initialTeamFilter ?? null);
+  const filterByTeam = <T extends { teamKey: string }>(rows: T[]) => (teamFilter ? rows.filter((r) => r.teamKey === teamFilter) : rows);
+  function closePopup() {
+    setOpenPopup(null);
+    setTeamFilter(null);
+  }
   // 通知メール・プッシュから「未確定シフト」を開いた状態で来たときの指定（?open=unconfirmed）は
   // 一度開いたら消す（再読み込みで何度も開かないように）
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (url.searchParams.get("open") === "unconfirmed") {
+    if (url.searchParams.get("open") === "unconfirmed" || url.searchParams.has("team")) {
       url.searchParams.delete("open");
+      url.searchParams.delete("team");
       window.history.replaceState(null, "", url);
     }
   }, []);
@@ -567,16 +579,16 @@ export function DashboardView({
         <ShortagePopup entries={shortageEntries} onClose={() => setOpenPopup(null)} />
       ) : null}
       {openPopup === "unconfirmed" ? (
-        <UnconfirmedShiftPopup entries={unconfirmedShiftEntries} onClose={() => setOpenPopup(null)} />
+        <UnconfirmedShiftPopup entries={filterByTeam(unconfirmedShiftEntries)} onClose={closePopup} />
       ) : null}
       {openPopup === "reports" ? (
         <PendingReportsPopup
-          entries={pendingReportEntries}
+          entries={filterByTeam(pendingReportEntries)}
           onSelect={(entry) => {
-            setOpenPopup(null);
+            closePopup();
             setReportDetail(entry);
           }}
-          onClose={() => setOpenPopup(null)}
+          onClose={closePopup}
         />
       ) : null}
       {reportDetail ? (

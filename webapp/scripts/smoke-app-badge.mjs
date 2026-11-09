@@ -80,6 +80,20 @@ try {
   psql(`update "StaffNotice" set "readAt"=now() where id='${noticeId}';`);
   log("お知らせを読むと数字が減る", (await badge(manager)) === manager0 + 1);
 
+  // 契約書の未送付など、長く残るものはアイコンの数字に入れない（未確定シフト・業務報告の未承認だけ）
+  const noContract = user("契約書なしスタッフ", `badge-nocontract-${suffix}@example.com`);
+  psql(`insert into "CompanyMembership" (id, "userId", "companyId", role) values (gen_random_uuid()::text, '${noContract}', '${companyId}', 'STAFF');`);
+  log("契約書が未送付のスタッフが増えても、本部の数字は増えない", (await badge(admin)) === admin0 + 2);
+
+  // やることリストは、チームごとに「未確定のシフト希望が◯件あります（チーム名）」の1行
+  await admin.goto("http://localhost:3000/company");
+  const todoText = await admin.locator("main").innerText();
+  log("やることリストの未確定シフトはチームごとに1行にまとまる", todoText.includes("未確定のシフト希望が1件あります（Aチーム）") && todoText.includes("未確定のシフト希望が1件あります（Bチーム）"));
+  await admin.getByRole("link", { name: /未確定のシフト希望が1件あります（Bチーム）/ }).click();
+  await admin.getByText("スタッフから提出された希望シフトです").waitFor({ timeout: 15000 });
+  const popupText = await admin.locator("div.fixed.inset-0").last().innerText();
+  log("タップするとそのチームの未確定シフトだけの一覧が開く", popupText.includes("Bスタッフ") && !popupText.includes("マネージャー"));
+
   // マネージャーのダッシュボードの「未確定シフト」は自分のチームの分だけ
   await manager.goto("http://localhost:3000/company");
   const card = manager.locator("button, a", { hasText: "未確定シフト" }).first();

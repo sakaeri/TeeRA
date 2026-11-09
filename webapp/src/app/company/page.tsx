@@ -36,6 +36,8 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
   const sp = await searchParams;
   const open = typeof sp.open === "string" ? sp.open : undefined;
   const reportId = typeof sp.reportId === "string" ? sp.reportId : undefined;
+  // やることリストのチームごとのまとめから開いたとき、そのチームの分だけに絞る
+  const teamFilter = typeof sp.team === "string" ? sp.team : undefined;
 
   const [
     companyDashboardData,
@@ -90,7 +92,9 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
         ? ("paidLeave" as const)
         : open === "unconfirmed"
           ? ("unconfirmed" as const)
-          : undefined;
+          : open === "reports" && !reportId
+            ? ("reports" as const)
+            : undefined;
   const initialReportDetailId = open === "reports" ? reportId : undefined;
 
   sortTemplatesByUsage(templates);
@@ -111,7 +115,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
       <DashboardView
-        key={`${open ?? "default"}-${reportId ?? ""}-${sp.announce ?? ""}`}
+        key={`${open ?? "default"}-${reportId ?? ""}-${teamFilter ?? ""}-${sp.announce ?? ""}`}
         kpis={kpis}
         autoTodos={autoTodos}
         openTodos={openTodos.map((t) => ({
@@ -214,6 +218,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
         initialTab={initialTab}
         initialOpenPopup={initialOpenPopup}
         initialReportDetailId={initialReportDetailId}
+        initialTeamFilter={teamFilter}
         announcementsPanel={
           canPostToAll || announcementTeams.length > 0 ? (
             <CompanyAnnouncementsCard
