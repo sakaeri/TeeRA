@@ -74,7 +74,11 @@ export async function loadDashboardData(companyId: string) {
         include: { entries: true },
         orderBy: { date: "asc" },
       }),
-      prisma.shiftRequest.findMany({ where: { companyId, status: "PENDING" }, include: { staff: true }, orderBy: { createdAt: "asc" } }),
+      prisma.shiftRequest.findMany({
+        where: { companyId, status: "PENDING" },
+        include: { staff: true, team: { select: { name: true } } },
+        orderBy: { createdAt: "asc" },
+      }),
       listPendingReportsForCompany(companyId),
       listPendingContractStaff(companyId),
       listExpiringContractStaff(companyId),
@@ -137,17 +141,12 @@ export async function scopeDashboardDataToTeams(data: DashboardData, teamIds: st
 // アプリのアイコンに出す数字のうち、ダッシュボードの「対応が必要な件数」の合計
 // （欠員・未確定シフト・業務報告未承認・契約書未確認・契約満了間近・有給付与予定・書類未提出）。
 // やることリストや販促品は含めない。
+// アプリのアイコンの数字（管理者・マネージャーの分）。すぐ対応が要る「未確定シフト」と
+// 「業務報告の未承認」だけを数える（契約書の未確認などは長く残って数字が下がらないため、
+// ダッシュボードには出すがアイコンの数字には入れない）。
 export function countDashboardAttention(data: DashboardData) {
   const kpis = computeKpis(data, 0, 0);
-  return (
-    kpis.shortageCount +
-    kpis.unconfirmedShiftCount +
-    kpis.pendingReportCount +
-    kpis.pendingContractCount +
-    kpis.expiringContractCount +
-    kpis.duePaidLeaveGrantCount +
-    kpis.missingDocumentCount
-  );
+  return kpis.unconfirmedShiftCount + kpis.pendingReportCount;
 }
 type PendingShipment = { id: string; promoItem: { name: string }; staff: { name: string } };
 
@@ -199,6 +198,7 @@ export function computeUnconfirmedShiftEntries(data: DashboardData) {
     .filter((r) => r.desire === "WORK")
     .map((r) => ({
       id: r.id,
+      teamKey: r.teamId ?? "none",
       staffName: r.staff.name,
       desire: r.desire,
       dates: r.dates.map((d) => d.toISOString().slice(0, 10)),
@@ -224,6 +224,7 @@ function formatJstTime(date: Date) {
 export function computePendingReportEntries(data: DashboardData) {
   return data.pendingReports.map((r) => ({
     id: r.id,
+    teamKey: r.shift.teamId ?? "none",
     staffName: r.staff.name,
     teamName: r.shift.team?.name ?? null,
     date: r.shift.date.toISOString().slice(0, 10),
@@ -277,21 +278,18 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
     }
   }
 
-  // 休み希望は会社の確認・マッチングが不要なので、やることリストには
-  // 出勤希望のみを出す。
+  // 休み希望は会社の確認・マッチングが不要なので、やることリストには出勤希望のみを出す。
+  // 1件ずつ並べると長くなるので、チームごとに「◯件あります」の1行にまとめ、
+  // タップするとそのチームの分だけの一覧（未確定シフトのポップアップ）が開く。
   const today = new Date(`${todayJst()}T00:00:00.000Z`);
-  for (const sr of shiftRequests.filter((r) => r.desire === "WORK")) {
-    // 1件のShiftRequestが複数日をまとめて持てるため、最初の1日だけでなく
-    // 希望日を全て列挙する（じゃないと2日目以降の希望が無かったことになる）。
-    // 過ぎた日は対応する意味が無いので混ぜない。
-    const dateStrs = sr.dates.filter((d) => d >= today).map((d) => d.toISOString().slice(0, 10));
-    const dateLabel = dateStrs.join("、");
+  const workRequests = shiftRequests.filter((r) => r.desire === "WORK" && r.dates.some((d) => d >= today));
+  for (const group of groupByTeam(workRequests.map((r) => ({ teamId: r.teamId, teamName: r.team?.name ?? null })))) {
     items.push({
-      id: `shift-${sr.id}`,
+      id: `shift-team-${group.key}`,
       kind: "シフト",
-      text: `${sr.staff.name}さんの希望シフト（${dateLabel}）が未確定です`,
-      actionLabel: "カレンダーで確認",
-      actionHref: dateStrs[0] ? `/company/calendar?date=${dateStrs[0]}` : "/company/calendar",
+      text: `未確定のシフト希望が${group.count}件あります${group.label}`,
+      actionLabel: "一覧を見る",
+      actionHref: `/company?open=unconfirmed&team=${group.key}`,
     });
   }
 
@@ -307,17 +305,14 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
     });
   }
 
-  for (const report of pendingReports) {
-    const teamName = report.shift.team?.name ?? "自社";
-    const dateStr = report.shift.date.toISOString().slice(0, 10);
-    const timeRange =
-      report.shift.startTime && report.shift.endTime ? `・${report.shift.startTime}〜${report.shift.endTime}` : "";
+  // 業務報告の未承認も、チームごとに1行にまとめる（一覧から1件ずつ確認・承認できる）
+  for (const group of groupByTeam(pendingReports.map((r) => ({ teamId: r.shift.teamId, teamName: r.shift.team?.name ?? null })))) {
     items.push({
-      id: `report-${report.id}`,
+      id: `report-team-${group.key}`,
       kind: "業務報告",
-      text: `${report.staff.name}さんの業務（${teamName}）（${dateStr}${timeRange}）${report.shift.createdVia === "STAFF_REPORT" ? "シフト外の" : ""}業務報告が未承認です`,
-      actionLabel: "確認する",
-      actionHref: `/company?open=reports&reportId=${report.id}`,
+      text: `未承認の業務報告が${group.count}件あります${group.label}`,
+      actionLabel: "一覧を見る",
+      actionHref: `/company?open=reports&team=${group.key}`,
     });
   }
 
@@ -436,4 +431,20 @@ export async function addTodoComment(params: { todoItemId: string; authorUserId:
 // 呼び出し元(actions-todo.ts)でauthorUserId一致を確認済みの前提。
 export async function deleteTodoComment(id: string) {
   return prisma.todoComment.delete({ where: { id } });
+}
+
+// やることリストのチームごとのまとめ。チームに入っていない分は「チームなし」（チームを
+// 使っていない会社では、チーム名を付けない）。チームの作成順ではなく件数の多い順。
+function groupByTeam(rows: { teamId: string | null; teamName: string | null }[]) {
+  const groups = new Map<string, { key: string; name: string | null; count: number }>();
+  for (const r of rows) {
+    const key = r.teamId ?? "none";
+    const g = groups.get(key) ?? { key, name: r.teamId ? (r.teamName ?? "チーム") : null, count: 0 };
+    g.count += 1;
+    groups.set(key, g);
+  }
+  const anyTeam = [...groups.values()].some((g) => g.name !== null);
+  return [...groups.values()]
+    .sort((a, b) => b.count - a.count)
+    .map((g) => ({ key: g.key, count: g.count, label: anyTeam ? `（${g.name ?? "チームなし"}）` : "" }));
 }

@@ -80,10 +80,7 @@ try {
 
   await page.goto("http://localhost:3000/company");
   let body = await page.textContent("body");
-  log(
-    "業務報告 auto-todo text includes team/date/time detail",
-    body.includes(`リンクスタッフさんの業務（自社）（${workReportDate}・09:00〜13:00）業務報告が未承認です`),
-  );
+  log("業務報告はやることリストで1件ずつではなく「未承認の業務報告が◯件あります」にまとまる", body.includes("未承認の業務報告が1件あります") && !body.includes("業務報告が未承認です"));
 
   // 欠員: カレンダーで確認 should deep-link straight to that day's detail
   const shortageLink = await page
@@ -97,12 +94,16 @@ try {
   body = await page.textContent("body");
   log("clicking it opens that day's detail on the calendar", body.includes("テスト事務所"));
 
-  // 業務報告: 確認する should open the report detail modal directly
+  // 業務報告: まとめをタップ → そのチームの未承認の一覧 → 確認するで詳細
   await page.goto("http://localhost:3000/company");
-  await page.click(`a[href="/company?open=reports&reportId=${reportId}"]`);
-  await page.waitForURL(new RegExp(`open=reports`));
+  await page.getByRole("link", { name: /未承認の業務報告が1件あります/ }).click();
+  await page.getByText("業務報告未承認").first().waitFor({ timeout: 15000 });
+  log("まとめをタップすると未承認の業務報告の一覧が開く", (await page.textContent("body")).includes("リンクスタッフ"));
+  await page.getByRole("button", { name: "確認する" }).first().click();
   await page.waitForTimeout(400);
   body = await page.textContent("body");
+  // 通知などから個別に開くリンク（?open=reports&reportId=）も今まで通り
+  void reportId;
   log(
     "業務報告 confirm link opens the detail modal directly (shows clock times + comment)",
     body.includes("業務報告の確認") && body.includes("09:00") && body.includes("13:00") && body.includes("テストコメント"),
