@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import Stripe from "stripe";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
@@ -134,6 +135,59 @@ try {
   log("解約で即座に無料プランへ戻る", planTier === "FREE");
   const subStatusAfterCancel = psql(`select status from "StripeSubscription" where "stripeSubscriptionId"='${stripeSubId}';`);
   log("StripeSubscriptionがCANCELEDになる", subStatusAfterCancel === "CANCELED");
+
+  // --- プランの変更：前の契約からの連絡でプランが書き戻されない・前の契約は解約する・履歴に誰が変えたか出る ---
+  const sendEvent = async (evt) => {
+    const body = JSON.stringify({ id: `evt_${Math.random().toString(36).slice(2)}`, object: "event", ...evt });
+    const sig = stripe.webhooks.generateTestHeaderString({ payload: body, secret: "whsec_local_dev_placeholder_not_real" });
+    return fetch("http://localhost:3000/api/webhooks/stripe", {
+      method: "POST",
+      headers: { "content-type": "application/json", "stripe-signature": sig },
+      body,
+    });
+  };
+  const adminId = psql(`select id from "User" where email='${email}';`);
+  const stdSession = `cs_test_std_${Date.now()}`;
+  const stdSub = `sub_test_std_${Date.now()}`;
+  psql(
+    `insert into "StripeSubscription" (id, "companyId", "stripeCheckoutSessionId", "planTier", status, "createdByUserId", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', '${stdSession}', 'STANDARD', 'PENDING', '${adminId}', now() - interval '1 minute', now());`,
+  );
+  await sendEvent({ type: "checkout.session.completed", data: { object: { id: stdSession, mode: "subscription", subscription: stdSub, object: "checkout.session" } } });
+  log("スタンダードに申し込むとスタンダードになる", psql(`select "planTier" from "Company" where id='${companyId}';`) === "STANDARD");
+
+  const bizSession = `cs_test_biz_${Date.now()}`;
+  const bizSub = `sub_test_biz_${Date.now()}`;
+  psql(
+    `insert into "StripeSubscription" (id, "companyId", "stripeCheckoutSessionId", "planTier", status, "createdByUserId", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', '${bizSession}', 'BUSINESS', 'PENDING', '${adminId}', now(), now());`,
+  );
+  const logBefore = readFileSync("/tmp/nextdev.log").length;
+  await sendEvent({ type: "checkout.session.completed", data: { object: { id: bizSession, mode: "subscription", subscription: bizSub, object: "checkout.session" } } });
+  await new Promise((r) => setTimeout(r, 1500));
+  log("ビジネスに変えるとビジネスになる", psql(`select "planTier" from "Company" where id='${companyId}';`) === "BUSINESS");
+  const stdStatus = psql(`select status from "StripeSubscription" where "stripeSubscriptionId"='${stdSub}';`);
+  const triedCancel = stdStatus === "CANCELED" || readFileSync("/tmp/nextdev.log").subarray(logBefore).toString().includes("前の契約の解約に失敗しました");
+  log("前の契約（スタンダード）をStripe上で解約しにいく（ローカルではStripeに繋がらないので失敗のログ）", triedCancel);
+
+  // 前の契約の「契約は続いています」の連絡が来ても、ビジネスのまま（以前はここでスタンダードに書き戻っていた）
+  await sendEvent({ type: "customer.subscription.updated", data: { object: { id: stdSub, status: "active", object: "subscription" } } });
+  log("前の契約の更新の連絡でプランが書き戻されない", psql(`select "planTier" from "Company" where id='${companyId}';`) === "BUSINESS");
+
+  await page.goto("http://localhost:3000/company/wallet");
+  await page.getByRole("button", { name: /購入履歴・利用履歴/ }).click();
+  const historyText = await page.textContent("body");
+  log("履歴に「プラン変更：スタンダード→ビジネス（変えた人）」が出る", historyText.includes("プラン変更：スタンダード→ビジネス（サブスク確認管理者）"));
+
+  // 前の契約が解約済みになり、ビジネスも解約されたら無料へ
+  await sendEvent({ type: "customer.subscription.deleted", data: { object: { id: stdSub, status: "canceled", object: "subscription" } } });
+  log("前の契約の解約の連絡が来てもビジネスのまま", psql(`select "planTier" from "Company" where id='${companyId}';`) === "BUSINESS");
+  await sendEvent({ type: "customer.subscription.deleted", data: { object: { id: bizSub, status: "canceled", object: "subscription" } } });
+  log("今の契約が解約されたら無料プランへ", psql(`select "planTier" from "Company" where id='${companyId}';`) === "FREE");
+  log(
+    "解約で無料になったことも履歴に残る",
+    psql(`select count(*) from "PlanChangeEvent" where "companyId"='${companyId}' and reason='CANCELED' and "toTier"='FREE';`) !== "0",
+  );
 
   // --- 既存の一回払い（Tee購入）のwebhookフローが壊れていないことの回帰確認 ---
   const chargeSessionId = `cs_test_payment_${Date.now()}`;

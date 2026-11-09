@@ -14,7 +14,7 @@ const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
   : null;
 
-type LedgerEntry = { id: string; label: string; amount: number; balanceAfter: number; createdAt: string };
+type LedgerEntry = { id: string; label: string; amount: number | null; balanceAfter: number | null; createdAt: string };
 type PlanTier = "FREE" | "STANDARD" | "BUSINESS" | "PRO" | "ENTERPRISE";
 
 const PLAN_LABEL: Record<PlanTier, string> = {
@@ -207,11 +207,20 @@ export function WalletView({
                   <tr key={e.id} className="border-b border-border/60">
                     <td className="py-1">{new Date(e.createdAt).toLocaleDateString("ja-JP")}</td>
                     <td className="py-1">{e.label}</td>
-                    <td className={`py-1 ${e.amount >= 0 ? "text-primary" : "text-red-600"}`}>
-                      {e.amount >= 0 ? "+" : ""}
-                      {e.amount.toLocaleString()}
-                    </td>
-                    <td className="py-1">{e.balanceAfter.toLocaleString()}</td>
+                    {e.amount === null ? (
+                      <>
+                        <td className="py-1 text-muted">—</td>
+                        <td className="py-1 text-muted">—</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className={`py-1 ${e.amount >= 0 ? "text-primary" : "text-red-600"}`}>
+                          {e.amount >= 0 ? "+" : ""}
+                          {e.amount.toLocaleString()}
+                        </td>
+                        <td className="py-1">{e.balanceAfter?.toLocaleString()}</td>
+                      </>
+                    )}
                   </tr>
                 ))}
                 {ledgerEntries.length === 0 ? (
