@@ -31,7 +31,7 @@ try {
   const body = await page.textContent("body");
   log("permission table shown", body.includes("権限ごとに使える機能") && body.includes("チームマネージャー"));
   log("PWA instructions shown", body.includes("ホーム画面に追加する") && body.includes("iPhone"));
-  for (const title of ["シフト希望を確認する", "募集を出す", "有給休暇を管理する", "ダッシュボードで「やること」を確認する", "通知・ログイン方法を設定する", "シフト外の勤務を報告してもらう", "依頼主ごとのキャンセル規定を決める", "依頼主に取り消された時"]) {
+  for (const title of ["シフト希望を確認する", "募集を出す", "有給休暇を管理する", "ダッシュボードで「やること」を確認する", "通知・ログイン方法を設定する", "シフト外の勤務を報告してもらう", "依頼主ごとのキャンセル規定を決める", "依頼主に取り消された時", "スタッフにお知らせを出す", "依頼主とシフトを共有する", "「勤務終了」を押し忘れた時", "月末にまとめて", "Tee・プラン"]) {
     log(`howto section shown: ${title}`, body.includes(title));
   }
   const brokenImages = await page.$$eval("img[src^='/howto/']", (imgs) => imgs.filter((i) => !i.complete || i.naturalWidth === 0).map((i) => i.src));
