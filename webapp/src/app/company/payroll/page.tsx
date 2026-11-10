@@ -12,6 +12,9 @@ import { todayJstParts, earliestAllowedMonth, cutoffMonthString } from "@/lib/da
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PdfLink } from "@/components/PdfLink";
+import { approvedStaffInvoiceStaffIds, listReceivedStaffInvoices, staffInvoiceOpenCost, sanitizeExpenses } from "@/lib/domain/staffInvoices";
+import type { ComputedWorkLine } from "@/lib/domain/payroll";
+import { ReceivedStaffInvoiceList, ReceivedStaffInvoiceView, type ReceivedInvoiceDetail } from "@/components/company/ReceivedStaffInvoices";
 
 function currentMonth() {
   const today = todayJstParts();
@@ -26,6 +29,7 @@ export default async function PayrollPage({
   const sp = await searchParams;
   const requestedMonth = typeof sp.month === "string" ? sp.month : currentMonth();
   const staffUserId = typeof sp.staff === "string" ? sp.staff : undefined;
+  const staffInvoiceId = typeof sp.staffInvoice === "string" ? sp.staffInvoice : undefined;
 
   const [allStaff, company] = await Promise.all([
     listStaff(membership.companyId),
@@ -135,6 +139,47 @@ export default async function PayrollPage({
   const staffAvailableForNewSlip = staff.filter((s) => !staffWithRecordIds.has(s.userId));
   const selectedStaffName = staffUserId ? (allStaff.find((s) => s.userId === staffUserId)?.name ?? "") : "";
 
+  // 業務委託のスタッフから届いた請求書（自分が扱えるスタッフの分だけ）
+  const receivedInvoices = await listReceivedStaffInvoices(membership.companyId, targetMonth, accessibleStaffIds);
+  const receivedRows = await Promise.all(
+    receivedInvoices.map(async (inv) => ({
+      id: inv.id,
+      staffName: inv.staff.name,
+      status: inv.status,
+      opened: inv.chargeSettledAt != null,
+      freeToOpen: (await staffInvoiceOpenCost(inv)) === "free",
+    })),
+  );
+  const invoicedStaffIds = await approvedStaffInvoiceStaffIds(membership.companyId, targetMonth);
+  // 開いた（1件分を精算した）請求書だけ中身を見られる
+  const openedInvoice = staffInvoiceId ? receivedInvoices.find((i) => i.id === staffInvoiceId && i.chargeSettledAt) : undefined;
+  const invoiceDetail: ReceivedInvoiceDetail | null = openedInvoice
+    ? {
+        id: openedInvoice.id,
+        staffName: openedInvoice.staff.name,
+        targetMonth: openedInvoice.targetMonth,
+        status: openedInvoice.status,
+        submittedAt: new Date(openedInvoice.submittedAt!.getTime() + 9 * 3600e3).toISOString().slice(0, 10),
+        lines: openedInvoice.workLines as ComputedWorkLine[],
+        expenses: sanitizeExpenses(openedInvoice.expenses),
+        note: openedInvoice.note,
+        issuerName: openedInvoice.issuerName,
+        issuerAddress: openedInvoice.issuerAddress,
+        registrationNumber: openedInvoice.registrationNumber,
+        bankLine: openedInvoice.bankName
+          ? [openedInvoice.bankName, openedInvoice.branchName, openedInvoice.accountType, openedInvoice.accountNumber, openedInvoice.accountHolderName].filter(Boolean).join(" ")
+          : null,
+        withholding: openedInvoice.withholding,
+        taxExclusive: openedInvoice.taxExclusive,
+        workSubtotal: openedInvoice.workSubtotal,
+        taxAmount: openedInvoice.taxAmount,
+        withholdingAmount: openedInvoice.withholdingAmount,
+        expensesTotal: openedInvoice.expensesTotal,
+        total: openedInvoice.total,
+        returnReason: openedInvoice.returnReason,
+      }
+    : null;
+
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-8 sm:py-10">
       <FinanceTabs active="payroll" invoicesEnabled={company.agencyEnabled} />
@@ -150,11 +195,23 @@ export default async function PayrollPage({
 
       <MonthNavBar basePath="/company/payroll" targetMonth={targetMonth} minMonth={minMonth} todayMonth={currentMonth()} />
 
-      {slipData ? (
+      {invoiceDetail ? (
         <>
           <Link href={`/company/payroll?month=${targetMonth}`} className="mb-4 inline-block text-sm text-primary underline">
             ← 一覧に戻る
           </Link>
+          <ReceivedStaffInvoiceView invoice={invoiceDetail} />
+        </>
+      ) : slipData ? (
+        <>
+          <Link href={`/company/payroll?month=${targetMonth}`} className="mb-4 inline-block text-sm text-primary underline">
+            ← 一覧に戻る
+          </Link>
+          {staffUserId && invoicedStaffIds.has(staffUserId) ? (
+            <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+              この月は{selectedStaffName}さんから請求書を受け取り、承認済みです（支払明細の発行は要りません）。
+            </p>
+          ) : null}
           <SalarySlipEditor
             slip={slipData}
             staffName={selectedStaffName}
@@ -186,6 +243,13 @@ export default async function PayrollPage({
         </>
       ) : (
         <>
+          {receivedRows.length > 0 ? (
+            <ReceivedStaffInvoiceList
+              rows={receivedRows}
+              targetMonth={targetMonth}
+              quota={{ remaining: pdfQuota.remaining, unlimited: pdfQuota.unlimited, quota: pdfQuota.quota }}
+            />
+          ) : null}
           <section>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-serif-jp text-lg font-bold text-primary">下書き中</h2>
@@ -213,6 +277,9 @@ export default async function PayrollPage({
                           <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">
                             発行済み（修正中）
                           </span>
+                        ) : null}
+                        {invoicedStaffIds.has(slip.staffUserId) ? (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">請求書を受け取り済み</span>
                         ) : null}
                       </span>
                     </Link>

@@ -1,6 +1,7 @@
 "use server";
 
-import { notifyStaffPayslipIssued } from "@/lib/domain/emailNotifications";
+import { notifyStaffPayslipIssued, notifyStaffInvoiceReviewed } from "@/lib/domain/emailNotifications";
+import { openStaffInvoice, reviewStaffInvoice, updateContractorSettings, StaffInvoiceError } from "@/lib/domain/staffInvoices";
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManageAny } from "@/lib/auth/permissions";
@@ -118,6 +119,60 @@ export async function renameUnresolvedTaskNamesAction(
     staffUserId: slip.staffUserId,
     items,
     newTaskName: newTaskName.trim(),
+  });
+  revalidatePath("/company/payroll");
+}
+
+// ---- 業務委託のスタッフから届いた請求書 ----
+
+async function assertStaffInvoiceAccess(invoiceId: string) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  const invoice = await prisma.staffInvoice.findUniqueOrThrow({ where: { id: invoiceId } });
+  const staffTeamIds = await getStaffTeamIds(invoice.staffUserId);
+  if (invoice.companyId !== membership.companyId || !canManageAny(membership, staffTeamIds)) throw new Error("forbidden");
+  return { userId, membership, invoice };
+}
+
+// 開く（最初の1回だけ、プランの無料枠か1Teeを使う）
+export async function openStaffInvoiceAction(invoiceId: string): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { userId, membership } = await assertStaffInvoiceAccess(invoiceId);
+  try {
+    await openStaffInvoice({ invoiceId, companyId: membership.companyId, userId });
+  } catch (e) {
+    if (e instanceof Error && e.message === "insufficient_tee_balance") {
+      return { ok: false, message: "Teeが足りません。チャージしてから開いてください。" };
+    }
+    throw e;
+  }
+  revalidatePath("/company/payroll");
+  return { ok: true };
+}
+
+export async function reviewStaffInvoiceAction(
+  invoiceId: string,
+  decision: "approve" | "return",
+  reason?: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { userId, membership } = await assertStaffInvoiceAccess(invoiceId);
+  try {
+    await reviewStaffInvoice({ invoiceId, companyId: membership.companyId, userId, decision, reason });
+  } catch (e) {
+    if (e instanceof StaffInvoiceError) return { ok: false, message: e.message };
+    throw e;
+  }
+  await notifyStaffInvoiceReviewed(invoiceId).catch((err) => console.error("[notify] staff invoice reviewed failed", err));
+  revalidatePath("/company/payroll");
+  return { ok: true };
+}
+
+// スタッフごとの扱い（源泉徴収・消費税）を変える
+export async function updateContractorSettingsAction(invoiceId: string, withholding: boolean, taxExclusive: boolean) {
+  const { membership, invoice } = await assertStaffInvoiceAccess(invoiceId);
+  await updateContractorSettings({
+    companyId: membership.companyId,
+    staffUserId: invoice.staffUserId,
+    withholding: withholding === true,
+    taxExclusive: taxExclusive === true,
   });
   revalidatePath("/company/payroll");
 }

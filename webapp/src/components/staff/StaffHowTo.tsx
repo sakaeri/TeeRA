@@ -17,7 +17,7 @@ const SECTIONS: { id: string; title: string; image: string; steps: string[]; not
       "iPhoneはSafariの共有ボタン（□に↑）→「ホーム画面に追加」、AndroidはChromeの「︙」→「ホーム画面に追加」で、アプリのように使える",
       "ログインは、メールアドレスを入れると届くメールの6桁のコードをアプリに入力する（メールのリンクを開いてもログインできます）",
     ],
-    note: "右上の丸いアイコン→鉛筆マークの「アカウント設定」で、プッシュ通知をオンにしておくと、シフトやお知らせにすぐ気づけます（どんな時に届くかは⑩）。",
+    note: "右上の丸いアイコン→鉛筆マークの「アカウント設定」で、プッシュ通知をオンにしておくと、シフトやお知らせにすぐ気づけます（どんな時に届くかは⑪）。",
   },
   {
     id: "staff-howto-contract",
@@ -106,9 +106,21 @@ const SECTIONS: { id: string; title: string; image: string; steps: string[]; not
     ],
     note: "同意しない場合は、これまで通り会社から受け取ってください。業務委託の方は「支払明細」として届きます。",
   },
+  {
+    id: "staff-howto-invoice",
+    title: "⑩請求書を出す（業務委託の方）",
+    image: "/howto/staff-invoice.png",
+    steps: [
+      "右上の丸いアイコン→「請求書」を開き、月を選ぶ（業務委託の契約がある方だけに出ます）",
+      "その月の承認済みの勤務が、会社の単価で自動で入る。交通費・経費があれば「＋交通費・経費を足す」で足す",
+      "名前・住所・インボイスの登録番号（持っている方だけ）・振込先を確かめて「提出する」。会社が承認・差し戻しするとお知らせが届く",
+    ],
+    note: "勤務の金額は直せません（違っていたら会社に連絡してください）。源泉徴収・消費税の扱いは会社が決めます。差し戻されたら、直してもう一度提出できます。",
+    pageBreak: true,
+  },
 ];
 
-// ⑩ 通知が届くタイミング（emailNotifications.ts などで実際に送っているものと合わせること）
+// ⑪ 通知が届くタイミング（emailNotifications.ts などで実際に送っているものと合わせること）
 const NOTIFICATIONS: { when: string; what: string; how: string }[] = [
   { when: "シフト開始の約1時間前", what: "まもなくシフト開始です", how: "プッシュ・メール" },
   { when: "時間未定・終日のシフトの日の朝（6時以降）", what: "本日のシフトがあります", how: "プッシュ・メール" },
@@ -117,6 +129,7 @@ const NOTIFICATIONS: { when: string; what: string; how: string }[] = [
   { when: "応募した募集にお知らせが追加された時", what: "募集のお知らせが追加されました", how: "プッシュ（受け取れない人はメール）" },
   { when: "会社がお知らせを出した時", what: "お知らせの件名", how: "プッシュ（会社が通知すると選んだ時）" },
   { when: "給料明細が発行・修正された時", what: "給料明細が届きました／修正されました", how: "プッシュ" },
+  { when: "請求書が承認・差し戻しされた時（業務委託の方）", what: "請求書が承認されました／差し戻されました", how: "プッシュ" },
   {
     when: "退勤して3時間たっても業務報告を出していない時（退勤を押し忘れた日は夜8時）",
     what: "業務報告がまだ提出されていません（1回だけ）",
@@ -181,9 +194,9 @@ export function StaffHowTo() {
       ))}
       <section
         id="staff-howto-notifications"
-        className="print-avoid-break print-page-break rounded-2xl border border-border bg-white/60 p-4 print:mb-3 print:rounded-lg print:p-3"
+        className="print-avoid-break rounded-2xl border border-border bg-white/60 p-4 print:mb-3 print:rounded-lg print:p-3"
       >
-        <h2 className="mb-3 font-serif-jp text-base font-bold text-primary print:mb-1.5">⑩通知が届くタイミング</h2>
+        <h2 className="mb-3 font-serif-jp text-base font-bold text-primary print:mb-1.5">⑪通知が届くタイミング</h2>
         <div className="overflow-x-auto print:overflow-visible">
           <table className="w-full min-w-[480px] border-collapse text-xs print:min-w-0 print:text-[11px]">
             <thead>

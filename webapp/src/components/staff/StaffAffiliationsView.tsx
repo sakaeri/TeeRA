@@ -8,14 +8,19 @@ const ROLE_LABEL: Record<string, string> = {
 
 type CompanyRow = { companyId: string; companyName: string; role: string; pendingCount: number };
 
-export function StaffAffiliationsView({ companies }: { companies: CompanyRow[] }) {
+export function StaffAffiliationsView({ companies, isContractor = false }: { companies: CompanyRow[]; isContractor?: boolean }) {
   return (
     <ul className="flex flex-col gap-3">
-      {/* 給料明細・使い方への入口（右上のメニューにもある） */}
-      <li className="grid grid-cols-2 gap-3">
+      {/* 給料明細・（業務委託の人は）請求書・使い方への入口（右上のメニューにもある） */}
+      <li className={`grid gap-3 ${isContractor ? "grid-cols-3" : "grid-cols-2"}`}>
         <Link href="/staff/payslips" className="rounded-2xl border border-border bg-white/60 p-4 text-center text-sm font-semibold text-primary hover:border-primary">
           給料明細
         </Link>
+        {isContractor ? (
+          <Link href="/staff/invoices" className="rounded-2xl border border-border bg-white/60 p-4 text-center text-sm font-semibold text-primary hover:border-primary">
+            請求書
+          </Link>
+        ) : null}
         <Link href="/staff/howto" className="rounded-2xl border border-border bg-white/60 p-4 text-center text-sm font-semibold text-primary hover:border-primary">
           使い方
         </Link>

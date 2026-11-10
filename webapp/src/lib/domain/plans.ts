@@ -32,20 +32,22 @@ export const PLAN_PDF_QUOTA: Record<PlanTier, number> = {
   ENTERPRISE: Number.POSITIVE_INFINITY,
 };
 
-// 給与明細＋請求書の合算で、その対象月（稼働月）の分としてcountsAgainstQuota=trueで
+// 給与明細＋請求書（＋業務委託のスタッフから届いた請求書を開いた分）の合算で、その対象月（稼働月）の分としてcountsAgainstQuota=trueで
 // 発行した件数。発行した日ではなく、明細・請求書自体の対象月（targetMonth/periodLabel）
 // で数える — 11月になってから10月分を発行したら10月分の枠を使う。会社全体での件数で、
 // 誰が発行したかは関係ない。
 async function countPdfQuotaUsed(tx: Tx | typeof prisma, companyId: string, targetMonth: string): Promise<number> {
-  const [slipCount, invoiceCount] = await Promise.all([
+  const [slipCount, invoiceCount, staffInvoiceCount] = await Promise.all([
     tx.salarySlipIssue.count({
       where: { countsAgainstQuota: true, salarySlip: { companyId, targetMonth } },
     }),
     tx.invoiceIssue.count({
       where: { countsAgainstQuota: true, invoice: { issuingCompanyId: companyId, periodLabel: targetMonth } },
     }),
+    // 業務委託のスタッフから届いた請求書を開いた分（staffInvoices.ts）
+    tx.staffInvoice.count({ where: { countsAgainstQuota: true, companyId, targetMonth } }),
   ]);
-  return slipCount + invoiceCount;
+  return slipCount + invoiceCount + staffInvoiceCount;
 }
 
 // issueSalarySlip/issueInvoiceの初回発行判定で使う — 今回の発行が無料枠に

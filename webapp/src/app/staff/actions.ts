@@ -15,12 +15,17 @@ import {
   confirmCorrectedWorkReport,
   disputeCorrectedWorkReport,
 } from "@/lib/domain/workReports";
-import { notifyCompanyOfWorkReportSubmission, notifyCompanyOfRecruitmentEntry } from "@/lib/domain/emailNotifications";
+import {
+  notifyCompanyOfWorkReportSubmission,
+  notifyCompanyOfRecruitmentEntry,
+  notifyCompanyOfStaffInvoiceSubmitted,
+} from "@/lib/domain/emailNotifications";
 import { markStaffNoticeRead, markAllStaffNoticesRead } from "@/lib/domain/notices";
 import { updateMembershipIdDocument, updateMembershipBankInfo, updateStaffAddressPhone } from "@/lib/domain/roster";
 import { addStaffRelationshipNote } from "@/lib/domain/relationships";
 import { prisma } from "@/lib/prisma";
 import { consentToElectronicPayslip } from "@/lib/domain/staffPayslips";
+import { saveStaffInvoice, StaffInvoiceError, type StaffInvoiceInput } from "@/lib/domain/staffInvoices";
 
 async function assertOwnShift(shiftId: string, staffUserId: string) {
   const shift = await prisma.shift.findUniqueOrThrow({ where: { id: shiftId } });
@@ -326,4 +331,23 @@ export async function consentToElectronicPayslipAction(companyId: string) {
   const { userId } = await requireCompanyStaffRole();
   await consentToElectronicPayslip(userId, companyId);
   revalidatePath("/staff/payslips");
+}
+
+// 業務委託の請求書：下書きの保存・提出
+export async function saveStaffInvoiceAction(params: {
+  companyId: string;
+  targetMonth: string;
+  input: StaffInvoiceInput;
+  submit: boolean;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { userId } = await requireCompanyStaffRole();
+  try {
+    const { invoice, wasResubmission } = await saveStaffInvoice({ staffUserId: userId, ...params });
+    if (params.submit) await notifyCompanyOfStaffInvoiceSubmitted(invoice.id, wasResubmission).catch(() => {});
+  } catch (e) {
+    if (e instanceof StaffInvoiceError) return { ok: false, message: e.message };
+    throw e;
+  }
+  revalidatePath("/staff/invoices");
+  return { ok: true };
 }
