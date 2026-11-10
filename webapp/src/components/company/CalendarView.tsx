@@ -764,6 +764,7 @@ export function CalendarView({
         <RecruitmentFormModal
           teams={teams}
           clients={clients}
+          placementRates={placementRates}
           defaultDate={selectedDate ?? todayStr}
           recentTitles={recentTitles}
           onClose={() => setShowRecruitForm(false)}
@@ -3957,9 +3958,16 @@ function MiniCalendarMultiSelect({
   );
 }
 
+type RecruitStep = "team" | "workplace" | "task" | "datetime" | "count" | "confirm";
+
+// 募集作成：シフト作成と同じく1画面ずつ進む（チーム→勤務先→業務内容→日付・時間→日付ごとの人数→確認）。
+// 人数を最後にするのは、選んだ日付ごとに人数を変えられるようにするため（例：2日は2名、3日は1名）。
+// 勤務先は、自社か、自社が派遣会社として持っている依頼主（依頼主の代わりに出すオーダー）。
+// 業務内容は、その勤務先に登録してある業務内容から選ぶ（単価とつながるので、表記ゆれを防ぐ）。
 function RecruitmentFormModal({
   teams,
   clients = [],
+  placementRates = [],
   defaultDate,
   recentTitles,
   onClose,
@@ -3967,26 +3975,77 @@ function RecruitmentFormModal({
   teams: Team[];
   // 依頼主の代わりにオーダーを出す時の依頼主（現場）の候補（自社が派遣会社として持っている依頼主）
   clients?: { id: string; name: string }[];
+  placementRates?: TaskNameRow[];
   defaultDate: string;
   recentTitles: string[];
   onClose: () => void;
 }) {
-  const [title, setTitle] = useState("");
+  const steps: RecruitStep[] = [
+    ...(teams.length > 0 ? (["team"] as const) : []),
+    ...(clients.length > 0 ? (["workplace"] as const) : []),
+    "task",
+    "datetime",
+    "count",
+    "confirm",
+  ];
+  const [step, setStep] = useState<RecruitStep>(steps[0]);
   const [teamId, setTeamId] = useState("");
   const [clientRelationshipId, setClientRelationshipId] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [title, setTitle] = useState("");
+  const [extraTaskNames, setExtraTaskNames] = useState<TaskNameRow[]>([]);
+  const [showNewTaskForm, setShowNewTaskForm] = useState(false);
+  const [newTaskName, setNewTaskName] = useState("");
+  const [newTaskPending, startNewTaskTransition] = useTransition();
   const [dates, setDates] = useState<string[]>([defaultDate]);
   const [isUndecided, setIsUndecided] = useState(false);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("18:00");
-  const [maxEntries, setMaxEntries] = useState(1);
+  // 日付ごとの人数（入っていない日は1名）
+  const [countByDate, setCountByDate] = useState<Record<string, number>>({});
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [step, setStep] = useState<"form" | "confirm">("form");
-  const teamRequired = teams.length > 0;
 
+  const countOf = (d: string) => countByDate[d] ?? 1;
+
+  function goBack() {
+    const i = steps.indexOf(step);
+    if (i > 0) setStep(steps[i - 1]);
+  }
+  function goNext() {
+    const i = steps.indexOf(step);
+    if (i < steps.length - 1) setStep(steps[i + 1]);
+  }
   function toggleDate(d: string) {
     setDates((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
+  }
+
+  // 業務内容の候補：その勤務先に登録してある業務内容。自社の場合は、最近の募集の業務内容も出す
+  const taskOptions = Array.from(
+    new Set([
+      ...[...placementRates, ...extraTaskNames]
+        .filter((r) => r.companyRelationshipId === (clientRelationshipId || null))
+        .map((r) => r.taskName),
+      ...(clientRelationshipId ? [] : recentTitles),
+    ]),
+  );
+
+  function submitNewTask() {
+    const name = newTaskName.trim();
+    if (!name) return;
+    startNewTaskTransition(async () => {
+      const rate = await registerPlacementTaskNameAction({
+        teamId: teamId || undefined,
+        companyRelationshipId: clientRelationshipId || undefined,
+        taskName: name,
+      });
+      setExtraTaskNames((prev) => [...prev, { id: rate.id, companyRelationshipId: clientRelationshipId || null, taskName: rate.taskName }]);
+      setTitle(rate.taskName);
+      setShowNewTaskForm(false);
+      setNewTaskName("");
+      goNext();
+    });
   }
 
   function submit() {
@@ -4002,7 +4061,8 @@ function RecruitmentFormModal({
           startTime: isUndecided ? undefined : startTime,
           endTime: isUndecided ? undefined : endTime,
           isUndecided,
-          maxEntries,
+          maxEntries: 1,
+          maxEntriesByDate: Object.fromEntries(dates.map((d) => [d, countOf(d)])),
         });
         onClose();
       } catch {
@@ -4012,71 +4072,256 @@ function RecruitmentFormModal({
   }
 
   const teamName = teams.find((t) => t.id === teamId)?.name;
-  const clientName = clients.find((c) => c.id === clientRelationshipId)?.name;
-  const dateLabels = dates.map((d) => {
+  const workplaceName = clients.find((c) => c.id === clientRelationshipId)?.name ?? "自社";
+  const dateLabel = (d: string) => {
     const dt = new Date(d + "T00:00:00Z");
     return `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
-  });
+  };
+  const totalCount = dates.reduce((sum, d) => sum + countOf(d), 0);
+  const teamClientIds = teams.find((t) => t.id === teamId)?.clientIds ?? [];
+  const filteredClients = clients
+    .filter((c) => c.name.includes(clientSearch))
+    .sort((a, b) => Number(teamClientIds.includes(b.id)) - Number(teamClientIds.includes(a.id)));
+  const heading = [workplaceName, title].filter(Boolean).join("・");
 
-  if (step === "confirm") {
+  const backButton =
+    steps.indexOf(step) > 0 ? (
+      <button type="button" onClick={goBack} className="-mt-1 self-start text-xs text-muted hover:text-primary">
+        ＜ 戻る
+      </button>
+    ) : null;
+
+  if (step === "team") {
     return (
       <Modal title="募集を作成" onClose={onClose}>
         <div className="flex flex-col gap-3">
+          <h3 className="font-serif-jp text-lg font-semibold">どのチームの募集を作成しますか？</h3>
+          <div className="flex flex-col gap-2">
+            {teams.map((t) => (
+              <WizardOptionButton
+                key={t.id}
+                label={t.name}
+                onClick={() => {
+                  setTeamId(t.id);
+                  goNext();
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
+  if (step === "workplace") {
+    return (
+      <Modal title="募集を作成" onClose={onClose}>
+        <div className="flex flex-col gap-3">
+          {backButton}
+          <h3 className="font-serif-jp text-lg font-semibold">勤務先を選択</h3>
+          <WizardOptionButton
+            label="自社（自社の勤務）"
+            onClick={() => {
+              setClientRelationshipId("");
+              setTitle("");
+              goNext();
+            }}
+          />
+          <p className="mt-1 text-xs text-muted">依頼主の代わりに、依頼主の現場の募集を出す</p>
+          <input
+            type="text"
+            value={clientSearch}
+            onChange={(e) => setClientSearch(e.target.value)}
+            placeholder="依頼主名で検索"
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+          />
+          <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+            {filteredClients.map((c) => (
+              <WizardOptionButton
+                key={c.id}
+                label={c.name}
+                onClick={() => {
+                  setClientRelationshipId(c.id);
+                  setTitle("");
+                  goNext();
+                }}
+              />
+            ))}
+          </div>
+          <p className="text-xs text-muted">
+            依頼主を選ぶと、決まったシフトはその依頼主の現場のシフトになります（請求書・キャンセル規定・単価もその依頼主で計算）。
+          </p>
+        </div>
+      </Modal>
+    );
+  }
+
+  if (step === "task") {
+    return (
+      <Modal title="募集を作成" onClose={onClose}>
+        <div className="flex flex-col gap-3">
+          {backButton}
+          <h3 className="font-serif-jp text-lg font-semibold">{workplaceName}・業務内容を選択</h3>
+          <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+            {taskOptions.map((name) => (
+              <WizardOptionButton
+                key={name}
+                label={name}
+                onClick={() => {
+                  setTitle(name);
+                  goNext();
+                }}
+              />
+            ))}
+          </div>
+          {showNewTaskForm || taskOptions.length === 0 ? (
+            <div className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-3">
+              <input
+                type="text"
+                value={newTaskName}
+                onChange={(e) => setNewTaskName(e.target.value)}
+                placeholder="業務内容（例：キャディ業務）"
+                aria-label="新しい業務内容"
+                className="rounded-lg border border-border px-3 py-2 text-sm"
+              />
+              <button
+                type="button"
+                disabled={newTaskPending || !newTaskName.trim()}
+                onClick={submitNewTask}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                この業務内容を追加して次へ
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowNewTaskForm(true)}
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-semibold text-muted hover:border-primary hover:text-primary"
+            >
+              ＋ 新しい業務内容を追加する
+            </button>
+          )}
+        </div>
+      </Modal>
+    );
+  }
+
+  if (step === "datetime") {
+    return (
+      <Modal title="募集を作成" onClose={onClose}>
+        <div className="flex flex-col gap-3">
+          {backButton}
+          <h3 className="font-serif-jp text-lg font-semibold">{heading}・日付と時間</h3>
+          <label className="flex items-center gap-1 text-xs">
+            <input type="checkbox" checked={isUndecided} onChange={(e) => setIsUndecided(e.target.checked)} />
+            時間未定
+          </label>
+          {!isUndecided ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
+              <Field label="開始時刻">
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="w-full min-w-0 rounded-lg border border-border px-3 py-2 text-sm"
+                />
+              </Field>
+              <Field label="終了時刻">
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="w-full min-w-0 rounded-lg border border-border px-3 py-2 text-sm"
+                />
+              </Field>
+            </div>
+          ) : null}
+          <div className="flex flex-col gap-1 text-xs text-foreground/80">
+            <span>日付を選択（複数選択可）</span>
+            <MiniCalendarMultiSelect selected={dates} onToggle={toggleDate} initialDate={defaultDate} />
+          </div>
+          {dates.length === 0 ? <p className="text-xs text-red-600">少なくとも1つ日付を選択してください。</p> : null}
           <button
             type="button"
-            onClick={() => setStep("form")}
-            className="-mt-1 self-start text-xs text-muted hover:text-primary"
+            disabled={dates.length === 0}
+            onClick={goNext}
+            className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
-            ＜ 戻る
+            次へ
           </button>
-          <h3 className="font-serif-jp text-lg font-semibold">内容を確認してください</h3>
+        </div>
+      </Modal>
+    );
+  }
 
-          <dl className="divide-y divide-border rounded-xl border border-border bg-background/40 text-sm">
-            <div className="flex items-center justify-between px-4 py-3">
-              <dt className="text-muted">業務内容</dt>
-              <dd className="font-medium">{title}</dd>
-            </div>
-            <div className="flex items-center justify-between px-4 py-3">
-              <dt className="text-muted">勤務先</dt>
-              <dd className="font-medium">{clientName ?? "自社"}</dd>
-            </div>
-            <div className="flex items-center justify-between px-4 py-3">
-              <dt className="text-muted">チーム</dt>
-              <dd className="font-medium">{teamName ?? "未選択"}</dd>
-            </div>
-            <div className="flex items-center justify-between px-4 py-3">
-              <dt className="text-muted">募集人数</dt>
-              <dd className="font-medium">{maxEntries}名</dd>
-            </div>
-            <div className="flex items-center justify-between px-4 py-3">
-              <dt className="text-muted">時間</dt>
-              <dd className="font-medium">{isUndecided ? "未定" : `${startTime}〜${endTime}`}</dd>
-            </div>
-            <div className="px-4 py-3">
-              <dt className="mb-1 text-muted">日付（{dates.length}件）</dt>
-              <dd className="flex flex-col gap-0.5 font-medium">
-                {dateLabels.map((label) => (
-                  <span key={label}>{label}</span>
-                ))}
-              </dd>
-            </div>
-            {note ? (
-              <div className="px-4 py-3">
-                <dt className="mb-1 text-muted">備考</dt>
-                <dd className="font-medium whitespace-pre-wrap">{note}</dd>
-              </div>
-            ) : null}
-          </dl>
-
-          {error ? <p className="text-xs text-red-600">{error}</p> : null}
-
+  if (step === "count") {
+    return (
+      <Modal title="募集を作成" onClose={onClose}>
+        <div className="flex flex-col gap-3" data-testid="recruit-count-step">
+          {backButton}
+          <h3 className="font-serif-jp text-lg font-semibold">{heading}・募集人数</h3>
+          <p className="text-xs text-muted">日付ごとに人数を入れられます（例：2日は2名、3日は1名）。</p>
+          {dates.length > 1 ? (
+            <button
+              type="button"
+              onClick={() => setCountByDate(Object.fromEntries(dates.map((d) => [d, countOf(dates[0])])))}
+              className="self-start text-xs text-primary underline"
+            >
+              全部の日を{countOf(dates[0])}名にそろえる
+            </button>
+          ) : null}
+          <ul className="flex flex-col divide-y divide-border rounded-xl border border-border">
+            {dates.map((d) => (
+              <li key={d} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                <span>{dateLabel(d)}</span>
+                <span className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label={`${dateLabel(d)}の人数を減らす`}
+                    disabled={countOf(d) <= 1}
+                    onClick={() => setCountByDate((prev) => ({ ...prev, [d]: Math.max(1, countOf(d) - 1) }))}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-base disabled:opacity-40"
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    aria-label={`${dateLabel(d)}の人数`}
+                    value={countOf(d)}
+                    onChange={(e) => setCountByDate((prev) => ({ ...prev, [d]: Math.max(1, Number(e.target.value) || 1) }))}
+                    className="w-14 rounded-lg border border-border px-2 py-1.5 text-center text-sm"
+                  />
+                  <button
+                    type="button"
+                    aria-label={`${dateLabel(d)}の人数を増やす`}
+                    onClick={() => setCountByDate((prev) => ({ ...prev, [d]: countOf(d) + 1 }))}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-base"
+                  >
+                    ＋
+                  </button>
+                  <span className="w-4 text-xs text-muted">名</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <Field label="備考（任意）">
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="集合場所・服装・持ち物など"
+              rows={3}
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+            />
+          </Field>
           <button
             type="button"
-            disabled={pending}
-            onClick={() => submit()}
-            className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            onClick={goNext}
+            className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
           >
-            {pending ? "作成中…" : `${dates.length}件の募集を作成`}
+            次へ
           </button>
         </div>
       </Modal>
@@ -4086,130 +4331,54 @@ function RecruitmentFormModal({
   return (
     <Modal title="募集を作成" onClose={onClose}>
       <div className="flex flex-col gap-3">
-        <p className="-mt-2 text-xs text-muted">
-          {clients.length > 0 ? "自社の勤務、または依頼主の代わりに依頼主の現場の勤務を募集します" : "自社での勤務を募集します"}
-        </p>
-
-        {clients.length > 0 ? (
-          <Field label="勤務先（依頼主）">
-            <select
-              value={clientRelationshipId}
-              onChange={(e) => setClientRelationshipId(e.target.value)}
-              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-              aria-label="勤務先（依頼主）"
-            >
-              <option value="">自社（依頼主なし）</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            {clientRelationshipId ? (
-              <p className="mt-1 text-xs text-muted">
-                決まったシフトは、この依頼主の現場のシフトになります（請求書・キャンセル規定・単価もこの依頼主で計算）。依頼主がTeeRAを使っていれば、依頼主のカレンダーに「派遣会社が入力」と出ます。
-              </p>
-            ) : null}
-          </Field>
-        ) : null}
-
-        {teamRequired ? (
-          <Field label="担当チーム">
-            <select
-              value={teamId}
-              onChange={(e) => setTeamId(e.target.value)}
-              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-            >
-              <option value="">チームを選択</option>
-              {teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        ) : null}
-
-        <Field label="業務内容">
-          <input
-            type="text"
-            list="job-title-suggestions"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="例：倉庫での軽作業"
-            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-          />
-          <datalist id="job-title-suggestions">
-            {recentTitles.map((t) => (
-              <option key={t} value={t} />
-            ))}
-          </datalist>
-        </Field>
-
-        <Field label="募集人数">
-          <input
-            type="number"
-            min={1}
-            value={maxEntries}
-            onChange={(e) => setMaxEntries(Number(e.target.value))}
-            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-          />
-        </Field>
-
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={isUndecided} onChange={(e) => setIsUndecided(e.target.checked)} />
-          時間未定
-        </label>
-        {!isUndecided ? (
-          <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
-            <Field label="開始時刻">
-              <input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="w-full min-w-0 rounded-lg border border-border px-3 py-2 text-sm"
-              />
-            </Field>
-            <Field label="終了時刻">
-              <input
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="w-full min-w-0 rounded-lg border border-border px-3 py-2 text-sm"
-              />
-            </Field>
+        {backButton}
+        <h3 className="font-serif-jp text-lg font-semibold">内容を確認してください</h3>
+        <dl className="divide-y divide-border rounded-xl border border-border bg-background/40 text-sm">
+          {teamName ? (
+            <div className="flex items-center justify-between px-4 py-3">
+              <dt className="text-muted">チーム</dt>
+              <dd className="font-medium">{teamName}</dd>
+            </div>
+          ) : null}
+          <div className="flex items-center justify-between px-4 py-3">
+            <dt className="text-muted">勤務先</dt>
+            <dd className="font-medium">{workplaceName}</dd>
           </div>
-        ) : null}
-
-        <div className="flex flex-1 flex-col gap-1 text-xs text-foreground/80">
-          <span>日付を選択（複数選択可）</span>
-          <MiniCalendarMultiSelect selected={dates} onToggle={toggleDate} initialDate={defaultDate} />
-        </div>
-        {dates.length === 0 ? (
-          <p className="text-xs text-red-600">少なくとも1つ日付を選択してください。</p>
-        ) : dates.length > 1 ? (
-          <p className="text-xs text-muted">選んだ{dates.length}日分、同じ内容の募集がそれぞれ独立して作成されます。</p>
-        ) : null}
-
-        <Field label="備考（任意）">
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="集合場所・服装・持ち物など"
-            rows={3}
-            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-          />
-        </Field>
-
+          <div className="flex items-center justify-between px-4 py-3">
+            <dt className="text-muted">業務内容</dt>
+            <dd className="font-medium">{title}</dd>
+          </div>
+          <div className="flex items-center justify-between px-4 py-3">
+            <dt className="text-muted">時間</dt>
+            <dd className="font-medium">{isUndecided ? "未定" : `${startTime}〜${endTime}`}</dd>
+          </div>
+          <div className="px-4 py-3">
+            <dt className="mb-1 text-muted">
+              日付と人数（{dates.length}日・合計{totalCount}名）
+            </dt>
+            <dd className="flex flex-col gap-0.5 font-medium">
+              {dates.map((d) => (
+                <span key={d}>
+                  {dateLabel(d)}　{countOf(d)}名
+                </span>
+              ))}
+            </dd>
+          </div>
+          {note ? (
+            <div className="px-4 py-3">
+              <dt className="mb-1 text-muted">備考</dt>
+              <dd className="font-medium whitespace-pre-wrap">{note}</dd>
+            </div>
+          ) : null}
+        </dl>
         {error ? <p className="text-xs text-red-600">{error}</p> : null}
-
         <button
           type="button"
-          disabled={pending || !title || dates.length === 0 || (teamRequired && !teamId)}
-          onClick={() => setStep("confirm")}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          disabled={pending}
+          onClick={() => submit()}
+          className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
-          掲載する
+          {pending ? "作成中…" : `${dates.length}件の募集を作成`}
         </button>
       </div>
     </Modal>

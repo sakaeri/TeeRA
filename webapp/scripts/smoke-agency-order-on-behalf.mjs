@@ -1,9 +1,10 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
+import { createRecruitmentViaWizard } from "./_lib/recruitmentWizard.mjs";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 // 派遣会社が依頼主の代わりにオーダーを出す：
-// ・募集の作成で「勤務先（依頼主）」を選べる（選ばなければ今まで通り自社の募集）
+// ・募集の作成で勤務先として依頼主を選べる（選ばなければ今まで通り自社の募集）
 // ・スタッフの募集一覧に「依頼主（派遣会社）」と出る
 // ・応募して決まったシフトは、その依頼主の現場のシフト（source=CLIENT・依頼主とのひも付けあり）になる
 // ・依頼主（本アカウント）のカレンダーに「派遣会社が入力」と出る（依頼主が自分のオーダーから決めたシフトには出ない）
@@ -86,12 +87,8 @@ try {
   await agency.locator("button", { hasText: "＋" }).last().click();
   await agency.getByText("募集を作成").click();
   const modal = agency.locator("div.fixed.inset-0.z-20").last();
-  const clientSelect = modal.getByLabel("勤務先（依頼主）");
-  log("募集の作成に「勤務先（依頼主）」の欄がある（最初は自社）", (await clientSelect.inputValue()) === "");
-  await clientSelect.selectOption(relId);
-  await modal.locator('input[placeholder="例：倉庫での軽作業"]').fill("代理オーダー業務");
-  await modal.getByRole("button", { name: "掲載する" }).click();
-  await agency.waitForTimeout(300);
+  log("募集の作成で勤務先（自社か依頼主）を選ぶ画面が出る", (await modal.innerText()).includes("勤務先を選択") && (await modal.innerText()).includes(clientName));
+  await createRecruitmentViaWizard(agency, { taskName: "代理オーダー業務", workplace: clientName, confirm: false });
   log("確認画面に勤務先として依頼主の名前が出る", (await modal.innerText()).includes(clientName));
   await modal.getByRole("button", { name: /件の募集を作成/ }).click();
   await agency.waitForTimeout(800);

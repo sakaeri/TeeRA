@@ -45,6 +45,8 @@ export async function createPublicRecruitment(params: {
   endTime?: string;
   isUndecided: boolean;
   maxEntries: number;
+  // 日付ごとの募集人数（"YYYY-MM-DD" → 人数）。無い日は maxEntries
+  maxEntriesByDate?: Record<string, number>;
   createdByUserId: string;
   // 依頼主の代わりに出すオーダーの依頼主（現場）。自社が派遣会社として持っている依頼主だけ選べる
   companyRelationshipId?: string;
@@ -67,7 +69,7 @@ export async function createPublicRecruitment(params: {
           startTime: params.isUndecided ? undefined : params.startTime,
           endTime: params.isUndecided ? undefined : params.endTime,
           isUndecided: params.isUndecided,
-          maxEntries: params.maxEntries,
+          maxEntries: Math.max(1, Math.round(params.maxEntriesByDate?.[date.toISOString().slice(0, 10)] ?? params.maxEntries)),
           perEntryTeeCost: PER_ENTRY_TEE_COST,
           lockedTee: 0,
           status: "PUBLISHED",
