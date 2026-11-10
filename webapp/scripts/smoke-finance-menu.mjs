@@ -108,6 +108,8 @@ try {
 
   await admin.click("text=給料明細/請求書");
   await admin.waitForURL("http://localhost:3000/company/payroll");
+  // 月を選んでいなければ先月を開くので、データを入れた当月に切り替える
+  await admin.goto(`http://localhost:3000/company/payroll?month=${thisMonth}`);
 
   // --- 給料明細タブ: 発行履歴に発行済みだけが出る ---
   // 「スタッフ」選択欄には下書き中のスタッフも当然出るので、発行履歴
@@ -126,6 +128,7 @@ try {
   // --- タブ切り替えで請求書ページへ ---
   await admin.getByRole("link", { name: "請求書", exact: true }).click();
   await admin.waitForURL("http://localhost:3000/company/invoices");
+  await admin.goto(`http://localhost:3000/company/invoices?month=${thisMonth}`);
   const invoiceHistorySection = admin.locator("section", { hasText: "発行履歴" });
   const invoiceHistoryText = await invoiceHistorySection.textContent();
   log("発行済み依頼主が発行履歴に出る", invoiceHistoryText.includes("発行済み請求依頼主"));

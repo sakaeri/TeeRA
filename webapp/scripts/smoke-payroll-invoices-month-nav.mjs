@@ -82,7 +82,8 @@ try {
   await admin.waitForTimeout(300);
   let body = await admin.textContent("body");
   log("開くボタンはもう無い", !body.includes("開く"));
-  log("当月の年月ラベルが表示される", body.includes(`${today.year}年${today.month}月`));
+  const lastYm = jstPartsMonthsAgo(1);
+  log("月を選んでいなければ先月の年月ラベルが表示される", body.includes(`${lastYm.year}年${lastYm.month}月`));
   log("一覧画面に「下書き中」セクションがある", body.includes("下書き中"));
   log("一覧画面に「発行履歴」セクションがある", body.includes("発行履歴"));
   log("「＋新しく作成」ボタンがある", body.includes("＋新しく作成"));
@@ -90,9 +91,9 @@ try {
   await admin.getByRole("button", { name: "前の月" }).click();
   await admin.waitForTimeout(300);
   let url = new URL(admin.url());
-  const prevYm = jstPartsMonthsAgo(1);
+  const prevYm = jstPartsMonthsAgo(2);
   log(
-    "「前の月」クリックだけで前月のURLに遷移する（対象未選択のまま）",
+    "「前の月」クリックだけで（先月の）前月のURLに遷移する（対象未選択のまま）",
     url.searchParams.get("month") === `${prevYm.year}-${String(prevYm.month).padStart(2, "0")}` && !url.searchParams.has("staff"),
   );
 
