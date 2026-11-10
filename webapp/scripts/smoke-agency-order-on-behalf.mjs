@@ -7,6 +7,7 @@ import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 // ・スタッフの募集一覧に「依頼主（派遣会社）」と出る
 // ・応募して決まったシフトは、その依頼主の現場のシフト（source=CLIENT・依頼主とのひも付けあり）になる
 // ・依頼主（本アカウント）のカレンダーに「派遣会社が入力」と出る（依頼主が自分のオーダーから決めたシフトには出ない）
+// ・逆に、派遣会社のカレンダーでは、依頼主が入れたシフトに「依頼主が入力」と出る
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -114,6 +115,9 @@ try {
   await client.goto(`http://localhost:3000/company/calendar?date=${date}`);
   await client.waitForTimeout(1500);
   log("依頼主のカレンダーに「派遣会社が入力」と出る", (await client.locator("main").innerText()).includes("派遣会社が入力"));
+  await agency.goto(`http://localhost:3000/company/calendar?date=${date}`);
+  await agency.waitForTimeout(1500);
+  log("派遣会社が自分で入れたシフトには、派遣会社の画面で「依頼主が入力」と出ない", !(await agency.locator("main").innerText()).includes("依頼主が入力"));
 
   // 依頼主が自分のオーダーから決めたシフト（派遣会社のスタッフが応募）には出ない
   psql(`delete from "Shift" where "staffUserId"='${staffId}';`);
@@ -130,6 +134,9 @@ try {
   await client.goto(`http://localhost:3000/company/calendar?date=${date}`);
   await client.waitForTimeout(1500);
   log("依頼主が自分のオーダーから決めたシフトには「派遣会社が入力」と出ない", !(await client.locator("main").innerText()).includes("派遣会社が入力"));
+  await agency.goto(`http://localhost:3000/company/calendar?date=${date}`);
+  await agency.waitForTimeout(1500);
+  log("依頼主のオーダーから決まったシフトは、派遣会社の画面に「依頼主が入力」と出る", (await agency.locator("main").innerText()).includes("依頼主が入力"));
 
   console.log(process.exitCode ? "AGENCY ORDER ON BEHALF SMOKE TEST HAD FAILURES" : "AGENCY ORDER ON BEHALF SMOKE TEST PASSED");
 } catch (e) {

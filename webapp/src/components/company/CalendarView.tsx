@@ -55,6 +55,8 @@ type ShiftRow = {
   // 依頼主の現場のシフトを、派遣会社が自分で入れた（派遣会社がアサイン、または派遣会社が代わりに出したオーダー経由）。
   // 依頼主が自分で入れた・自分のオーダーから決まったシフトとの見分け（揉めた時の記録）に使う
   enteredByAgency?: boolean;
+  // 派遣会社から見て、依頼主が入れた自社スタッフのシフト（依頼主の直接アサイン・依頼主のオーダーから決まったもの）
+  enteredByClient?: boolean;
 };
 
 type ShiftHistoryRow = {
@@ -1126,6 +1128,14 @@ function DayDetailModal({
                         >
                           {workplaceLabel}
                         </span>
+                        {s.enteredByClient ? (
+                          <span
+                            title={`作成：${s.clientName ?? "依頼主"}（依頼主が入力）`}
+                            className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900"
+                          >
+                            依頼主が入力
+                          </span>
+                        ) : null}
                         {s.enteredByAgency ? (
                           <span
                             title={`作成：${s.agencyName}（派遣会社が入力）`}
