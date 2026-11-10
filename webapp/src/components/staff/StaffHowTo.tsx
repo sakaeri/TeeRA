@@ -17,7 +17,7 @@ const SECTIONS: { id: string; title: string; image: string; steps: string[]; not
       "iPhoneはSafariの共有ボタン（□に↑）→「ホーム画面に追加」、AndroidはChromeの「︙」→「ホーム画面に追加」で、アプリのように使える",
       "ログインは、メールアドレスを入れると届くメールの6桁のコードをアプリに入力する（メールのリンクを開いてもログインできます）",
     ],
-    note: "右上の丸いアイコン→鉛筆マークの「アカウント設定」で、プッシュ通知をオンにしておくと、シフトやお知らせにすぐ気づけます。",
+    note: "右上の丸いアイコン→鉛筆マークの「アカウント設定」で、プッシュ通知をオンにしておくと、シフトやお知らせにすぐ気づけます（どんな時に届くかは⑩）。",
   },
   {
     id: "staff-howto-contract",
@@ -108,6 +108,25 @@ const SECTIONS: { id: string; title: string; image: string; steps: string[]; not
   },
 ];
 
+// ⑩ 通知が届くタイミング（emailNotifications.ts などで実際に送っているものと合わせること）
+const NOTIFICATIONS: { when: string; what: string; how: string }[] = [
+  { when: "シフト開始の約1時間前", what: "まもなくシフト開始です", how: "プッシュ・メール" },
+  { when: "時間未定・終日のシフトの日の朝（6時以降）", what: "本日のシフトがあります", how: "プッシュ・メール" },
+  { when: "勤務先が出勤時間を決めた・変えた時", what: "出勤時間が決まりました／変わりました", how: "プッシュ（受け取れない人はメール）" },
+  { when: "シフトが取り消されて休みになった時", what: "シフトがなくなりました", how: "プッシュ" },
+  { when: "応募した募集にお知らせが追加された時", what: "募集のお知らせが追加されました", how: "プッシュ（受け取れない人はメール）" },
+  { when: "会社がお知らせを出した時", what: "お知らせの件名", how: "プッシュ（会社が通知すると選んだ時）" },
+  { when: "給料明細が発行・修正された時", what: "給料明細が届きました／修正されました", how: "プッシュ" },
+  {
+    when: "退勤して3時間たっても業務報告を出していない時（退勤を押し忘れた日は夜8時）",
+    what: "業務報告がまだ提出されていません（1回だけ）",
+    how: "プッシュ",
+  },
+  { when: "毎週月曜の朝（前日までの業務報告に未提出がある時だけ）", what: "未提出の業務報告のまとめ", how: "メール" },
+  { when: "毎週月曜の朝（同意していない契約書がある時だけ）", what: "契約書の確認のお願い", how: "メール" },
+  { when: "パスワードでログインした時", what: "ログインのお知らせ（心当たりが無ければ会社に連絡）", how: "メール" },
+];
+
 function isStandaloneOrPhone() {
   return (
     window.matchMedia("(display-mode: standalone)").matches ||
@@ -160,6 +179,41 @@ export function StaffHowTo() {
           </div>
         </section>
       ))}
+      <section
+        id="staff-howto-notifications"
+        className="print-avoid-break print-page-break rounded-2xl border border-border bg-white/60 p-4 print:mb-3 print:rounded-lg print:p-3"
+      >
+        <h2 className="mb-3 font-serif-jp text-base font-bold text-primary print:mb-1.5">⑩通知が届くタイミング</h2>
+        <div className="overflow-x-auto print:overflow-visible">
+          <table className="w-full min-w-[480px] border-collapse text-xs print:min-w-0 print:text-[11px]">
+            <thead>
+              <tr className="border-b border-border text-left text-muted">
+                <th className="py-1.5 pr-3 font-semibold">いつ</th>
+                <th className="py-1.5 pr-3 font-semibold">内容</th>
+                <th className="py-1.5 font-semibold">届き方</th>
+              </tr>
+            </thead>
+            <tbody>
+              {NOTIFICATIONS.map((n) => (
+                <tr key={n.when + n.what} className="border-b border-border/60 last:border-0 align-top">
+                  <td className="py-1.5 pr-3">{n.when}</td>
+                  <td className="py-1.5 pr-3 font-semibold text-primary">{n.what}</td>
+                  <td className="py-1.5 whitespace-nowrap print:whitespace-normal">{n.how}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-4 rounded-lg bg-background px-3 py-2 text-xs text-muted print:mt-2 print:text-[11px] print:leading-snug">
+          <p className="mb-1 font-semibold text-primary">通知が届かない時は</p>
+          <ul className="list-disc space-y-0.5 pl-4">
+            <li>右上の丸いアイコン→鉛筆マークの「アカウント設定」で、プッシュ通知がオンになっているか確かめる（スマホとパソコンなど、端末ごとにオンにします）</li>
+            <li>iPhoneは、Safariで「ホーム画面に追加」したアプリから開いてオンにしないと届きません</li>
+            <li>スマホの設定で、TeeRA（またはブラウザ）の通知が許可されているか確かめる</li>
+            <li>メールが見当たらない時は、迷惑メールのフォルダも確かめる</li>
+          </ul>
+        </div>
+      </section>
     </div>
   );
 }

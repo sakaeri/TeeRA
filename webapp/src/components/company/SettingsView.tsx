@@ -283,6 +283,54 @@ const HOWTO_SECTIONS: { id: string; label: string }[] = [
   { id: "howto-payroll", label: "⑱給与明細" },
   { id: "howto-invoice", label: "⑲請求書" },
   { id: "howto-wallet", label: "⑳Tee・プラン" },
+  { id: "howto-notifications", label: "㉑届く通知" },
+];
+
+// ㉑ 会社側に届く通知（emailNotifications.ts で実際に送っているものと合わせること）
+const COMPANY_NOTIFICATIONS: { when: string; what: string; how: string; who: string }[] = [
+  {
+    when: "スタッフが業務報告を出した時",
+    what: "業務報告が届きました",
+    how: "プッシュ（すぐ）",
+    who: "そのチームのマネージャー・リーダー（チームの無いシフトは本部）",
+  },
+  {
+    when: "毎日、会社で決めた時刻（未承認の業務報告がある時だけ）",
+    what: "業務報告のまとめ（ボタンから承認できる）",
+    how: "メール",
+    who: "チームの通知用メールアドレス（無ければ会社の通知用メールアドレス）",
+  },
+  {
+    when: "スタッフが募集に応募した時",
+    what: "募集に応募がありました",
+    how: "プッシュ",
+    who: "募集を出したチームのマネージャー・リーダー（チームの無い募集は本部）",
+  },
+  {
+    when: "毎朝10時（未確定のシフト希望がある時だけ）",
+    what: "未確定のシフト希望があります",
+    how: "メール・プッシュ",
+    who: "本部と、希望を出したスタッフのチーム（プッシュを受け取れない人はメール）",
+  },
+  {
+    when: "依頼主がシフトを取り消した時（派遣会社）",
+    what: "依頼主がシフトを取り消しました",
+    how: "メール・プッシュ",
+    who: "会社の通知用メールアドレス・本部",
+  },
+  {
+    when: "依頼主が出勤時間を入力・変更した時（派遣会社）",
+    what: "依頼主が出勤時間を変更しました",
+    how: "メール・プッシュ",
+    who: "会社の通知用メールアドレス・本部",
+  },
+  {
+    when: "配属しているスタッフが依頼主のオーダーに応募した時（派遣会社）",
+    what: "依頼主のオーダーにエントリーがありました",
+    how: "プッシュ",
+    who: "本部",
+  },
+  { when: "パスワードでログインした時", what: "ログインのお知らせ", how: "メール", who: "ログインした本人" },
 ];
 
 // ホーム画面に追加したアプリ（iPhone）では window.print() が何もしないため、スマホ・アプリでは
@@ -406,7 +454,7 @@ function HowToSection() {
           alt="アカウント設定画面"
           steps={[
             "画面右上の丸いアイコン（名前の頭文字）をタップし、表示されたメニューの鉛筆マークから「アカウント設定」を開く",
-            "「プッシュ通知」をオンにすると、業務報告の提出・シフト開始前・未確定のシフト希望などのお知らせが、このブラウザ（スマホ）に届く",
+            "「プッシュ通知」をオンにすると、業務報告の提出・募集への応募・未確定のシフト希望などのお知らせが、このブラウザ（スマホ）に届く（どんな時に誰に届くかは㉑）",
             "ログインは、メールアドレスを入れると届くログイン用メールのリンクを開くか、メールに書かれた6桁のコードをアプリに入力する（ホーム画面に追加したアプリではコードが便利です）。「パスワードを設定する」と、メールのあとにパスワードも入れる2段階のログインになり、より安全になる",
             "通知メールのボタンを押すと、24時間以内ならログインせずにそのまま目的の画面が開く。心配な時は「すべての端末からログアウト」で、ログイン中の端末と出してあるボタンをまとめて無効にできる",
           ]}
@@ -622,7 +670,35 @@ function HowToSection() {
         />
       </SectionCard>
 
-      <SectionCard title="権限ごとに使える機能" printPageBreak>
+      <SectionCard id="howto-notifications" printPageBreak title="㉑届く通知（いつ・誰に）">
+        <div className="overflow-x-auto print:overflow-visible">
+          <table className="w-full min-w-[640px] border-collapse text-xs print:min-w-0 print:text-[10px] print:leading-snug">
+            <thead>
+              <tr className="border-b border-border text-left text-muted">
+                <th className="py-1.5 pr-3 font-semibold">いつ</th>
+                <th className="py-1.5 pr-3 font-semibold">内容</th>
+                <th className="py-1.5 pr-3 font-semibold">届き方</th>
+                <th className="py-1.5 font-semibold">届く人</th>
+              </tr>
+            </thead>
+            <tbody>
+              {COMPANY_NOTIFICATIONS.map((n) => (
+                <tr key={n.when} className="border-b border-border/60 align-top last:border-0">
+                  <td className="py-1.5 pr-3">{n.when}</td>
+                  <td className="py-1.5 pr-3 font-semibold text-primary">{n.what}</td>
+                  <td className="py-1.5 pr-3">{n.how}</td>
+                  <td className="py-1.5">{n.who}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-xs text-muted print:mt-1.5 print:text-[10px] print:leading-snug">
+          「月末にまとめて」承認する依頼主の業務報告は、その月のうちはまとめメールに載らず、月が明けてから届きます。スタッフに届く通知（シフト開始前・出勤時間の変更・給料明細など）は、スタッフ用の使い方（スタッフのアプリの「設定」→「使い方」）に一覧があります。
+        </p>
+      </SectionCard>
+
+      <SectionCard title="権限ごとに使える機能">
         <div className="overflow-x-auto print:overflow-visible">
           <table className="w-full min-w-[640px] border-collapse text-sm print:min-w-0 print:text-[10px]">
             <thead>
@@ -698,7 +774,7 @@ function HowToSection() {
 }
 
 // printPageBreak: 使い方マニュアルを印刷した時、この項目から新しいページに
-// する（1ページ3項目に固定するため、④⑦⑩⑬⑯と権限表の前で改ページ）。
+// する（1ページ3項目に固定するため、④⑦⑩⑬⑯⑲と㉑（通知の一覧・権限表・ホーム画面追加を同じページに）の前で改ページ）。
 function SectionCard({
   id,
   title,
