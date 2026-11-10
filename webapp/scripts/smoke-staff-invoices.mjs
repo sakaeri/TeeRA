@@ -4,7 +4,7 @@ import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 // 業務委託のスタッフから会社へ出す請求書：
 // ・業務委託の契約がある人だけメニューに「請求書」が出る
-// ・承認済みの業務報告から勤務の行が自動で入り、交通費・経費を足して提出できる
+// ・承認済みの業務報告から勤務の行が自動で入り、「その他の項目」（交通費など）を足して提出できる
 // ・会社の一覧には金額を出さず、開く時に1件分（無料枠が無ければ1Tee）使う。開く前はPDFも見られない
 // ・源泉徴収・消費税は会社がスタッフごとに決め、確認待ちの請求書の金額も計算し直す
 // ・差し戻し→スタッフが直して再提出→もう一度開いても追加はかからない→承認
@@ -110,10 +110,10 @@ try {
   log("未承認の業務報告があることを知らせる", editorText.includes("まだ会社が承認していない業務報告が1件"));
   log("契約書の名前・住所と振込先が入っている", (await editor.locator("input").first().inputValue()) === "委託 太郎" && editorText.includes("テスト銀行"));
   log("合計（9,600＋5,400＝15,000円）", (await staff.getByTestId("staff-invoice-total").innerText()) === "15,000円");
-  await staff.getByRole("button", { name: "＋交通費・経費を足す" }).click();
+  await staff.getByRole("button", { name: "＋その他の項目を足す" }).click();
   await editor.locator('input[placeholder^="例：交通費"]').fill("交通費（電車）");
   await editor.locator('input[placeholder="金額"]').fill("880");
-  log("交通費を足すと合計に入る", (await staff.getByTestId("staff-invoice-total").innerText()) === "15,880円");
+  log("その他の項目を足すと合計に入る", (await staff.getByTestId("staff-invoice-total").innerText()) === "15,880円");
   await editor.locator('input[placeholder="無ければ空欄のまま"]').fill("T123");
   staff.once("dialog", (d) => d.accept());
   await staff.getByRole("button", { name: "提出する", exact: true }).click();

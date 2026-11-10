@@ -107,7 +107,7 @@ export function StaffInvoiceDocument({ data }: { data: StaffInvoicePdfData }) {
         ))}
         {data.expenses.map((e, i) => (
           <View key={`e${i}`} style={styles.tr} wrap={false}>
-            <Text style={styles.colDesc}>{e.label}（実費）</Text>
+            <Text style={styles.colDesc}>{e.label}</Text>
             <Text style={styles.colQty}>1</Text>
             <Text style={styles.colRate}>{yen(e.amount)}</Text>
             <Text style={styles.colAmount}>{yen(e.amount)}</Text>
@@ -133,7 +133,7 @@ export function StaffInvoiceDocument({ data }: { data: StaffInvoicePdfData }) {
           ) : null}
           {data.expensesTotal > 0 ? (
             <View style={styles.sumRow}>
-              <Text style={styles.sumLabel}>交通費・経費（実費）</Text>
+              <Text style={styles.sumLabel}>その他の項目</Text>
               <Text style={styles.sumValue}>{yen(data.expensesTotal)}</Text>
             </View>
           ) : null}

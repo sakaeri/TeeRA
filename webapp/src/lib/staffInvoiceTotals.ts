@@ -18,7 +18,7 @@ export function computeWithholding(amount: number) {
 }
 
 // 消費税を上乗せする（taxExclusive）場合、源泉徴収は税抜の報酬額に対して計算する
-// （請求書で報酬と消費税が区分されていれば税抜で計算できる扱い）。交通費・経費は
+// （請求書で報酬と消費税が区分されていれば税抜で計算できる扱い）。「その他の項目」（交通費など）は
 // 実費の精算として、消費税の上乗せ・源泉徴収のどちらの対象にもしない。
 export function computeStaffInvoiceTotals(params: {
   workLines: { amount: number }[];

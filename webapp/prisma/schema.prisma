@@ -1303,7 +1303,7 @@ model SalarySlipIssue {
 }
 
 // 業務委託のスタッフから会社へ出す請求書（スタッフ1人×会社×対象月で1件）。
-// 業務の行は承認済みの業務報告から自動で作り、スタッフは金額を直せない（足せるのは交通費・経費だけ）。
+// 業務の行は承認済みの業務報告から自動で作り、スタッフは金額を直せない（足せるのは「その他の項目」だけ）。
 // 会社は「最初に開いた時」に1件分（プランの無料枠、無ければ1Tee）使う。同じスタッフの同じ月は1回だけで、
 // その月の支払明細をもう発行していれば無料（chargeSettledAtで「この月の分は精算済み」を表す）。
 enum StaffInvoiceStatus {
@@ -1321,7 +1321,7 @@ model StaffInvoice {
   status             StaffInvoiceStatus @default(DRAFT)
   // 提出した時点の業務の行 [{shiftId, description, hours, rate, amount}]（下書き・差し戻し中は毎回作り直す）
   workLines          Json               @default("[]")
-  // スタッフが足した交通費・経費 [{label, amount}]（税込の金額として扱い、源泉徴収の対象にしない）
+  // スタッフが足した「その他の項目」（交通費など） [{label, amount}]（税込の金額として扱い、源泉徴収の対象にしない）
   expenses           Json               @default("[]")
   note               String?
   issuerName         String?

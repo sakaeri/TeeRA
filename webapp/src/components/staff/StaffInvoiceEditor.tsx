@@ -141,14 +141,14 @@ export function StaffInvoiceEditor({
       </section>
 
       <section className={card}>
-        <h2 className="mb-2 text-sm font-semibold text-primary">交通費・経費</h2>
+        <h2 className="mb-2 text-sm font-semibold text-primary">その他の項目</h2>
         {expenses.length === 0 && !editable ? <p className="text-sm text-muted">なし</p> : null}
         <ul className="flex flex-col gap-2">
           {expenses.map((e, i) => (
             <li key={i} className="flex items-center gap-2">
               <input
                 className={`${input} min-w-0 flex-1`}
-                placeholder="例：交通費（10/5 電車）"
+                placeholder="例：交通費（10/5 電車）・備品代など"
                 value={e.label}
                 disabled={!editable}
                 onChange={(ev) => setExpenses(expenses.map((x, j) => (j === i ? { ...x, label: ev.target.value } : x)))}
@@ -180,7 +180,7 @@ export function StaffInvoiceEditor({
             onClick={() => setExpenses([...expenses, { label: "", amount: "" }])}
             className="mt-2 rounded-lg border border-dashed border-primary/50 px-3 py-1.5 text-xs font-semibold text-primary"
           >
-            ＋交通費・経費を足す
+            ＋その他の項目を足す
           </button>
         ) : null}
       </section>
@@ -205,7 +205,7 @@ export function StaffInvoiceEditor({
           ) : null}
           {totals.expensesTotal > 0 ? (
             <div className="flex justify-between">
-              <dt className="text-muted">交通費・経費</dt>
+              <dt className="text-muted">その他の項目</dt>
               <dd>{yen(totals.expensesTotal)}</dd>
             </div>
           ) : null}

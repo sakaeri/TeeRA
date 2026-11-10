@@ -185,7 +185,7 @@ export function ReceivedStaffInvoiceView({ invoice }: { invoice: ReceivedInvoice
             <li key={`e${i}`} className="flex justify-between gap-3 py-1.5">
               <span>
                 {e.label}
-                <span className="ml-2 text-xs text-muted">交通費・経費（実費）</span>
+                <span className="ml-2 text-xs text-muted">その他の項目</span>
               </span>
               <span className="shrink-0">{yen(e.amount)}</span>
             </li>
@@ -210,7 +210,7 @@ export function ReceivedStaffInvoiceView({ invoice }: { invoice: ReceivedInvoice
           ) : null}
           {invoice.expensesTotal > 0 ? (
             <div className="flex justify-between">
-              <dt className="text-muted">交通費・経費</dt>
+              <dt className="text-muted">その他の項目</dt>
               <dd>{yen(invoice.expensesTotal)}</dd>
             </div>
           ) : null}
