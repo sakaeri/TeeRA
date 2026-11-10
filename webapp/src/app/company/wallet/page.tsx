@@ -3,7 +3,8 @@ import { listWalletHistory } from "@/lib/domain/teeWallet";
 import { teeYenPerUnit } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
 import { WalletView } from "@/components/company/WalletView";
-import { listPlanChangeEvents } from "@/lib/domain/subscriptions";
+import { listPlanChangeEvents, getPlanCancelStatus } from "@/lib/domain/subscriptions";
+import { canManageCompanySettings } from "@/lib/auth/permissions";
 import { PLAN_LABEL } from "@/lib/domain/plans";
 
 const PLAN_REASON_LABEL: Record<string, string> = {
@@ -11,6 +12,8 @@ const PLAN_REASON_LABEL: Record<string, string> = {
   CANCELED: "解約で無料プランへ",
   PAST_DUE: "支払いができず無料プランへ",
   RESTORED: "支払いが確認でき、プランを戻しました",
+  CANCEL_SCHEDULED: "無料プランに戻す申し込み（期間の終わりに解約）",
+  CANCEL_UNDONE: "無料プランに戻す申し込みを取り消し",
   REPAIRED: "プランの表示を修正",
 };
 
@@ -28,9 +31,10 @@ const LEDGER_LABEL: Record<string, string> = {
 export default async function WalletPage() {
   const { membership } = await requireCompanyAdminOrEditor();
   const company = await prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } });
-  const [ledgerEntries, planEvents] = await Promise.all([
+  const [ledgerEntries, planEvents, planCancel] = await Promise.all([
     listWalletHistory(membership.companyId),
     listPlanChangeEvents(membership.companyId),
+    getPlanCancelStatus(membership.companyId),
   ]);
 
   return (
@@ -41,6 +45,8 @@ export default async function WalletPage() {
         yenPerUnit={teeYenPerUnit()}
         stripeConfigured={Boolean(process.env.STRIPE_SECRET_KEY) && Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)}
         planTier={company.planTier}
+        planCancel={planCancel}
+        canManagePlan={canManageCompanySettings(membership)}
         ledgerEntries={[
           ...ledgerEntries.map((e) => ({
             id: e.id,
@@ -52,7 +58,10 @@ export default async function WalletPage() {
           // プランの変更（誰が・どのプランに）も同じ一覧に出す
           ...planEvents.map((e) => ({
             id: `plan-${e.id}`,
-            label: `${PLAN_REASON_LABEL[e.reason] ?? "プラン変更"}：${PLAN_LABEL[e.fromTier]}→${PLAN_LABEL[e.toTier]}${e.byUserName ? `（${e.byUserName}）` : ""}`,
+            label:
+              e.reason === "CANCEL_UNDONE"
+                ? `${PLAN_REASON_LABEL[e.reason]}${e.byUserName ? `（${e.byUserName}）` : ""}`
+                : `${PLAN_REASON_LABEL[e.reason] ?? "プラン変更"}：${PLAN_LABEL[e.fromTier]}→${PLAN_LABEL[e.toTier]}${e.byUserName ? `（${e.byUserName}）` : ""}`,
             amount: null,
             balanceAfter: null,
             createdAt: e.createdAt.toISOString(),

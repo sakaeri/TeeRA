@@ -132,3 +132,80 @@ export async function listPlanChangeEvents(companyId: string) {
   const nameOf = new Map(users.map((u) => [u.id, u.name]));
   return events.map((e) => ({ ...e, byUserName: e.byUserId ? (nameOf.get(e.byUserId) ?? null) : null }));
 }
+
+// ---- 無料プランに戻す（今の期間の終わりに解約する予約） ----
+// すぐには解約せず、払った期間の終わりまでは今のプランのまま使える。期間の終わりにStripeが解約し、
+// その連絡（customer.subscription.deleted）でhandleSubscriptionLifecycleEventが無料プランに切り替える。
+
+export class PlanCancelError extends Error {}
+
+// 開発用：Stripeの鍵が無い手元の環境で試すため、"sub_local_"で始まる契約はStripeを呼ばない（本番では使わない）
+function isLocalTestSubscription(stripeSubscriptionId: string) {
+  return process.env.NODE_ENV !== "production" && stripeSubscriptionId.startsWith("sub_local_");
+}
+
+async function currentActiveSubscription(companyId: string) {
+  return prisma.stripeSubscription.findFirst({
+    where: { companyId, status: "ACTIVE", stripeSubscriptionId: { not: null } },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function getPlanCancelStatus(companyId: string) {
+  const sub = await currentActiveSubscription(companyId);
+  if (!sub) return null;
+  return {
+    cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+    currentPeriodEnd: sub.currentPeriodEnd?.toISOString() ?? null,
+  };
+}
+
+async function setCancelAtPeriodEnd(companyId: string, userId: string, cancel: boolean) {
+  const sub = await currentActiveSubscription(companyId);
+  if (!sub?.stripeSubscriptionId) throw new PlanCancelError("有料プランの契約が見つかりません。");
+  let periodEnd: Date | null = sub.currentPeriodEnd;
+  if (isLocalTestSubscription(sub.stripeSubscriptionId)) {
+    periodEnd = periodEnd ?? new Date(Date.now() + 20 * 24 * 3600e3);
+  } else {
+    const updated = await requireStripe().subscriptions.update(sub.stripeSubscriptionId, { cancel_at_period_end: cancel });
+    const end = updated.items.data[0]?.current_period_end;
+    if (end) periodEnd = new Date(end * 1000);
+  }
+  await prisma.stripeSubscription.update({
+    where: { id: sub.id },
+    data: {
+      cancelAtPeriodEnd: cancel,
+      currentPeriodEnd: periodEnd,
+      cancelRequestedAt: cancel ? new Date() : null,
+      cancelRequestedByUserId: cancel ? userId : null,
+    },
+  });
+  // 誰がいつ申し込んだ／取り消したかを、プラン変更の履歴に残す（プラン自体は期間の終わりまで変わらない）
+  const company = await prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: { planTier: true } });
+  await prisma.planChangeEvent.create({
+    data: {
+      companyId,
+      fromTier: company.planTier,
+      toTier: cancel ? "FREE" : company.planTier,
+      reason: cancel ? "CANCEL_SCHEDULED" : "CANCEL_UNDONE",
+      byUserId: userId,
+    },
+  });
+  return { currentPeriodEnd: periodEnd?.toISOString() ?? null };
+}
+
+export function schedulePlanCancellation(companyId: string, userId: string) {
+  return setCancelAtPeriodEnd(companyId, userId, true);
+}
+
+export function undoPlanCancellation(companyId: string, userId: string) {
+  return setCancelAtPeriodEnd(companyId, userId, false);
+}
+
+// Stripeの管理画面などで解約の予約を変えた時も合わせる（customer.subscription.updated）
+export async function syncSubscriptionCancelSchedule(stripeSubscriptionId: string, cancelAtPeriodEnd: boolean, periodEnd: number | null) {
+  await prisma.stripeSubscription.updateMany({
+    where: { stripeSubscriptionId },
+    data: { cancelAtPeriodEnd, ...(periodEnd ? { currentPeriodEnd: new Date(periodEnd * 1000) } : {}) },
+  });
+}

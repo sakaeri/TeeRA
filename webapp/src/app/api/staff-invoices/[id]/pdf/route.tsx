@@ -1,4 +1,5 @@
 import { renderToBuffer } from "@react-pdf/renderer";
+import { isMonthHiddenByFreePlan, freePlanHiddenResponse } from "@/lib/domain/plans";
 import { verifySession, getActiveMembership } from "@/lib/auth/session";
 import { canManageAny } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
@@ -23,6 +24,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/api/staf
     if (!canManageAny(membership, await getStaffTeamIds(invoice.staffUserId))) return new Response("forbidden", { status: 403 });
     // 開く前（1件分を精算する前）は中身を見せない
     if (!invoice.chargeSettledAt) return new Response("forbidden", { status: 403 });
+    if (await isMonthHiddenByFreePlan(invoice.companyId, invoice.targetMonth)) return freePlanHiddenResponse();
   }
 
   const workLines = invoice.workLines as ComputedWorkLine[];

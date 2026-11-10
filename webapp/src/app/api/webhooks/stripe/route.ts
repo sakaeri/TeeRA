@@ -5,6 +5,7 @@ import {
   confirmSubscriptionCheckout,
   markSubscriptionCheckoutFailed,
   handleSubscriptionLifecycleEvent,
+  syncSubscriptionCancelSchedule,
 } from "@/lib/domain/subscriptions";
 
 function mapStripeSubscriptionStatus(status: Stripe.Subscription.Status): "ACTIVE" | "PAST_DUE" | "CANCELED" {
@@ -70,6 +71,11 @@ export async function POST(request: Request) {
     case "customer.subscription.updated":
     case "customer.subscription.deleted": {
       const subscription = event.data.object as Stripe.Subscription;
+      await syncSubscriptionCancelSchedule(
+        subscription.id,
+        subscription.cancel_at_period_end,
+        subscription.items?.data?.[0]?.current_period_end ?? null,
+      );
       await handleSubscriptionLifecycleEvent(subscription.id, mapStripeSubscriptionStatus(subscription.status));
       break;
     }
