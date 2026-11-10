@@ -183,6 +183,9 @@ export function StaffInvoiceEditor({
             ＋その他の項目を足す
           </button>
         ) : null}
+        <p className="mt-2 text-xs text-muted">
+          交通費などの実費の精算として、消費税・源泉徴収はかけずに計算します。手当など報酬にあたるものは、会社に相談してください。
+        </p>
       </section>
 
       <section className={card}>
