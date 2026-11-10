@@ -851,3 +851,21 @@ export async function runWorkReportDigests(now = new Date()) {
     console.log(`[email-notif] work report digest company=${company.id} reports=${reports.length} destinations=${byDestination.size}`);
   }
 }
+
+// 給料明細（業務委託は支払明細）を発行したら、スタッフのアプリの「給料明細」に届いたことを
+// お知らせとプッシュ通知で知らせる。2回目以降の発行（直して再発行）は「修正されました」。
+export async function notifyStaffPayslipIssued(salarySlipId: string) {
+  const slip = await prisma.salarySlip.findUnique({
+    where: { id: salarySlipId },
+    include: { company: { select: { name: true } }, _count: { select: { issues: true } } },
+  });
+  if (!slip) return;
+  const [y, m] = slip.targetMonth.split("-").map(Number);
+  const revised = slip._count.issues > 1;
+  const title = revised ? "給料明細が修正されました" : "給料明細が届きました";
+  const body = `${slip.company.name}の${y}年${m}月分`;
+  await prisma.staffNotice.create({
+    data: { companyId: slip.companyId, staffUserId: slip.staffUserId, message: `【${title}】\n${body}（メニューの「給料明細」から見られます）` },
+  });
+  await sendPushToUser(slip.staffUserId, { title, body, url: "/staff/payslips" });
+}

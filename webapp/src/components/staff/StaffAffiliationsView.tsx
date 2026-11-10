@@ -11,6 +11,15 @@ type CompanyRow = { companyId: string; companyName: string; role: string; pendin
 export function StaffAffiliationsView({ companies }: { companies: CompanyRow[] }) {
   return (
     <ul className="flex flex-col gap-3">
+      {/* 給料明細・使い方への入口（右上のメニューにもある） */}
+      <li className="grid grid-cols-2 gap-3">
+        <Link href="/staff/payslips" className="rounded-2xl border border-border bg-white/60 p-4 text-center text-sm font-semibold text-primary hover:border-primary">
+          給料明細
+        </Link>
+        <Link href="/staff/howto" className="rounded-2xl border border-border bg-white/60 p-4 text-center text-sm font-semibold text-primary hover:border-primary">
+          使い方
+        </Link>
+      </li>
       {companies.map((c) => (
         <li key={c.companyId}>
           <Link

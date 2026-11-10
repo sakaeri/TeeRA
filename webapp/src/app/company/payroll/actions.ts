@@ -1,5 +1,6 @@
 "use server";
 
+import { notifyStaffPayslipIssued } from "@/lib/domain/emailNotifications";
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManageAny } from "@/lib/auth/permissions";
@@ -87,7 +88,9 @@ export async function updatePaidLeaveAction(
 export async function issueSalarySlipAction(salarySlipId: string) {
   const { userId } = await requireCompanyAdminOrEditor();
   await assertAccess(salarySlipId);
-  await issueSalarySlip({ salarySlipId, issuedByUserId: userId });
+  const issue = await issueSalarySlip({ salarySlipId, issuedByUserId: userId });
+  // スタッフのアプリの「給料明細」に届いたことを知らせる（送れなくても発行は成立させる）
+  await notifyStaffPayslipIssued(issue.salarySlipId).catch((err) => console.error("[notify] payslip issued failed", err));
   revalidatePath("/company/payroll");
 }
 
