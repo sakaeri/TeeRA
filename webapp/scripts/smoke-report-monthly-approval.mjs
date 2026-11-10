@@ -67,11 +67,16 @@ try {
   await admin.click("text=依頼主一覧");
   await admin.click("text=月まとめゴルフ");
   const panel = admin.locator("div.fixed.inset-0.z-30").last();
+  // 設定はチームの紐付けと一緒に「編集」の中（普段は出しておかない）
+  await panel.getByRole("button", { name: "チームとの紐付けを編集" }).waitFor({ timeout: 15000 });
+  log("普段は承認のタイミングの選択欄を出さない", (await panel.getByLabel(/業務報告の承認/).count()) === 0);
+  await panel.getByRole("button", { name: "チームとの紐付けを編集" }).click();
   const select = panel.getByLabel(/業務報告の承認/);
-  await select.waitFor({ timeout: 15000 });
   log("初期値は「その都度」", (await select.inputValue()) === "EACH");
   await select.selectOption("MONTHLY");
-  await admin.waitForTimeout(1200);
+  await panel.getByRole("button", { name: "保存", exact: true }).click();
+  await panel.getByText("業務報告は月末にまとめて承認").waitFor({ timeout: 15000 });
+  log("「月末にまとめて」にするとチームの横に表示される", true);
   log("依頼主の詳細で「月末にまとめて」に切り替えられる", psql(`select "reportApprovalTiming" from "CompanyRelationship" where id='${relId}';`) === "MONTHLY");
 
   // ダッシュボード：今月分は出さず、先月分だけまとめて出る

@@ -302,14 +302,21 @@ export function ClientDetailPanel({
       });
   }
 
+  // 業務報告の承認のタイミング（仮の依頼主だけ）。チームの紐付けと一緒に「編集」で変える
+  const [approvalTiming, setApprovalTiming] = useState<"EACH" | "MONTHLY">("EACH");
+
   function startEditTeams(teams: ClientMonthDetail["teams"]) {
     setTeamSelection(new Set(teams.map((t) => t.teamId)));
+    setApprovalTiming(data?.reportApprovalTiming === "MONTHLY" ? "MONTHLY" : "EACH");
     setEditingTeams(true);
   }
 
   function submitTeams() {
     startTransition(async () => {
       await setClientTeamsAction(relationshipId, Array.from(teamSelection));
+      if (data?.isProxy && data.reportApprovalTiming !== approvalTiming) {
+        await updateReportApprovalTimingAction(relationshipId, approvalTiming);
+      }
       setEditingTeams(false);
       await refresh();
     });
@@ -466,10 +473,6 @@ export function ClientDetailPanel({
               </div>
             ) : null}
 
-            {kind === "client" && data.isProxy ? (
-              <ReportApprovalTimingField relationshipId={relationshipId} initial={data.reportApprovalTiming} />
-            ) : null}
-
             {kind === "client" ? (
               !editingTeams ? (
                 <div className="mb-4 flex flex-wrap items-center gap-1">
@@ -482,6 +485,9 @@ export function ClientDetailPanel({
                       </span>
                     ))
                   )}
+                  {data.isProxy && data.reportApprovalTiming === "MONTHLY" ? (
+                    <span className="rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">業務報告は月末にまとめて承認</span>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => startEditTeams(data.teams)}
@@ -515,6 +521,20 @@ export function ClientDetailPanel({
                     ))}
                     {allTeams.length === 0 ? <p className="text-xs text-muted">チームがまだありません。</p> : null}
                   </div>
+                  {data.isProxy ? (
+                    <label className="mb-3 flex flex-col gap-1 text-xs">
+                      <span className="font-medium">業務報告の承認（依頼主に確認するタイミング）</span>
+                      <select
+                        value={approvalTiming}
+                        disabled={pending}
+                        onChange={(e) => setApprovalTiming(e.target.value as "EACH" | "MONTHLY")}
+                        className="rounded-lg border border-border bg-white px-3 py-2 text-sm"
+                      >
+                        <option value="EACH">その都度承認する</option>
+                        <option value="MONTHLY">月末にまとめて承認する（月の途中はやること・通知に出さない）</option>
+                      </select>
+                    </label>
+                  ) : null}
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -1736,29 +1756,5 @@ function CancelRuleModal({
         </button>
       </div>
     </div>
-  );
-}
-
-// 業務報告の承認のタイミング（仮の依頼主の分）。契約のときに依頼主に聞いて決めておく
-function ReportApprovalTimingField({ relationshipId, initial }: { relationshipId: string; initial: string }) {
-  const [value, setValue] = useState(initial === "MONTHLY" ? "MONTHLY" : "EACH");
-  const [pending, startTransition] = useTransition();
-  return (
-    <label className="mb-4 flex flex-col gap-1 text-xs">
-      <span className="text-muted">業務報告の承認（依頼主に確認するタイミング）</span>
-      <select
-        value={value}
-        disabled={pending}
-        onChange={(e) => {
-          const next = e.target.value as "EACH" | "MONTHLY";
-          setValue(next);
-          startTransition(() => updateReportApprovalTimingAction(relationshipId, next));
-        }}
-        className="rounded-lg border border-border px-3 py-2 text-sm"
-      >
-        <option value="EACH">その都度承認する</option>
-        <option value="MONTHLY">月末にまとめて承認する（月の途中はやること・通知に出さない）</option>
-      </select>
-    </label>
   );
 }

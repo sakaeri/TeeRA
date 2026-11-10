@@ -248,15 +248,15 @@ function StepGuide({
       <img
         src={image}
         alt={alt}
-        className="w-full rounded-xl border border-border sm:w-1/2 print:aspect-[64/45] print:w-[40%] print:shrink-0 print:self-start print:rounded-md print:object-cover print:object-top"
+        className="w-full rounded-xl border border-border sm:w-1/2 print:aspect-[64/45] print:w-[44%] print:shrink-0 print:self-start print:rounded-md print:object-cover print:object-top"
       />
       <div className="flex-1">
-        <ol className="list-decimal space-y-2 pl-5 text-sm print:space-y-0.5 print:pl-4 print:text-[11.5px] print:leading-snug">
+        <ol className="list-decimal space-y-2 pl-5 text-sm print:space-y-1 print:pl-4 print:text-[12px] print:leading-snug">
           {steps.map((s, i) => (
             <li key={i}>{s}</li>
           ))}
         </ol>
-        {note ? <p className="mt-3 text-xs text-muted print:mt-1 print:text-[10px] print:leading-snug">{note}</p> : null}
+        {note ? <p className="mt-3 text-xs text-muted print:mt-1.5 print:text-[11px] print:leading-snug">{note}</p> : null}
       </div>
     </div>
   );
@@ -504,7 +504,7 @@ function HowToSection() {
           ]}
           note="承認された業務報告だけが、給与計算の勤務内訳に反映されます。仮の依頼主を「月末にまとめて」にしている場合（⑤）、その依頼主の分は月の途中はやること・通知に出ず、月が終わると「〇〇の◯月分の業務報告が◯件、未承認です」の1行から「まとめて承認」できます。"
         />
-        <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted print:mt-1.5 print:px-2 print:py-1 print:text-[10px] print:leading-snug">
+        <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted print:mt-1.5 print:px-2 print:py-1 print:text-[11px] print:leading-snug">
           通知メールアドレス（会社またはチーム）を登録しておくと、1日1回、決めた時刻に業務報告のまとめメールが届きます（未承認の報告があるときだけ）。メール内の「承認する」ボタンからは、アプリを開かずにそのまま承認できます（リンクの有効期限は7日間です。内容を直したい場合はアプリから操作してください）。
         </p>
       </SectionCard>
@@ -587,7 +587,7 @@ function HowToSection() {
           ]}
           note="控除・支払日・備考・載せ方は翌月にも自動で引き継がれるので、毎月入力し直す必要はありません。スタッフ個別の業務内容単価は「この日で終了」にでき、それ以降の勤務は契約書の基本給で計算されます。"
         />
-        <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted print:mt-1.5 print:px-2 print:py-1 print:text-[10px] print:leading-snug">
+        <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted print:mt-1.5 print:px-2 print:py-1 print:text-[11px] print:leading-snug">
           発行した後に金額や内容を間違えていたことに気づいた場合は、明細の「内容を修正する」ボタンで一旦下書きに戻して編集できます。同じ対象月の明細であれば、修正後の再発行に追加費用はかかりません（Teeは最初の発行時にしか消費されません）。
         </p>
       </SectionCard>
@@ -604,7 +604,7 @@ function HowToSection() {
           ]}
           note="依頼主に取り消されたシフトのキャンセル料も、その月の請求書に明細として載ります。業務内容の単価が未設定の分があると案内が出るので、「単価タブを開く」から設定してください。"
         />
-        <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted print:mt-1.5 print:px-2 print:py-1 print:text-[10px] print:leading-snug">
+        <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted print:mt-1.5 print:px-2 print:py-1 print:text-[11px] print:leading-snug">
           請求書も給与明細と同じく、発行後に「内容を修正する」で下書きに戻して直せます。同じ対象月の請求書であれば、修正しての再発行は何度でも無料です。
         </p>
       </SectionCard>
@@ -717,7 +717,7 @@ function SectionCard({
   return (
     <section
       id={id}
-      className={`print-avoid-break rounded-2xl border border-border bg-white/60 p-6 scroll-mt-20 print:mb-3 print:rounded-lg print:p-3 print:last:mb-0 ${printPageBreak ? "print-page-break" : ""} ${className ?? ""}`}
+      className={`print-avoid-break rounded-2xl border border-border bg-white/60 p-6 scroll-mt-20 print:mb-3 print:rounded-lg print:p-3 print:last:mb-0 ${id?.startsWith("howto-") ? "print:min-h-[80mm]" : ""} ${printPageBreak ? "print-page-break" : ""} ${className ?? ""}`}
     >
       <div className="mb-4 flex items-center justify-between print:mb-1.5">
         <h2 className="font-serif-jp text-lg font-bold text-primary print:text-base">{title}</h2>
