@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { InfoPopupButton } from "@/components/InfoPopupButton";
 import { useRouter } from "next/navigation";
 import { pdfViewerHref } from "@/lib/pdfViewerHref";
 import {
@@ -27,7 +28,6 @@ import { ContractsView } from "@/components/company/ContractsView";
 import { WorkReportsQueue } from "@/components/company/WorkReportsQueue";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CopyUrlField } from "@/components/CopyUrlField";
-import { useClickOutside } from "@/lib/useClickOutside";
 
 type Admin = {
   userId: string;
@@ -1468,8 +1468,6 @@ function TeamHeaderEditor({
   const [nameValue, setNameValue] = useState(name);
   const [emailValue, setEmailValue] = useState(notificationEmail);
   const [pending, startTransition] = useTransition();
-  const [showInfo, setShowInfo] = useState(false);
-  const infoRef = useClickOutside<HTMLSpanElement>(showInfo, () => setShowInfo(false));
 
   if (!editing) {
     return (
@@ -1491,21 +1489,9 @@ function TeamHeaderEditor({
         </div>
         <div className="flex items-center gap-1 text-xs text-muted">
           通知先：{notificationEmail || "未設定"}
-          <span className="relative" ref={infoRef}>
-            <button
-              type="button"
-              onClick={() => setShowInfo((v) => !v)}
-              aria-label="説明を見る"
-              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted/20 text-[10px] font-bold text-muted"
-            >
-              i
-            </button>
-            {showInfo ? (
-              <div className="absolute left-0 top-full z-10 mt-1.5 w-64 rounded-lg border border-border bg-white p-3 text-xs font-normal normal-case leading-relaxed text-muted shadow-md">
-                チーム宛メール通知は未設定だと届きません。業務報告の提出・シフト希望の未確定件数をこのチームのマネージャー/リーダーに知らせたい場合に設定してください。
-              </div>
-            ) : null}
-          </span>
+          <InfoPopupButton title="チーム宛メールの通知先">
+            チーム宛メール通知は未設定だと届きません。業務報告の提出・シフト希望の未確定件数をこのチームのマネージャー/リーダーに知らせたい場合に設定してください。
+          </InfoPopupButton>
         </div>
       </div>
     );
@@ -1580,8 +1566,6 @@ function TeamsSection({
   const [removeConfirmTarget, setRemoveConfirmTarget] = useState<{ teamId: string; userId: string; name: string } | null>(
     null,
   );
-  const [showInfo, setShowInfo] = useState(false);
-  const infoRef = useClickOutside<HTMLSpanElement>(showInfo, () => setShowInfo(false));
 
   const nextTeamRequiresTee = teams.length > 0;
   const canAffordNextTeam = !nextTeamRequiresTee || teeBalance >= TEAM_UNLOCK_TEE_COST;
@@ -1591,22 +1575,10 @@ function TeamsSection({
       title={
         <span className="flex items-center gap-1.5">
           チーム管理
-          <span className="relative" ref={infoRef}>
-            <button
-              type="button"
-              onClick={() => setShowInfo((v) => !v)}
-              aria-label="説明を見る"
-              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted/20 text-[10px] font-bold text-muted"
-            >
-              i
-            </button>
-            {showInfo ? (
-              <div className="absolute left-0 top-full z-10 mt-1.5 w-64 rounded-lg border border-border bg-white p-3 text-xs font-normal normal-case leading-relaxed text-muted shadow-md">
-                ここに載るのはチームのマネージャー/リーダーだけです。一般スタッフのチーム所属はスタッフ名簿の各スタッフ詳細から、依頼主/派遣会社との紐付けは各企業詳細から変更できます。1チーム目は無料、2チーム目以降は1チームにつき{TEAM_UNLOCK_TEE_COST}
+          <InfoPopupButton title="チーム管理">
+            ここに載るのはチームのマネージャー/リーダーだけです。一般スタッフのチーム所属はスタッフ名簿の各スタッフ詳細から、依頼主/派遣会社との紐付けは各企業詳細から変更できます。1チーム目は無料、2チーム目以降は1チームにつき{TEAM_UNLOCK_TEE_COST}
                 {" "}Teeで作成できます（プラン不問）。
-              </div>
-            ) : null}
-          </span>
+          </InfoPopupButton>
         </span>
       }
       headerAction={
