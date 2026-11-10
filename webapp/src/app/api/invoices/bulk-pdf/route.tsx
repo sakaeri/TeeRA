@@ -1,4 +1,5 @@
 import { verifySession, getActiveMembership } from "@/lib/auth/session";
+import { isMonthHiddenByFreePlan, freePlanHiddenResponse } from "@/lib/domain/plans";
 import { isCompanyScopeAdmin } from "@/lib/auth/permissions";
 import { listClients } from "@/lib/domain/relationships";
 import { listInvoicesForCompany } from "@/lib/domain/invoicing";
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const month = url.searchParams.get("month");
   if (!month) return new Response("month required", { status: 400 });
+  if (await isMonthHiddenByFreePlan(membership.companyId, month)) return freePlanHiddenResponse();
 
   const allClients = await listClients(membership.companyId);
   let clients = allClients;

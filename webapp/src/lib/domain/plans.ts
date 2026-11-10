@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import type { PlanTier } from "@/generated/prisma/enums";
+import { earliestAllowedMonth, cutoffMonthString } from "@/lib/date";
 
 type Tx = Prisma.TransactionClient;
 
@@ -73,4 +74,20 @@ export async function pdfQuotaRemaining(
   if (!Number.isFinite(quota)) return { quota: 0, used: 0, remaining: 0, unlimited: true };
   const used = quota > 0 ? await countPdfQuotaUsed(prisma, companyId, targetMonth) : 0;
   return { quota, used, remaining: Math.max(0, quota - used), unlimited: false };
+}
+
+// 無料プランの会社は、過去のデータを直近3か月分（今月と前の2か月）だけ見られる。画面と同じ制限を、
+// 会社側のPDF（給料明細・請求書・カレンダーなど）にもかける。month は "YYYY-MM"。
+// スタッフ本人が自分の明細・請求書を見る時には使わない（本人の記録なので会社のプランで隠さない）。
+export const FREE_PLAN_PDF_HIDDEN_MESSAGE = "無料プランでは、直近3か月より前のPDFは見られません。有料プランにすると見られます。";
+
+export async function isMonthHiddenByFreePlan(companyId: string, month: string) {
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { planTier: true } });
+  if (!company) return true;
+  const min = cutoffMonthString(earliestAllowedMonth(company.planTier));
+  return min !== null && month < min;
+}
+
+export function freePlanHiddenResponse() {
+  return new Response(FREE_PLAN_PDF_HIDDEN_MESSAGE, { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8" } });
 }

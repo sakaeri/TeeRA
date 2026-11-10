@@ -1,4 +1,5 @@
 import { verifySession, getActiveMembership } from "@/lib/auth/session";
+import { isMonthHiddenByFreePlan, freePlanHiddenResponse } from "@/lib/domain/plans";
 import { prisma } from "@/lib/prisma";
 import { computeInvoiceTotals } from "@/lib/domain/invoicing";
 import { todayJst } from "@/lib/date";
@@ -28,6 +29,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
   if (membership.companyId !== invoice.issuingCompanyId || membership.role === "STAFF") {
     return new Response("forbidden", { status: 403 });
   }
+  if (await isMonthHiddenByFreePlan(invoice.issuingCompanyId, invoice.periodLabel)) return freePlanHiddenResponse();
 
   const clientName = invoice.companyRelationship.clientCompany?.name ?? invoice.companyRelationship.proxyName ?? "";
 

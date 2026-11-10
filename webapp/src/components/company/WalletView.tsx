@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { loadStripe } from "@stripe/stripe-js";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { createCheckoutSessionAction } from "@/app/company/wallet/actions";
-import { createSubscriptionCheckoutSessionAction } from "@/app/company/settings/subscriptionActions";
+import { createSubscriptionCheckoutSessionAction, setPlanCancellationAction } from "@/app/company/settings/subscriptionActions";
 
 // checkout.stripe.comへ遷移させず、ページ内にStripeのカード入力フォームを
 // 埋め込むための読み込み（1回だけ行えばよいのでモジュールスコープに置く）。
@@ -38,12 +38,17 @@ export function WalletView({
   yenPerUnit,
   stripeConfigured,
   planTier,
+  planCancel = null,
+  canManagePlan = false,
   ledgerEntries,
 }: {
   teeBalance: number;
   yenPerUnit: number;
   stripeConfigured: boolean;
   planTier: PlanTier;
+  // 今の有料プランの契約（無料プランに戻す予約をしているか・今の期間の終わり）
+  planCancel?: { cancelAtPeriodEnd: boolean; currentPeriodEnd: string | null } | null;
+  canManagePlan?: boolean;
   ledgerEntries: LedgerEntry[];
 }) {
   const router = useRouter();
@@ -56,6 +61,24 @@ export function WalletView({
   const [chargeError, setChargeError] = useState<string | null>(null);
   const [planClientSecret, setPlanClientSecret] = useState<string | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
+  const [confirmFree, setConfirmFree] = useState(false);
+  const periodEndLabel = planCancel?.currentPeriodEnd
+    ? new Date(planCancel.currentPeriodEnd).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", month: "long", day: "numeric" })
+    : null;
+
+  function setCancellation(cancel: boolean) {
+    setPlanError(null);
+    startTransition(async () => {
+      const result = await setPlanCancellationAction(cancel);
+      if (!result.ok) {
+        setPlanError(result.message);
+        return;
+      }
+      setConfirmFree(false);
+      closeModal();
+      router.refresh();
+    });
+  }
 
   function closeModal() {
     setModal(null);
@@ -63,6 +86,7 @@ export function WalletView({
     setChargeError(null);
     setPlanClientSecret(null);
     setPlanError(null);
+    setConfirmFree(false);
   }
 
   // Webhook経由でTee付与・プラン切替が反映されるまで若干のタイムラグが
@@ -107,6 +131,21 @@ export function WalletView({
             <p className="text-[10px] uppercase tracking-widest text-primary-foreground/55">現在のプラン</p>
             <p className="mt-0.5 font-serif-jp text-base font-bold">{PLAN_LABEL[planTier]}プラン</p>
             <p className="mt-0.5 text-xs text-primary-foreground/70">{PLAN_INFO[planTier].detail}</p>
+            {planCancel?.cancelAtPeriodEnd ? (
+              <p className="mt-1.5 text-xs text-accent" data-testid="plan-cancel-scheduled">
+                {periodEndLabel ? `${periodEndLabel}に` : "今の期間の終わりに"}無料プランに戻ります。
+                {canManagePlan ? (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => setCancellation(false)}
+                    className="ml-1 underline disabled:opacity-60"
+                  >
+                    取り消す
+                  </button>
+                ) : null}
+              </p>
+            ) : null}
           </div>
           <button
             type="button"
@@ -371,7 +410,25 @@ export function WalletView({
                           <span className="shrink-0 rounded-full bg-accent/20 px-3 py-1 text-xs font-semibold text-accent">
                             現在のプラン
                           </span>
-                        ) : tier === "FREE" ? null : (
+                        ) : tier === "FREE" ? (
+                          // 有料プランから無料プランに戻すのも、ほかのプランと同じく自由に選べる
+                          planCancel && canManagePlan ? (
+                            planCancel.cancelAtPeriodEnd ? (
+                              <span className="shrink-0 rounded-full bg-background px-3 py-1 text-xs text-muted">
+                                {periodEndLabel ?? "期間の終わり"}から
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={pending}
+                                onClick={() => setConfirmFree(true)}
+                                className="shrink-0 rounded-lg border border-primary px-3 py-2 text-xs font-semibold text-primary disabled:opacity-60 whitespace-nowrap"
+                              >
+                                このプランにする
+                              </button>
+                            )
+                          ) : null
+                        ) : (
                           <button
                             type="button"
                             disabled={pending || !stripeConfigured}
@@ -395,6 +452,32 @@ export function WalletView({
                     );
                   })}
                 </div>
+                {confirmFree ? (
+                  <div className="mt-4 rounded-xl border border-border bg-background p-4 text-sm" data-testid="plan-free-confirm">
+                    <p className="font-semibold text-primary">無料プランに戻します</p>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted">
+                      <li>
+                        {periodEndLabel ? `${periodEndLabel}まで` : "今の期間の終わりまで"}は、今の{PLAN_LABEL[planTier]}プランのまま使えます。その後、無料プランになります（日割りの返金はありません）。
+                      </li>
+                      <li>無料プランでは、過去のデータは直近3か月分だけ見られます。PDFの無料発行枠もなくなります（1件1Tee）。</li>
+                      <li>データは消えません。もう一度有料プランにすると、また全部見られます。</li>
+                      <li>期間の終わりまでなら、取り消せます。</li>
+                    </ul>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => setConfirmFree(false)} className="rounded-lg border border-border px-3 py-2 text-xs">
+                        やめる
+                      </button>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => setCancellation(true)}
+                        className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                      >
+                        無料プランに戻す
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 {planError ? <p className="mt-3 text-xs text-red-600">{planError}</p> : null}
                 {!stripeConfigured ? (
                   <p className="mt-3 text-xs text-red-600">Stripeが未設定のため、プランのアップグレードは利用できません。</p>

@@ -1,4 +1,5 @@
 import { renderToBuffer } from "@react-pdf/renderer";
+import { isMonthHiddenByFreePlan, freePlanHiddenResponse } from "@/lib/domain/plans";
 import { PDFDocument } from "pdf-lib";
 import { verifySession, getActiveMembership } from "@/lib/auth/session";
 import { isCompanyScopeAdmin } from "@/lib/auth/permissions";
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const month = url.searchParams.get("month");
   if (!month) return new Response("month required", { status: 400 });
+  if (await isMonthHiddenByFreePlan(membership.companyId, month)) return freePlanHiddenResponse();
 
   const allStaff = await listStaff(membership.companyId);
   const payableStaff = allStaff.filter((s) => !s.viaAgencyRelationshipName);

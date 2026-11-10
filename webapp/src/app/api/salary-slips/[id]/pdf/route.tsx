@@ -1,4 +1,5 @@
 import { renderToBuffer } from "@react-pdf/renderer";
+import { isMonthHiddenByFreePlan, freePlanHiddenResponse } from "@/lib/domain/plans";
 import { verifySession, getActiveMembership } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getTotals, getEmploymentType, buildSalarySlipPdfLines, resolveWorkplaceNamesByShiftId } from "@/lib/domain/payroll";
@@ -21,6 +22,8 @@ export async function GET(request: Request, { params }: RouteContext<"/api/salar
   if (!slip) return new Response("not found", { status: 404 });
 
   const isCompanyMember = membership.companyId === slip.companyId && membership.role !== "STAFF";
+  // 会社側は無料プランなら直近3か月まで（スタッフ本人の明細は制限しない）
+  if (isCompanyMember && (await isMonthHiddenByFreePlan(slip.companyId, slip.targetMonth))) return freePlanHiddenResponse();
   // スタッフ本人は、電子交付に同意していれば、発行済みの内容（最新の発行）だけ見られる（下書きは見せない）
   let effectiveIssueId = issueId;
   if (!isCompanyMember) {

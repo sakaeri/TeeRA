@@ -1,4 +1,5 @@
 import { renderToBuffer } from "@react-pdf/renderer";
+import { isMonthHiddenByFreePlan, freePlanHiddenResponse } from "@/lib/domain/plans";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { listApprovedShiftsForTaggedAgencyStaff } from "@/lib/domain/relationships";
@@ -19,6 +20,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/agenc
   const today = todayJstParts();
   const year = Number(url.searchParams.get("y")) || today.year;
   const month = Number(url.searchParams.get("m")) || today.month;
+  if (await isMonthHiddenByFreePlan(membership.companyId, `${year}-${String(month).padStart(2, "0")}`)) return freePlanHiddenResponse();
 
   const [shifts, company] = await Promise.all([
     listApprovedShiftsForTaggedAgencyStaff({ companyId: membership.companyId, viaAgencyRelationshipId: id, year, month }),

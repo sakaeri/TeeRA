@@ -1,4 +1,5 @@
 import { renderToBuffer } from "@react-pdf/renderer";
+import { isMonthHiddenByFreePlan, freePlanHiddenResponse } from "@/lib/domain/plans";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { listShiftsForMonth } from "@/lib/domain/shifts";
 import { prisma } from "@/lib/prisma";
@@ -14,6 +15,7 @@ export async function GET(request: Request) {
   const today = todayJstParts();
   const year = Number(url.searchParams.get("y")) || today.year;
   const month = Number(url.searchParams.get("m")) || today.month;
+  if (await isMonthHiddenByFreePlan(membership.companyId, `${year}-${String(month).padStart(2, "0")}`)) return freePlanHiddenResponse();
   const teamId = url.searchParams.get("team") || undefined;
   const companyRelationshipId = url.searchParams.get("rel") || undefined;
   // "actual" のときは実績表（請求の内容）、それ以外はシフト表

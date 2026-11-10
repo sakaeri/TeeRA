@@ -1548,6 +1548,11 @@ model StripeSubscription {
   status                  StripeSubscriptionStatus @default(PENDING)
   // このプランに申し込んだ人（プラン変更の履歴に出す）
   createdByUserId         String?
+  // 「無料プランに戻す」で、今の期間の終わりに解約する予約（Stripeのcancel_at_period_end）
+  cancelAtPeriodEnd       Boolean                  @default(false)
+  currentPeriodEnd        DateTime?
+  cancelRequestedAt       DateTime?
+  cancelRequestedByUserId String?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
 
