@@ -140,6 +140,7 @@ export default async function CompanyCalendarPage({
           // 派遣会社が自社（依頼主）の現場に入れたシフト（派遣会社名義）
           agencyName:
             s.companyId !== membership.companyId ? (s.companyRelationship?.agencyCompany?.name ?? "派遣会社") : undefined,
+          enteredByAgency: s.companyId !== membership.companyId && s.createdByCompanyId === s.companyId,
         }))}
         shiftHistory={shiftHistory.map((s) => ({
           id: s.id,

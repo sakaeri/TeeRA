@@ -52,6 +52,9 @@ type ShiftRow = {
   status?: string; // "CONFIRMED" | "ON_HOLD"（依頼主の取り消しで調整中）
   ownShift?: boolean; // 自社名義のシフト（解除できるのはこれだけ）
   agencyName?: string; // 派遣会社が自社（依頼主）の現場に入れたシフトの派遣会社名（見る・時間を変えるだけ）
+  // 依頼主の現場のシフトを、派遣会社が自分で入れた（派遣会社がアサイン、または派遣会社が代わりに出したオーダー経由）。
+  // 依頼主が自分で入れた・自分のオーダーから決まったシフトとの見分け（揉めた時の記録）に使う
+  enteredByAgency?: boolean;
 };
 
 type ShiftHistoryRow = {
@@ -758,6 +761,7 @@ export function CalendarView({
       {showRecruitForm ? (
         <RecruitmentFormModal
           teams={teams}
+          clients={clients}
           defaultDate={selectedDate ?? todayStr}
           recentTitles={recentTitles}
           onClose={() => setShowRecruitForm(false)}
@@ -1122,6 +1126,14 @@ function DayDetailModal({
                         >
                           {workplaceLabel}
                         </span>
+                        {s.enteredByAgency ? (
+                          <span
+                            title={`作成：${s.agencyName}（派遣会社が入力）`}
+                            className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900"
+                          >
+                            派遣会社が入力
+                          </span>
+                        ) : null}
                         {s.taskName ? <span className="truncate">{s.taskName}</span> : null}
                         {s.note ? <span className="truncate">（{s.note}）</span> : null}
                         {s.cancelFeeAmount ? (
@@ -1846,7 +1858,7 @@ function OrderCard({
             <ul className="mt-1 flex flex-col text-xs">
               {assignedShifts.map((s) => {
                 const affiliation = s.agencyName
-                  ? `派遣：${s.agencyName}`
+                  ? `派遣：${s.agencyName}${s.enteredByAgency ? "（派遣会社が入力）" : ""}`
                   : s.originLabel && s.originLabel !== "自社"
                     ? s.originLabel
                     : null;
@@ -3938,17 +3950,21 @@ function MiniCalendarMultiSelect({
 
 function RecruitmentFormModal({
   teams,
+  clients = [],
   defaultDate,
   recentTitles,
   onClose,
 }: {
   teams: Team[];
+  // 依頼主の代わりにオーダーを出す時の依頼主（現場）の候補（自社が派遣会社として持っている依頼主）
+  clients?: { id: string; name: string }[];
   defaultDate: string;
   recentTitles: string[];
   onClose: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [teamId, setTeamId] = useState("");
+  const [clientRelationshipId, setClientRelationshipId] = useState("");
   const [dates, setDates] = useState<string[]>([defaultDate]);
   const [isUndecided, setIsUndecided] = useState(false);
   const [startTime, setStartTime] = useState("09:00");
@@ -3970,6 +3986,7 @@ function RecruitmentFormModal({
       try {
         await createPublicRecruitmentAction({
           teamId: teamId || undefined,
+          companyRelationshipId: clientRelationshipId || undefined,
           title,
           note: note || undefined,
           dates,
@@ -3986,6 +4003,7 @@ function RecruitmentFormModal({
   }
 
   const teamName = teams.find((t) => t.id === teamId)?.name;
+  const clientName = clients.find((c) => c.id === clientRelationshipId)?.name;
   const dateLabels = dates.map((d) => {
     const dt = new Date(d + "T00:00:00Z");
     return `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
@@ -4008,6 +4026,10 @@ function RecruitmentFormModal({
             <div className="flex items-center justify-between px-4 py-3">
               <dt className="text-muted">業務内容</dt>
               <dd className="font-medium">{title}</dd>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3">
+              <dt className="text-muted">勤務先</dt>
+              <dd className="font-medium">{clientName ?? "自社"}</dd>
             </div>
             <div className="flex items-center justify-between px-4 py-3">
               <dt className="text-muted">チーム</dt>
@@ -4055,7 +4077,32 @@ function RecruitmentFormModal({
   return (
     <Modal title="募集を作成" onClose={onClose}>
       <div className="flex flex-col gap-3">
-        <p className="-mt-2 text-xs text-muted">自社での勤務を募集します</p>
+        <p className="-mt-2 text-xs text-muted">
+          {clients.length > 0 ? "自社の勤務、または依頼主の代わりに依頼主の現場の勤務を募集します" : "自社での勤務を募集します"}
+        </p>
+
+        {clients.length > 0 ? (
+          <Field label="勤務先（依頼主）">
+            <select
+              value={clientRelationshipId}
+              onChange={(e) => setClientRelationshipId(e.target.value)}
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+              aria-label="勤務先（依頼主）"
+            >
+              <option value="">自社（依頼主なし）</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            {clientRelationshipId ? (
+              <p className="mt-1 text-xs text-muted">
+                決まったシフトは、この依頼主の現場のシフトになります（請求書・キャンセル規定・単価もこの依頼主で計算）。依頼主がTeeRAを使っていれば、依頼主のカレンダーに「派遣会社が入力」と出ます。
+              </p>
+            ) : null}
+          </Field>
+        ) : null}
 
         {teamRequired ? (
           <Field label="担当チーム">

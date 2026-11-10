@@ -46,13 +46,20 @@ export async function createPublicRecruitment(params: {
   isUndecided: boolean;
   maxEntries: number;
   createdByUserId: string;
+  // 依頼主の代わりに出すオーダーの依頼主（現場）。自社が派遣会社として持っている依頼主だけ選べる
+  companyRelationshipId?: string;
 }) {
+  if (params.companyRelationshipId) {
+    const rel = await prisma.companyRelationship.findUnique({ where: { id: params.companyRelationshipId } });
+    if (!rel || rel.agencyCompanyId !== params.companyId || rel.status !== "ACTIVE") throw new Error("forbidden");
+  }
   return prisma.$transaction(
     params.dates.map((date) =>
       prisma.publicRecruitment.create({
         data: {
           companyId: params.companyId,
           teamId: params.teamId,
+          companyRelationshipId: params.companyRelationshipId,
           title: params.title,
           jobDescription: params.jobDescription,
           note: params.note,
@@ -403,7 +410,13 @@ export async function listOpenRecruitmentsForStaff(params: { companyId: string; 
         { companyId: { in: clientCompanyIds }, visibility: "ORDER" },
       ],
     },
-    include: { entries: true, company: true, announcements: { orderBy: { createdAt: "asc" } } },
+    include: {
+      entries: true,
+      company: true,
+      announcements: { orderBy: { createdAt: "asc" } },
+      // 依頼主の代わりに出したオーダーなら、勤務先（依頼主）の名前を出す
+      companyRelationship: { select: { proxyName: true, clientCompany: { select: { name: true } } } },
+    },
     orderBy: { date: "asc" },
   });
 
@@ -563,7 +576,8 @@ export async function assignStaffToRecruitment(params: {
   }
 
   const isOwnCompany = params.assignerCompanyId === recruitment.companyId;
-  let companyRelationshipId: string | undefined;
+  // 自社のオーダーでも、依頼主の代わりに出したもの（companyRelationshipIdあり）は、その依頼主の現場のシフトにする
+  let companyRelationshipId: string | undefined = isOwnCompany ? (recruitment.companyRelationshipId ?? undefined) : undefined;
   if (!isOwnCompany) {
     const rel = await prisma.companyRelationship.findFirst({
       where: { agencyCompanyId: params.assignerCompanyId, clientCompanyId: recruitment.companyId, status: "ACTIVE" },
@@ -635,7 +649,7 @@ export async function assignStaffToRecruitment(params: {
         companyId: params.assignerCompanyId,
         teamId: isOwnCompany ? recruitment.teamId : null,
         staffUserId: params.staffUserId,
-        source: isOwnCompany ? "INHOUSE" : "CLIENT",
+        source: companyRelationshipId ? "CLIENT" : "INHOUSE",
         companyRelationshipId,
         // 依頼主の募集タイトルを業務内容として引き継ぐ — これが無いと、
         // このオーダー経由で確定したシフトは請求単価（依頼主詳細の業務内容
@@ -648,6 +662,7 @@ export async function assignStaffToRecruitment(params: {
         isUndecided: recruitment.isUndecided,
         note: recruitment.title,
         createdVia: "PUBLIC_RECRUIT_ENTRY",
+        createdByCompanyId: recruitment.companyId,
         publicRecruitmentId: recruitment.id,
       },
     });
@@ -761,7 +776,14 @@ export async function applyToRecruitment(params: { recruitmentId: string; staffU
     // 場合は、派遣会社がアサインしたときと同じく「派遣会社のシフト」として作る。
     // 依頼主のシフトとして作ると、スタッフ本人と派遣会社のカレンダーに載らず、
     // 派遣会社の給料計算・請求書にも入らないため。
-    const placementRelationship = await findAgencyPlacementForApply(tx, recruitment.companyId, params.staffUserId);
+    // 派遣会社が依頼主の代わりに出したオーダーに、派遣会社のスタッフが応募した時は、その依頼主の現場のシフトにする
+    const onBehalfRelationship = recruitment.companyRelationshipId
+      ? await tx.companyRelationship.findUnique({ where: { id: recruitment.companyRelationshipId } })
+      : null;
+    const placementRelationship =
+      onBehalfRelationship && onBehalfRelationship.agencyCompanyId === recruitment.companyId
+        ? { id: onBehalfRelationship.id, agencyCompanyId: recruitment.companyId }
+        : await findAgencyPlacementForApply(tx, recruitment.companyId, params.staffUserId);
     if (placementRelationship) {
       const existingTaskName = await tx.companyPlacementRate.findFirst({
         where: {
@@ -797,6 +819,7 @@ export async function applyToRecruitment(params: { recruitmentId: string; staffU
             isUndecided: recruitment.isUndecided,
             note: recruitment.title,
             createdVia: "PUBLIC_RECRUIT_ENTRY",
+            createdByCompanyId: recruitment.companyId,
             publicRecruitmentId: recruitment.id,
           }
         : {
@@ -811,6 +834,7 @@ export async function applyToRecruitment(params: { recruitmentId: string; staffU
             isUndecided: recruitment.isUndecided,
             note: recruitment.title,
             createdVia: "PUBLIC_RECRUIT_ENTRY",
+            createdByCompanyId: recruitment.companyId,
             publicRecruitmentId: recruitment.id,
           },
     });
