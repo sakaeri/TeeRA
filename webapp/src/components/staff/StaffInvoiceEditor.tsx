@@ -57,9 +57,9 @@ export function StaffInvoiceEditor({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [expenses, setExpenses] = useState<{ label: string; amount: string }[]>(
-    invoice.expenses.map((e) => ({ label: e.label, amount: String(e.amount) })),
-  );
+  const [expenses, setExpenses] = useState<StaffInvoiceExpense[]>(invoice.expenses);
+  // 「その他の項目」の入力ポップアップ（index=null は新しく足す）
+  const [itemForm, setItemForm] = useState<{ index: number | null; label: string; quantity: string; unitPrice: string } | null>(null);
   const [note, setNote] = useState(invoice.note);
   const [issuerName, setIssuerName] = useState(invoice.issuerName);
   const [issuerAddress, setIssuerAddress] = useState(invoice.issuerAddress);
@@ -67,7 +67,7 @@ export function StaffInvoiceEditor({
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const editable = invoice.editable;
 
-  const cleanExpenses = sanitizeExpenses(expenses.map((e) => ({ label: e.label, amount: Number(e.amount) })));
+  const cleanExpenses = sanitizeExpenses(expenses);
   const totals = editable
     ? computeStaffInvoiceTotals({ workLines: invoice.workLines, expenses: cleanExpenses, withholding: invoice.withholding, taxExclusive: invoice.taxExclusive })
     : invoice;
@@ -143,41 +143,30 @@ export function StaffInvoiceEditor({
       <section className={card}>
         <h2 className="mb-2 text-sm font-semibold text-primary">その他の項目</h2>
         {expenses.length === 0 && !editable ? <p className="text-sm text-muted">なし</p> : null}
-        <ul className="flex flex-col gap-2">
+        <ul className="divide-y divide-border/60 text-sm">
           {expenses.map((e, i) => (
-            <li key={i} className="flex items-center gap-2">
-              <input
-                className={`${input} min-w-0 flex-1`}
-                placeholder="例：交通費（10/5 電車）・備品代など"
-                value={e.label}
+            <li key={i}>
+              <button
+                type="button"
                 disabled={!editable}
-                onChange={(ev) => setExpenses(expenses.map((x, j) => (j === i ? { ...x, label: ev.target.value } : x)))}
-              />
-              <input
-                className={`${input.replace("w-full ", "")} w-24 shrink-0 text-right`}
-                inputMode="numeric"
-                placeholder="金額"
-                value={e.amount}
-                disabled={!editable}
-                onChange={(ev) => setExpenses(expenses.map((x, j) => (j === i ? { ...x, amount: ev.target.value.replace(/[^\d]/g, "") } : x)))}
-              />
-              {editable ? (
-                <button
-                  type="button"
-                  aria-label="この行を消す"
-                  onClick={() => setExpenses(expenses.filter((_, j) => j !== i))}
-                  className="shrink-0 rounded-lg px-2 py-1 text-muted"
-                >
-                  ✕
-                </button>
-              ) : null}
+                onClick={() => setItemForm({ index: i, label: e.label, quantity: String(e.quantity), unitPrice: String(e.unitPrice) })}
+                className="flex w-full items-center justify-between gap-3 py-2 text-left disabled:cursor-default"
+              >
+                <span className="min-w-0">
+                  {e.label}
+                  <span className="ml-2 text-xs text-muted">
+                    {e.quantity} × {yen(e.unitPrice)}
+                  </span>
+                </span>
+                <span className="shrink-0 font-medium">{yen(e.amount)}</span>
+              </button>
             </li>
           ))}
         </ul>
         {editable && expenses.length < 20 ? (
           <button
             type="button"
-            onClick={() => setExpenses([...expenses, { label: "", amount: "" }])}
+            onClick={() => setItemForm({ index: null, label: "", quantity: "1", unitPrice: "" })}
             className="mt-2 rounded-lg border border-dashed border-primary/50 px-3 py-1.5 text-xs font-semibold text-primary"
           >
             ＋その他の項目を足す
@@ -230,7 +219,7 @@ export function StaffInvoiceEditor({
             <input className={input} value={issuerName} disabled={!editable} onChange={(e) => setIssuerName(e.target.value)} />
           </label>
           <label className="text-xs text-muted">
-            住所（任意）
+            住所
             <input className={input} value={issuerAddress} disabled={!editable} onChange={(e) => setIssuerAddress(e.target.value)} />
           </label>
           <label className="text-xs text-muted">
@@ -292,6 +281,81 @@ export function StaffInvoiceEditor({
         <PdfLink href={`/api/staff-invoices/${invoice.id}/pdf`} className="text-center text-sm font-semibold text-primary underline">
           請求書のPDFを見る
         </PdfLink>
+      ) : null}
+      {itemForm ? (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={() => setItemForm(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()} data-testid="staff-invoice-item-form">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-serif-jp text-lg font-bold text-primary">{itemForm.index === null ? "その他の項目を足す" : "その他の項目を直す"}</h3>
+              <button type="button" onClick={() => setItemForm(null)} className="text-muted" aria-label="閉じる">
+                ✕
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs text-muted">
+                項目名
+                <input
+                  className={input}
+                  placeholder="例：交通費（10/5 電車）・備品代など"
+                  value={itemForm.label}
+                  onChange={(e) => setItemForm({ ...itemForm, label: e.target.value })}
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs text-muted">
+                  数量
+                  <input
+                    className={`${input} text-right`}
+                    inputMode="decimal"
+                    value={itemForm.quantity}
+                    onChange={(e) => setItemForm({ ...itemForm, quantity: e.target.value.replace(/[^\d.]/g, "") })}
+                  />
+                </label>
+                <label className="text-xs text-muted">
+                  単価（円）
+                  <input
+                    className={`${input} text-right`}
+                    inputMode="numeric"
+                    value={itemForm.unitPrice}
+                    onChange={(e) => setItemForm({ ...itemForm, unitPrice: e.target.value.replace(/[^\d]/g, "") })}
+                  />
+                </label>
+              </div>
+              <p className="text-right text-sm">
+                金額 <span className="font-semibold text-primary">{yen(Math.round((Number(itemForm.quantity) || 0) * (Number(itemForm.unitPrice) || 0)))}</span>
+              </p>
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-2">
+              {itemForm.index !== null ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpenses(expenses.filter((_, j) => j !== itemForm.index));
+                    setItemForm(null);
+                  }}
+                  className="rounded-lg px-3 py-2 text-sm text-red-700"
+                >
+                  消す
+                </button>
+              ) : (
+                <span />
+              )}
+              <button
+                type="button"
+                disabled={sanitizeExpenses([{ label: itemForm.label, quantity: Number(itemForm.quantity), unitPrice: Number(itemForm.unitPrice) }]).length === 0}
+                onClick={() => {
+                  const [item] = sanitizeExpenses([{ label: itemForm.label, quantity: Number(itemForm.quantity), unitPrice: Number(itemForm.unitPrice) }]);
+                  if (!item) return;
+                  setExpenses(itemForm.index === null ? [...expenses, item] : expenses.map((x, j) => (j === itemForm.index ? item : x)));
+                  setItemForm(null);
+                }}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+              >
+                {itemForm.index === null ? "追加する" : "直す"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

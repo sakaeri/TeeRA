@@ -179,6 +179,7 @@ export async function saveStaffInvoice(params: {
   const workLines = lines.sort((a, b) => a.description.localeCompare(b.description));
   if (params.submit) {
     if (!issuerName) throw new StaffInvoiceError("名前を入力してください。");
+    if (!issuerAddress) throw new StaffInvoiceError("住所を入力してください。");
     if (workLines.length === 0 && expenses.length === 0) {
       throw new StaffInvoiceError("この月の承認済みの勤務がありません。会社が業務報告を承認すると請求書に入ります。");
     }

@@ -102,7 +102,12 @@ try {
   // --- スタッフ：請求書を作って提出 ---
   await staff.goto("http://localhost:3000/staff/contracts");
   log("業務委託の契約がある人には「請求書」が出る", (await staff.locator('a[href="/staff/invoices"]').count()) > 0);
-  await staff.goto(`http://localhost:3000/staff/invoices?company=${companyId}&month=${month}`);
+  // 一覧（会社画面の給料明細と同じ並び）から「＋新しく作成」で会社を選んで開く
+  await staff.goto(`http://localhost:3000/staff/invoices?month=${month}`);
+  await staff.getByTestId("staff-invoice-drafts").waitFor();
+  await staff.getByRole("button", { name: "＋新しく作成" }).click();
+  await staff.getByRole("button", { name: companyName }).click();
+  await staff.getByRole("button", { name: "作成へ進む" }).click();
   const editor = staff.getByTestId("staff-invoice-editor");
   await editor.waitFor();
   const editorText = await editor.innerText();
@@ -111,9 +116,20 @@ try {
   log("契約書の名前・住所と振込先が入っている", (await editor.locator("input").first().inputValue()) === "委託 太郎" && editorText.includes("テスト銀行"));
   log("合計（9,600＋5,400＝15,000円）", (await staff.getByTestId("staff-invoice-total").innerText()) === "15,000円");
   await staff.getByRole("button", { name: "＋その他の項目を足す" }).click();
-  await editor.locator('input[placeholder^="例：交通費"]').fill("交通費（電車）");
-  await editor.locator('input[placeholder="金額"]').fill("880");
-  log("その他の項目を足すと合計に入る", (await staff.getByTestId("staff-invoice-total").innerText()) === "15,880円");
+  const itemForm = staff.getByTestId("staff-invoice-item-form");
+  await itemForm.getByLabel("項目名").fill("交通費（電車）");
+  await itemForm.getByLabel("数量").fill("2");
+  await itemForm.getByLabel("単価（円）").fill("440");
+  log("ポップアップで数量×単価の金額が出る", (await itemForm.innerText()).includes("880円"));
+  await itemForm.getByRole("button", { name: "追加する" }).click();
+  log("その他の項目を足すと合計に入る（2×440円）", (await staff.getByTestId("staff-invoice-total").innerText()) === "15,880円" && (await editor.innerText()).includes("2 × 440円"));
+  // 住所は必須
+  await editor.getByLabel("住所").fill("");
+  staff.once("dialog", (d) => d.accept());
+  await staff.getByRole("button", { name: "提出する", exact: true }).click();
+  await staff.getByText("住所を入力してください").waitFor();
+  log("住所が空だと提出できない", psql(`select count(*) from "StaffInvoice" where "staffUserId"='${staffId}' and status='SUBMITTED';`) === "0");
+  await editor.getByLabel("住所").fill("東京都千代田区1-1");
   await editor.locator('input[placeholder="無ければ空欄のまま"]').fill("T123");
   staff.once("dialog", (d) => d.accept());
   await staff.getByRole("button", { name: "提出する", exact: true }).click();
@@ -126,6 +142,9 @@ try {
   const inv = psql(`select id||'|'||status||'|'||total||'|'||"expensesTotal" from "StaffInvoice" where "staffUserId"='${staffId}';`).split("|");
   const invoiceId = inv[0];
   log("提出すると確認待ちになり、金額が保存される", inv[1] === "SUBMITTED" && inv[2] === "15880" && inv[3] === "880");
+  await staff.goto(`http://localhost:3000/staff/invoices?month=${month}`);
+  log("一覧の「提出済み」に会社名・確認中・金額が出る", /請求書受取株式会社[\s\S]*確認中[\s\S]*15,880円/.test(await staff.getByTestId("staff-invoice-submitted").innerText()));
+  await staff.goto(`http://localhost:3000/staff/invoices?company=${companyId}&month=${month}`);
   log("登録番号を覚えておく", psql(`select "invoiceRegistrationNumber" from "User" where id='${staffId}';`) === "T1234567890123");
   await staff.getByText("提出済みです。会社が確認するまでお待ちください。").waitFor();
   log("提出後は直せない（入力欄が無効）", await editor.locator('input[placeholder="無ければ空欄のまま"]').isDisabled());
@@ -178,7 +197,9 @@ try {
   await editor2.waitFor();
   log("差し戻しの理由が見える", (await editor2.innerText()).includes("交通費の区間を書いてください"));
   log("源泉徴収が反映されている（会社の設定）", (await editor2.innerText()).includes("源泉徴収税"));
-  await editor2.locator('input[placeholder^="例：交通費"]').fill("交通費（東京→品川 往復）");
+  await editor2.getByRole("button", { name: /交通費（電車）/ }).click();
+  await staff.getByTestId("staff-invoice-item-form").getByLabel("項目名").fill("交通費（東京→品川 往復）");
+  await staff.getByTestId("staff-invoice-item-form").getByRole("button", { name: "直す" }).click();
   staff.once("dialog", (d) => d.accept());
   await staff.getByRole("button", { name: "直して提出する" }).click();
   await staff.getByText("請求書を提出しました").waitFor();

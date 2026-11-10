@@ -12,7 +12,7 @@ export type StaffInvoicePdfData = {
   issuerAddress: string | null;
   registrationNumber: string | null;
   lines: { description: string; hours: number; rate: number; amount: number; isDaily: boolean }[];
-  expenses: { label: string; amount: number }[];
+  expenses: { label: string; quantity: number; unitPrice: number; amount: number }[];
   workSubtotal: number;
   taxExclusive: boolean;
   taxAmount: number;
@@ -108,8 +108,8 @@ export function StaffInvoiceDocument({ data }: { data: StaffInvoicePdfData }) {
         {data.expenses.map((e, i) => (
           <View key={`e${i}`} style={styles.tr} wrap={false}>
             <Text style={styles.colDesc}>{e.label}</Text>
-            <Text style={styles.colQty}>1</Text>
-            <Text style={styles.colRate}>{yen(e.amount)}</Text>
+            <Text style={styles.colQty}>{e.quantity}</Text>
+            <Text style={styles.colRate}>{yen(e.unitPrice)}</Text>
             <Text style={styles.colAmount}>{yen(e.amount)}</Text>
           </View>
         ))}
