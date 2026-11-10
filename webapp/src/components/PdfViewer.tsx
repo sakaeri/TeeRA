@@ -90,7 +90,7 @@ export function PdfViewer({ src, sample = false }: { src: string; sample?: boole
 
   return (
     <div className="flex min-h-dvh flex-col bg-neutral-200">
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b-2 border-accent bg-primary px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top)*1.5)] text-primary-foreground">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b-2 border-accent app-header-safe bg-primary px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top)*1.5)] text-primary-foreground">
         <button type="button" onClick={goBack} className="py-1 text-sm font-semibold">
           ← 戻る
         </button>

@@ -154,3 +154,16 @@ body {
     text-align: left;
   }
 }
+
+/* iPhoneのホーム画面アプリでは、ステータスバー（時計・電池の所）にiOSが明るいぼかしを重ねるため、
+   下のヘッダーの緑が白っぽくモヤがかって見える。ぼかしは下の色を明るく見せるので、ステータスバーの
+   下（セーフエリア）だけ緑を濃くして、モヤを目立たなくする。セーフエリアの無い画面（パソコンなど）では
+   env()が0になるので、見た目は今まで通り。 */
+.app-header-safe {
+  background-image: linear-gradient(
+    to bottom,
+    #031710 0,
+    #031710 env(safe-area-inset-top, 0px),
+    var(--brand-primary) calc(env(safe-area-inset-top, 0px) * 1.5)
+  );
+}
