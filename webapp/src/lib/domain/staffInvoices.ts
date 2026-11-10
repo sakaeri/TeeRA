@@ -19,34 +19,59 @@ function monthRange(targetMonth: string) {
   return { start: new Date(Date.UTC(year, month - 1, 1)), end: new Date(Date.UTC(year, month, 1)) };
 }
 
-// その会社と業務委託の契約（同意済み）をしているか。終了した契約も含む（終わった後で最後の月の請求書を出せるように）
-export async function isContractorOf(staffUserId: string, companyId: string) {
-  const count = await prisma.staffContract.count({
-    where: {
-      staffUserId,
-      status: { not: "PENDING_CONSENT" },
-      template: { companyId, employmentType: "CONTRACTOR" },
-    },
-  });
-  return count > 0;
+// 請求書を出せるのは「その会社との今の契約が業務委託」の人だけ。
+// ・同意済みで有効（ACTIVE）な契約があれば、その中で一番新しい契約の雇用形態で決める
+//   （昔の業務委託の契約が残っていても、今がアルバイトなら出せない）
+// ・有効な契約が無い（終わった）場合は、一番新しい契約が業務委託で、終わってから2か月以内のときだけ
+//   出せる（最後の月の分を、月が明けてから出せるように）
+const ENDED_GRACE_DAYS = 62;
+type ContractRow = {
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+  contractEndDate: Date | null;
+  template: { companyId: string; employmentType: string; contractEndDate: Date | null; company: { id: string; name: string } };
+};
+function isCurrentlyContractor(contracts: ContractRow[], now = new Date()) {
+  const active = contracts.filter((c) => c.status === "ACTIVE").sort((x, y) => y.createdAt.getTime() - x.createdAt.getTime());
+  if (active.length > 0) return active[0].template.employmentType === "CONTRACTOR";
+  const ended = contracts.filter((c) => c.status === "ENDED").sort((x, y) => y.createdAt.getTime() - x.createdAt.getTime());
+  const latest = ended[0];
+  if (!latest || latest.template.employmentType !== "CONTRACTOR") return false;
+  const endedAt = latest.contractEndDate ?? latest.template.contractEndDate ?? latest.updatedAt;
+  return now.getTime() - endedAt.getTime() <= ENDED_GRACE_DAYS * 24 * 3600e3;
 }
 
-// スタッフが請求書を出せる会社（業務委託の契約がある会社）
+async function contractsOf(staffUserId: string, companyId?: string) {
+  return prisma.staffContract.findMany({
+    where: { staffUserId, status: { not: "PENDING_CONSENT" }, ...(companyId ? { template: { companyId } } : {}) },
+    select: {
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      contractEndDate: true,
+      template: { select: { companyId: true, employmentType: true, contractEndDate: true, company: { select: { id: true, name: true } } } },
+    },
+  });
+}
+
+export async function isContractorOf(staffUserId: string, companyId: string) {
+  return isCurrentlyContractor(await contractsOf(staffUserId, companyId));
+}
+
+// スタッフが請求書を出せる会社（今の契約が業務委託の、所属している会社）
 export async function listContractorCompanies(staffUserId: string) {
-  const contracts = await prisma.staffContract.findMany({
-    where: { staffUserId, status: { not: "PENDING_CONSENT" }, template: { employmentType: "CONTRACTOR" } },
-    select: { template: { select: { company: { select: { id: true, name: true } } } } },
-  });
-  const memberships = await prisma.companyMembership.findMany({
-    where: { userId: staffUserId },
-    select: { companyId: true },
-  });
+  const [contracts, memberships] = await Promise.all([
+    contractsOf(staffUserId),
+    prisma.companyMembership.findMany({ where: { userId: staffUserId }, select: { companyId: true } }),
+  ]);
   const memberOf = new Set(memberships.map((m) => m.companyId));
-  const byId = new Map<string, { id: string; name: string }>();
+  const byCompany = new Map<string, ContractRow[]>();
   for (const c of contracts) {
-    if (memberOf.has(c.template.company.id)) byId.set(c.template.company.id, c.template.company);
+    if (!memberOf.has(c.template.companyId)) continue;
+    byCompany.set(c.template.companyId, [...(byCompany.get(c.template.companyId) ?? []), c]);
   }
-  return [...byId.values()];
+  return [...byCompany.values()].filter((rows) => isCurrentlyContractor(rows)).map((rows) => rows[0].template.company);
 }
 
 async function countPendingReports(companyId: string, staffUserId: string, targetMonth: string) {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Toaster } from "@/components/Toast";
 import Link from "next/link";
+import { PayslipIcon, InvoiceIcon, HowtoIcon, CompanyIcon, SwitchIcon, ChevronIcon } from "@/components/staff/StaffMenuIcons";
 import { usePathname, useRouter } from "next/navigation";
 import { loadContractConsentAction } from "@/app/staff/contracts/actions";
 import { ContractConsentWizard, type ContractConsentData } from "@/components/staff/ContractConsentWizard";
@@ -179,47 +180,29 @@ export function StaffShell({
                     </svg>
                   </Link>
                 </div>
-                <div className={`mb-3 grid gap-2 ${isContractor ? "grid-cols-3" : "grid-cols-2"}`}>
-                  <Link
-                    href="/staff/payslips"
-                    onClick={() => setProfileOpen(false)}
-                    className="rounded-lg border border-border px-3 py-2 text-center text-sm text-foreground hover:border-primary"
-                  >
-                    給料明細
-                  </Link>
-                  {isContractor ? (
-                    <Link
-                      href="/staff/invoices"
-                      onClick={() => setProfileOpen(false)}
-                      className="rounded-lg border border-border px-3 py-2 text-center text-sm text-foreground hover:border-primary"
-                    >
-                      請求書
-                    </Link>
-                  ) : null}
-                  <Link
-                    href="/staff/howto"
-                    onClick={() => setProfileOpen(false)}
-                    className="rounded-lg border border-border px-3 py-2 text-center text-sm text-foreground hover:border-primary"
-                  >
-                    使い方
-                  </Link>
-                </div>
-                {showCompanyScreenLink ? (
-                  <Link
-                    href="/company"
-                    className="mb-3 block rounded-lg border border-border px-4 py-2 text-center text-sm text-foreground hover:border-primary"
-                  >
-                    会社画面へ
-                  </Link>
-                ) : null}
-                {hasMultipleCompanies ? (
-                  <Link
-                    href="/home?switch=1"
-                    className="mb-3 block rounded-lg border border-border px-4 py-2 text-center text-sm text-foreground hover:border-primary"
-                  >
-                    会社を切り替える
-                  </Link>
-                ) : null}
+                {/* 給料明細・請求書・使い方などの入口は、アイコン付きの1行ずつのメニューにする（ボタンを横に並べると文字が折り返して不揃いになるため） */}
+                <nav className="mb-3 flex flex-col border-y border-border/70 py-1 text-sm">
+                  {[
+                    { href: "/staff/payslips", label: "給料明細", icon: <PayslipIcon />, show: true },
+                    { href: "/staff/invoices", label: "請求書", icon: <InvoiceIcon />, show: isContractor },
+                    { href: "/staff/howto", label: "使い方", icon: <HowtoIcon />, show: true },
+                    { href: "/company", label: "会社画面へ", icon: <CompanyIcon />, show: showCompanyScreenLink },
+                    { href: "/home?switch=1", label: "会社を切り替える", icon: <SwitchIcon />, show: hasMultipleCompanies },
+                  ]
+                    .filter((item) => item.show)
+                    .map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setProfileOpen(false)}
+                        className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-foreground hover:bg-background"
+                      >
+                        <span className="text-primary">{item.icon}</span>
+                        <span className="flex-1">{item.label}</span>
+                        <ChevronIcon className="h-4 w-4 text-muted" />
+                      </Link>
+                    ))}
+                </nav>
                 <form action={logoutAction}>
                   <button type="submit" className="w-full rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
                     ログアウト
