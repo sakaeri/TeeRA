@@ -20,6 +20,7 @@ import { markStaffNoticeRead, markAllStaffNoticesRead } from "@/lib/domain/notic
 import { updateMembershipIdDocument, updateMembershipBankInfo, updateStaffAddressPhone } from "@/lib/domain/roster";
 import { addStaffRelationshipNote } from "@/lib/domain/relationships";
 import { prisma } from "@/lib/prisma";
+import { consentToElectronicPayslip } from "@/lib/domain/staffPayslips";
 
 async function assertOwnShift(shiftId: string, staffUserId: string) {
   const shift = await prisma.shift.findUniqueOrThrow({ where: { id: shiftId } });
@@ -318,4 +319,11 @@ export async function markAllStaffNoticesReadAction(companyId: string | null) {
   const { userId } = await requireCompanyStaffRole();
   await markAllStaffNoticesRead(userId, companyId || null);
   revalidatePath("/staff", "layout");
+}
+
+// 給料明細を電子で受け取ることに同意する（会社ごと）
+export async function consentToElectronicPayslipAction(companyId: string) {
+  const { userId } = await requireCompanyStaffRole();
+  await consentToElectronicPayslip(userId, companyId);
+  revalidatePath("/staff/payslips");
 }

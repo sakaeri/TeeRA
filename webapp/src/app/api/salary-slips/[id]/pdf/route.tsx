@@ -20,13 +20,24 @@ export async function GET(request: Request, { params }: RouteContext<"/api/salar
   });
   if (!slip) return new Response("not found", { status: 404 });
 
-  const isOwnStaff = membership.role === "STAFF" && slip.staffUserId === userId;
   const isCompanyMember = membership.companyId === slip.companyId && membership.role !== "STAFF";
-  if (!isOwnStaff && !isCompanyMember) return new Response("forbidden", { status: 403 });
+  // スタッフ本人は、電子交付に同意していれば、発行済みの内容（最新の発行）だけ見られる（下書きは見せない）
+  let effectiveIssueId = issueId;
+  if (!isCompanyMember) {
+    if (slip.staffUserId !== userId) return new Response("forbidden", { status: 403 });
+    const own = await prisma.companyMembership.findFirst({
+      where: { userId, companyId: slip.companyId },
+      select: { payslipEConsentAt: true },
+    });
+    if (!own?.payslipEConsentAt) return new Response("forbidden", { status: 403 });
+    const latest = await prisma.salarySlipIssue.findFirst({ where: { salarySlipId: slip.id }, orderBy: { issuedAt: "desc" } });
+    if (!latest) return new Response("not found", { status: 404 });
+    if (!effectiveIssueId) effectiveIssueId = latest.id;
+  }
 
   let data: SalarySlipPdfData;
-  if (issueId) {
-    const issue = await prisma.salarySlipIssue.findUnique({ where: { id: issueId } });
+  if (effectiveIssueId) {
+    const issue = await prisma.salarySlipIssue.findUnique({ where: { id: effectiveIssueId } });
     if (!issue || issue.salarySlipId !== slip.id) return new Response("not found", { status: 404 });
     const snap = issue.snapshot as unknown as Record<string, unknown>;
     const employmentType = await getEmploymentType(slip.companyId, slip.staffUserId, snap.targetMonth as string);

@@ -123,7 +123,7 @@ export function StaffShell({
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-accent bg-primary px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top)*1.5)] text-primary-foreground">
+      <header className="print-hide flex flex-wrap items-center justify-between gap-3 border-b-2 border-accent bg-primary px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top)*1.5)] text-primary-foreground">
         <div className="flex items-center gap-2">
           <div className="font-serif-jp text-lg font-bold tracking-wide">TeeRA</div>
           <span className="text-xs opacity-70">{todayLabel()}</span>
@@ -176,6 +176,22 @@ export function StaffShell({
                     </svg>
                   </Link>
                 </div>
+                <div className="mb-3 grid grid-cols-2 gap-2">
+                  <Link
+                    href="/staff/payslips"
+                    onClick={() => setProfileOpen(false)}
+                    className="rounded-lg border border-border px-3 py-2 text-center text-sm text-foreground hover:border-primary"
+                  >
+                    給料明細
+                  </Link>
+                  <Link
+                    href="/staff/howto"
+                    onClick={() => setProfileOpen(false)}
+                    className="rounded-lg border border-border px-3 py-2 text-center text-sm text-foreground hover:border-primary"
+                  >
+                    使い方
+                  </Link>
+                </div>
                 {showCompanyScreenLink ? (
                   <Link
                     href="/company"
@@ -205,7 +221,7 @@ export function StaffShell({
 
       <PushNotificationPrompt />
 
-      <nav className="flex items-stretch justify-around border-b border-border/60 bg-white/40 px-1 py-1.5 sm:justify-start sm:gap-1 sm:px-4">
+      <nav className="print-hide flex items-stretch justify-around border-b border-border/60 bg-white/40 px-1 py-1.5 sm:justify-start sm:gap-1 sm:px-4">
         {NAV.map((item) => {
           const active =
             pathname === item.href || (item.href !== "/staff" && pathname.startsWith(`${item.href}/`));
@@ -245,7 +261,7 @@ export function StaffShell({
         })}
       </nav>
 
-      <div className="flex flex-1 flex-col bg-background">{children}</div>
+      <div className="flex flex-1 flex-col bg-background print:bg-white">{children}</div>
       {showContractPopup ? <PendingContractPopup companies={pendingContractCompanies} /> : null}
       <Toaster />
     </div>

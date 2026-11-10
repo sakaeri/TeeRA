@@ -6,6 +6,6 @@ export function pdfViewerHref(src: string, options: { sample?: boolean } = {}) {
 
 // 使い方マニュアルのPDF（public/howto/manual.pdf）も開ける
 export function isAllowedPdfSrc(src: string) {
-  if (src === "/howto/manual.pdf") return true;
+  if (src === "/howto/manual.pdf" || src === "/howto/staff-manual.pdf") return true;
   return src.startsWith("/api/") && !src.startsWith("//") && !src.includes("\\");
 }
