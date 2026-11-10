@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { pdfViewerHref } from "@/lib/pdfViewerHref";
 import {
   updateCompanyNameAction,
   updateCompanyInvoiceRegistrationNumberAction,
@@ -284,7 +285,23 @@ const HOWTO_SECTIONS: { id: string; label: string }[] = [
   { id: "howto-wallet", label: "⑳Tee・プラン" },
 ];
 
+// ホーム画面に追加したアプリ（iPhone）では window.print() が何もしないため、スマホ・アプリでは
+// 同じ内容のPDF（public/howto/manual.pdf）をアプリ内のPDF表示で開く（「保存・共有」から印刷・保存できる）。
+// ※ マニュアルの内容を直したら scripts/generate-manual-pdf.mjs でPDFも作り直すこと。
+function isStandaloneOrPhone() {
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true ||
+    window.innerWidth < 640
+  );
+}
+
 function HowToSection() {
+  const router = useRouter();
+  function printManual() {
+    if (isStandaloneOrPhone()) router.push(pdfViewerHref("/howto/manual.pdf"));
+    else window.print();
+  }
   return (
     <div className="flex flex-col gap-10 print:block">
       <h1 className="hidden font-serif-jp text-lg font-bold text-primary print:mb-2 print:block">TeeRA 使い方マニュアル</h1>
@@ -295,7 +312,7 @@ function HowToSection() {
         <div className="print-hide flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={printManual}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
           >
             🖨 このページを印刷する

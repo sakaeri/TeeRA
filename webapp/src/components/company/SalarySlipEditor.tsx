@@ -215,7 +215,7 @@ export function SalarySlipEditor({
           翌月の明細も、ここで選んだ載せ方で始まります。
         </p>
         {isEditable ? (
-          <PdfLink href={`/api/salary-slips/${slip.id}/pdf`} className="mt-3 inline-block text-sm font-semibold text-primary underline">
+          <PdfLink sample href={`/api/salary-slips/${slip.id}/pdf`} className="mt-3 inline-block text-sm font-semibold text-primary underline">
             見本のPDFを見る
           </PdfLink>
         ) : null}

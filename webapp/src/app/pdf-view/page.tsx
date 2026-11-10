@@ -7,5 +7,5 @@ export default async function PdfViewPage({ searchParams }: PageProps<"/pdf-view
   const sp = await searchParams;
   const src = typeof sp.src === "string" ? sp.src : "";
   if (!isAllowedPdfSrc(src)) notFound();
-  return <PdfViewer src={src} />;
+  return <PdfViewer src={src} sample={sp.sample === "1"} />;
 }

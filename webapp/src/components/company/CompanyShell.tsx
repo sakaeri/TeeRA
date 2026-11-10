@@ -65,7 +65,7 @@ export function CompanyShell({
 
   return (
     <div className="flex min-h-full flex-1 flex-col print:block">
-      <header className="print-hide flex flex-wrap items-center justify-between gap-3 border-b-2 border-accent bg-primary px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] text-primary-foreground sm:gap-6 sm:px-6 sm:pt-3">
+      <header className="print-hide flex flex-wrap items-center justify-between gap-3 border-b-2 border-accent bg-primary px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top)*1.5)] text-primary-foreground sm:gap-6 sm:px-6 sm:pt-3">
         <div className="flex items-center gap-2 sm:gap-4">
           <div className="font-serif-jp text-lg font-bold tracking-wide">TeeRA</div>
           <span className="hidden text-xs opacity-70 sm:inline">{todayLabel()}</span>

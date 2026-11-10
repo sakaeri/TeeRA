@@ -130,7 +130,7 @@ export function ContractConsentWizard({
 
   return (
     <div role="dialog" aria-modal="true" aria-label="契約書の確認" className="fixed inset-0 z-50 flex flex-col bg-white">
-      <div className="border-b border-border px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
+      <div className="border-b border-border px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top)*1.5)]">
         <div className="flex items-center justify-between gap-2">
           <p className="min-w-0 truncate text-xs text-muted">
             {data.companyName}
