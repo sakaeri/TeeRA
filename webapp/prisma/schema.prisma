@@ -38,6 +38,8 @@ model User {
   phoneNumber                String?
   postalCode                 String? // same reuse pattern as address/phoneNumber
   shippingRecipientName      String? // お届け先氏名。アカウント名(name)とは別に持つ
+  // 業務委託のスタッフが会社へ出す請求書に載せるインボイス（適格請求書発行事業者）登録番号。任意
+  invoiceRegistrationNumber  String?
   // — 家族宛て等、本人以外に送る場合もあるため name 自体は上書きしない。
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt
@@ -63,6 +65,7 @@ model User {
   promoRedemptions                    PromoRedemption[]
   conflictOverridesConfirmed          ConflictOverride[]
   salarySlips                         SalarySlip[]
+  staffInvoices                       StaffInvoice[]
   staffTaskRates                      StaffTaskRate[]
   staffNotices                        StaffNotice[]
   companyPlacementRateVersionsCreated CompanyPlacementRateVersion[]
@@ -156,6 +159,7 @@ model Company {
   publicRecruitments   PublicRecruitment[]
   shiftRequests        ShiftRequest[]
   salarySlips          SalarySlip[]
+  staffInvoices        StaffInvoice[]
   issuedInvoices       Invoice[]
   bankAccounts         CompanyBankAccount[]
   announcements        CompanyAnnouncement[]
@@ -166,9 +170,9 @@ model Company {
   promoItems           PromoItem[]
   todoItems            TodoItem[]
   inviteTokens         InviteToken[]
+  planChangeEvents     PlanChangeEvent[]
 
   @@index([name])
-  planChangeEvents PlanChangeEvent[]
 }
 
 model Team {
@@ -235,6 +239,11 @@ model CompanyMembership {
   // 給与明細（業務委託は支払明細）を電子で受け取ることへの本人の同意（所得税法上、電子交付には同意が要る）。
   // 同意するとスタッフのアプリの「給料明細」で発行済みの明細を見られる
   payslipEConsentAt DateTime?
+
+  // 業務委託のスタッフから届く請求書の扱い（会社がスタッフごとに決める）。
+  // 源泉徴収するのは支払う会社の側なので会社が決める。消費税は、報酬額を税込とみなすか、10%を上乗せするか
+  contractorWithholding  Boolean @default(false)
+  contractorTaxExclusive Boolean @default(false)
 
   // 本人確認書類（両面）。スタッフ本人・会社どちらからもアップロード可能。
   // 契約ごとではなく所属（会社との関係）単位で1組だけ持つ — 契約を結び直す
@@ -395,28 +404,28 @@ enum RelationshipStatus {
 // holds its display name in that case, until upgraded via CLIENT_UPGRADE /
 // AGENCY_UPGRADE invite redemption.
 model CompanyRelationship {
-  id                String             @id @default(cuid())
-  ownerCompanyId    String
-  agencyCompanyId   String?
-  clientCompanyId   String?
-  proxyName         String?
+  id                   String             @id @default(cuid())
+  ownerCompanyId       String
+  agencyCompanyId      String?
+  clientCompanyId      String?
+  proxyName            String?
   // 業務報告の承認のタイミング（仮の依頼主＝依頼主がTeeRAを使っていない場合に、派遣会社が承認する分）。
   // EACH＝その都度、MONTHLY＝月末にまとめて（月の途中はやること・アイコンの数字・まとめメールに出さない）
-  reportApprovalTiming String @default("EACH")
-  status            RelationshipStatus @default(ACTIVE)
-  createdAt         DateTime           @default(now())
+  reportApprovalTiming String             @default("EACH")
+  status               RelationshipStatus @default(ACTIVE)
+  createdAt            DateTime           @default(now())
   // 配属先のルール連絡先。配属先自身の住所（Company.address）は「本社所在
   // 地≠実際の勤務地」のケースがあるため参照せず、この2項目は常に手入力
   // ＋固定フォームにする。配属されているスタッフ本人にも「業務単価」の
   // 勤務先詳細で表示される（社内専用メモとは別軸の共有情報）。
-  workLocation      String?
-  emergencyContact  String?
+  workLocation         String?
+  emergencyContact     String?
   // 社内メモ欄の先頭に出す「現在の」住所・電話番号（相手がproxyで実体の
   // Companyを持たない場合もあるため、関係ごとに保持する）。上書きすると
   // 旧値はRelationshipNoteへ普通のメモとして自動で積まれる
   // （updateClientAddressPhone参照）。
-  clientAddress     String?
-  clientPhoneNumber String?
+  clientAddress        String?
+  clientPhoneNumber    String?
 
   ownerCompany  Company  @relation("OwnerSide", fields: [ownerCompanyId], references: [id], onDelete: Cascade)
   agencyCompany Company? @relation("AgencySide", fields: [agencyCompanyId], references: [id], onDelete: SetNull)
@@ -1293,6 +1302,62 @@ model SalarySlipIssue {
   salarySlip SalarySlip @relation(fields: [salarySlipId], references: [id], onDelete: Cascade)
 }
 
+// 業務委託のスタッフから会社へ出す請求書（スタッフ1人×会社×対象月で1件）。
+// 業務の行は承認済みの業務報告から自動で作り、スタッフは金額を直せない（足せるのは「その他の項目」だけ）。
+// 会社は「最初に開いた時」に1件分（プランの無料枠、無ければ1Tee）使う。同じスタッフの同じ月は1回だけで、
+// その月の支払明細をもう発行していれば無料（chargeSettledAtで「この月の分は精算済み」を表す）。
+enum StaffInvoiceStatus {
+  DRAFT
+  SUBMITTED
+  RETURNED
+  APPROVED
+}
+
+model StaffInvoice {
+  id                 String             @id @default(cuid())
+  companyId          String
+  staffUserId        String
+  targetMonth        String // "YYYY-MM"
+  status             StaffInvoiceStatus @default(DRAFT)
+  // 提出した時点の業務の行 [{shiftId, description, hours, rate, amount}]（下書き・差し戻し中は毎回作り直す）
+  workLines          Json               @default("[]")
+  // スタッフが足した「その他の項目」（交通費など） [{label, amount}]（税込の金額として扱い、源泉徴収の対象にしない）
+  expenses           Json               @default("[]")
+  note               String?
+  issuerName         String?
+  issuerAddress      String?
+  registrationNumber String?
+  bankName           String?
+  branchName         String?
+  accountType        String?
+  accountNumber      String?
+  accountHolderName  String?
+  withholding        Boolean            @default(false)
+  taxExclusive       Boolean            @default(false)
+  workSubtotal       Int                @default(0)
+  taxAmount          Int                @default(0)
+  withholdingAmount  Int                @default(0)
+  expensesTotal      Int                @default(0)
+  total              Int                @default(0)
+  submittedAt        DateTime?
+  openedAt           DateTime?
+  openedByUserId     String?
+  chargeSettledAt    DateTime?
+  chargedTee         Boolean            @default(false)
+  countsAgainstQuota Boolean            @default(false)
+  reviewedAt         DateTime?
+  reviewedByUserId   String?
+  returnReason       String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  staff   User    @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, staffUserId, targetMonth])
+  @@index([companyId, targetMonth])
+}
+
 // CONFIRMED（確定）という中間状態は廃止済み（20260909052244で既存データは
 // DRAFTへ寄せ済み）。DRAFT→ISSUEDの2状態のみ。
 enum InvoiceStatus {
@@ -1398,6 +1463,7 @@ enum TeeLedgerEntryType {
   UNLOCK_REFUND_RECRUITMENT
   CONSUME_SALARY_ISSUE
   CONSUME_INVOICE_ISSUE
+  CONSUME_STAFF_INVOICE_OPEN
   CONSUME_TEAM_UNLOCK
   ADJUSTMENT
 }

@@ -1,6 +1,7 @@
 import { requireCompanyStaffRole, listMyMemberships } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { StaffAffiliationsView } from "@/components/staff/StaffAffiliationsView";
+import { listContractorCompanies } from "@/lib/domain/staffInvoices";
 
 export default async function StaffContractsListPage() {
   const { userId } = await requireCompanyStaffRole();
@@ -13,6 +14,7 @@ export default async function StaffContractsListPage() {
     where: { staffUserId: userId, status: "PENDING_CONSENT", template: { companyId: { in: companyIds } } },
     select: { template: { select: { companyId: true } } },
   });
+  const contractorCompanies = await listContractorCompanies(userId);
   const pendingByCompany = new Map<string, number>();
   for (const c of pending) {
     pendingByCompany.set(c.template.companyId, (pendingByCompany.get(c.template.companyId) ?? 0) + 1);
@@ -21,6 +23,7 @@ export default async function StaffContractsListPage() {
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-10">
       <StaffAffiliationsView
+        isContractor={contractorCompanies.length > 0}
         companies={memberships.map((m) => ({
           companyId: m.companyId,
           companyName: m.companyName,

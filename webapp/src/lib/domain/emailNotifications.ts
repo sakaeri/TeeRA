@@ -869,3 +869,53 @@ export async function notifyStaffPayslipIssued(salarySlipId: string) {
   });
   await sendPushToUser(slip.staffUserId, { title, body, url: "/staff/payslips" });
 }
+
+// 業務委託のスタッフが請求書を提出したら、支払明細を発行できる人（本部の管理者・編集者と、
+// そのスタッフのチームのマネージャー）にプッシュ通知する。金額は通知に載せない（開く時に1件分使うため）。
+export async function notifyCompanyOfStaffInvoiceSubmitted(staffInvoiceId: string, resubmitted: boolean) {
+  const invoice = await prisma.staffInvoice.findUnique({
+    where: { id: staffInvoiceId },
+    include: { staff: { select: { name: true } } },
+  });
+  if (!invoice) return;
+  const teams = await prisma.teamMembership.findMany({
+    where: { userId: invoice.staffUserId, team: { companyId: invoice.companyId } },
+    select: { teamId: true },
+  });
+  const managers = await prisma.teamMembership.findMany({
+    where: { teamId: { in: teams.map((t) => t.teamId) }, role: "TEAM_MANAGER" },
+    select: { userId: true },
+  });
+  const targets = [...new Set([...(await companyAdminUserIds(invoice.companyId)), ...managers.map((m) => m.userId)])];
+  const [y, m] = invoice.targetMonth.split("-").map(Number);
+  await sendPushToUsers(targets, {
+    title: resubmitted ? "直した請求書が届きました" : "請求書が届きました",
+    body: `${invoice.staff.name}さんの${y}年${m}月分`,
+    url: `/company/payroll?month=${invoice.targetMonth}`,
+  });
+}
+
+// 会社が業務委託のスタッフの請求書を承認・差し戻ししたら、本人にお知らせとプッシュ通知で知らせる
+export async function notifyStaffInvoiceReviewed(staffInvoiceId: string) {
+  const invoice = await prisma.staffInvoice.findUnique({
+    where: { id: staffInvoiceId },
+    include: { company: { select: { name: true } } },
+  });
+  if (!invoice || (invoice.status !== "APPROVED" && invoice.status !== "RETURNED")) return;
+  const [y, m] = invoice.targetMonth.split("-").map(Number);
+  const approved = invoice.status === "APPROVED";
+  const title = approved ? "請求書が承認されました" : "請求書が差し戻されました";
+  const body = `${invoice.company.name}の${y}年${m}月分${approved ? "" : `（理由：${invoice.returnReason ?? ""}）`}`;
+  await prisma.staffNotice.create({
+    data: {
+      companyId: invoice.companyId,
+      staffUserId: invoice.staffUserId,
+      message: `【${title}】\n${body}${approved ? "" : "\nメニューの「請求書」から直して、もう一度提出してください。"}`,
+    },
+  });
+  await sendPushToUser(invoice.staffUserId, {
+    title,
+    body,
+    url: `/staff/invoices?company=${invoice.companyId}&month=${invoice.targetMonth}`,
+  });
+}

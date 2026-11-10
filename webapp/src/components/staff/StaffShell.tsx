@@ -98,6 +98,7 @@ export function StaffShell({
   contractSettingsBadgeCount,
   unreadNoticeCount,
   pendingContractCompanies,
+  isContractor = false,
   children,
 }: {
   userName: string;
@@ -112,6 +113,8 @@ export function StaffShell({
   // 確認待ち（PENDING_CONSENT）の契約書がある会社。ある間は、契約書の画面以外では
   // 閉じられないポップアップを出して、確認・同意を先に済ませてもらう。
   pendingContractCompanies: { id: string; name: string }[];
+  // 業務委託の契約がある人だけ、メニューに「請求書」を出す
+  isContractor?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -176,7 +179,7 @@ export function StaffShell({
                     </svg>
                   </Link>
                 </div>
-                <div className="mb-3 grid grid-cols-2 gap-2">
+                <div className={`mb-3 grid gap-2 ${isContractor ? "grid-cols-3" : "grid-cols-2"}`}>
                   <Link
                     href="/staff/payslips"
                     onClick={() => setProfileOpen(false)}
@@ -184,6 +187,15 @@ export function StaffShell({
                   >
                     給料明細
                   </Link>
+                  {isContractor ? (
+                    <Link
+                      href="/staff/invoices"
+                      onClick={() => setProfileOpen(false)}
+                      className="rounded-lg border border-border px-3 py-2 text-center text-sm text-foreground hover:border-primary"
+                    >
+                      請求書
+                    </Link>
+                  ) : null}
                   <Link
                     href="/staff/howto"
                     onClick={() => setProfileOpen(false)}

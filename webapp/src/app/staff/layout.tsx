@@ -6,6 +6,7 @@ import { listOpenRecruitmentsForStaff } from "@/lib/domain/recruitment";
 import { countUnsubmittedReports } from "@/lib/domain/workReports";
 import { countUnreadStaffNotices } from "@/lib/domain/notices";
 import { StaffShell } from "@/components/staff/StaffShell";
+import { listContractorCompanies } from "@/lib/domain/staffInvoices";
 
 export default async function StaffLayout({
   children,
@@ -13,7 +14,7 @@ export default async function StaffLayout({
   children: React.ReactNode;
 }) {
   const { userId, membership } = await requireCompanyStaffRole();
-  const [user, pointsBalance, myMemberships, openRecruitments, pendingContracts, unreadNoticeCount] = await Promise.all([
+  const [user, pointsBalance, myMemberships, openRecruitments, pendingContracts, unreadNoticeCount, contractorCompanies] = await Promise.all([
     prisma.user.findUniqueOrThrow({ where: { id: userId } }),
     getStaffPointsBalance(userId),
     listMyMemberships(userId),
@@ -24,6 +25,7 @@ export default async function StaffLayout({
       select: { template: { select: { company: { select: { id: true, name: true } } } } },
     }),
     countUnreadStaffNotices(userId),
+    listContractorCompanies(userId),
   ]);
   // ナビの「募集一覧」バッジ用 — まだ応募しておらず、まだ枠が埋まって
   // いない募集だけを数える（応募済み/満員は「新着」として知らせる
@@ -58,6 +60,7 @@ export default async function StaffLayout({
       contractSettingsBadgeCount={contractSettingsBadgeCount}
       unreadNoticeCount={unreadNoticeCount}
       pendingContractCompanies={pendingContractCompanies}
+      isContractor={contractorCompanies.length > 0}
     >
       {children}
     </StaffShell>

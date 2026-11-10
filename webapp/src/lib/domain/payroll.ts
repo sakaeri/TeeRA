@@ -183,6 +183,111 @@ export type UnresolvedSalaryShift = {
   source: "workReport" | "shift";
 };
 
+export type ComputedWorkLine = { shiftId: string; description: string; hours: number; rate: number; amount: number };
+
+// 対象月の承認済みの業務報告から、勤務の行（単価×時間/日数）を計算する。給与明細（regenerateShiftLines）と、
+// 業務委託のスタッフが出す請求書（staffInvoices.ts）の両方で使う — どちらも同じ単価で計算されるようにするため。
+// 単価の決め方：その業務内容・勤務先のスタッフ個別の単価（土日祝の単価を含む）→無ければ雇用契約の基本給。
+// 雇用契約が無い・月給（日々のシフトでは計上しない）・実働0時間の勤務は行にしない。
+export async function computeApprovedWorkLines(params: {
+  companyId: string;
+  staffUserId: string;
+  targetMonth: string;
+  excludedShiftIds?: Set<string>;
+}): Promise<{ lines: ComputedWorkLine[]; unresolved: UnresolvedSalaryShift[]; hasContract: boolean }> {
+  const { start, end } = monthRange(params.targetMonth);
+  const reports = await prisma.workReport.findMany({
+    where: {
+      staffUserId: params.staffUserId,
+      outcome: "WORKED",
+      approvalStatus: "APPROVED",
+      shift: { companyId: params.companyId, date: { gte: start, lt: end } },
+    },
+    include: { shift: true },
+  });
+
+  const contracts = await contractsWithWageVersions(params.companyId, params.staffUserId);
+  if (contracts.length === 0) return { lines: [], unresolved: [], hasContract: false };
+  const taskRates = await prisma.staffTaskRate.findMany({
+    where: { companyId: params.companyId, staffUserId: params.staffUserId },
+    include: { versions: true },
+  });
+  const taskRateRowsByName = new Map<string, typeof taskRates>();
+  for (const r of taskRates) {
+    const list = taskRateRowsByName.get(r.taskName) ?? [];
+    list.push(r);
+    taskRateRowsByName.set(r.taskName, list);
+  }
+
+  const unresolved: UnresolvedSalaryShift[] = [];
+  const lines: ComputedWorkLine[] = [];
+  for (const r of reports) {
+    if (params.excludedShiftIds?.has(r.shiftId)) continue;
+    const workedHours = Math.round((r.computedMinutes / 60) * 100) / 100;
+    if (workedHours <= 0) continue;
+    // 業務報告の時点で業務内容が選び直されていればそちらを優先し（提出時点
+    // で確定）、無ければシフト作成時の予定（shift.taskName）を使う。
+    const effectiveTaskName = r.taskName ?? r.shift.taskName;
+    // その業務内容・その勤務先に、シフトの日付時点で有効なスタッフ個別の
+    // 単価があればそれを優先し（勤務先限定＞勤務先を問わない、の順で
+    // 探す）、無ければ雇用契約の基本単価（こちらもシフトの日付時点で
+    // 有効だった契約・バージョン）にフォールバックする。
+    const candidateRows = effectiveTaskName ? taskRateRowsByName.get(effectiveTaskName) : undefined;
+    const matchedRow = candidateRows ? pickStaffTaskRate(candidateRows, r.shift.companyRelationshipId) : null;
+    // 土曜・日曜・祝日の勤務は、土日祝の単価が設定されていればそちらを使う
+    // （雇用契約の基本給には土日祝の区別は無い）
+    const matchedWage = matchedRow
+      ? resolveRateVersion(matchedRow.versions, r.shift.date, {
+          weekendOrHoliday: isWeekendOrHoliday(r.shift.date.toISOString().slice(0, 10)),
+        })
+      : null;
+    const baseContract = pickContractForDate(contracts, r.shift.date);
+    const baseWageVersion = baseContract ? resolveContractWageVersion(baseContract.wageVersions, r.shift.date) : null;
+    if (!matchedWage && !baseWageVersion) continue;
+    // 業務内容は指定されているのに、その業務内容専用のスタッフ単価が
+    // 無くて基本給にフォールバックしたケースは、単価の設定漏れの可能性が
+    // あるため警告対象として記録する（計算自体は基本給で続行する）。
+    // ただし、その業務内容名が雇用契約自体の業務内容（jobDescription）と
+    // 一致する場合は「設定漏れ」ではなく基本給がまさにその業務のために
+    // 定められたものなので、警告は出さない。
+    const isBaseContractTask = effectiveTaskName != null && effectiveTaskName === baseContract?.template.jobDescription;
+    // 個別単価を「終了」にしている場合も、意図して基本給に戻したので警告しない
+    const rateEnded = matchedRow ? isRateEndedAt(matchedRow.versions, r.shift.date) : false;
+    if (!matchedWage && baseWageVersion && effectiveTaskName && !isBaseContractTask && !rateEnded) {
+      unresolved.push({
+        shiftId: r.shiftId,
+        workReportId: r.id,
+        date: r.shift.date.toISOString().slice(0, 10),
+        taskName: effectiveTaskName,
+        source: r.taskName ? "workReport" : "shift",
+      });
+    }
+    const wage = matchedWage ?? {
+      wageType: baseContract!.template.wageType,
+      amount: baseWageVersion!.wageAmount,
+      isHolidayRate: false,
+    };
+    // 月給は日々のシフト単位では自動計上しない（固定給のため、必要なら
+    // 手動でカスタム行を追加する）。時給/日給のみ自動生成する。
+    if (wage.wageType === "MONTHLY") continue;
+    // 日給は「1シフト＝1日分」として単価をそのまま計上する（実働時間で
+    // 掛け算しない）。時給*時間との整合を保つため hours*rate=amount の形は
+    // 崩さず、日給の場合は hours=1 として扱う。
+    const isHourly = wage.wageType === "HOURLY";
+    const lineHours = isHourly ? workedHours : 1;
+    const rate = wage.amount;
+    const taskLabel = `${effectiveTaskName ? `（${effectiveTaskName}）` : ""}${wage.isHolidayRate ? "（土日祝）" : ""}`;
+    lines.push({
+      shiftId: r.shiftId,
+      description: `${r.shift.date.toISOString().slice(0, 10)} 勤務${taskLabel}${isHourly ? "" : "（日給）"}`,
+      hours: lineHours,
+      rate,
+      amount: Math.round(lineHours * rate),
+    });
+  }
+  return { lines, unresolved, hasContract: true };
+}
+
 // 稼働支給額 always recalculates fresh from that month's approved shifts —
 // unfinalized months regenerate their SHIFT lines each time this runs, but
 // CUSTOM lines and deductions/leave settings are left untouched.
@@ -206,35 +311,15 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
   // から毎回フレッシュに再生成する。
   if (slip._count.issues > 0) return { slip, unresolved: [] as UnresolvedSalaryShift[] };
 
-  const { start, end } = monthRange(params.targetMonth);
-  const reports = await prisma.workReport.findMany({
-    where: {
-      staffUserId: params.staffUserId,
-      outcome: "WORKED",
-      approvalStatus: "APPROVED",
-      shift: { companyId: params.companyId, date: { gte: start, lt: end } },
-    },
-    include: { shift: true },
-  });
-
-  const contracts = await contractsWithWageVersions(params.companyId, params.staffUserId);
-  const taskRates = await prisma.staffTaskRate.findMany({
-    where: { companyId: params.companyId, staffUserId: params.staffUserId },
-    include: { versions: true },
-  });
-  const taskRateRowsByName = new Map<string, typeof taskRates>();
-  for (const r of taskRates) {
-    const list = taskRateRowsByName.get(r.taskName) ?? [];
-    list.push(r);
-    taskRateRowsByName.set(r.taskName, list);
-  }
-
-  const unresolved: UnresolvedSalaryShift[] = [];
   const manuallyExcludedShiftIds = new Set((slip.excludedShiftIds as string[]) ?? []);
+  const { lines, unresolved, hasContract } = await computeApprovedWorkLines({
+    ...params,
+    excludedShiftIds: manuallyExcludedShiftIds,
+  });
 
   await prisma.$transaction(async (tx) => {
     // 雇用契約が無いスタッフは自動計上できない。
-    if (contracts.length === 0) {
+    if (!hasContract) {
       await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, kind: "SHIFT" } });
       return;
     }
@@ -252,76 +337,21 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     const autoShiftIds = new Set(existingLines.filter((l) => !l.isManuallyEdited).map((l) => l.shiftId));
     const validShiftIds = new Set<string>();
 
-    for (const r of reports) {
-      if (manuallyExcludedShiftIds.has(r.shiftId)) continue;
-      const workedHours = Math.round((r.computedMinutes / 60) * 100) / 100;
-      if (workedHours <= 0) continue;
-      // 業務報告の時点で業務内容が選び直されていればそちらを優先し（提出時点
-      // で確定）、無ければシフト作成時の予定（shift.taskName）を使う。
-      const effectiveTaskName = r.taskName ?? r.shift.taskName;
-      // その業務内容・その勤務先に、シフトの日付時点で有効なスタッフ個別の
-      // 単価があればそれを優先し（勤務先限定＞勤務先を問わない、の順で
-      // 探す）、無ければ雇用契約の基本単価（こちらもシフトの日付時点で
-      // 有効だった契約・バージョン）にフォールバックする。
-      const candidateRows = effectiveTaskName ? taskRateRowsByName.get(effectiveTaskName) : undefined;
-      const matchedRow = candidateRows ? pickStaffTaskRate(candidateRows, r.shift.companyRelationshipId) : null;
-      // 土曜・日曜・祝日の勤務は、土日祝の単価が設定されていればそちらを使う
-      // （雇用契約の基本給には土日祝の区別は無い）
-      const matchedWage = matchedRow
-        ? resolveRateVersion(matchedRow.versions, r.shift.date, {
-            weekendOrHoliday: isWeekendOrHoliday(r.shift.date.toISOString().slice(0, 10)),
-          })
-        : null;
-      const baseContract = pickContractForDate(contracts, r.shift.date);
-      const baseWageVersion = baseContract ? resolveContractWageVersion(baseContract.wageVersions, r.shift.date) : null;
-      if (!matchedWage && !baseWageVersion) continue;
-      // 業務内容は指定されているのに、その業務内容専用のスタッフ単価が
-      // 無くて基本給にフォールバックしたケースは、単価の設定漏れの可能性が
-      // あるため警告対象として記録する（計算自体は基本給で続行する）。
-      // ただし、その業務内容名が雇用契約自体の業務内容（jobDescription）と
-      // 一致する場合は「設定漏れ」ではなく基本給がまさにその業務のために
-      // 定められたものなので、警告は出さない。
-      const isBaseContractTask = effectiveTaskName != null && effectiveTaskName === baseContract?.template.jobDescription;
-      // 個別単価を「終了」にしている場合も、意図して基本給に戻したので警告しない
-      const rateEnded = matchedRow ? isRateEndedAt(matchedRow.versions, r.shift.date) : false;
-      if (!matchedWage && baseWageVersion && effectiveTaskName && !isBaseContractTask && !rateEnded) {
-        unresolved.push({
-          shiftId: r.shiftId,
-          workReportId: r.id,
-          date: r.shift.date.toISOString().slice(0, 10),
-          taskName: effectiveTaskName,
-          source: r.taskName ? "workReport" : "shift",
-        });
+    for (const line of lines) {
+      validShiftIds.add(line.shiftId);
+      if (manuallyEditedShiftIds.has(line.shiftId)) continue;
+      if (autoShiftIds.has(line.shiftId)) {
+        await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, shiftId: line.shiftId, kind: "SHIFT" } });
       }
-      const wage = matchedWage ?? {
-        wageType: baseContract!.template.wageType,
-        amount: baseWageVersion!.wageAmount,
-        isHolidayRate: false,
-      };
-      // 月給は日々のシフト単位では自動計上しない（固定給のため、必要なら
-      // 手動でカスタム行を追加する）。時給/日給のみ自動生成する。
-      if (wage.wageType === "MONTHLY") continue;
-      validShiftIds.add(r.shiftId);
-      if (manuallyEditedShiftIds.has(r.shiftId)) continue;
-      if (autoShiftIds.has(r.shiftId)) {
-        await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, shiftId: r.shiftId, kind: "SHIFT" } });
-      }
-      // 日給は「1シフト＝1日分」として単価をそのまま計上する（実働時間で
-      // 掛け算しない）。時給*時間との整合を保つため hours*rate=amount の形は
-      // 崩さず、日給の場合は hours=1 として扱う。
-      const isHourly = wage.wageType === "HOURLY";
-      const lineHours = isHourly ? workedHours : 1;
-      const rate = wage.amount;
-      const taskLabel = `${effectiveTaskName ? `（${effectiveTaskName}）` : ""}${wage.isHolidayRate ? "（土日祝）" : ""}`;
       await tx.salarySlipLine.create({
         data: {
           salarySlipId: slip.id,
-          shiftId: r.shiftId,
+          shiftId: line.shiftId,
           kind: "SHIFT",
-          description: `${r.shift.date.toISOString().slice(0, 10)} 勤務${taskLabel}${isHourly ? "" : "（日給）"}`,
-          hours: lineHours,
-          rate,
-          amount: Math.round(lineHours * rate),
+          description: line.description,
+          hours: line.hours,
+          rate: line.rate,
+          amount: line.amount,
         },
       });
     }
