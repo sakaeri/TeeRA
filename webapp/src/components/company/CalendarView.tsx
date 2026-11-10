@@ -1112,13 +1112,27 @@ function DayDetailModal({
                       onClick={() => setReportDetailShiftId(s.id)}
                       className="min-w-0 rounded-md text-left hover:bg-background"
                     >
-                      <span className="block truncate font-semibold underline decoration-border underline-offset-2">
-                        {s.staffName}
+                      {/* 1行目：名前と、相手の会社が入れたシフトかどうか（揉めた時の記録） */}
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate font-semibold underline decoration-border underline-offset-2">{s.staffName}</span>
+                        {s.enteredByAgency || s.enteredByClient ? (
+                          <span
+                            title={
+                              s.enteredByAgency
+                                ? `作成：${s.agencyName}（派遣会社が入力）`
+                                : `作成：${s.clientName ?? "依頼主"}（依頼主が入力）`
+                            }
+                            className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900"
+                          >
+                            {s.enteredByAgency ? "派遣会社が入力" : "依頼主が入力"}
+                          </span>
+                        ) : null}
                       </span>
-                      <span className="flex items-center gap-1.5 text-xs text-muted">
+                      {/* 2行目：勤務先・業務内容（スマホでは途中で切らずに折り返す） */}
+                      <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted">
                         <span
                           title={workplaceLabel}
-                          className={`max-w-[220px] truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                          className={`max-w-full truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
                             s.agencyName
                               ? "bg-violet-100 text-violet-800"
                               : s.source === "CLIENT"
@@ -1128,24 +1142,9 @@ function DayDetailModal({
                         >
                           {workplaceLabel}
                         </span>
-                        {s.enteredByClient ? (
-                          <span
-                            title={`作成：${s.clientName ?? "依頼主"}（依頼主が入力）`}
-                            className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900"
-                          >
-                            依頼主が入力
-                          </span>
-                        ) : null}
-                        {s.enteredByAgency ? (
-                          <span
-                            title={`作成：${s.agencyName}（派遣会社が入力）`}
-                            className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900"
-                          >
-                            派遣会社が入力
-                          </span>
-                        ) : null}
-                        {s.taskName ? <span className="truncate">{s.taskName}</span> : null}
-                        {s.note ? <span className="truncate">（{s.note}）</span> : null}
+                        {s.taskName ? <span>{s.taskName}</span> : null}
+                        {/* メモが業務内容と同じ（オーダーのタイトルが入っているだけ）なら重ねて出さない */}
+                        {s.note && s.note !== s.taskName ? <span>（{s.note}）</span> : null}
                         {s.cancelFeeAmount ? (
                           <span className="shrink-0 font-semibold text-orange-700">キャンセル料 {s.cancelFeeAmount.toLocaleString()}円</span>
                         ) : null}
