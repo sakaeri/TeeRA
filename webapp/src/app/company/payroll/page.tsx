@@ -21,13 +21,20 @@ function currentMonth() {
   return `${today.year}-${String(today.month).padStart(2, "0")}`;
 }
 
+// 何も選んでいなければ先月を開く（月が明けてから前の月の分を作ることが多いため）
+function previousMonth() {
+  const today = todayJstParts();
+  const d = new Date(Date.UTC(today.year, today.month - 2, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 export default async function PayrollPage({
   searchParams,
 }: PageProps<"/company/payroll">) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (isLeaderOnly(membership)) redirect("/company/calendar");
   const sp = await searchParams;
-  const requestedMonth = typeof sp.month === "string" ? sp.month : currentMonth();
+  const requestedMonth = typeof sp.month === "string" ? sp.month : previousMonth();
   const staffUserId = typeof sp.staff === "string" ? sp.staff : undefined;
   const staffInvoiceId = typeof sp.staffInvoice === "string" ? sp.staffInvoice : undefined;
 
