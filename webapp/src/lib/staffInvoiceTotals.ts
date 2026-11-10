@@ -1,6 +1,7 @@
 // 業務委託のスタッフの請求書の金額計算（画面でもサーバーでも同じ計算にするため、server-onlyにしない）
 
-export type StaffInvoiceExpense = { label: string; amount: number };
+// 「その他の項目」1行（項目名・数量・単価。金額＝数量×単価）。数量・単価の無い古い行は「1×金額」として読む
+export type StaffInvoiceExpense = { label: string; quantity: number; unitPrice: number; amount: number };
 
 const MAX_EXPENSES = 20;
 
@@ -37,11 +38,24 @@ export function computeStaffInvoiceTotals(params: {
 export function sanitizeExpenses(raw: unknown): StaffInvoiceExpense[] {
   if (!Array.isArray(raw)) return [];
   return raw
-    .map((e) => ({
-      label: String((e as { label?: unknown })?.label ?? "").trim().slice(0, 60),
-      amount: Math.round(Number((e as { amount?: unknown })?.amount ?? 0)),
-    }))
-    .filter((e) => e.label && Number.isFinite(e.amount) && e.amount > 0 && e.amount <= 10_000_000)
+    .map((e) => {
+      const r = (e ?? {}) as { label?: unknown; quantity?: unknown; unitPrice?: unknown; amount?: unknown };
+      const label = String(r.label ?? "").trim().slice(0, 60);
+      const hasBreakdown = r.unitPrice !== undefined && r.unitPrice !== null;
+      // 数量は小数第2位まで（例：1.5時間）。単価は円単位
+      const quantity = hasBreakdown ? Math.round(Number(r.quantity ?? 1) * 100) / 100 : 1;
+      const unitPrice = Math.round(Number(hasBreakdown ? r.unitPrice : r.amount ?? 0));
+      return { label, quantity, unitPrice, amount: Math.round(quantity * unitPrice) };
+    })
+    .filter(
+      (e) =>
+        e.label &&
+        Number.isFinite(e.quantity) &&
+        Number.isFinite(e.unitPrice) &&
+        e.quantity > 0 &&
+        e.quantity <= 10_000 &&
+        e.unitPrice > 0 &&
+        e.amount <= 10_000_000,
+    )
     .slice(0, MAX_EXPENSES);
 }
-

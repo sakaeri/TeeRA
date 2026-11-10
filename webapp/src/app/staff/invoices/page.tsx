@@ -4,21 +4,18 @@ import { prisma } from "@/lib/prisma";
 import { todayJstParts } from "@/lib/date";
 import { getStaffInvoiceForStaff, isValidTargetMonth, listContractorCompanies } from "@/lib/domain/staffInvoices";
 import { StaffInvoiceEditor } from "@/components/staff/StaffInvoiceEditor";
+import { MonthNavBar } from "@/components/company/MonthNavBar";
+import { CreateRecordButton } from "@/components/company/CreateRecordButton";
+import { PdfLink } from "@/components/PdfLink";
 
-function shiftMonth(month: string, delta: number) {
-  const [y, m] = month.split("-").map(Number);
-  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: "下書き",
-  SUBMITTED: "確認中",
-  RETURNED: "差し戻し",
-  APPROVED: "承認済み",
+const STATUS_CHIP: Record<string, { text: string; className: string }> = {
+  RETURNED: { text: "差し戻し", className: "bg-red-100 text-red-800" },
+  SUBMITTED: { text: "確認中", className: "bg-amber-100 text-amber-800" },
+  APPROVED: { text: "承認済み", className: "bg-emerald-100 text-emerald-800" },
 };
 
-// 業務委託のスタッフが、会社へ請求書を出す画面（承認済みの業務報告から下書きができる）
+// 業務委託のスタッフが会社へ出す請求書。会社画面の「給料明細／請求書」と同じ並び
+// （月の切り替え → 下書き中＋「＋新しく作成」 → 提出済み）にして、開くと作成画面になる。
 export default async function StaffInvoicesPage({ searchParams }: PageProps<"/staff/invoices">) {
   const { userId } = await requireCompanyStaffRole();
   const sp = await searchParams;
@@ -31,84 +28,104 @@ export default async function StaffInvoicesPage({ searchParams }: PageProps<"/st
       </main>
     );
   }
-  const companyId =
-    typeof sp.company === "string" && companies.some((c) => c.id === sp.company) ? sp.company : companies[0].id;
-  // 何も選んでいなければ先月分（月が明けてから前の月の分を出すのが普通のため）
   const today = todayJstParts();
   const thisMonth = `${today.year}-${String(today.month).padStart(2, "0")}`;
-  const targetMonth = typeof sp.month === "string" && isValidTargetMonth(sp.month) && sp.month <= thisMonth ? sp.month : shiftMonth(thisMonth, -1);
-  const [invoice, history] = await Promise.all([
-    getStaffInvoiceForStaff(userId, companyId, targetMonth),
-    prisma.staffInvoice.findMany({
-      where: { staffUserId: userId, companyId },
-      orderBy: { targetMonth: "desc" },
-      take: 12,
-      select: { id: true, targetMonth: true, status: true, total: true },
-    }),
-  ]);
-  const companyName = companies.find((c) => c.id === companyId)!.name;
-  const [y, m] = targetMonth.split("-").map(Number);
-  const href = (month: string, company = companyId) => `/staff/invoices?company=${company}&month=${month}`;
+  // 何も選んでいなければ先月（月が明けてから前の月の分を出すのが普通のため）
+  const lastMonthDate = new Date(Date.UTC(today.year, today.month - 2, 1));
+  const lastMonth = `${lastMonthDate.getUTCFullYear()}-${String(lastMonthDate.getUTCMonth() + 1).padStart(2, "0")}`;
+  const targetMonth = typeof sp.month === "string" && isValidTargetMonth(sp.month) ? sp.month : lastMonth;
+  const companyId = typeof sp.company === "string" && companies.some((c) => c.id === sp.company) ? sp.company : null;
+
+  if (companyId) {
+    const invoice = await getStaffInvoiceForStaff(userId, companyId, targetMonth);
+    const companyName = companies.find((c) => c.id === companyId)!.name;
+    const [y, m] = targetMonth.split("-").map(Number);
+    return (
+      <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-10">
+        <Link href={`/staff/invoices?month=${targetMonth}`} className="mb-4 inline-block text-sm text-primary underline">
+          ← 一覧に戻る
+        </Link>
+        <div className="mb-4">
+          <h1 className="font-serif-jp text-xl font-bold text-primary">{companyName}</h1>
+          <p className="text-sm text-muted">
+            {y}年{m}月分の請求書
+          </p>
+        </div>
+        <StaffInvoiceEditor key={`${companyId}-${targetMonth}`} companyId={companyId} companyName={companyName} targetMonth={targetMonth} invoice={invoice} />
+      </main>
+    );
+  }
+
+  const invoices = await prisma.staffInvoice.findMany({
+    where: { staffUserId: userId, targetMonth, companyId: { in: companies.map((c) => c.id) } },
+    include: { company: { select: { name: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  const drafts = invoices.filter((i) => i.status === "DRAFT" || i.status === "RETURNED");
+  const submitted = invoices.filter((i) => i.status === "SUBMITTED" || i.status === "APPROVED");
+  const companiesWithInvoice = new Set(invoices.map((i) => i.companyId));
+  const availableCompanies = companies.filter((c) => !companiesWithInvoice.has(c.id));
+  const row = "flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm";
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-10">
       <h1 className="mb-4 font-serif-jp text-xl font-bold text-primary">請求書</h1>
-      {companies.length > 1 ? (
-        <div className="mb-3 flex flex-wrap gap-2">
-          {companies.map((c) => (
-            <Link
-              key={c.id}
-              href={href(targetMonth, c.id)}
-              className={`rounded-full border px-3 py-1 text-xs font-semibold ${c.id === companyId ? "border-primary bg-primary text-primary-foreground" : "border-border bg-white text-primary"}`}
-            >
-              {c.name}
-            </Link>
-          ))}
+      <MonthNavBar basePath="/staff/invoices" targetMonth={targetMonth} minMonth={null} todayMonth={thisMonth} />
+
+      <section data-testid="staff-invoice-drafts">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-serif-jp text-lg font-bold text-primary">下書き中</h2>
+          {availableCompanies.length > 0 ? (
+            <CreateRecordButton
+              basePath="/staff/invoices"
+              targetMonth={targetMonth}
+              paramName="company"
+              label="請求先の会社"
+              options={availableCompanies.map((c) => ({ id: c.id, name: c.name }))}
+            />
+          ) : null}
         </div>
-      ) : null}
-      <div className="mb-4 flex items-center justify-between rounded-2xl bg-white px-3 py-2 shadow-sm ring-1 ring-black/5">
-        <Link href={href(shiftMonth(targetMonth, -1))} className="shrink-0 whitespace-nowrap rounded-lg px-2 py-1.5 text-sm text-primary" aria-label="前の月">
-          ‹ 前月
-        </Link>
-        <span className="min-w-0 text-center text-sm font-semibold text-primary">
-          <span className="block truncate text-xs font-normal text-muted">{companyName}</span>
-          {y}年{m}月分
-        </span>
-        {targetMonth < thisMonth ? (
-          <Link href={href(shiftMonth(targetMonth, 1))} className="shrink-0 whitespace-nowrap rounded-lg px-2 py-1.5 text-sm text-primary" aria-label="次の月">
-            翌月 ›
-          </Link>
+        {drafts.length === 0 ? (
+          <p className="text-sm text-muted">下書き中の請求書はありません。</p>
         ) : (
-          <span className="shrink-0 whitespace-nowrap px-2 py-1.5 text-sm text-transparent">翌月 ›</span>
-        )}
-      </div>
-
-      <StaffInvoiceEditor key={`${companyId}-${targetMonth}`} companyId={companyId} companyName={companyName} targetMonth={targetMonth} invoice={invoice} />
-
-      {history.length > 0 ? (
-        <section className="mt-8">
-          <h2 className="mb-2 text-sm font-semibold text-muted">これまでの請求書</h2>
-          <ul className="flex flex-col gap-1.5">
-            {history.map((h) => {
-              const [hy, hm] = h.targetMonth.split("-").map(Number);
-              return (
-                <li key={h.id}>
-                  <Link
-                    href={href(h.targetMonth)}
-                    className="flex items-center justify-between rounded-xl bg-white px-4 py-2.5 text-sm shadow-sm ring-1 ring-black/5"
-                  >
-                    <span>
-                      {hy}年{hm}月分
-                      <span className="ml-2 rounded-full bg-background px-2 py-0.5 text-[11px] text-muted">{STATUS_LABEL[h.status]}</span>
-                    </span>
-                    {h.status !== "DRAFT" ? <span className="font-semibold text-primary">{h.total.toLocaleString()}円</span> : null}
-                  </Link>
-                </li>
-              );
-            })}
+          <ul className="flex flex-col gap-1">
+            {drafts.map((i) => (
+              <li key={i.id}>
+                <Link href={`/staff/invoices?month=${targetMonth}&company=${i.companyId}`} className={`${row} hover:bg-background`}>
+                  <span className="flex items-center gap-2">
+                    <span className="font-medium">{i.company.name}</span>
+                    {STATUS_CHIP[i.status] ? (
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_CHIP[i.status].className}`}>{STATUS_CHIP[i.status].text}</span>
+                    ) : null}
+                  </span>
+                </Link>
+              </li>
+            ))}
           </ul>
-        </section>
-      ) : null}
+        )}
+      </section>
+
+      <section className="mt-10" data-testid="staff-invoice-submitted">
+        <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">提出済み</h2>
+        {submitted.length === 0 ? (
+          <p className="text-sm text-muted">この月に提出した請求書はありません。</p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {submitted.map((i) => (
+              <li key={i.id} className={row}>
+                <Link href={`/staff/invoices?month=${targetMonth}&company=${i.companyId}`} className="flex items-center gap-2 font-medium text-primary underline">
+                  {i.company.name}
+                  <span className={`rounded-full px-2 py-0.5 text-xs no-underline ${STATUS_CHIP[i.status].className}`}>{STATUS_CHIP[i.status].text}</span>
+                </Link>
+                <span className="text-muted">{i.total.toLocaleString()}円</span>
+                <PdfLink href={`/api/staff-invoices/${i.id}/pdf`} className="text-xs text-primary underline">
+                  PDF
+                </PdfLink>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </main>
   );
 }

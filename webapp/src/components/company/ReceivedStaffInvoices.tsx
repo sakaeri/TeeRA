@@ -105,7 +105,7 @@ export type ReceivedInvoiceDetail = {
   status: string;
   submittedAt: string;
   lines: { shiftId: string; description: string; hours: number; rate: number; amount: number }[];
-  expenses: { label: string; amount: number }[];
+  expenses: { label: string; quantity: number; unitPrice: number; amount: number }[];
   note: string | null;
   issuerName: string | null;
   issuerAddress: string | null;
@@ -185,7 +185,9 @@ export function ReceivedStaffInvoiceView({ invoice }: { invoice: ReceivedInvoice
             <li key={`e${i}`} className="flex justify-between gap-3 py-1.5">
               <span>
                 {e.label}
-                <span className="ml-2 text-xs text-muted">その他の項目</span>
+                <span className="ml-2 text-xs text-muted">
+                  {e.quantity} × {yen(e.unitPrice)}（その他の項目）
+                </span>
               </span>
               <span className="shrink-0">{yen(e.amount)}</span>
             </li>
