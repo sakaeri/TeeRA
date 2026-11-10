@@ -12,7 +12,7 @@ import { todayJstParts, earliestAllowedMonth, cutoffMonthString } from "@/lib/da
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PdfLink } from "@/components/PdfLink";
-import { approvedStaffInvoiceStaffIds, listReceivedStaffInvoices, staffInvoiceOpenCost, sanitizeExpenses } from "@/lib/domain/staffInvoices";
+import { approvedStaffInvoiceStaffIds, hasContractorStaff, listReceivedStaffInvoices, staffInvoiceOpenCost, sanitizeExpenses } from "@/lib/domain/staffInvoices";
 import type { ComputedWorkLine } from "@/lib/domain/payroll";
 import { ReceivedStaffInvoiceList, ReceivedStaffInvoiceView, type ReceivedInvoiceDetail } from "@/components/company/ReceivedStaffInvoices";
 
@@ -160,6 +160,8 @@ export default async function PayrollPage({
     })),
   );
   const invoicedStaffIds = await approvedStaffInvoiceStaffIds(membership.companyId, targetMonth);
+  // 業務委託のスタッフがいる会社には、まだ届いていなくても「届いた請求書」の欄を出しておく
+  const showReceivedSection = receivedRows.length > 0 || (await hasContractorStaff(membership.companyId, [...accessibleStaffIds]));
   // 開いた（1件分を精算した）請求書だけ中身を見られる
   const openedInvoice = staffInvoiceId ? receivedInvoices.find((i) => i.id === staffInvoiceId && i.chargeSettledAt) : undefined;
   const invoiceDetail: ReceivedInvoiceDetail | null = openedInvoice
@@ -291,7 +293,7 @@ export default async function PayrollPage({
             )}
           </section>
 
-          {receivedRows.length > 0 ? (
+          {showReceivedSection ? (
             <ReceivedStaffInvoiceList
               rows={receivedRows}
               targetMonth={targetMonth}

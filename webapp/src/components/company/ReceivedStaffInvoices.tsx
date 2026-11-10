@@ -93,6 +93,7 @@ export function ReceivedStaffInvoiceList({
           </Link>
         </p>
       ) : null}
+      {rows.length === 0 ? <p className="text-sm text-muted">まだ届いていません。</p> : null}
       <ul className="flex flex-col gap-1">
         {rows.map((r) => {
           const st = STATUS_LABEL[r.status];
