@@ -94,6 +94,7 @@ export async function createAssignedShiftAction(input: {
       taskName: input.taskName,
       note: input.note,
       confirmedByUserId: userId,
+      createdByCompanyId: membership.companyId,
       overrideShiftIds: input.overridesByDate?.[date],
       confirmedDespiteOffRequest: input.confirmedOffDates?.includes(date),
     });
@@ -136,11 +137,13 @@ export async function createPublicRecruitmentAction(input: {
   endTime?: string;
   isUndecided: boolean;
   maxEntries: number;
+  companyRelationshipId?: string;
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManageShifts(membership, input.teamId)) throw new Error("forbidden");
 
   await createPublicRecruitment({
+    companyRelationshipId: input.companyRelationshipId || undefined,
     companyId: membership.companyId,
     teamId: input.teamId,
     title: input.title,

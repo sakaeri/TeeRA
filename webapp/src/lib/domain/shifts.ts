@@ -208,6 +208,7 @@ export async function createAssignedShift(params: {
   confirmedDespiteOffRequest?: boolean; // set when the caller has already confirmed assigning despite a pending 休み希望
   companyRelationshipId?: string; // set for 取引先オーダー (source becomes CLIENT, billable on that client's invoice)
   taskName?: string; // 業務内容 — 単価は保持しない。給与/請求計算時にその都度参照される
+  createdByCompanyId?: string; // シフトを入れた会社（依頼主のカレンダーに「派遣会社が入力」と出すため）
 }) {
   return prisma.$transaction(async (tx) => {
     // 同じスタッフ×日付への重複チェック(findConflictingShifts)とアサイン
@@ -241,6 +242,7 @@ export async function createAssignedShift(params: {
     const created = await tx.shift.create({
       data: {
         companyId: params.companyId,
+        createdByCompanyId: params.createdByCompanyId,
         teamId: params.teamId,
         staffUserId: params.staffUserId,
         source: params.companyRelationshipId ? "CLIENT" : "INHOUSE",
