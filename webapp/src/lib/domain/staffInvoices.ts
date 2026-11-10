@@ -59,6 +59,25 @@ export async function isContractorOf(staffUserId: string, companyId: string) {
   return isCurrentlyContractor(await contractsOf(staffUserId, companyId));
 }
 
+// 会社側：この中に今の契約が業務委託のスタッフが1人でもいるか（給料明細の一覧に「届いた請求書」の欄を出すかどうか）
+export async function hasContractorStaff(companyId: string, staffUserIds: string[]) {
+  if (staffUserIds.length === 0) return false;
+  const contracts = await prisma.staffContract.findMany({
+    where: { staffUserId: { in: staffUserIds }, status: { not: "PENDING_CONSENT" }, template: { companyId } },
+    select: {
+      staffUserId: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      contractEndDate: true,
+      template: { select: { companyId: true, employmentType: true, contractEndDate: true, company: { select: { id: true, name: true } } } },
+    },
+  });
+  const byStaff = new Map<string, ContractRow[]>();
+  for (const c of contracts) byStaff.set(c.staffUserId, [...(byStaff.get(c.staffUserId) ?? []), c]);
+  return [...byStaff.values()].some((rows) => isCurrentlyContractor(rows));
+}
+
 // スタッフが請求書を出せる会社（今の契約が業務委託の、所属している会社）
 export async function listContractorCompanies(staffUserId: string) {
   const [contracts, memberships] = await Promise.all([

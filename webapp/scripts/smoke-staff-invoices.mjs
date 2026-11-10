@@ -216,7 +216,8 @@ try {
   log("承認すると承認済みになる", psql(`select status from "StaffInvoice" where id='${invoiceId}';`) === "APPROVED");
   log("スタッフに承認のお知らせが届く", psql(`select count(*) from "StaffNotice" where "staffUserId"='${staffId}' and message like '%請求書が承認されました%';`) === "1");
   await admin.goto(`http://localhost:3000/company/payroll?month=${month}`);
-  log("承認した請求書は「届いた請求書」の欄から消える", (await admin.getByTestId("received-staff-invoices").count()) === 0);
+  const receivedAfter = await admin.getByTestId("received-staff-invoices").innerText();
+  log("承認した請求書は「届いた請求書」の欄から消え、業務委託のスタッフがいるので欄は「まだ届いていません」で残る", !receivedAfter.includes("委託太郎") && receivedAfter.includes("まだ届いていません"));
   const historyText = await admin.locator("section", { hasText: "発行履歴" }).last().innerText();
   log("承認した請求書は「発行履歴」に移る", historyText.includes("委託太郎") && historyText.includes("受け取った請求書"));
   await admin.goto(`http://localhost:3000/company/payroll?month=${month}&staff=${staffId}`);
@@ -248,6 +249,9 @@ try {
 
   // --- 他の会社の人はPDFを見られない ---
   await registerCompany(other, `別会社${suffix}`, `sinv-other-${suffix}@example.com`);
+  await other.goto("http://localhost:3000/company/payroll");
+  await other.getByText("下書き中").first().waitFor();
+  log("業務委託のスタッフがいない会社には「届いた請求書」の欄を出さない", (await other.getByTestId("received-staff-invoices").count()) === 0);
   const otherPdf = await other.request.get(`http://localhost:3000/api/staff-invoices/${invoiceId}/pdf`);
   log("他の会社の人はPDFを見られない", otherPdf.status() === 403);
 
