@@ -34,6 +34,7 @@ export function ReceivedStaffInvoiceList({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [m] = [Number(targetMonth.slice(5, 7))];
+  const [infoOpen, setInfoOpen] = useState(false);
 
   function open(row: ReceivedInvoiceRow) {
     setError(null);
@@ -61,9 +62,29 @@ export function ReceivedStaffInvoiceList({
   }
 
   return (
-    <section className="mb-10" data-testid="received-staff-invoices">
-      <h2 className="mb-1 font-serif-jp text-lg font-bold text-primary">業務委託のスタッフから届いた請求書</h2>
-      <p className="mb-3 text-xs text-muted">開くと1件分（無料枠か1Tee）を使います。同じ人の同じ月は1回だけで、その月の支払明細を発行済みなら無料です。</p>
+    <section className="mt-10" data-testid="received-staff-invoices">
+      {/* スマホでは見出しが1行に収まらないので、意味の切れ目（「業務委託のスタッフから」「届いた請求書」）で折り返す */}
+      <div className="mb-3 flex items-start gap-1.5">
+        <h2 className="font-serif-jp text-base font-bold leading-snug text-primary sm:text-lg">
+          <span className="inline-block">業務委託のスタッフから</span>
+          <span className="inline-block">届いた請求書</span>
+        </h2>
+        {/* 説明は「ⓘ」を押した時だけ出す（一覧の上に長い文が並ばないように） */}
+        <button
+          type="button"
+          aria-label="説明を見る"
+          aria-expanded={infoOpen}
+          onClick={() => setInfoOpen((v) => !v)}
+          className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-muted text-[11px] font-bold text-muted sm:mt-1"
+        >
+          i
+        </button>
+      </div>
+      {infoOpen ? (
+        <p className="-mt-1 mb-3 rounded-lg bg-background px-3 py-2 text-xs text-muted" data-testid="received-staff-invoices-info">
+          承認するまでここに出て、承認すると「発行履歴」に移ります。開くと1件分（無料枠か1Tee）を使います。同じ人の同じ月は1回だけで、その月の支払明細を発行済みなら無料です。
+        </p>
+      ) : null}
       {error ? (
         <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
           {error}{" "}

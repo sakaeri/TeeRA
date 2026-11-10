@@ -215,6 +215,10 @@ try {
   await admin.getByText("承認しました").waitFor();
   log("承認すると承認済みになる", psql(`select status from "StaffInvoice" where id='${invoiceId}';`) === "APPROVED");
   log("スタッフに承認のお知らせが届く", psql(`select count(*) from "StaffNotice" where "staffUserId"='${staffId}' and message like '%請求書が承認されました%';`) === "1");
+  await admin.goto(`http://localhost:3000/company/payroll?month=${month}`);
+  log("承認した請求書は「届いた請求書」の欄から消える", (await admin.getByTestId("received-staff-invoices").count()) === 0);
+  const historyText = await admin.locator("section", { hasText: "発行履歴" }).last().innerText();
+  log("承認した請求書は「発行履歴」に移る", historyText.includes("委託太郎") && historyText.includes("受け取った請求書"));
   await admin.goto(`http://localhost:3000/company/payroll?month=${month}&staff=${staffId}`);
   log("給料明細の画面に「請求書を受け取り、承認済み」と出る", (await admin.locator("main").innerText()).includes("請求書を受け取り、承認済みです"));
   const staffPdf = await staff.request.get(`http://localhost:3000/api/staff-invoices/${invoiceId}/pdf`);
@@ -229,6 +233,9 @@ try {
   psql(`insert into "SalarySlipIssue" (id, "salarySlipId", snapshot, "chargedTee", "issuedAt") values (gen_random_uuid()::text, '${slip}', '{}'::jsonb, true, now());`);
   psql(`insert into "StaffInvoice" (id, "companyId", "staffUserId", "targetMonth", status, "issuerName", total, "submittedAt", "updatedAt") values (gen_random_uuid()::text, '${companyId}', '${staff2}', '${month}', 'SUBMITTED', '委託次郎', 1000, now(), now());`);
   await admin.goto(`http://localhost:3000/company/payroll?month=${month}`);
+  await admin.setViewportSize({ width: 390, height: 844 });
+  await admin.screenshot({ path: "/tmp/claude-0/-home-user-TeeRA/080a6f73-edd8-511c-aeae-9c93d46ffc7b/scratchpad/company-payroll-mobile.png", fullPage: true });
+  await admin.setViewportSize({ width: 1280, height: 720 });
   let confirm2 = "";
   admin.once("dialog", (d) => {
     confirm2 = d.message();
