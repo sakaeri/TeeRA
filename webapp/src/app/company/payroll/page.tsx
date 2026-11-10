@@ -148,8 +148,10 @@ export default async function PayrollPage({
 
   // 業務委託のスタッフから届いた請求書（自分が扱えるスタッフの分だけ）
   const receivedInvoices = await listReceivedStaffInvoices(membership.companyId, targetMonth, accessibleStaffIds);
+  // 承認するまで（確認待ち・差し戻し中）は「業務委託のスタッフから届いた請求書」の欄、承認したら「発行履歴」に移す
+  const approvedInvoices = receivedInvoices.filter((inv) => inv.status === "APPROVED");
   const receivedRows = await Promise.all(
-    receivedInvoices.map(async (inv) => ({
+    receivedInvoices.filter((inv) => inv.status !== "APPROVED").map(async (inv) => ({
       id: inv.id,
       staffName: inv.staff.name,
       status: inv.status,
@@ -250,13 +252,6 @@ export default async function PayrollPage({
         </>
       ) : (
         <>
-          {receivedRows.length > 0 ? (
-            <ReceivedStaffInvoiceList
-              rows={receivedRows}
-              targetMonth={targetMonth}
-              quota={{ remaining: pdfQuota.remaining, unlimited: pdfQuota.unlimited, quota: pdfQuota.quota }}
-            />
-          ) : null}
           <section>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-serif-jp text-lg font-bold text-primary">下書き中</h2>
@@ -296,6 +291,13 @@ export default async function PayrollPage({
             )}
           </section>
 
+          {receivedRows.length > 0 ? (
+            <ReceivedStaffInvoiceList
+              rows={receivedRows}
+              targetMonth={targetMonth}
+              quota={{ remaining: pdfQuota.remaining, unlimited: pdfQuota.unlimited, quota: pdfQuota.quota }}
+            />
+          ) : null}
           <section className="mt-10">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-serif-jp text-lg font-bold text-primary">発行履歴</h2>
@@ -308,10 +310,28 @@ export default async function PayrollPage({
                 </PdfLink>
               ) : null}
             </div>
-            {issuedSlips.length === 0 ? (
+            {issuedSlips.length === 0 && approvedInvoices.length === 0 ? (
               <p className="text-sm text-muted">この月に発行された給与明細はありません。</p>
             ) : (
               <ul className="flex flex-col gap-1">
+                {approvedInvoices.map((inv) => (
+                  <li
+                    key={inv.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm"
+                  >
+                    <Link
+                      href={`/company/payroll?month=${targetMonth}&staffInvoice=${inv.id}`}
+                      className="flex items-center gap-2 font-medium text-primary underline"
+                    >
+                      {inv.staff.name}
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 no-underline">受け取った請求書</span>
+                    </Link>
+                    <span className="text-muted">{inv.total.toLocaleString()}円</span>
+                    <PdfLink href={`/api/staff-invoices/${inv.id}/pdf`} className="text-xs text-primary underline">
+                      PDF（承認 {inv.reviewedAt ? new Date(inv.reviewedAt).toLocaleDateString("ja-JP") : ""}）
+                    </PdfLink>
+                  </li>
+                ))}
                 {issuedSlips.map((slip) => {
                   // 一覧にはこのスタッフの最新発行分のPDFだけを出す。過去分は
                   // 詳細（編集画面）の発行履歴から辿れる。
