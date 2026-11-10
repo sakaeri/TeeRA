@@ -14,7 +14,7 @@ function fileNameFrom(disposition: string | null) {
 
 // PDFを各ページの画像（canvas）にして縦に並べる。iPhoneはPDFをそのまま埋め込むと
 // 1ページ目しか出ないことがあるため、pdf.jsで描く。
-export function PdfViewer({ src }: { src: string }) {
+export function PdfViewer({ src, sample = false }: { src: string; sample?: boolean }) {
   const router = useRouter();
   const pagesRef = useRef<HTMLDivElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -90,18 +90,23 @@ export function PdfViewer({ src }: { src: string }) {
 
   return (
     <div className="flex min-h-dvh flex-col bg-neutral-200">
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b-2 border-accent bg-primary px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] text-primary-foreground">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b-2 border-accent bg-primary px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top)*1.5)] text-primary-foreground">
         <button type="button" onClick={goBack} className="py-1 text-sm font-semibold">
           ← 戻る
         </button>
-        <button
-          type="button"
-          onClick={share}
-          disabled={!file}
-          className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-primary disabled:opacity-50"
-        >
-          保存・共有
-        </button>
+        {/* 見本（下書きのプレビュー）は保存・共有させない */}
+        {sample ? (
+          <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold">見本</span>
+        ) : (
+          <button
+            type="button"
+            onClick={share}
+            disabled={!file}
+            className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-primary disabled:opacity-50"
+          >
+            保存・共有
+          </button>
+        )}
       </header>
       <main className="mx-auto w-full max-w-3xl flex-1 px-3 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         {status === "loading" ? <p className="py-10 text-center text-sm text-muted">PDFを読み込んでいます…</p> : null}

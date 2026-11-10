@@ -18,7 +18,7 @@ export default async function AccountPage({
 
   return (
     // ホーム画面に追加したアプリ（全画面表示）では上端が時計・電池の帯と重なるので、その分下げる
-    <main className="mx-auto w-full max-w-2xl px-4 pb-10 pt-[calc(1.5rem+env(safe-area-inset-top))] sm:px-8 sm:pt-10">
+    <main className="mx-auto w-full max-w-2xl px-4 pb-10 pt-[calc(1.5rem+env(safe-area-inset-top)*1.5)] sm:px-8 sm:pt-10">
       <Link href={backHref} className="mb-6 inline-block py-2 text-sm text-primary underline">
         ← 戻る
       </Link>

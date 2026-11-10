@@ -391,7 +391,7 @@ export function InvoiceEditor({
           実績表を付ける（2ページ目以降に、この請求書に載ったシフトの日付・スタッフ・時間）
         </label>
         {isEditable ? (
-          <PdfLink href={`/api/invoices/${invoice.id}/pdf`} className="mt-4 inline-block text-sm font-semibold text-primary underline">
+          <PdfLink sample href={`/api/invoices/${invoice.id}/pdf`} className="mt-4 inline-block text-sm font-semibold text-primary underline">
             見本のPDFを見る
           </PdfLink>
         ) : null}

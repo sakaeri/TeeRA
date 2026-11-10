@@ -20,8 +20,10 @@ export function PdfLink({
   children,
   title,
   ariaLabel,
+  sample = false,
 }: {
   href: string;
+  sample?: boolean;
   className?: string;
   children: ReactNode;
   title?: string;
@@ -39,7 +41,7 @@ export function PdfLink({
       onClick={(e) => {
         if (isStandaloneApp() || window.innerWidth < 640) {
           e.preventDefault();
-          router.push(pdfViewerHref(href));
+          router.push(pdfViewerHref(href, { sample }));
         }
       }}
     >

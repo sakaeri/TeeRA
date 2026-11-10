@@ -37,6 +37,18 @@ try {
   const brokenImages = await page.$$eval("img[src^='/howto/']", (imgs) => imgs.filter((i) => !i.complete || i.naturalWidth === 0).map((i) => i.src));
   log("all howto images load", brokenImages.length === 0);
 
+  // スマホ（ホーム画面のアプリでは印刷が効かない）では、マニュアルのPDFをアプリ内で開く
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: /このページを印刷する/ }).click();
+  await page.waitForURL(/\/pdf-view\?src=%2Fhowto%2Fmanual\.pdf/, { timeout: 15000 });
+  await page.locator("canvas").first().waitFor({ timeout: 30000 });
+  log("スマホでは「印刷する」でマニュアルのPDFが開く", (await page.locator("canvas").count()) > 0);
+  log("マニュアルのPDFは保存・共有できる", (await page.getByRole("button", { name: "保存・共有" }).count()) === 1);
+  // 見本のPDFには保存・共有を出さない
+  await page.goto("http://localhost:3000/pdf-view?src=%2Fhowto%2Fmanual.pdf&sample=1");
+  await page.getByText("見本", { exact: true }).waitFor({ timeout: 15000 });
+  log("見本のPDFには保存・共有のボタンが出ない", (await page.getByRole("button", { name: "保存・共有" }).count()) === 0);
+
   console.log(process.exitCode ? "HOWTO TAB SMOKE TEST HAD FAILURES" : "HOWTO TAB SMOKE TEST PASSED");
 } catch (err) {
   console.error("HOWTO TAB SMOKE TEST FAILED", err);
