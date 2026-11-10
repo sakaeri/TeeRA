@@ -20,8 +20,19 @@ const SECTIONS: { id: string; title: string; image: string; steps: string[]; not
     note: "右上の丸いアイコン→鉛筆マークの「アカウント設定」で、プッシュ通知をオンにしておくと、シフトやお知らせにすぐ気づけます。",
   },
   {
+    id: "staff-howto-contract",
+    title: "②契約書を確認して同意する",
+    image: "/howto/staff-contract.png",
+    steps: [
+      "ログインした後、会社から契約書が届いていると、アプリを開いたときに確認の画面が出る（同意するまで他の画面は使えません）",
+      "「契約書の内容 → 身分証明書 → 振込先 → 署名」の順に進めて、最後に「同意する」",
+      "同意すると、控えのPDFがメールで届く。あとからメニューの「設定」でも見られる",
+    ],
+    note: "身分証・振込先は一度出せば、次の契約書では最初から入っています（直すこともできます）。",
+  },
+  {
     id: "staff-howto-calendar",
-    title: "②カレンダーで自分のシフトを見る",
+    title: "③カレンダーで自分のシフトを見る",
     image: "/howto/staff-calendar.png",
     steps: [
       "メニューの「カレンダー」に、自分のシフトが勤務先の名前つきで出る",
@@ -32,17 +43,18 @@ const SECTIONS: { id: string; title: string; image: string; steps: string[]; not
   },
   {
     id: "staff-howto-request",
-    title: "③シフト希望を出す",
+    title: "④シフト希望を出す",
     image: "/howto/staff-shift-request.png",
     steps: [
       "カレンダー右下の「＋」（または日付をタップして「＋シフト希望を作成」）",
       "日付を選び、「出勤希望」か「休み希望」かを選んで送る（何日分かまとめて出せます）",
       "会社がシフトを作ると、カレンダーにシフトとして出る",
     ],
+    pageBreak: true,
   },
   {
     id: "staff-howto-recruit",
-    title: "④募集に応募する",
+    title: "⑤募集に応募する",
     image: "/howto/staff-recruitments.png",
     steps: [
       "メニューの「募集」に、会社や配属先から出ている募集が並ぶ",
@@ -50,11 +62,10 @@ const SECTIONS: { id: string; title: string; image: string; steps: string[]; not
       "応募すると、そのままシフトとして確定し、カレンダーに出る",
     ],
     note: "自分のシフトと時間が重なる募集や、満員の募集は出ません。",
-    pageBreak: true,
   },
   {
     id: "staff-howto-timecard",
-    title: "⑤タイムカード（勤務開始・勤務終了）",
+    title: "⑥タイムカード（勤務開始・勤務終了）",
     image: "/howto/staff-timecard-mobile.png",
     steps: [
       "勤務の日は「タイムカード」を開き、着いたら「勤務開始」",
@@ -66,24 +77,13 @@ const SECTIONS: { id: string; title: string; image: string; steps: string[]; not
   },
   {
     id: "staff-howto-unscheduled",
-    title: "⑥シフトが無い日に働いた時（シフト外の勤務）",
+    title: "⑦シフトが無い日に働いた時（シフト外の勤務）",
     image: "/howto/staff-unscheduled.png",
     steps: [
       "急に呼ばれて働いた日など、シフトが無い日は、タイムカードの「＋シフト外の勤務を報告する」",
       "勤務先・日付・業務内容・出勤と退勤の時刻・休憩を入れて提出する",
       "会社が承認すると、ほかの勤務と同じように給料に反映される",
     ],
-  },
-  {
-    id: "staff-howto-contract",
-    title: "⑦契約書を確認して同意する",
-    image: "/howto/staff-contract.png",
-    steps: [
-      "会社から契約書が届くと、アプリを開いたときに確認の画面が出る",
-      "「契約書の内容 → 身分証明書 → 振込先 → 署名」の順に進めて、最後に「同意する」",
-      "同意すると、控えのPDFがメールで届く。あとからメニューの「設定」でも見られる",
-    ],
-    note: "身分証・振込先は一度出せば、次の契約書では最初から入っています（直すこともできます）。",
     pageBreak: true,
   },
   {
