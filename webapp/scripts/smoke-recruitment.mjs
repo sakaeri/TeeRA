@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
+import { createRecruitmentViaWizard } from "./_lib/recruitmentWizard.mjs";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 function log(label, ok) {
@@ -78,14 +79,9 @@ try {
   log("order creation form has no 時給/Tee-cap fields", !bodyBeforeFill.includes("時給") && !bodyBeforeFill.includes("残高で賄える"));
 
   const recruitmentTitle = `キッチンスタッフ募集${Date.now()}`;
-  const titleInput = admin.locator('input[type="text"]').first();
-  await titleInput.fill(recruitmentTitle);
-  const maxEntriesInput = admin.locator("label:has-text('募集人数') input").first();
-  await maxEntriesInput.fill("3");
-  await admin.getByRole("button", { name: "掲載する" }).click();
-  await admin.waitForTimeout(300);
-  log("clicking 掲載する shows a confirmation step before creating", (await admin.textContent("body")).includes("内容を確認してください"));
-  await admin.getByRole("button", { name: /件の募集を作成/ }).click();
+  const wizardModal = await createRecruitmentViaWizard(admin, { taskName: recruitmentTitle, counts: [3], confirm: false });
+  log("人数の後に確認画面が出てから作成する", (await wizardModal.innerText()).includes("3名"));
+  await wizardModal.getByRole("button", { name: /件の募集を作成/ }).click();
   await admin.waitForTimeout(800);
 
   const balanceAfterCreate = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));

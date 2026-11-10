@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
+import { createRecruitmentViaWizard } from "./_lib/recruitmentWizard.mjs";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 function log(label, ok) {
@@ -85,10 +86,7 @@ try {
   await client.locator("button", { hasText: "＋" }).last().click();
   await client.getByText("募集を作成").click();
   let modal = client.locator("div.fixed.inset-0.z-20").last();
-  await modal.locator('input[placeholder="例：倉庫での軽作業"]').fill("キャディ募集");
-  await modal.getByRole("button", { name: "掲載する" }).click();
-  await client.waitForTimeout(300);
-  await modal.getByRole("button", { name: /件の募集を作成/ }).click();
+  await createRecruitmentViaWizard(client, { taskName: "キャディ募集" });
   await client.waitForTimeout(600);
 
   const recruitmentId = psql(

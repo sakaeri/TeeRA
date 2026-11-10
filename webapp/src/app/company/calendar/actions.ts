@@ -137,6 +137,7 @@ export async function createPublicRecruitmentAction(input: {
   endTime?: string;
   isUndecided: boolean;
   maxEntries: number;
+  maxEntriesByDate?: Record<string, number>;
   companyRelationshipId?: string;
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
@@ -154,6 +155,7 @@ export async function createPublicRecruitmentAction(input: {
     endTime: input.endTime,
     isUndecided: input.isUndecided,
     maxEntries: input.maxEntries,
+    maxEntriesByDate: input.maxEntriesByDate,
     createdByUserId: userId,
   });
   revalidatePath("/company/calendar");
