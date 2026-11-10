@@ -73,17 +73,41 @@ export function ReceivedStaffInvoiceList({
         <button
           type="button"
           aria-label="説明を見る"
-          aria-expanded={infoOpen}
-          onClick={() => setInfoOpen((v) => !v)}
+          onClick={() => setInfoOpen(true)}
           className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-muted text-[11px] font-bold text-muted sm:mt-1"
         >
           i
         </button>
       </div>
       {infoOpen ? (
-        <p className="-mt-1 mb-3 rounded-lg bg-background px-3 py-2 text-xs text-muted" data-testid="received-staff-invoices-info">
-          承認するまでここに出て、承認すると「発行履歴」に移ります。開くと1件分（無料枠か1Tee）を使います。同じ人の同じ月は1回だけで、その月の支払明細を発行済みなら無料です。
-        </p>
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={() => setInfoOpen(false)}>
+          <div
+            role="dialog"
+            aria-label="業務委託のスタッフから届いた請求書について"
+            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+            data-testid="received-staff-invoices-info"
+          >
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <h3 className="font-serif-jp text-base font-bold text-primary">業務委託のスタッフから届いた請求書</h3>
+              <button type="button" onClick={() => setInfoOpen(false)} className="text-muted" aria-label="閉じる">
+                ✕
+              </button>
+            </div>
+            <ul className="list-disc space-y-1.5 pl-5 text-sm text-foreground">
+              <li>承認するまでここに出て、承認すると「発行履歴」に移ります。</li>
+              <li>開くと1件分（プランの無料枠か1Tee）を使います。</li>
+              <li>同じ人の同じ月は1回だけで、直して再提出されても追加はかかりません。その月の支払明細を発行済みなら無料です。</li>
+            </ul>
+            <button
+              type="button"
+              onClick={() => setInfoOpen(false)}
+              className="mt-4 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
       ) : null}
       {error ? (
         <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">

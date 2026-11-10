@@ -156,6 +156,9 @@ try {
   const listText = await list.innerText();
   log("一覧に届いた請求書（未開封）が出る", listText.includes("委託太郎") && listText.includes("未開封"));
   log("一覧には金額を出さない", !(await admin.locator("main").innerText()).includes("15,880"));
+  await list.getByRole("button", { name: "説明を見る" }).click();
+  log("iマークを押すと説明がポップアップで出る", (await admin.getByTestId("received-staff-invoices-info").innerText()).includes("承認すると「発行履歴」に移ります"));
+  await admin.getByTestId("received-staff-invoices-info").getByText("閉じる", { exact: true }).click();
   const pdfBefore = await admin.request.get(`http://localhost:3000/api/staff-invoices/${invoiceId}/pdf`);
   log("開く前はPDFを見られない", pdfBefore.status() === 403);
   await admin.goto(`http://localhost:3000/company/payroll?month=${month}&staffInvoice=${invoiceId}`);
