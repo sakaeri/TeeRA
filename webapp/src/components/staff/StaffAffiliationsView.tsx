@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PayslipIcon, InvoiceIcon, HowtoIcon } from "@/components/staff/StaffMenuIcons";
 
 const ROLE_LABEL: Record<string, string> = {
   COMPANY_ADMIN: "管理者",
@@ -13,17 +14,22 @@ export function StaffAffiliationsView({ companies, isContractor = false }: { com
     <ul className="flex flex-col gap-3">
       {/* 給料明細・（業務委託の人は）請求書・使い方への入口（右上のメニューにもある） */}
       <li className={`grid gap-3 ${isContractor ? "grid-cols-3" : "grid-cols-2"}`}>
-        <Link href="/staff/payslips" className="rounded-2xl border border-border bg-white/60 p-4 text-center text-sm font-semibold text-primary hover:border-primary">
-          給料明細
-        </Link>
-        {isContractor ? (
-          <Link href="/staff/invoices" className="rounded-2xl border border-border bg-white/60 p-4 text-center text-sm font-semibold text-primary hover:border-primary">
-            請求書
-          </Link>
-        ) : null}
-        <Link href="/staff/howto" className="rounded-2xl border border-border bg-white/60 p-4 text-center text-sm font-semibold text-primary hover:border-primary">
-          使い方
-        </Link>
+        {[
+          { href: "/staff/payslips", label: "給料明細", icon: <PayslipIcon className="h-6 w-6" />, show: true },
+          { href: "/staff/invoices", label: "請求書", icon: <InvoiceIcon className="h-6 w-6" />, show: isContractor },
+          { href: "/staff/howto", label: "使い方", icon: <HowtoIcon className="h-6 w-6" />, show: true },
+        ]
+          .filter((item) => item.show)
+          .map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-border bg-white/60 px-2 py-3 text-xs font-semibold text-primary hover:border-primary"
+            >
+              {item.icon}
+              <span className="whitespace-nowrap">{item.label}</span>
+            </Link>
+          ))}
       </li>
       {companies.map((c) => (
         <li key={c.companyId}>

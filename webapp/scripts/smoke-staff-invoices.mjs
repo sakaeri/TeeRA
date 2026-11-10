@@ -244,6 +244,18 @@ try {
   const otherPdf = await other.request.get(`http://localhost:3000/api/staff-invoices/${invoiceId}/pdf`);
   log("他の会社の人はPDFを見られない", otherPdf.status() === 403);
 
+  // --- 今の契約が業務委託でなくなったら（新しいアルバイトの契約に同意済み）、請求書は出せない ---
+  const ptTpl = psql(
+    `insert into "ContractTemplate" (id, "companyId", title, "employmentType", "workplaceType", "jobDescription", "scheduleType", "wageType", "wageAmount", "contractPeriodType", "contractStartDate", status, "updatedAt") values (gen_random_uuid()::text, '${companyId}', 'アルバイト契約', 'PART_TIME', 'INHOUSE', 'キャディ', 'SHIFT', 'HOURLY', 1100, 'INDEFINITE', '2026-11-01', 'LOCKED', now()) returning id;`,
+  );
+  psql(
+    `insert into "StaffContract" (id, "templateId", "staffUserId", "wageAmountSnapshot", "contractStartDate", status, "consentedAt", "createdAt", "updatedAt") values (gen_random_uuid()::text, '${ptTpl}', '${staffId}', 1100, '2026-11-01', 'ACTIVE', now(), now() + interval '1 minute', now());`,
+  );
+  await staff.goto("http://localhost:3000/staff/contracts");
+  log("今の契約がアルバイトなら、昔の業務委託の契約が残っていても「請求書」は出ない", (await staff.locator('a[href="/staff/invoices"]').count()) === 0);
+  await staff.goto(`http://localhost:3000/staff/invoices?month=${month}`);
+  log("請求書の画面を直接開いても作れない", (await staff.locator("main").innerText()).includes("業務委託の契約がある会社にだけ出せます"));
+
   console.log(process.exitCode ? "STAFF INVOICES SMOKE TEST HAD FAILURES" : "STAFF INVOICES SMOKE TEST PASSED");
 } catch (e) {
   console.error(e);
