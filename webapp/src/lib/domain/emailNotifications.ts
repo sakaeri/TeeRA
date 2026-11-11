@@ -351,6 +351,16 @@ export async function runShiftRequestDigest() {
   }
 }
 
+// メール・通知に出す勤務先。依頼主の現場のシフトは依頼主（未登録の依頼主は登録名）、
+// それ以外は自社。以前はいつも自社（雇っている会社）の名前を出していたため、
+// 依頼主の現場のシフトでも勤務先が自社の名前になっていた。
+function shiftWorkplaceName(shift: {
+  company: { name: string };
+  companyRelationship: { proxyName: string | null; clientCompany: { name: string } | null } | null;
+}) {
+  return shift.companyRelationship?.clientCompany?.name ?? shift.companyRelationship?.proxyName ?? shift.company.name;
+}
+
 // ④勤務開始1時間前リマインド（終日シフトは当日朝6:00以降にリマインド）
 // — 5〜10分おきのCronから呼ばれる想定だったが、実際にはGitHub Actionsの
 // 高頻度スケジュールは公式に間引かれ、数時間おきにしか実行されないことが
@@ -380,7 +390,7 @@ export async function runShiftStartReminders(now = new Date()) {
       reminderSentAt: null,
       date: { gte: new Date(`${todayStr}T00:00:00.000Z`), lte: tomorrow },
     },
-    include: { staff: true, company: true, publicRecruitment: true },
+    include: { staff: true, company: true, publicRecruitment: true, companyRelationship: { include: { clientCompany: true } } },
   });
 
   for (const shift of candidates) {
@@ -394,7 +404,7 @@ export async function runShiftStartReminders(now = new Date()) {
     await prisma.shift.update({ where: { id: shift.id }, data: { reminderSentAt: new Date() } });
     await sendShiftReminderEmail(shift.staff.email, {
       staffName: shift.staff.name,
-      companyName: shift.company.name,
+      companyName: shiftWorkplaceName(shift),
       date: shift.date.toISOString().slice(0, 10),
       timeLabel: shiftTimeLabel(shift),
       taskLabel: shift.taskName,
@@ -421,7 +431,7 @@ export async function runShiftStartReminders(now = new Date()) {
         reminderSentAt: null,
         date: { gte: new Date(`${todayStr}T00:00:00.000Z`), lt: tomorrow },
       },
-      include: { staff: true, company: true, publicRecruitment: true },
+      include: { staff: true, company: true, publicRecruitment: true, companyRelationship: { include: { clientCompany: true } } },
     });
 
     for (const shift of allDayCandidates) {
@@ -429,7 +439,7 @@ export async function runShiftStartReminders(now = new Date()) {
       await prisma.shift.update({ where: { id: shift.id }, data: { reminderSentAt: new Date() } });
       await sendShiftReminderEmail(shift.staff.email, {
         staffName: shift.staff.name,
-        companyName: shift.company.name,
+        companyName: shiftWorkplaceName(shift),
         date: shift.date.toISOString().slice(0, 10),
         timeLabel: shiftTimeLabel(shift),
         taskLabel: shift.taskName,
@@ -648,8 +658,7 @@ export async function notifyStaffShiftTimeChanged(params: {
   });
   if (shift.staff.isProxy) return;
   const dateLabel = `${shift.date.getUTCMonth() + 1}月${shift.date.getUTCDate()}日（${WEEKDAY_JA[shift.date.getUTCDay()]}）`;
-  const workplace =
-    shift.companyRelationship?.clientCompany?.name ?? shift.companyRelationship?.proxyName ?? shift.company.name;
+  const workplace = shiftWorkplaceName(shift);
   const newLabel = shiftTimeLabel(shift);
   const previousLabel = shiftTimeLabel(params.previous);
   const decided = params.previous.isUndecided && !shift.isUndecided;

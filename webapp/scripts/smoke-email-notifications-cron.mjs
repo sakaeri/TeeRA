@@ -121,6 +121,29 @@ try {
   const secondReminderLog = readServerLogSince(logStart);
   log("同じシフトに二重送信されない", !secondReminderLog.includes(reminderStaffEmail));
 
+  // 依頼主の現場のシフトは、勤務先に依頼主の名前が入る（雇っている会社の名前ではなく）
+  const clientName = `リマインド現場ゴルフ場${suffix}`;
+  const clientCompanyId = psql(`insert into "Company" (id, name, "updatedAt") values (gen_random_uuid()::text, '${clientName}', now()) returning id;`);
+  const relId = psql(
+    `insert into "CompanyRelationship" (id, "ownerCompanyId", "agencyCompanyId", "clientCompanyId", status, "createdAt") values (gen_random_uuid()::text, '${reminderCompanyId}', '${reminderCompanyId}', '${clientCompanyId}', 'ACTIVE', now()) returning id;`,
+  );
+  const clientStaffEmail = `cron-reminder-client-${suffix}@example.com`;
+  const clientStaffId = psql(
+    `insert into "User" (id, email, "passwordHash", name, "updatedAt") values (gen_random_uuid()::text, '${clientStaffEmail}', 'x', 'Cron現場花子', now()) returning id;`,
+  );
+  psql(
+    `insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", date, "startTime", "endTime", "taskName", "createdVia", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${reminderCompanyId}', '${clientStaffId}', 'CLIENT', '${relId}', (now() at time zone 'Asia/Tokyo')::date, '${hhmm}', '${hhmm}', 'キャディ', 'ASSIGN', now());`,
+  );
+  logStart = readFileSync(DEV_LOG_PATH, "utf8").length;
+  await callCron("shift-start-reminders");
+  await new Promise((r) => setTimeout(r, 500));
+  const clientReminderLog = readServerLogSince(logStart);
+  log(
+    "依頼主の現場のシフトは、リマインドメールの勤務先が依頼主の名前になる",
+    clientReminderLog.includes(clientStaffEmail) && clientReminderLog.includes(`勤務先：</span>${clientName}`) && !clientReminderLog.includes(`勤務先：</span>${reminderCompanyName}`),
+  );
+
   // 開始50分前（窓の中）は送られ、開始2時間前（窓の外）はまだ送られない
   // （以前は4時間前から送っていて、8:00出勤に4:00に届いていた）。
   const wideWindowStaffEmail = `cron-reminder-wide-staff-${suffix}@example.com`;
