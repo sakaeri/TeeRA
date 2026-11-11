@@ -127,7 +127,7 @@ export function StaffShell({
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <header className="print-hide flex flex-wrap items-center justify-between gap-3 border-b-2 border-accent app-header-safe bg-primary px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top)*1.5)] text-primary-foreground">
+      <header className="print-hide sticky top-0 z-[15] flex flex-wrap items-center justify-between gap-3 border-b-2 border-accent app-header-safe bg-primary px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top)*1.5)] text-primary-foreground">
         <div className="flex items-center gap-2">
           <div className="font-serif-jp text-lg font-bold tracking-wide">TeeRA</div>
           <span className="text-xs opacity-70">{todayLabel()}</span>
