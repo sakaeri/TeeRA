@@ -70,30 +70,31 @@ export default async function CompanyCalendarPage({
     listDeletedOrdersForMonth({ companyId: membership.companyId, year, month }),
   ]);
 
-  const affordable = await affordableMaxEntries(membership.companyId);
-  const clients = company.agencyEnabled ? await listClients(membership.companyId, restrictToTeamIds) : [];
-  const agencies = company.dispatchEnabled ? await listAgencies(membership.companyId, restrictToTeamIds) : [];
-  const assignableAgencyStaff = company.dispatchEnabled ? await listAssignableAgencyStaff(membership.companyId) : [];
+  // 互いに関係ない読み込みは同時に行う（データベースへの往復を減らして表示を速くする）
+  const [affordable, clients, agencies, assignableAgencyStaff, placementRates] = await Promise.all([
+    affordableMaxEntries(membership.companyId),
+    company.agencyEnabled ? listClients(membership.companyId, restrictToTeamIds) : Promise.resolve([]),
+    company.dispatchEnabled ? listAgencies(membership.companyId, restrictToTeamIds) : Promise.resolve([]),
+    company.dispatchEnabled ? listAssignableAgencyStaff(membership.companyId) : Promise.resolve([]),
+    // 自社(社内)勤務のシフトでも業務内容を選べるようにしたため、依頼主連携の
+    // 有無に関わらず常に取得する（companyRelationshipId=nullの登録もここに含む）。
+    listPlacementRates(membership.companyId),
+  ]);
   // 絞り込みの一覧で「今月動いている順」に並べるための、依頼主・派遣会社ごとの今月のシフト数
-  const monthlyShiftCounts = await countMonthlyShiftsByRelationship(
-    membership.companyId,
-    [...clients.map((c) => c.id), ...agencies.filter((a) => a.agencyCompany).map((a) => a.id)],
-    agencies.filter((a) => !a.agencyCompany).map((a) => a.id),
-  );
   const agencyRelationshipIds = [...new Set(assignableAgencyStaff.map((s) => s.companyRelationshipId))];
-  const agencyTaskNamesByRelationship = Object.fromEntries(
-    await Promise.all(
-      agencyRelationshipIds.map(async (id) => [id, await listPastTaskNamesForRelationship(id)] as const),
-    ),
-  );
-  // 自社(社内)勤務のシフトでも業務内容を選べるようにしたため、依頼主連携の
-  // 有無に関わらず常に取得する（companyRelationshipId=nullの登録もここに含む）。
-  const placementRates = await listPlacementRates(membership.companyId);
-
   // source=INHOUSEのシフトに立っているスタッフが、自社の名簿メンバーなのか
   // 配属記録のある派遣スタッフなのか公開募集経由なのかをまとめて解決する。
   const inhouseStaffIds = shifts.filter((s) => s.source !== "CLIENT").map((s) => s.staffUserId);
-  const staffOrigins = await resolveStaffOrigins({ companyId: membership.companyId, staffUserIds: inhouseStaffIds });
+  const [monthlyShiftCounts, agencyTaskNameEntries, staffOrigins] = await Promise.all([
+    countMonthlyShiftsByRelationship(
+      membership.companyId,
+      [...clients.map((c) => c.id), ...agencies.filter((a) => a.agencyCompany).map((a) => a.id)],
+      agencies.filter((a) => !a.agencyCompany).map((a) => a.id),
+    ),
+    Promise.all(agencyRelationshipIds.map(async (id) => [id, await listPastTaskNamesForRelationship(id)] as const)),
+    resolveStaffOrigins({ companyId: membership.companyId, staffUserIds: inhouseStaffIds }),
+  ]);
+  const agencyTaskNamesByRelationship = Object.fromEntries(agencyTaskNameEntries);
   const originLabel = (origin: ReturnType<typeof staffOrigins.get>) => {
     if (!origin) return undefined;
     if (origin.kind === "SELF") return "自社";
