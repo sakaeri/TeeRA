@@ -13,7 +13,7 @@ type WorkRecordShift = {
   taskName: string | null;
   staff: { name: string };
   cancellation: { feeAmount: number | null } | null;
-  workReport: (NonNullable<Parameters<typeof reportDisplay>[0]> & { outcome: string; approvalStatus: string }) | null;
+  workReport: (NonNullable<Parameters<typeof reportDisplay>[0]> & { outcome: string; approvalStatus: string; computedMinutes?: number | null }) | null;
   companyRelationship: { proxyName: string | null; clientCompany: { name: string } | null } | null;
 };
 
@@ -42,7 +42,13 @@ export function workRecordRow(s: WorkRecordShift): CalendarPdfShift {
   };
   if (isCancelled(s)) return { ...base, timeOverride: "取消（キャンセル料あり）" };
   const shown = reportDisplay(s.workReport);
-  return { ...base, taskName: shown.reportedTaskName ?? s.taskName, outcome: shown.outcome, reportedTimeLabel: shown.reportedTimeLabel };
+  return {
+    ...base,
+    taskName: shown.reportedTaskName ?? s.taskName,
+    outcome: shown.outcome,
+    reportedTimeLabel: shown.reportedTimeLabel,
+    workedMinutes: s.workReport?.outcome === "WORKED" ? (s.workReport.computedMinutes ?? 0) : 0,
+  };
 }
 
 // 請求の対象になる実績（承認済みの出勤と、キャンセル料が発生した取消）だけを残す

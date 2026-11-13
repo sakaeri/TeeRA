@@ -90,6 +90,7 @@ try {
   log("取消の報告は「取消」", after("取消次郎").includes("取消"));
   log("過去で報告がまだなら「（未報告）」付き", after("未報告三郎").includes("09:00〜17:00（未報告）"));
   log("過去で時間未定のまま報告がまだなら「未報告」", after("未報告未定子").includes("未報告") && !after("未報告未定子").includes("未定 "));
+  log("シフト表の上に合計（件数・人数）が出る", /合計 ?5件・5人/.test(past));
 
   // 実績表（請求の内容）：承認済みの出勤とキャンセル料のある取消だけ
   const cancelFee = staff("料金五郎");
@@ -106,6 +107,10 @@ try {
     !actual.includes("欠勤花子") && !actual.includes("取消次郎") && !actual.includes("未報告三郎") && !actual.includes("未報告未定子"),
   );
   log("実績表に「承認済みの業務報告…のみ」の注記", actual.includes("承認済みの業務報告"));
+  log(
+    "実績表の上に合計（件数・人数・出勤・実働・キャンセル料ありの取消）が出る",
+    /合計 ?2件・2人（出勤 ?1件・実働 ?6時間40分／取消（キャンセル料あり）1件）/.test(actual),
+  );
 
   const [ny, nm] = nextMonth.split("-").map(Number);
   const futureRes = await page.request.get(`http://localhost:3000/api/calendar/pdf?y=${ny}&m=${nm}`);

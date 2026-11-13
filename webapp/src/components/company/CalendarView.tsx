@@ -806,6 +806,11 @@ function ShareableShiftList({
         {companyName} ／ 対象月: {year}年{month}月 ／ 発行日: {issuedAt}
         {filterLabel ? ` ／ 絞り込み: ${filterLabel}` : ""}
       </p>
+      {shifts.length > 0 ? (
+        <p className="mb-4 -mt-2 font-bold text-primary" data-testid="share-summary">
+          合計 {shifts.length}件・{new Set(shifts.map((s) => s.staffUserId)).size}人
+        </p>
+      ) : null}
       {dates.length === 0 ? (
         <p className="py-10 text-center text-muted">この月のシフトはありません。</p>
       ) : (
