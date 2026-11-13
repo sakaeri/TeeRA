@@ -1,5 +1,6 @@
 "use client";
 
+import { WorkReportDetailModal } from "@/components/company/WorkReportDetailModal";
 import { StatNumber } from "@/components/company/StatNumber";
 import { CLOSING_DAY_OPTIONS, closingDayLabel } from "@/lib/closingPeriod";
 import { NoteAttachmentList, NoteAttachmentPicker } from "@/components/NoteAttachments";
@@ -131,7 +132,8 @@ function timeLabel(d: ClientMonthDetail["days"][number]) {
   if (d.outcome === "ABSENT") return "欠勤";
   if (d.outcome === "CANCELLED_BY_EMPLOYER") return "勤務先キャンセル";
   if (d.reportedTimeLabel) return d.reportedTimeLabel;
-  if (!d.approvalStatus) return "未提出";
+  // 未提出は右の状態に出るので、時間の欄は空ける
+  if (!d.approvalStatus) return "—";
   if (d.isUndecided) return "未定";
   if (d.isAllDay) return "終日";
   return `${d.startTime ?? "--:--"}〜${d.endTime ?? "--:--"}`;
@@ -308,6 +310,8 @@ export function ClientDetailPanel({
 
   // 業務報告の承認のタイミング（仮の依頼主だけ）。チームの紐付けと一緒に「編集」で変える
   const [approvalTiming, setApprovalTiming] = useState<"EACH" | "MONTHLY">("EACH");
+  // タップした勤務の業務報告の詳細
+  const [reportDetailShiftId, setReportDetailShiftId] = useState<string | null>(null);
   // 請求書の締め日（""＝末日締め）
   const [closingDay, setClosingDay] = useState("");
 
@@ -680,7 +684,7 @@ export function ClientDetailPanel({
                     >
                       <p className="text-xs font-semibold text-primary">請求明細 ›</p>
                       {data.invoiceTotal === null ? (
-                        <p className="text-lg font-bold text-muted">未作成</p>
+                        <p className="py-0.5 text-base font-bold text-muted">未作成</p>
                       ) : (
                         <StatNumber value={data.invoiceTotal} unit="円" />
                       )}
@@ -699,20 +703,31 @@ export function ClientDetailPanel({
 
                 <ul className="flex flex-col gap-1">
                   {data.days.map((d) => (
-                    <li key={d.shiftId} className="flex items-center justify-between border-b border-border/50 py-2 text-sm">
-                      <span>
-                        {d.date}
-                        {d.taskName ? <span className="ml-1.5 text-xs text-muted">（{d.taskName}）</span> : null}
-                      </span>
-                      <span>{d.staffName}</span>
-                      <span className="text-muted">{timeLabel(d)}</span>
-                      {d.approvalStatus ? (
-                        <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${APPROVAL_PILL[d.approvalStatus]}`}>
-                          {APPROVAL_LABEL[d.approvalStatus]}
+                    <li key={d.shiftId} className="border-b border-border/50">
+                      {/* スタッフの詳細と同じ並び（日付・スタッフ・時間・状態）。タップで業務報告の詳細を開く */}
+                      <button
+                        type="button"
+                        onClick={() => setReportDetailShiftId(d.shiftId)}
+                        className="grid w-full grid-cols-[44px_1fr_auto_64px] items-center gap-2 py-2.5 text-left text-xs hover:bg-background"
+                      >
+                        <span>{d.date.slice(5)}</span>
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium">{d.staffName}</span>
+                          {d.taskName ? <span className="block truncate text-[11px] text-muted">{d.taskName}</span> : null}
                         </span>
-                      ) : (
-                        <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">未提出</span>
-                      )}
+                        <span className="whitespace-nowrap text-muted">{timeLabel(d)}</span>
+                        {d.approvalStatus ? (
+                          <span
+                            className={`whitespace-nowrap rounded-md px-1.5 py-0.5 text-center font-semibold ${APPROVAL_PILL[d.approvalStatus]}`}
+                          >
+                            {APPROVAL_LABEL[d.approvalStatus]}
+                          </span>
+                        ) : (
+                          <span className="whitespace-nowrap rounded-md bg-gray-100 px-1.5 py-0.5 text-center font-semibold text-gray-600">
+                            未提出
+                          </span>
+                        )}
+                      </button>
                     </li>
                   ))}
                   {data.days.length === 0 ? <p className="py-6 text-center text-sm text-muted">この月のシフトはありません。</p> : null}
@@ -1120,6 +1135,9 @@ export function ClientDetailPanel({
           agencyName={data?.name ?? ""}
           onClose={() => setShowAgencyInviteModal(false)}
         />
+      ) : null}
+      {reportDetailShiftId ? (
+        <WorkReportDetailModal shiftId={reportDetailShiftId} onClose={() => setReportDetailShiftId(null)} />
       ) : null}
     </div>
   );

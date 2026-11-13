@@ -756,7 +756,7 @@ export function StaffDetailPanel({
                   >
                     <p className="text-xs font-semibold text-primary">給料明細 ›</p>
                     {data.salarySlipNet === null ? (
-                      <p className="text-lg font-bold text-muted">未計算</p>
+                      <p className="py-0.5 text-base font-bold text-muted">未計算</p>
                     ) : (
                       <StatNumber value={data.salarySlipNet} unit="円" />
                     )}
@@ -770,14 +770,14 @@ export function StaffDetailPanel({
                     <button
                       type="button"
                       onClick={() => setReportDetailShiftId(d.shiftId)}
-                      className="grid w-full grid-cols-[62px_1fr_82px_68px] items-center gap-2 py-2 text-left text-xs hover:bg-background"
+                      className="grid w-full grid-cols-[44px_1fr_auto_64px] items-center gap-2 py-2.5 text-left text-xs hover:bg-background"
                     >
                       <span>{d.date.slice(5)}</span>
-                      <span className="truncate text-muted" title={`${d.workplaceLabel}${d.taskName ? `（${d.taskName}）` : ""}`}>
-                        {d.workplaceLabel}
-                        {d.taskName ? `（${d.taskName}）` : ""}
+                      <span className="min-w-0" title={`${d.workplaceLabel}${d.taskName ? `（${d.taskName}）` : ""}`}>
+                        <span className="block truncate font-medium">{d.workplaceLabel}</span>
+                        {d.taskName ? <span className="block truncate text-[11px] text-muted">{d.taskName}</span> : null}
                       </span>
-                      <span className="text-muted">{actualTimeLabel(d)}</span>
+                      <span className="whitespace-nowrap text-muted">{actualTimeLabel(d)}</span>
                       {d.approvalStatus ? (
                         <span
                           className={`whitespace-nowrap rounded-md px-1.5 py-0.5 text-center font-semibold ${APPROVAL_PILL[d.approvalStatus]}`}
