@@ -1,5 +1,6 @@
 "use client";
 
+import { StatNumber } from "@/components/company/StatNumber";
 import { NoteAttachmentList, NoteAttachmentPicker } from "@/components/NoteAttachments";
 import type { NoteAttachmentInput, NoteAttachmentView } from "@/lib/noteAttachments";
 import { useEffect, useState, useTransition } from "react";
@@ -739,34 +740,25 @@ export function StaffDetailPanel({
                 </div>
 
                 <div className="mb-4 grid grid-cols-3 gap-2 text-center">
-                  <div className="rounded-lg border border-border p-3">
+                  <div className="rounded-lg border border-border px-2 py-3">
                     <p className="text-xs text-muted">稼働時間</p>
-                    <p className="text-lg font-bold">
-                      {data.monthlyHours}
-                      <span className="ml-0.5 text-xs font-semibold">h</span>
-                    </p>
+                    <StatNumber value={data.monthlyHours} unit="h" />
                   </div>
-                  <div className="rounded-lg border border-border p-3">
+                  <div className="rounded-lg border border-border px-2 py-3">
                     <p className="text-xs text-muted">出勤日数</p>
-                    <p className="text-lg font-bold">
-                      {data.daysWorked}
-                      <span className="ml-0.5 text-xs font-semibold">日</span>
-                    </p>
+                    <StatNumber value={data.daysWorked} unit="日" />
                   </div>
                   {/* ほかの2つと同じ形（見出し＋数字）・同じ高さにそろえ、枠ごと押すと給料明細を開く（見出しの「›」で押せることを示す） */}
                   <button
                     type="button"
                     onClick={() => router.push(`/company/payroll?month=${year}-${String(month).padStart(2, "0")}&staff=${userId}`)}
-                    className="rounded-lg border border-border p-3 hover:border-primary"
+                    className="rounded-lg border border-border px-2 py-3 hover:border-primary"
                   >
                     <p className="text-xs font-semibold text-primary">給料明細 ›</p>
                     {data.salarySlipNet === null ? (
                       <p className="text-lg font-bold text-muted">未計算</p>
                     ) : (
-                      <p className="whitespace-nowrap text-lg font-bold">
-                        {data.salarySlipNet.toLocaleString()}
-                        <span className="ml-0.5 text-xs font-semibold">円</span>
-                      </p>
+                      <StatNumber value={data.salarySlipNet} unit="円" />
                     )}
                   </button>
                 </div>

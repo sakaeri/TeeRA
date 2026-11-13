@@ -1,5 +1,6 @@
 "use client";
 
+import { StatNumber } from "@/components/company/StatNumber";
 import { CLOSING_DAY_OPTIONS, closingDayLabel } from "@/lib/closingPeriod";
 import { NoteAttachmentList, NoteAttachmentPicker } from "@/components/NoteAttachments";
 import type { NoteAttachmentInput, NoteAttachmentView } from "@/lib/noteAttachments";
@@ -660,41 +661,38 @@ export function ClientDetailPanel({
                     kind === "client" || (kind === "agency" && data.isProxy) ? "grid-cols-3" : "grid-cols-2"
                   }`}
                 >
-                  <div className="rounded-lg border border-border p-3">
+                  <div className="rounded-lg border border-border px-2 py-3">
                     <p className="text-xs text-muted">稼働時間</p>
-                    <p className="text-lg font-bold">{data.workedHours}h</p>
+                    <StatNumber value={data.workedHours} unit="h" />
                   </div>
-                  <div className="rounded-lg border border-border p-3">
+                  <div className="rounded-lg border border-border px-2 py-3">
                     <p className="text-xs text-muted">未承認数</p>
-                    <p className="text-lg font-bold text-rose-600">{data.unapprovedCount}件</p>
+                    <StatNumber value={data.unapprovedCount} unit="件" className="text-rose-600" />
                   </div>
                   {kind === "client" ? (
-                    <div className="flex flex-col items-center justify-center rounded-lg border border-border p-3">
-                      <p className="mb-1 text-xs text-muted">請求明細</p>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          router.push(`/company/invoices?month=${year}-${String(month).padStart(2, "0")}&client=${relationshipId}`)
-                        }
-                        className={
-                          data.invoiceTotal === null
-                            ? "rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
-                            : "rounded-lg border border-primary px-3 py-1 text-xs font-semibold text-primary"
-                        }
-                      >
-                        {data.invoiceTotal === null ? "作成する" : `${data.invoiceTotal}円`}
-                      </button>
-                    </div>
+                    // ほかの2つと同じ形（見出し＋数字）にそろえ、枠ごと押すと請求書を開く（見出しの「›」で押せることを示す）
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(`/company/invoices?month=${year}-${String(month).padStart(2, "0")}&client=${relationshipId}`)
+                      }
+                      className="rounded-lg border border-border px-2 py-3 hover:border-primary"
+                    >
+                      <p className="text-xs font-semibold text-primary">請求明細 ›</p>
+                      {data.invoiceTotal === null ? (
+                        <p className="text-lg font-bold text-muted">未作成</p>
+                      ) : (
+                        <StatNumber value={data.invoiceTotal} unit="円" />
+                      )}
+                    </button>
                   ) : null}
                   {kind === "agency" && data.isProxy ? (
                     <PdfLink
                       href={`/api/agency-relationships/${relationshipId}/performance-pdf?y=${year}&m=${month}`}
-                      className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border p-3"
+                      className="rounded-lg border border-border px-2 py-3 hover:border-primary"
                     >
-                      <p className="text-xs text-muted">実績PDF</p>
-                      <span className="rounded-lg border border-primary px-3 py-1 text-xs font-semibold text-primary">
-                        PDF出力
-                      </span>
+                      <p className="text-xs font-semibold text-primary">実績PDF ›</p>
+                      <p className="text-lg font-bold">PDF</p>
                     </PdfLink>
                   ) : null}
                 </div>
