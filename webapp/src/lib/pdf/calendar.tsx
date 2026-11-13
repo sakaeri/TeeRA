@@ -20,7 +20,8 @@ const styles = StyleSheet.create({
   watermark: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, flexDirection: "row", flexWrap: "wrap", opacity: 0.14 },
   watermarkText: { fontSize: 22, color: "#0b3d2e", marginVertical: 34, marginHorizontal: 18, transform: "rotate(-30deg)" },
   title: { fontSize: 18, fontWeight: 700, color: "#0b3d2e", marginBottom: 4 },
-  subtitle: { fontSize: 10, color: "#6b7d76", marginBottom: 16 },
+  subtitle: { fontSize: 10, color: "#6b7d76", marginBottom: 8 },
+  summary: { fontSize: 11, fontWeight: 700, color: "#0b3d2e", marginBottom: 14 },
   dayGroup: { marginBottom: 10 },
   dayHeader: {
     flexDirection: "row",
@@ -60,6 +61,8 @@ export type CalendarPdfShift = {
   reportedTimeLabel?: string | null;
   // 時間欄にそのまま出す文字（実績表のキャンセル料の行など）
   timeOverride?: string | null;
+  // 実績表の実働（分）。合計の実働時間に使う
+  workedMinutes?: number | null;
 };
 
 export type CalendarPdfData = {
@@ -82,6 +85,18 @@ export type CalendarPdfData = {
 function timeLabel(s: CalendarPdfShift, todayStr: string) {
   if (s.timeOverride) return s.timeOverride;
   return shiftListTimeLabel({ ...s, todayStr });
+}
+
+// 一覧の上に出す合計（件数・人数。実績表は出勤・取消の内訳と実働時間も）
+function summaryLabel(data: CalendarPdfData) {
+  const count = data.shifts.length;
+  const people = new Set(data.shifts.map((s) => s.staffName)).size;
+  const base = `合計 ${count}件・${people}人`;
+  if (data.title !== "実績表") return base;
+  const cancelled = data.shifts.filter((s) => s.timeOverride).length;
+  const minutes = data.shifts.reduce((sum, s) => sum + (s.workedMinutes ?? 0), 0);
+  const hours = `${Math.floor(minutes / 60)}時間${minutes % 60 ? `${minutes % 60}分` : ""}`;
+  return `${base}（出勤 ${count - cancelled}件・実働 ${hours}${cancelled ? `／取消（キャンセル料あり）${cancelled}件` : ""}）`;
 }
 
 export function CalendarPdfDocument({ data }: { data: CalendarPdfData }) {
@@ -109,6 +124,7 @@ export function CalendarPdfDocument({ data }: { data: CalendarPdfData }) {
           {data.companyName} ／ 対象月: {data.year}年{data.month}月 ／ 発行日: {data.issuedAt}
           {data.filterLabel ? ` ／ 絞り込み: ${data.filterLabel}` : ""}
         </Text>
+        {data.shifts.length > 0 ? <Text style={styles.summary}>{summaryLabel(data)}</Text> : null}
 
         {dates.length === 0 ? (
           <Text style={styles.empty}>{data.title === "実績表" ? "この月の実績はありません。" : "この月のシフトはありません。"}</Text>
