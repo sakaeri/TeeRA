@@ -347,7 +347,7 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
             }`}
           >
             {shift.approvalStatus === "PENDING" && shift.monthlyApproval
-              ? "提出済み（月末にまとめて確認）"
+              ? "提出済み（締め日にまとめて確認）"
               : (APPROVAL_LABEL[shift.approvalStatus] ?? shift.approvalStatus)}
           </span>
         ) : null}
