@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { SelectNumberOnFocus } from "@/components/SelectNumberOnFocus";
 import { Zen_Old_Mincho } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerSetup } from "@/components/ServiceWorkerSetup";
@@ -82,6 +83,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         {children}
         <ServiceWorkerSetup />
+        <SelectNumberOnFocus />
       </body>
     </html>
   );
