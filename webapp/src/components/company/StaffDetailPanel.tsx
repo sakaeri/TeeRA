@@ -741,26 +741,34 @@ export function StaffDetailPanel({
                 <div className="mb-4 grid grid-cols-3 gap-2 text-center">
                   <div className="rounded-lg border border-border p-3">
                     <p className="text-xs text-muted">稼働時間</p>
-                    <p className="text-lg font-bold">{data.monthlyHours}h</p>
+                    <p className="text-lg font-bold">
+                      {data.monthlyHours}
+                      <span className="ml-0.5 text-xs font-semibold">h</span>
+                    </p>
                   </div>
                   <div className="rounded-lg border border-border p-3">
                     <p className="text-xs text-muted">出勤日数</p>
-                    <p className="text-lg font-bold">{data.daysWorked}日</p>
+                    <p className="text-lg font-bold">
+                      {data.daysWorked}
+                      <span className="ml-0.5 text-xs font-semibold">日</span>
+                    </p>
                   </div>
-                  <div className="flex flex-col items-center justify-center rounded-lg border border-border p-3">
-                    <p className="mb-1 text-xs text-muted">給料明細</p>
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/company/payroll?month=${year}-${String(month).padStart(2, "0")}&staff=${userId}`)}
-                      className={
-                        data.salarySlipNet === null
-                          ? "rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
-                          : "rounded-lg border border-primary px-3 py-1 text-xs font-semibold text-primary"
-                      }
-                    >
-                      {data.salarySlipNet === null ? "計算する" : `${data.salarySlipNet}円`}
-                    </button>
-                  </div>
+                  {/* ほかの2つと同じ形（見出し＋数字）・同じ高さにそろえ、枠ごと押すと給料明細を開く（見出しの「›」で押せることを示す） */}
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/company/payroll?month=${year}-${String(month).padStart(2, "0")}&staff=${userId}`)}
+                    className="rounded-lg border border-border p-3 hover:border-primary"
+                  >
+                    <p className="text-xs font-semibold text-primary">給料明細 ›</p>
+                    {data.salarySlipNet === null ? (
+                      <p className="text-lg font-bold text-muted">未計算</p>
+                    ) : (
+                      <p className="whitespace-nowrap text-lg font-bold">
+                        {data.salarySlipNet.toLocaleString()}
+                        <span className="ml-0.5 text-xs font-semibold">円</span>
+                      </p>
+                    )}
+                  </button>
                 </div>
 
                 <ul className="flex flex-col gap-1">

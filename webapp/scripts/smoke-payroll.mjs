@@ -169,9 +169,9 @@ try {
   const payrollButtonLabel = await admin
     .locator("div.fixed.inset-0.z-30")
     .last()
-    .getByRole("button", { name: /円$/ })
+    .getByRole("button", { name: /^給料明細/ })
     .textContent();
-  log("スタッフ詳細の「計算する」が金額表示に変わる", Boolean(payrollButtonLabel?.endsWith("円")));
+  log("スタッフ詳細の「計算する」が金額表示に変わる", /[\d,]+円$/.test(payrollButtonLabel ?? ""));
   await admin.click("text=← 閉じる");
   await admin.waitForTimeout(200);
 
