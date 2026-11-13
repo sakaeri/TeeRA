@@ -501,7 +501,7 @@ export function ClientDetailPanel({
                     ))
                   )}
                   {data.isProxy && data.reportApprovalTiming === "MONTHLY" ? (
-                    <span className="rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">業務報告は月末にまとめて承認</span>
+                    <span className="rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">業務報告は締め日にまとめて承認</span>
                   ) : null}
                   {data.invoiceClosingDay ? (
                     <span className="rounded-md bg-sky-50 px-2 py-1 text-xs font-medium text-sky-900">請求書：{closingDayLabel(data.invoiceClosingDay)}</span>
@@ -565,7 +565,7 @@ export function ClientDetailPanel({
                         className="rounded-lg border border-border bg-white px-3 py-2 text-sm"
                       >
                         <option value="EACH">その都度承認する</option>
-                        <option value="MONTHLY">月末（締め日）にまとめて承認する（期間の途中はやること・通知に出さない）</option>
+                        <option value="MONTHLY">締め日にまとめて承認する（期間の途中はやること・通知に出さない）</option>
                       </select>
                     </label>
                   ) : null}

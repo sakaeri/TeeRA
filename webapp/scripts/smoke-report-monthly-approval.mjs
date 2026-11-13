@@ -75,7 +75,7 @@ try {
   log("初期値は「その都度」", (await select.inputValue()) === "EACH");
   await select.selectOption("MONTHLY");
   await panel.getByRole("button", { name: "保存", exact: true }).click();
-  await panel.getByText("業務報告は月末にまとめて承認").waitFor({ timeout: 15000 });
+  await panel.getByText("業務報告は締め日にまとめて承認").waitFor({ timeout: 15000 });
   log("「月末にまとめて」にするとチームの横に表示される", true);
   log("依頼主の詳細で「月末にまとめて」に切り替えられる", psql(`select "reportApprovalTiming" from "CompanyRelationship" where id='${relId}';`) === "MONTHLY");
 

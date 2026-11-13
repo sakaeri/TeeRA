@@ -444,7 +444,7 @@ export function RosterView({
                   className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                 >
                   <option value="EACH">その都度承認する</option>
-                  <option value="MONTHLY">月末にまとめて承認する</option>
+                  <option value="MONTHLY">締め日にまとめて承認する</option>
                 </select>
               </div>
             ) : null}
