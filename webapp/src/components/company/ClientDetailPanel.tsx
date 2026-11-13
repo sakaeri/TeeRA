@@ -1,5 +1,6 @@
 "use client";
 
+import { CLOSING_DAY_OPTIONS, closingDayLabel } from "@/lib/closingPeriod";
 import { NoteAttachmentList, NoteAttachmentPicker } from "@/components/NoteAttachments";
 import type { NoteAttachmentInput, NoteAttachmentView } from "@/lib/noteAttachments";
 import { useEffect, useState, useTransition } from "react";
@@ -22,6 +23,7 @@ import {
   setRelationshipStatusAction,
   updateProxyNameAction,
   updateReportApprovalTimingAction,
+  updateInvoiceClosingDayAction,
 } from "@/app/company/actions";
 import {
   addPlacementRateVersionAction,
@@ -78,6 +80,7 @@ type ClientMonthDetail = {
   name: string;
   isProxy: boolean;
   reportApprovalTiming: string;
+  invoiceClosingDay: number | null;
   isOwner: boolean;
   canDeactivate: boolean;
   status: "ACTIVE" | "INACTIVE";
@@ -304,10 +307,13 @@ export function ClientDetailPanel({
 
   // 業務報告の承認のタイミング（仮の依頼主だけ）。チームの紐付けと一緒に「編集」で変える
   const [approvalTiming, setApprovalTiming] = useState<"EACH" | "MONTHLY">("EACH");
+  // 請求書の締め日（""＝末日締め）
+  const [closingDay, setClosingDay] = useState("");
 
   function startEditTeams(teams: ClientMonthDetail["teams"]) {
     setTeamSelection(new Set(teams.map((t) => t.teamId)));
     setApprovalTiming(data?.reportApprovalTiming === "MONTHLY" ? "MONTHLY" : "EACH");
+    setClosingDay(data?.invoiceClosingDay ? String(data.invoiceClosingDay) : "");
     setEditingTeams(true);
   }
 
@@ -316,6 +322,10 @@ export function ClientDetailPanel({
       await setClientTeamsAction(relationshipId, Array.from(teamSelection));
       if (data?.isProxy && data.reportApprovalTiming !== approvalTiming) {
         await updateReportApprovalTimingAction(relationshipId, approvalTiming);
+      }
+      const nextClosingDay = closingDay ? Number(closingDay) : null;
+      if (data && (data.invoiceClosingDay ?? null) !== nextClosingDay) {
+        await updateInvoiceClosingDayAction(relationshipId, nextClosingDay);
       }
       setEditingTeams(false);
       await refresh();
@@ -488,6 +498,9 @@ export function ClientDetailPanel({
                   {data.isProxy && data.reportApprovalTiming === "MONTHLY" ? (
                     <span className="rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">業務報告は月末にまとめて承認</span>
                   ) : null}
+                  {data.invoiceClosingDay ? (
+                    <span className="rounded-md bg-sky-50 px-2 py-1 text-xs font-medium text-sky-900">請求書：{closingDayLabel(data.invoiceClosingDay)}</span>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => startEditTeams(data.teams)}
@@ -521,6 +534,22 @@ export function ClientDetailPanel({
                     ))}
                     {allTeams.length === 0 ? <p className="text-xs text-muted">チームがまだありません。</p> : null}
                   </div>
+                  <label className="mb-3 flex flex-col gap-1 text-xs">
+                    <span className="font-medium">請求書の締め日（例：20日締めなら「11月分」は10/21〜11/20の勤務）</span>
+                    <select
+                      value={closingDay}
+                      disabled={pending}
+                      onChange={(e) => setClosingDay(e.target.value)}
+                      aria-label="請求書の締め日"
+                      className="rounded-lg border border-border bg-white px-3 py-2 text-sm"
+                    >
+                      {CLOSING_DAY_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   {data.isProxy ? (
                     <label className="mb-3 flex flex-col gap-1 text-xs">
                       <span className="font-medium">業務報告の承認（依頼主に確認するタイミング）</span>
@@ -531,7 +560,7 @@ export function ClientDetailPanel({
                         className="rounded-lg border border-border bg-white px-3 py-2 text-sm"
                       >
                         <option value="EACH">その都度承認する</option>
-                        <option value="MONTHLY">月末にまとめて承認する（月の途中はやること・通知に出さない）</option>
+                        <option value="MONTHLY">月末（締め日）にまとめて承認する（期間の途中はやること・通知に出さない）</option>
                       </select>
                     </label>
                   ) : null}

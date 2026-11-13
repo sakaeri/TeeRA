@@ -802,7 +802,7 @@ export async function runWorkReportDigests(now = new Date()) {
         where: { submittedAt: { not: null }, approvalStatus: "PENDING", shift: { companyId: company.id } },
         select: {
           shift: {
-            select: { date: true, team: { select: { notificationEmail: true } }, companyRelationship: { select: { reportApprovalTiming: true, clientCompanyId: true } } },
+            select: { date: true, team: { select: { notificationEmail: true } }, companyRelationship: { select: { reportApprovalTiming: true, clientCompanyId: true, invoiceClosingDay: true } } },
           },
         },
       }),

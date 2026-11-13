@@ -130,6 +130,8 @@ export type InvoicePdfData = {
   issuingCompanyPhoneNumber: string | null;
   clientName: string;
   periodLabel: string;
+  // 締め日が末日でない依頼主の対象期間（例："10/21〜11/20"）。末日締めならnull
+  periodRangeLabel?: string | null;
   dueDate: string | null;
   note: string | null;
   issuedAt: string;
@@ -176,6 +178,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
           <View style={styles.recipientBlock}>
             <Text style={styles.recipientName}>{data.clientName} 御中</Text>
             <Text style={styles.subjectLine}>件名：{periodLabelJa(data.periodLabel)}分 ご請求</Text>
+            {data.periodRangeLabel ? <Text style={styles.subjectLine}>対象期間：{data.periodRangeLabel}</Text> : null}
           </View>
           <View style={styles.issuerBlock}>
             {/* 文字より先に描いて、文字の後ろに敷く */}

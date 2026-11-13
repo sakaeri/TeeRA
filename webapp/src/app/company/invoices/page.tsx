@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
+import { closingDayLabel } from "@/lib/closingPeriod";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManageAny, isCompanyScopeAdmin, isLeaderOnly } from "@/lib/auth/permissions";
 import { listClients } from "@/lib/domain/relationships";
-import { getOrCreateInvoice, computeInvoiceTotals, listInvoicesForCompany, listBankAccounts } from "@/lib/domain/invoicing";
+import { invoicePeriod, getOrCreateInvoice, computeInvoiceTotals, listInvoicesForCompany, listBankAccounts } from "@/lib/domain/invoicing";
 import { pdfQuotaRemaining } from "@/lib/domain/plans";
 import { prisma } from "@/lib/prisma";
 import { InvoiceEditor } from "@/components/company/InvoiceEditor";
@@ -86,6 +87,8 @@ export default async function InvoicesPage({
   };
 
   let invoiceData: InvoiceData | null = null;
+  let invoicePeriodRange: string | null = null;
+  let invoiceClosingLabel = "";
   const targetClientTeamIds = companyRelationshipId
     ? (await prisma.teamClientRelationship.findMany({ where: { companyRelationshipId }, select: { teamId: true } })).map((r) => r.teamId)
     : [];
@@ -97,6 +100,10 @@ export default async function InvoicesPage({
     });
     const registered = Boolean(invoice.invoiceRegistrationNumberSnapshot);
     const totals = computeInvoiceTotals({ lines: invoice.lines, registered });
+    // 締め日が末日でない依頼主は、対象期間を画面に出す
+    const period = await invoicePeriod(companyRelationshipId, periodLabel);
+    invoicePeriodRange = period.rangeLabel;
+    invoiceClosingLabel = closingDayLabel(period.closingDay);
     const issues = await prisma.invoiceIssue.findMany({
       where: { invoiceId: invoice.id },
       orderBy: { issuedAt: "desc" },
@@ -168,6 +175,11 @@ export default async function InvoicesPage({
           <Link href={`/company/invoices?month=${periodLabel}`} className="mb-4 inline-block text-sm text-primary underline">
             ← 一覧に戻る
           </Link>
+          {invoicePeriodRange ? (
+            <p className="mb-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-900" data-testid="invoice-period-range">
+              対象期間：{invoicePeriodRange}（この依頼主は{invoiceClosingLabel}）
+            </p>
+          ) : null}
           <InvoiceEditor
             invoice={invoiceData}
             clientName={selectedClientName}

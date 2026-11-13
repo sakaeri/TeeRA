@@ -119,6 +119,9 @@ model Company {
   sealImageDataUrl          String?
   // 電子印の濃さ（不透明度%）。設定画面の「薄め/標準/濃いめ」= 30/45/70
   sealOpacity               Int       @default(45)
+  // 給料明細・業務委託スタッフの請求書の締め日（1〜28日。nullは末日締め）。
+  // 例：20なら「11月分」は10/21〜11/20の勤務
+  payrollClosingDay         Int?
   // 業務報告提出・シフト希望のたまり・販促品受注のメール通知の宛先。
   // 特定ユーザーのアカウントに紐付けない（担当者交代やチーム共有アドレスに
   // 対応するため）。未設定ならその会社への通知メールは一切送らない。
@@ -412,6 +415,8 @@ model CompanyRelationship {
   // 業務報告の承認のタイミング（仮の依頼主＝依頼主がTeeRAを使っていない場合に、派遣会社が承認する分）。
   // EACH＝その都度、MONTHLY＝月末にまとめて（月の途中はやること・アイコンの数字・まとめメールに出さない）
   reportApprovalTiming String             @default("EACH")
+  // この依頼主への請求書の締め日（1〜28日。nullは末日締め）。例：20なら「11月分」は10/21〜11/20の勤務
+  invoiceClosingDay    Int?
   status               RelationshipStatus @default(ACTIVE)
   createdAt            DateTime           @default(now())
   // 配属先のルール連絡先。配属先自身の住所（Company.address）は「本社所在
@@ -1325,6 +1330,8 @@ model StaffInvoice {
   companyId          String
   staffUserId        String
   targetMonth        String // "YYYY-MM"
+  // 提出した時点の対象期間（締め日が末日でない時だけ。例："10/21〜11/20"）
+  periodRangeLabel   String?
   status             StaffInvoiceStatus @default(DRAFT)
   // 提出した時点の業務の行 [{shiftId, description, hours, rate, amount}]（下書き・差し戻し中は毎回作り直す）
   workLines          Json               @default("[]")

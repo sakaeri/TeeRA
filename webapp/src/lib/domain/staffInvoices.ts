@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { computeApprovedWorkLines, type ComputedWorkLine } from "@/lib/domain/payroll";
+import { computeApprovedWorkLines, payrollPeriod, type ComputedWorkLine } from "@/lib/domain/payroll";
 import { hasRemainingPdfQuota } from "@/lib/domain/plans";
 import { postLedgerEntry } from "@/lib/domain/wallet";
 import { computeStaffInvoiceTotals, sanitizeExpenses, isValidTargetMonth, type StaffInvoiceExpense } from "@/lib/staffInvoiceTotals";
@@ -14,10 +14,6 @@ export { computeStaffInvoiceTotals, sanitizeExpenses, isValidTargetMonth, type S
 // ・会社は最初に開いた時に1件分（プランの無料枠、無ければ1Tee）使う。同じスタッフの同じ月は
 //   1回だけ（直して再提出されても無料）。その月の支払明細をもう発行していれば無料。
 
-function monthRange(targetMonth: string) {
-  const [year, month] = targetMonth.split("-").map(Number);
-  return { start: new Date(Date.UTC(year, month - 1, 1)), end: new Date(Date.UTC(year, month, 1)) };
-}
 
 // 請求書を出せるのは「その会社との今の契約が業務委託」の人だけ。
 // ・同意済みで有効（ACTIVE）な契約があれば、その中で一番新しい契約の雇用形態で決める
@@ -94,7 +90,8 @@ export async function listContractorCompanies(staffUserId: string) {
 }
 
 async function countPendingReports(companyId: string, staffUserId: string, targetMonth: string) {
-  const { start, end } = monthRange(targetMonth);
+  // 対象期間は会社の給料の締め日と同じ
+  const { start, end } = await payrollPeriod(companyId, targetMonth);
   return prisma.workReport.count({
     where: {
       staffUserId,
@@ -172,6 +169,8 @@ export async function getStaffInvoiceForStaff(staffUserId: string, companyId: st
     taxExclusive,
     ...totals,
     pendingReportCount: editable ? await countPendingReports(companyId, staffUserId, targetMonth) : 0,
+    // 締め日が末日でない会社の対象期間（例："10/21〜11/20"）。提出後は提出した時点のまま
+    periodRangeLabel: editable ? (await payrollPeriod(companyId, targetMonth)).rangeLabel : existing!.periodRangeLabel,
     submittedAt: existing?.submittedAt?.toISOString() ?? null,
     reviewedAt: existing?.reviewedAt?.toISOString() ?? null,
     returnReason: existing?.returnReason ?? null,
@@ -250,6 +249,7 @@ export async function saveStaffInvoice(params: {
     withholding: membership.contractorWithholding,
     taxExclusive: membership.contractorTaxExclusive,
     ...totals,
+    periodRangeLabel: (await payrollPeriod(companyId, targetMonth)).rangeLabel,
     ...(params.submit ? { status: "SUBMITTED" as const, submittedAt: new Date(), returnReason: null } : {}),
   };
 

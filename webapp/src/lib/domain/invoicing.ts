@@ -5,12 +5,15 @@ import { resolveRateVersion } from "@/lib/domain/contracts";
 import { isWeekendOrHoliday } from "@/lib/holidays";
 import { hasRemainingPdfQuota } from "@/lib/domain/plans";
 import { workRecordRowsForShiftIds } from "@/lib/domain/workRecord";
+import { closingPeriod } from "@/lib/closingPeriod";
 
-function monthRange(periodLabel: string) {
-  const [year, month] = periodLabel.split("-").map(Number);
-  const start = new Date(Date.UTC(year, month - 1, 1));
-  const end = new Date(Date.UTC(year, month, 1));
-  return { start, end };
+// 依頼主ごとの締め日（invoiceClosingDay）で「◯月分」の対象期間を決める（末日締めならその月の1日〜末日）
+export async function invoicePeriod(companyRelationshipId: string, periodLabel: string) {
+  const rel = await prisma.companyRelationship.findUnique({
+    where: { id: companyRelationshipId },
+    select: { invoiceClosingDay: true },
+  });
+  return closingPeriod(periodLabel, rel?.invoiceClosingDay);
 }
 
 async function alreadyInvoicedShiftIds(companyRelationshipId: string, excludeInvoiceId?: string) {
@@ -46,7 +49,7 @@ async function regenerateLines(invoiceId: string) {
   const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
   if (invoice.status !== "DRAFT") return { invoice, unresolved: [] as UnresolvedInvoiceShift[] };
 
-  const { start, end } = monthRange(invoice.periodLabel);
+  const { start, end } = await invoicePeriod(invoice.companyRelationshipId, invoice.periodLabel);
   const excluded = await alreadyInvoicedShiftIds(invoice.companyRelationshipId, invoice.id);
 
   const [shifts, relationshipRates] = await Promise.all([
@@ -509,6 +512,8 @@ export async function issueInvoice(params: { invoiceId: string; issuedByUserId: 
         countsAgainstQuota,
         snapshot: {
           periodLabel: invoice.periodLabel,
+          // 締め日が末日でない依頼主は、発行した時点の対象期間を残す（後で締め日を変えても過去の請求書は変わらない）
+          periodRangeLabel: closingPeriod(invoice.periodLabel, invoice.companyRelationship.invoiceClosingDay).rangeLabel,
           dueDate: invoice.dueDate?.toISOString(),
           note: invoice.note,
           lines: invoice.lines,

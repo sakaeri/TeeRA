@@ -1,4 +1,5 @@
 import "server-only";
+import { normalizeClosingDay } from "@/lib/closingPeriod";
 import { deleteNoteAttachmentFiles, validateNoteAttachments } from "@/lib/domain/noteAttachments";
 import { noteAttachmentView, type NoteAttachmentInput } from "@/lib/noteAttachments";
 import { randomBytes } from "node:crypto";
@@ -512,6 +513,7 @@ export async function getClientMonthDetail(params: {
     name: counterpartCompany?.name ?? relationship.proxyName ?? "",
     isProxy: !counterpartCompany,
     reportApprovalTiming: relationship.reportApprovalTiming,
+    invoiceClosingDay: relationship.invoiceClosingDay,
     // 削除ボタンの表示判定用 — 関係を作った側（招待の向きを選んだ側）だけが
     // 削除できる。相手が本アカウント連携済みでも、稼働実績が無ければ
     // 削除できる（deleteCompanyRelationship参照。招待の向きを間違えた場合の
@@ -737,6 +739,16 @@ export async function updateClientAddressPhone(params: {
       data: { clientAddress: address || null, clientPhoneNumber: phoneNumber || null },
     });
   }
+}
+
+// この依頼主への請求書の締め日（1〜28日。nullは末日締め）。請求書を出す側（派遣会社）が決める。
+export async function updateInvoiceClosingDay(params: { companyId: string; companyRelationshipId: string; closingDay: number | null }) {
+  const relationship = await prisma.companyRelationship.findUniqueOrThrow({ where: { id: params.companyRelationshipId } });
+  if (relationship.agencyCompanyId !== params.companyId) throw new Error("forbidden");
+  return prisma.companyRelationship.update({
+    where: { id: relationship.id },
+    data: { invoiceClosingDay: normalizeClosingDay(params.closingDay) },
+  });
 }
 
 // 業務報告の承認のタイミング（仮の依頼主の分を、その都度承認するか、月末にまとめて承認するか）。

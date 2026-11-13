@@ -1,4 +1,5 @@
 import "server-only";
+import { closingPeriod } from "@/lib/closingPeriod";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
 import { resolveRateVersion, resolveContractWageVersion, pickStaffTaskRate, isRateEndedAt } from "@/lib/domain/contracts";
@@ -28,11 +29,11 @@ export function nextMonthPaymentDay(paymentDay: string | null | undefined): stri
 // （どちらも無い場合は金額を直接入力したもの）。
 export type DeductionItem = { id: string; label: string; amount: number; ratePercent?: number; quantity?: number; unitPrice?: number };
 
-function monthRange(targetMonth: string) {
-  const [year, month] = targetMonth.split("-").map(Number);
-  const start = new Date(Date.UTC(year, month - 1, 1));
-  const end = new Date(Date.UTC(year, month, 1));
-  return { start, end };
+// 会社の給料の締め日（payrollClosingDay）で「◯月分」の対象期間を決める（末日締めならその月の1日〜末日）。
+// 業務委託スタッフの請求書も同じ締め日を使う。
+export async function payrollPeriod(companyId: string, targetMonth: string) {
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { payrollClosingDay: true } });
+  return closingPeriod(targetMonth, company?.payrollClosingDay);
 }
 
 // シフトの日付時点で有効だった契約（＝基本給バージョン）を解決する必要が
@@ -63,7 +64,7 @@ export async function getEmploymentType(
   targetMonth: string,
 ): Promise<EmploymentType | null> {
   const contracts = await contractsWithWageVersions(companyId, staffUserId);
-  const { end } = monthRange(targetMonth);
+  const { end } = await payrollPeriod(companyId, targetMonth);
   const lastDayOfMonth = new Date(end.getTime() - 24 * 60 * 60 * 1000);
   const contract = pickContractForDate(contracts, lastDayOfMonth);
   return contract?.template.employmentType ?? null;
@@ -195,7 +196,7 @@ export async function computeApprovedWorkLines(params: {
   targetMonth: string;
   excludedShiftIds?: Set<string>;
 }): Promise<{ lines: ComputedWorkLine[]; unresolved: UnresolvedSalaryShift[]; hasContract: boolean }> {
-  const { start, end } = monthRange(params.targetMonth);
+  const { start, end } = await payrollPeriod(params.companyId, params.targetMonth);
   const reports = await prisma.workReport.findMany({
     where: {
       staffUserId: params.staffUserId,
@@ -619,6 +620,7 @@ export async function issueSalarySlip(params: { salarySlipId: string; issuedByUs
     select: { nextPaidLeaveGrantDate: true },
   });
   const paidLeaveConfigured = membership?.nextPaidLeaveGrantDate != null;
+  const period = await payrollPeriod(slip.companyId, slip.targetMonth);
 
   return prisma.$transaction(async (tx) => {
     let countsAgainstQuota = false;
@@ -648,6 +650,8 @@ export async function issueSalarySlip(params: { salarySlipId: string; issuedByUs
         snapshot: {
           staffName: slip.staff.name,
           targetMonth: slip.targetMonth,
+          // 締め日が末日でない会社は、発行した時点の対象期間を残す
+          periodRangeLabel: period.rangeLabel,
           paymentDay: slip.paymentDay,
           note: slip.note,
           groupShiftLines: slip.groupShiftLines,

@@ -2,7 +2,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { isMonthHiddenByFreePlan, freePlanHiddenResponse } from "@/lib/domain/plans";
 import { verifySession, getActiveMembership } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { getTotals, getEmploymentType, buildSalarySlipPdfLines, resolveWorkplaceNamesByShiftId } from "@/lib/domain/payroll";
+import { getTotals, getEmploymentType, payrollPeriod, buildSalarySlipPdfLines, resolveWorkplaceNamesByShiftId } from "@/lib/domain/payroll";
 import { todayJst } from "@/lib/date";
 import { SalarySlipDocument, type SalarySlipPdfData } from "@/lib/pdf/salarySlip";
 
@@ -54,6 +54,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/salar
       companyPhoneNumber: slip.company.phoneNumber,
       staffName: snap.staffName as string,
       targetMonth: snap.targetMonth as string,
+      periodRangeLabel: (snap.periodRangeLabel as string | null | undefined) ?? null,
       issuedAt: (snap.issuedAt as string).slice(0, 10),
       paymentDay: (snap.paymentDay as string | null) ?? null,
       note: (snap.note as string | null) ?? null,
@@ -86,6 +87,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/salar
       companyPhoneNumber: slip.company.phoneNumber,
       staffName: slip.staff.name,
       targetMonth: slip.targetMonth,
+      periodRangeLabel: (await payrollPeriod(slip.companyId, slip.targetMonth)).rangeLabel,
       issuedAt: todayJst(),
       paymentDay: slip.paymentDay,
       note: slip.note,
