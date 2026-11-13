@@ -1,5 +1,6 @@
 "use client";
 
+import { CLOSING_DAY_OPTIONS, closingDayLabel } from "@/lib/closingPeriod";
 import { useEffect, useState, useTransition } from "react";
 import { InfoPopupButton } from "@/components/InfoPopupButton";
 import { useRouter } from "next/navigation";
@@ -11,6 +12,7 @@ import {
   updateCompanyPhoneNumberAction,
   updateCompanyNotificationEmailAction,
   updateCompanyWorkReportDigestHourAction,
+  updateCompanyPayrollClosingDayAction,
   updateCompanySealAction,
   updateCompanySealOpacityAction,
   setMemberCanWorkShiftsAction,
@@ -112,6 +114,7 @@ export function SettingsView({
   phoneNumber,
   notificationEmail,
   workReportDigestHour,
+  payrollClosingDay,
   sealImageDataUrl,
   sealOpacity,
   admins,
@@ -133,6 +136,7 @@ export function SettingsView({
   phoneNumber: string;
   notificationEmail: string;
   workReportDigestHour: number;
+  payrollClosingDay: number | null;
   sealImageDataUrl: string | null;
   sealOpacity: number;
   admins: Admin[];
@@ -196,6 +200,7 @@ export function SettingsView({
             phoneNumber={phoneNumber}
             notificationEmail={notificationEmail}
             workReportDigestHour={workReportDigestHour}
+            payrollClosingDay={payrollClosingDay}
           />
           <SealSection companyName={companyName} sealImageDataUrl={sealImageDataUrl} sealOpacity={sealOpacity} />
           <div id="admins" className="scroll-mt-24">
@@ -640,7 +645,7 @@ function HowToSection() {
             "PDFの載せ方（勤務先・業務ごとに「まとめる」／「1件ずつ」）を選び、内容を確認して「PDFで明細を発行する」。発行するとスタッフのアプリの「給料明細」に届く（本人が電子で受け取ることに同意した場合）",
             "業務委託のスタッフから届いた請求書は、一覧（下書き中の下）で開いて「承認」か「差し戻し」。源泉徴収・消費税はその画面でスタッフごとに決め、承認すると発行履歴に移る",
           ]}
-          note="控除・支払日・備考・載せ方は翌月にも自動で引き継がれるので、毎月入力し直す必要はありません。スタッフ個別の業務内容単価は「この日で終了」にでき、それ以降の勤務は契約書の基本給で計算されます。"
+          note="給料の締め日は「設定」の会社情報で選べます（1〜28日・末日）。控除・支払日・備考・載せ方は翌月に引き継がれます。スタッフ個別の業務内容単価は「この日で終了」にでき、それ以降の勤務は契約書の基本給で計算されます。"
         />
         <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted print:mt-1.5 print:px-2 print:py-1 print:text-[11px] print:leading-snug">
           発行した後に金額や内容を間違えていたことに気づいた場合は、明細の「内容を修正する」ボタンで一旦下書きに戻して編集できます。同じ対象月の明細であれば、修正後の再発行に追加費用はかかりません（Teeは最初の発行時にしか消費されません）。業務委託のスタッフから届いた請求書は、開く時に1件分（無料の発行枠か1Tee）を使います。同じ人の同じ月は1回だけで、その月の支払明細を発行済みなら無料です。
@@ -657,7 +662,7 @@ function HowToSection() {
             "明細・消費税区分を確認し、振込先は登録済みのものから選ぶ。PDFの明細の載せ方（業務ごと／スタッフ・業務ごと）も選べ、実績表が付く",
             "内容を確認して「PDFで請求書を発行する」。備考・振込先・載せ方は翌月に引き継がれる",
           ]}
-          note="依頼主に取り消されたシフトのキャンセル料も、その月の請求書に明細として載ります。業務内容の単価が未設定の分があると案内が出るので、「単価タブを開く」から設定してください。"
+          note="締め日は依頼主の詳細の「編集」で選べます。取り消されたシフトのキャンセル料も明細に載ります。業務内容の単価が未設定の分があると案内が出るので、「単価タブを開く」から設定してください。"
         />
         <p className="mt-4 rounded-lg bg-background px-4 py-3 text-xs text-muted print:mt-1.5 print:px-2 print:py-1 print:text-[11px] print:leading-snug">
           請求書も給与明細と同じく、発行後に「内容を修正する」で下書きに戻して直せます。同じ対象月の請求書であれば、修正しての再発行は何度でも無料です。
@@ -1051,6 +1056,7 @@ function CompanyInfoSection({
   phoneNumber,
   notificationEmail,
   workReportDigestHour,
+  payrollClosingDay,
 }: {
   companyName: string;
   invoiceRegistrationNumber: string;
@@ -1058,6 +1064,7 @@ function CompanyInfoSection({
   phoneNumber: string;
   notificationEmail: string;
   workReportDigestHour: number;
+  payrollClosingDay: number | null;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(companyName);
@@ -1066,6 +1073,7 @@ function CompanyInfoSection({
   const [phoneValue, setPhoneValue] = useState(phoneNumber);
   const [notificationEmailValue, setNotificationEmailValue] = useState(notificationEmail);
   const [digestHourValue, setDigestHourValue] = useState(workReportDigestHour);
+  const [closingDayValue, setClosingDayValue] = useState(payrollClosingDay === null ? "" : String(payrollClosingDay));
   const [pending, startTransition] = useTransition();
 
   if (!editing) {
@@ -1096,6 +1104,10 @@ function CompanyInfoSection({
             <div>
               <p className="text-xs text-muted">業務報告のまとめメール</p>
               <p className="font-medium">毎日 {digestHourValue}:00</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">給料の締め日（給料明細・業務委託スタッフの請求書）</p>
+              <p className="font-medium">{closingDayLabel(closingDayValue ? Number(closingDayValue) : null)}</p>
             </div>
           </div>
           <button
@@ -1173,6 +1185,21 @@ function CompanyInfoSection({
             ))}
           </select>
         </label>
+        <label className="flex flex-col gap-1 text-xs">
+          給料の締め日（給料明細・業務委託スタッフの請求書の対象期間。例：20日締めなら「11月分」は10/21〜11/20の勤務）
+          <select
+            value={closingDayValue}
+            onChange={(e) => setClosingDayValue(e.target.value)}
+            aria-label="給料の締め日"
+            className="rounded-lg border border-border bg-white px-3 py-2 text-sm"
+          >
+            {CLOSING_DAY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="flex gap-2">
           <button
             type="button"
@@ -1185,6 +1212,7 @@ function CompanyInfoSection({
                 await updateCompanyPhoneNumberAction(phoneValue);
                 await updateCompanyNotificationEmailAction(notificationEmailValue);
                 await updateCompanyWorkReportDigestHourAction(digestHourValue);
+                await updateCompanyPayrollClosingDayAction(closingDayValue ? Number(closingDayValue) : null);
                 setEditing(false);
               })
             }

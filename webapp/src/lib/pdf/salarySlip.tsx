@@ -97,6 +97,8 @@ export type SalarySlipPdfData = {
   companyPhoneNumber: string | null;
   staffName: string;
   targetMonth: string;
+  // 締め日が末日でない会社の対象期間（例："10/21〜11/20"）。末日締めならnull
+  periodRangeLabel?: string | null;
   issuedAt: string;
   paymentDay: string | null;
   note: string | null;
@@ -143,6 +145,7 @@ export function SalarySlipDocument({ data }: { data: SalarySlipPdfData }) {
             <Text style={styles.subjectLine}>
               件名：{data.targetMonth}分 {data.isContractor ? "業務委託料" : "給与"}
             </Text>
+            {data.periodRangeLabel ? <Text style={styles.subjectLine}>対象期間：{data.periodRangeLabel}</Text> : null}
           </View>
           <View style={styles.issuerBlock}>
             <Text style={styles.issuerName}>{data.companyName}</Text>

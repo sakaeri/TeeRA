@@ -150,6 +150,7 @@ export type ReceivedInvoiceDetail = {
   targetMonth: string;
   status: string;
   submittedAt: string;
+  periodRangeLabel: string | null;
   lines: { shiftId: string; description: string; hours: number; rate: number; amount: number }[];
   expenses: { label: string; quantity: number; unitPrice: number; amount: number }[];
   note: string | null;
@@ -209,7 +210,10 @@ export function ReceivedStaffInvoiceView({ invoice }: { invoice: ReceivedInvoice
         </h2>
         {st ? <span className={`rounded-full px-2 py-0.5 text-xs ${st.className}`}>{st.text}</span> : null}
       </div>
-      <p className="text-xs text-muted">提出日 {invoice.submittedAt}</p>
+      <p className="text-xs text-muted">
+        提出日 {invoice.submittedAt}
+        {invoice.periodRangeLabel ? `　対象期間：${invoice.periodRangeLabel}` : ""}
+      </p>
       {invoice.status === "RETURNED" && invoice.returnReason ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">差し戻した理由：{invoice.returnReason}（スタッフが直して再提出するのを待っています）</p>
       ) : null}

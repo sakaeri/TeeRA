@@ -6,6 +6,8 @@ import "@/lib/pdf/invoice";
 export type StaffInvoicePdfData = {
   companyName: string;
   targetMonth: string;
+  // 締め日が末日でない会社の対象期間（例："10/21〜11/20"）。末日締めならnull
+  periodRangeLabel?: string | null;
   submittedAt: string; // YYYY-MM-DD
   statusLabel: string | null; // 「確認中」「差し戻し」など。承認済みならnull
   issuerName: string;
@@ -77,6 +79,7 @@ export function StaffInvoiceDocument({ data }: { data: StaffInvoicePdfData }) {
           <View>
             <Text style={styles.recipientName}>{data.companyName} 御中</Text>
             <Text style={styles.line}>件名：{y}年{m}月分 業務委託料</Text>
+            {data.periodRangeLabel ? <Text style={styles.line}>対象期間：{data.periodRangeLabel}</Text> : null}
             <Text style={styles.line}>請求日：{data.submittedAt}</Text>
           </View>
           <View style={styles.issuerBlock}>

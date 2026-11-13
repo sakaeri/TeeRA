@@ -81,6 +81,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
         invoiceRegistrationNumber={isCompanyAdmin ? (company.invoiceRegistrationNumber ?? "") : ""}
         notificationEmail={isCompanyAdmin ? (company.notificationEmail ?? "") : ""}
         workReportDigestHour={company.workReportDigestHour}
+        payrollClosingDay={company.payrollClosingDay}
         sealImageDataUrl={isCompanyAdmin ? company.sealImageDataUrl : null}
         sealOpacity={company.sealOpacity}
         teeBalance={company.teeBalance}

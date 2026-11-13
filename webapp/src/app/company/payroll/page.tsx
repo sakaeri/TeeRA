@@ -1,7 +1,8 @@
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
+import { closingDayLabel } from "@/lib/closingPeriod";
 import { canManageAny, isCompanyScopeAdmin, isLeaderOnly } from "@/lib/auth/permissions";
 import { listStaff } from "@/lib/domain/roster";
-import { getOrCreateSalarySlip, getTotals, listSalarySlipsForCompany } from "@/lib/domain/payroll";
+import { payrollPeriod, getOrCreateSalarySlip, getTotals, listSalarySlipsForCompany } from "@/lib/domain/payroll";
 import { pdfQuotaRemaining } from "@/lib/domain/plans";
 import { prisma } from "@/lib/prisma";
 import { SalarySlipEditor } from "@/components/company/SalarySlipEditor";
@@ -51,6 +52,10 @@ export default async function PayrollPage({
     redirect(`/company/payroll?${params.toString()}`);
   }
   const targetMonth = requestedMonth;
+  // 締め日が末日でない会社は、給料明細の対象期間を画面に出す
+  const payrollPeriodInfo = await payrollPeriod(membership.companyId, targetMonth);
+  const payrollPeriodRange = payrollPeriodInfo.rangeLabel;
+  const payrollClosingLabel = closingDayLabel(payrollPeriodInfo.closingDay);
   // カレンダー/スタッフ詳細パネルと同様、カットオフ月そのものを見ている
   // 時だけバナーを出す（無料プランというだけで常時表示すると邪魔になる）。
   const atHistoryCutoff = minMonth !== null && targetMonth === minMonth;
@@ -171,6 +176,7 @@ export default async function PayrollPage({
         targetMonth: openedInvoice.targetMonth,
         status: openedInvoice.status,
         submittedAt: new Date(openedInvoice.submittedAt!.getTime() + 9 * 3600e3).toISOString().slice(0, 10),
+        periodRangeLabel: openedInvoice.periodRangeLabel,
         lines: openedInvoice.workLines as ComputedWorkLine[],
         expenses: sanitizeExpenses(openedInvoice.expenses),
         note: openedInvoice.note,
@@ -221,6 +227,11 @@ export default async function PayrollPage({
           {staffUserId && invoicedStaffIds.has(staffUserId) ? (
             <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
               この月は{selectedStaffName}さんから請求書を受け取り、承認済みです（支払明細の発行は要りません）。
+            </p>
+          ) : null}
+          {payrollPeriodRange ? (
+            <p className="mb-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-900" data-testid="payroll-period-range">
+              対象期間：{payrollPeriodRange}（{payrollClosingLabel}）
             </p>
           ) : null}
           <SalarySlipEditor

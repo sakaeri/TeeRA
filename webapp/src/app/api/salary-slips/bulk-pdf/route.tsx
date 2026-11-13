@@ -47,6 +47,7 @@ export async function GET(request: Request) {
       companyPhoneNumber: company.phoneNumber,
       staffName: snap.staffName as string,
       targetMonth: snap.targetMonth as string,
+      periodRangeLabel: (snap.periodRangeLabel as string | null | undefined) ?? null,
       issuedAt: (snap.issuedAt as string).slice(0, 10),
       paymentDay: (snap.paymentDay as string | null) ?? null,
       note: (snap.note as string | null) ?? null,

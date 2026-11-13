@@ -49,6 +49,7 @@ export default async function StaffInvoicesPage({ searchParams }: PageProps<"/st
           <h1 className="font-serif-jp text-xl font-bold text-primary">{companyName}</h1>
           <p className="text-sm text-muted">
             {y}年{m}月分の請求書
+            {invoice.periodRangeLabel ? `（対象期間：${invoice.periodRangeLabel}）` : ""}
           </p>
         </div>
         <StaffInvoiceEditor key={`${companyId}-${targetMonth}`} companyId={companyId} companyName={companyName} targetMonth={targetMonth} invoice={invoice} />

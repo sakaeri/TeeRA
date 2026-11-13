@@ -1,5 +1,5 @@
 import "server-only";
-import { isMonthlyApproval, isMonthlyApprovalDeferred } from "@/lib/reportApprovalTiming";
+import { approvalPeriodMonth, isMonthlyApproval, isMonthlyApprovalDeferred } from "@/lib/reportApprovalTiming";
 import { prisma } from "@/lib/prisma";
 import { listPendingReportsForCompany } from "@/lib/domain/workReports";
 import { listStaffWithSummary } from "@/lib/domain/roster";
@@ -233,7 +233,7 @@ export function computePendingReportEntries(data: DashboardData) {
     teamKey: r.shift.teamId ?? "none",
     // 「月末にまとめて」の依頼主の分は、依頼主×月でまとめて開く・承認する
     monthlyKey: isMonthlyApproval(r.shift.companyRelationship)
-      ? `${r.shift.companyRelationshipId}:${r.shift.date.toISOString().slice(0, 7)}`
+      ? `${r.shift.companyRelationshipId}:${approvalPeriodMonth(r.shift.companyRelationship, r.shift.date.toISOString().slice(0, 10))}`
       : null,
     staffName: r.staff.name,
     teamName: r.shift.team?.name ?? null,
@@ -318,7 +318,7 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
   // 「月末にまとめて」の依頼主の分（月が終わったもの）は、依頼主×月ごとに1行
   const monthlyGroups = new Map<string, { name: string; month: string; count: number }>();
   for (const r of pendingReports.filter((x) => isMonthlyApproval(x.shift.companyRelationship))) {
-    const month = r.shift.date.toISOString().slice(0, 7);
+    const month = approvalPeriodMonth(r.shift.companyRelationship, r.shift.date.toISOString().slice(0, 10));
     const key = `${r.shift.companyRelationshipId}:${month}`;
     const g = monthlyGroups.get(key) ?? { name: r.shift.companyRelationship?.proxyName ?? "依頼主", month, count: 0 };
     g.count += 1;

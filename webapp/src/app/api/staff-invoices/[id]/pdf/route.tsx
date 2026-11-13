@@ -39,6 +39,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/api/staf
       data={{
         companyName: invoice.company.name,
         targetMonth: invoice.targetMonth,
+        periodRangeLabel: invoice.periodRangeLabel,
         submittedAt: new Date(invoice.submittedAt.getTime() + 9 * 3600e3).toISOString().slice(0, 10),
         statusLabel: STATUS_LABEL[invoice.status] ?? null,
         issuerName: invoice.issuerName ?? "",

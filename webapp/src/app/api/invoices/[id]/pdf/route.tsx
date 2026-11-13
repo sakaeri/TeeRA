@@ -1,7 +1,7 @@
 import { verifySession, getActiveMembership } from "@/lib/auth/session";
 import { isMonthHiddenByFreePlan, freePlanHiddenResponse } from "@/lib/domain/plans";
 import { prisma } from "@/lib/prisma";
-import { computeInvoiceTotals } from "@/lib/domain/invoicing";
+import { computeInvoiceTotals, invoicePeriod } from "@/lib/domain/invoicing";
 import { todayJst } from "@/lib/date";
 import { type InvoicePdfData } from "@/lib/pdf/invoice";
 import { invoiceLineLayoutFromSnapshot } from "@/lib/invoiceLineGrouping";
@@ -48,6 +48,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
       issuingCompanyPhoneNumber: invoice.issuingCompany.phoneNumber,
       clientName,
       periodLabel: snap.periodLabel as string,
+      periodRangeLabel: (snap.periodRangeLabel as string | null | undefined) ?? null,
       dueDate: (snap.dueDate as string | undefined)?.slice(0, 10) ?? null,
       note: snap.note as string | null,
       issuedAt: (snap.issuedAt as string).slice(0, 10),
@@ -79,6 +80,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
       issuingCompanyPhoneNumber: invoice.issuingCompany.phoneNumber,
       clientName,
       periodLabel: invoice.periodLabel,
+      periodRangeLabel: (await invoicePeriod(invoice.companyRelationshipId, invoice.periodLabel)).rangeLabel,
       dueDate: invoice.dueDate?.toISOString().slice(0, 10) ?? null,
       note: invoice.note,
       issuedAt: todayJst(),

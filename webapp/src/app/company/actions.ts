@@ -1,5 +1,6 @@
 "use server";
 
+import { normalizeClosingDay } from "@/lib/closingPeriod";
 import { revalidatePath } from "next/cache";
 import type { NoteAttachmentInput } from "@/lib/noteAttachments";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
@@ -38,7 +39,7 @@ import {
 } from "@/lib/domain/roster";
 import { setHireDate, grantPaidLeave, adjustPaidLeaveBalance, skipPaidLeaveGrant } from "@/lib/domain/paidLeave";
 import { earliestAllowedMonth, isBeforeCutoff } from "@/lib/date";
-import { updateReportApprovalTiming,
+import { updateReportApprovalTiming, updateInvoiceClosingDay,
   activateAgencyModuleWithProxyClient,
   activateDispatchModuleWithProxyAgency,
   addRealClient,
@@ -478,6 +479,18 @@ export async function updateCompanyWorkReportDigestHourAction(hour: number) {
   if (!Number.isInteger(hour) || hour < 0 || hour > 23) throw new Error("invalid_hour");
   await prisma.company.update({ where: { id: membership.companyId }, data: { workReportDigestHour: hour } });
   revalidatePath("/company/settings");
+}
+
+// 給料の締め日（給料明細・業務委託スタッフの請求書の対象期間）。nullは末日締め。
+export async function updateCompanyPayrollClosingDayAction(closingDay: number | null) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await prisma.company.update({
+    where: { id: membership.companyId },
+    data: { payrollClosingDay: normalizeClosingDay(closingDay) },
+  });
+  revalidatePath("/company/settings");
+  revalidatePath("/company/payroll");
 }
 
 // 請求書の電子印（社印）。nullで削除。画像はブラウザ側で白背景を透過・縮小
@@ -924,6 +937,14 @@ export async function deleteCompanyAnnouncementAction(announcementId: string) {
 }
 
 // 業務報告の承認のタイミング（その都度／月末にまとめて）を変える
+export async function updateInvoiceClosingDayAction(companyRelationshipId: string, closingDay: number | null) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await updateInvoiceClosingDay({ companyId: membership.companyId, companyRelationshipId, closingDay });
+  revalidatePath("/company/roster");
+  revalidatePath("/company/invoices");
+}
+
 export async function updateReportApprovalTimingAction(companyRelationshipId: string, timing: "EACH" | "MONTHLY") {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageCompanySettings(membership)) throw new Error("forbidden");
