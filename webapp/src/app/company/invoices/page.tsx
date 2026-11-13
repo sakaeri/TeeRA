@@ -78,7 +78,7 @@ export default async function InvoicesPage({
     accountType: string;
     accountNumber: string;
     accountHolderName: string;
-    lines: { id: string; staffName: string; description: string; hours: number; rate: number; amount: number; taxRatePercent: number }[];
+    lines: { id: string; staffName: string; description: string; hours: number; unit: string | null; rate: number; amount: number; taxRatePercent: number }[];
     totals: ReturnType<typeof computeInvoiceTotals>;
     issues: { id: string; issuedAt: string }[];
     unresolved: { shiftId: string; date: string; staffName: string; taskName: string | null }[];
@@ -125,6 +125,7 @@ export default async function InvoicesPage({
         staffName: l.staffName,
         description: l.description,
         hours: l.hours,
+        unit: l.unit,
         rate: l.rate,
         amount: l.amount,
         taxRatePercent: l.taxRatePercent,

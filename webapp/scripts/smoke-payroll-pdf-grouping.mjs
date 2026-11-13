@@ -197,6 +197,7 @@ try {
   };
   const slipPdfUrl = `http://localhost:3000/api/salary-slips/${slipId}/pdf`;
   let text = await pdfText(slipPdfUrl);
+  log("給料明細のPDFの数量に単位（時間）が付く", /\d時間/.test(text));
   log("最初は「まとめる」が選ばれている", (await admin.getByRole("radio", { name: "まとめる" }).getAttribute("aria-checked")) === "true");
   log("まとめるときは「社内（レジ業務）」「A社（品出し）」の2行になる", text.includes("社内（レジ業務）") && text.includes("A社（品出し）") && !text.includes(`${thisMonth}-01 社内`));
 

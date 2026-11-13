@@ -122,6 +122,7 @@ try {
   // キャディ：6h + 4.5h + 5h = 15.5h × 1,500円 = 23,250円（3件）
   log("キャディは1行にまとまり、時間の合計と件数が出る", first.includes("キャディ（3件）") && first.includes("15.5") && first.includes("23,250円"));
   log("清掃（日給）は件数を添えず1行", first.includes("清掃") && !first.includes("清掃（") && first.includes("8,000円"));
+  log("数量に単位が付く（時給の業務は「時間」、日給の業務は「日」）", first.includes("15.5時間") && first.includes("1日"));
   log("手で足した交通費はそのまま1行（業務の行の後）", first.includes("交通費") && first.includes("1,500円") && first.indexOf("交通費") > first.indexOf("清掃"));
   log("まとめた明細にはスタッフ名や日付は出ない", !first.includes("明細スタッフ甲") && !first.includes(day(5)));
   log("PDFは2ページ以上（2ページ目以降が実績表）", pages.length >= 2);

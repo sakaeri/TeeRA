@@ -1,5 +1,6 @@
 "use server";
 
+import { isQuantityUnit } from "@/lib/quantityUnit";
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManageAny } from "@/lib/auth/permissions";
@@ -34,10 +35,10 @@ async function assertAccess(invoiceId: string) {
 
 export async function addCustomLineAction(
   invoiceId: string,
-  input: { staffName: string; description: string; hours: number; rate: number; taxRatePercent: number },
+  input: { staffName: string; description: string; hours: number; unit?: string | null; rate: number; taxRatePercent: number },
 ) {
   await assertAccess(invoiceId);
-  await addCustomLine({ invoiceId, ...input });
+  await addCustomLine({ invoiceId, ...input, unit: isQuantityUnit(input.unit) ? input.unit : null });
   revalidatePath("/company/invoices");
 }
 
