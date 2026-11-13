@@ -7,6 +7,8 @@ export type GroupableInvoiceLine = {
   staffName: string;
   description: string;
   hours: number;
+  // 数量の単位（HOUR/DAY/COUNT）。まとめる時は単位が同じ行だけをまとめる
+  unit?: string | null;
   rate: number;
   amount: number;
   taxRatePercent: number;
@@ -40,7 +42,7 @@ export function groupInvoiceLines<T extends GroupableInvoiceLine>(lines: T[], op
     }
     const taskLabel = groupLabel(l.description);
     const label = byStaff && l.staffName ? `${l.staffName} ／ ${taskLabel}` : taskLabel;
-    const key = `${byStaff ? l.staffName : ""}\u0000${taskLabel}\u0000${l.rate}\u0000${l.taxRatePercent}`;
+    const key = `${byStaff ? l.staffName : ""}\u0000${taskLabel}\u0000${l.rate}\u0000${l.taxRatePercent}\u0000${l.unit ?? ""}`;
     const existing = byKey.get(key);
     if (existing) {
       existing.hours += l.hours;
@@ -48,7 +50,7 @@ export function groupInvoiceLines<T extends GroupableInvoiceLine>(lines: T[], op
       existing.count += 1;
       continue;
     }
-    const group = { shiftId: null, staffName: byStaff ? l.staffName : "", description: label, hours: l.hours, rate: l.rate, amount: l.amount, taxRatePercent: l.taxRatePercent, count: 1, grouped: true };
+    const group = { shiftId: null, staffName: byStaff ? l.staffName : "", description: label, hours: l.hours, unit: l.unit ?? null, rate: l.rate, amount: l.amount, taxRatePercent: l.taxRatePercent, count: 1, grouped: true };
     byKey.set(key, group);
     result.push(group);
   }

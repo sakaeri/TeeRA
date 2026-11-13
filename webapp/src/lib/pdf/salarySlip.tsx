@@ -1,4 +1,5 @@
 import { Document, Page, Text, View, StyleSheet, Font } from "@react-pdf/renderer";
+import { formatQuantity } from "@/lib/quantityUnit";
 import type { DeductionItem } from "@/lib/domain/payroll";
 
 Font.register({
@@ -57,7 +58,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#e6e1d3",
   },
   tableColDescription: { flexGrow: 1, textAlign: "left" },
-  tableColQty: { width: 40, textAlign: "right" },
+  tableColQty: { width: 52, textAlign: "right" },
   tableColRate: { width: 65, textAlign: "right" },
   tableColAmount: { width: 70, textAlign: "right" },
   summaryBox: {
@@ -103,7 +104,7 @@ export type SalarySlipPdfData = {
   paymentDay: string | null;
   note: string | null;
   isContractor: boolean;
-  lines: { description: string; hours: number; rate: number; amount: number }[];
+  lines: { description: string; hours: number; rate: number; amount: number; unit?: string | null }[];
   deductions: DeductionItem[];
   paidLeaveDaysUsed: number;
   paidLeaveDailyRate: number;
@@ -170,7 +171,7 @@ export function SalarySlipDocument({ data }: { data: SalarySlipPdfData }) {
           {data.lines.map((l, i) => (
             <View key={i} style={styles.tableRow}>
               <Text style={styles.tableColDescription}>{l.description}</Text>
-              <Text style={styles.tableColQty}>{Math.round(l.hours * 100) / 100}</Text>
+              <Text style={styles.tableColQty}>{formatQuantity(l.hours, l.unit)}</Text>
               <Text style={styles.tableColRate}>{l.rate.toLocaleString()}円</Text>
               <Text style={styles.tableColAmount}>{l.amount.toLocaleString()}円</Text>
             </View>

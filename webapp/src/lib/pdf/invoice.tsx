@@ -1,4 +1,5 @@
 import { Document, Page, Text, View, Image, StyleSheet, Font } from "@react-pdf/renderer";
+import { formatQuantity } from "@/lib/quantityUnit";
 import { layoutInvoiceLines, type InvoiceLineLayout } from "@/lib/invoiceLineGrouping";
 
 Font.register({
@@ -74,7 +75,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#e6e1d3",
   },
   tableColDescription: { flexGrow: 1, textAlign: "left" },
-  tableColQty: { width: 36, textAlign: "right" },
+  tableColQty: { width: 52, textAlign: "right" },
   tableColRate: { width: 64, textAlign: "right" },
   tableColTax: { width: 42, textAlign: "right" },
   tableColAmount: { width: 70, textAlign: "right" },
@@ -142,7 +143,7 @@ export type InvoicePdfData = {
   accountType: string | null;
   accountNumber: string | null;
   accountHolderName: string | null;
-  lines: { shiftId?: string | null; staffName: string; description: string; hours: number; rate: number; amount: number; taxRatePercent: number }[];
+  lines: { shiftId?: string | null; staffName: string; description: string; hours: number; unit?: string | null; rate: number; amount: number; taxRatePercent: number }[];
   // 明細の載せ方。業務×単価ごと／スタッフ×業務×単価ごと／1件ずつ（この機能より前に発行したもの）
   lineLayout?: InvoiceLineLayout;
   brackets: { rate: number; subtotal: number; tax: number }[];
@@ -221,7 +222,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
                 {l.staffName ? `${l.staffName} / ` : ""}
                 {l.description}
               </Text>
-              <Text style={styles.tableColQty}>{l.hours}</Text>
+              <Text style={styles.tableColQty}>{formatQuantity(l.hours, l.unit)}</Text>
               <Text style={styles.tableColRate}>{l.rate.toLocaleString()}円</Text>
               <Text style={styles.tableColTax}>{l.taxRatePercent === 0 ? "なし" : `${l.taxRatePercent}%`}</Text>
               <Text style={styles.tableColAmount}>{l.amount.toLocaleString()}円</Text>

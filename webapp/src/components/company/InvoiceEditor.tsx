@@ -1,5 +1,6 @@
 "use client";
 
+import { formatQuantity, isQuantityUnit, QUANTITY_UNIT_LABEL } from "@/lib/quantityUnit";
 import { PdfLink } from "@/components/PdfLink";
 import { useState, useTransition } from "react";
 import {
@@ -22,6 +23,7 @@ type Line = {
   staffName: string;
   description: string;
   hours: number;
+  unit: string | null;
   rate: number;
   amount: number;
   taxRatePercent: number;
@@ -181,8 +183,9 @@ export function InvoiceEditor({
                       className="w-16 rounded border border-border px-1 py-0.5"
                     />
                   ) : (
-                    l.hours
+                    formatQuantity(l.hours, null)
                   )}
+                  {isQuantityUnit(l.unit) ? <span className="ml-0.5 text-xs text-muted">{QUANTITY_UNIT_LABEL[l.unit]}</span> : null}
                 </td>
                 <td className="py-1">
                   {isEditable ? (
@@ -472,11 +475,12 @@ function AddInvoiceLineModal({
   onSubmit,
 }: {
   onClose: () => void;
-  onSubmit: (fields: { staffName: string; description: string; hours: number; rate: number; taxRatePercent: number }) => void;
+  onSubmit: (fields: { staffName: string; description: string; hours: number; unit: string | null; rate: number; taxRatePercent: number }) => void;
 }) {
   const [staffName, setStaffName] = useState("");
   const [desc, setDesc] = useState("");
   const [hours, setHours] = useState("");
+  const [unit, setUnit] = useState("");
   const [rate, setRate] = useState("");
   const [taxRatePercent, setTaxRatePercent] = useState("10");
   // スタッフ名は必須にしない — まとめて業務内容×単価×数量で計上する行
@@ -511,15 +515,31 @@ function AddInvoiceLineModal({
               className="rounded-lg border border-border px-2 py-1.5 text-sm"
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs">
-            数量
-            <input
-              type="number"
-              value={hours}
-              onChange={(e) => setHours(e.target.value)}
-              className="rounded-lg border border-border px-2 py-1.5 text-sm"
-            />
-          </label>
+          <div className="flex gap-2">
+            <label className="flex flex-1 flex-col gap-1 text-xs">
+              数量
+              <input
+                type="number"
+                value={hours}
+                onChange={(e) => setHours(e.target.value)}
+                className="rounded-lg border border-border px-2 py-1.5 text-sm"
+              />
+            </label>
+            <label className="flex w-24 flex-col gap-1 text-xs">
+              単位
+              <select
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                aria-label="単位"
+                className="rounded-lg border border-border bg-white px-2 py-1.5 text-sm"
+              >
+                <option value="">なし</option>
+                <option value="HOUR">時間</option>
+                <option value="DAY">日</option>
+                <option value="COUNT">件</option>
+              </select>
+            </label>
+          </div>
           <label className="flex flex-col gap-1 text-xs">
             単価（相殺の場合はマイナス金額で）
             <input
@@ -554,7 +574,7 @@ function AddInvoiceLineModal({
             type="button"
             disabled={!canSubmit}
             onClick={() =>
-              onSubmit({ staffName, description: desc, hours: Number(hours), rate: Number(rate), taxRatePercent: Number(taxRatePercent) })
+              onSubmit({ staffName, description: desc, hours: Number(hours), unit: unit || null, rate: Number(rate), taxRatePercent: Number(taxRatePercent) })
             }
             className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >

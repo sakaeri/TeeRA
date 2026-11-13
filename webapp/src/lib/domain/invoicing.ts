@@ -6,6 +6,7 @@ import { isWeekendOrHoliday } from "@/lib/holidays";
 import { hasRemainingPdfQuota } from "@/lib/domain/plans";
 import { workRecordRowsForShiftIds } from "@/lib/domain/workRecord";
 import { closingPeriod } from "@/lib/closingPeriod";
+import type { QuantityUnit } from "@/lib/quantityUnit";
 
 // 依頼主ごとの締め日（invoiceClosingDay）で「◯月分」の対象期間を決める（末日締めならその月の1日〜末日）
 export async function invoicePeriod(companyRelationshipId: string, periodLabel: string) {
@@ -108,6 +109,7 @@ async function regenerateLines(invoiceId: string) {
             staffName: s.staff.name,
             description: `${s.date.toISOString().slice(0, 10)} キャンセル料${s.taskName ? `（${s.taskName}）` : ""}`,
             hours: 1,
+            unit: "COUNT",
             rate: fee,
             amount: fee,
             taxRatePercent: 10,
@@ -154,6 +156,7 @@ async function regenerateLines(invoiceId: string) {
           staffName: s.staff.name,
           description: `${s.date.toISOString().slice(0, 10)} 勤務${taskLabel}`,
           hours: lineHours,
+          unit: isHourly ? "HOUR" : "DAY",
           rate,
           amount: Math.round(lineHours * rate),
           taxRatePercent: 10,
@@ -302,6 +305,7 @@ export async function addCustomLine(params: {
   staffName: string;
   description: string;
   hours: number;
+  unit?: QuantityUnit | null;
   rate: number;
   taxRatePercent: number;
 }) {
@@ -311,6 +315,7 @@ export async function addCustomLine(params: {
       staffName: params.staffName,
       description: params.description,
       hours: params.hours,
+      unit: params.unit ?? null,
       rate: params.rate,
       amount: Math.round(params.hours * params.rate),
       taxRatePercent: params.taxRatePercent,

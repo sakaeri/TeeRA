@@ -1445,6 +1445,8 @@ model InvoiceLine {
   rate             Int
   amount           Int
   taxRatePercent   Int // 10, 8, or 0 (消費税区分「なし」)
+  // 数量の単位（HOUR=時間・DAY=日・COUNT=件。null＝単位なし／この機能より前の行）
+  unit             String?
   sortOrder        Int     @default(0)
   // trueは管理者が時間/単価を手で直した行 — regenerateLinesはこの行を
   // 上書き・削除しない（SalarySlipLine.isManuallyEditedと同じ考え方）。

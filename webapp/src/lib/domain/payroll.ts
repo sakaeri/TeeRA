@@ -100,7 +100,8 @@ export async function resolveWorkplaceNamesByShiftId(shiftIds: string[]): Promis
   );
 }
 
-export type SalarySlipPdfLine = { description: string; hours: number; rate: number; amount: number };
+// unit：勤務の行は時給なら HOUR（時間）、日給なら DAY（日）。手で足した行は単位なし
+export type SalarySlipPdfLine = { description: string; hours: number; rate: number; amount: number; unit?: "HOUR" | "DAY" | null };
 
 // SHIFT行は「勤務先（業務内容）」×単価でまとめて1行に合算する（1日ごとの内訳は
 // PDFでは冗長なため）。日給は「勤務先（業務内容）（日給）」として別の行にし、数量＝日数。
@@ -134,7 +135,7 @@ export function buildSalarySlipPdfLines(
       const description = date
         ? `${date} ${workplace}${taskName ? `（${taskName}）` : ""}${isDaily ? DAILY_WAGE_SUFFIX : ""}`
         : line.description;
-      result.push({ description, hours: line.hours, rate: line.rate, amount: line.amount });
+      result.push({ description, hours: line.hours, rate: line.rate, amount: line.amount, unit: isDaily ? "DAY" : "HOUR" });
       continue;
     }
     // 日給も「勤務先（業務内容）（日給）」×単価でまとめる（数量＝日数）
@@ -146,7 +147,7 @@ export function buildSalarySlipPdfLines(
       existing.hours += line.hours;
       existing.amount += line.amount;
     } else {
-      const fresh: SalarySlipPdfLine = { description: label, hours: line.hours, rate: line.rate, amount: line.amount };
+      const fresh: SalarySlipPdfLine = { description: label, hours: line.hours, rate: line.rate, amount: line.amount, unit: isDaily ? "DAY" : "HOUR" };
       grouped.set(key, fresh);
       result.push(fresh);
     }
