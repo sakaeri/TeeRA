@@ -171,7 +171,7 @@ try {
     .last()
     .getByRole("button", { name: /^給料明細/ })
     .textContent();
-  log("スタッフ詳細の「計算する」が金額表示に変わる", /[\d,]+円明細を見る/.test(payrollButtonLabel ?? ""));
+  log("スタッフ詳細の「計算する」が金額表示に変わる", /[\d,]+円$/.test(payrollButtonLabel ?? ""));
   await admin.click("text=← 閉じる");
   await admin.waitForTimeout(200);
 

@@ -753,13 +753,13 @@ export function StaffDetailPanel({
                       <span className="ml-0.5 text-xs font-semibold">日</span>
                     </p>
                   </div>
-                  {/* ほかの2つと同じ形（見出し＋数字）にそろえ、枠ごと押すと給料明細を開く */}
+                  {/* ほかの2つと同じ形（見出し＋数字）・同じ高さにそろえ、枠ごと押すと給料明細を開く（見出しの「›」で押せることを示す） */}
                   <button
                     type="button"
                     onClick={() => router.push(`/company/payroll?month=${year}-${String(month).padStart(2, "0")}&staff=${userId}`)}
                     className="rounded-lg border border-border p-3 hover:border-primary"
                   >
-                    <p className="text-xs text-muted">給料明細</p>
+                    <p className="text-xs font-semibold text-primary">給料明細 ›</p>
                     {data.salarySlipNet === null ? (
                       <p className="text-lg font-bold text-muted">未計算</p>
                     ) : (
@@ -768,9 +768,6 @@ export function StaffDetailPanel({
                         <span className="ml-0.5 text-xs font-semibold">円</span>
                       </p>
                     )}
-                    <p className="mt-0.5 text-[11px] font-semibold text-primary">
-                      {data.salarySlipNet === null ? "計算する ›" : "明細を見る ›"}
-                    </p>
                   </button>
                 </div>
 
