@@ -134,7 +134,7 @@ try {
   await client.waitForTimeout(400);
   const agencyPanel = client.locator("div.fixed.inset-0.z-30, div.fixed.inset-0.z-20").last();
   bodyText = await agencyPanel.textContent();
-  log("実績PDFを出すボタンが稼働履歴タブにある", bodyText.includes("実績PDF") && bodyText.includes("PDF出力"));
+  log("実績PDFを出すボタンが稼働履歴タブにある", bodyText.includes("実績PDF ›"));
 
   await agencyPanel.getByRole("button", { name: "スタッフ一覧" }).click();
   await client.waitForTimeout(300);
