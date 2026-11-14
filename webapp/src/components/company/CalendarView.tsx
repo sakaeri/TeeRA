@@ -753,6 +753,7 @@ export function CalendarView({
           placementRates={placementRates}
           defaultDate={selectedDate ?? todayStr}
           defaultStaffUserId={assignFormStaffUserId}
+          shiftRequests={shiftRequests}
           onClose={() => {
             setShowAssignForm(false);
             setAssignFormStaffUserId(undefined);
@@ -3264,6 +3265,7 @@ function AssignShiftModal({
   placementRates,
   defaultDate,
   defaultStaffUserId,
+  shiftRequests = [],
   onClose,
 }: {
   staffOptions: StaffOption[];
@@ -3274,6 +3276,8 @@ function AssignShiftModal({
   placementRates: TaskNameRow[];
   defaultDate: string;
   defaultStaffUserId?: string;
+  // 選んだスタッフが出勤希望を出している日を、日付の選択で薄く色付けする補助に使う
+  shiftRequests?: ShiftRequestRow[];
   onClose: () => void;
 }) {
   const [teamId, setTeamId] = useState("");
@@ -3422,6 +3426,10 @@ function AssignShiftModal({
       ? clients.find((c) => c.id === companyRelationshipId)?.name
       : "社内";
   const staffName = staffOptions.find((s) => s.id === staffUserId)?.name;
+  // 選んだスタッフが出勤希望を出している日（日付の選択の補助として薄く色を付ける）
+  const requestedDates = staffUserId
+    ? [...new Set(shiftRequests.filter((r) => r.desire === "WORK" && r.staffUserId === staffUserId).flatMap((r) => r.dates))]
+    : [];
   const dateLabels = dates.map((d) => {
     const dt = new Date(d + "T00:00:00Z");
     return `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
@@ -3727,7 +3735,18 @@ function AssignShiftModal({
 
           <div className="flex flex-col gap-1 text-xs text-foreground/80">
             <span>日付を選択（複数選択可）</span>
-            <MiniCalendarMultiSelect selected={dates} onToggle={toggleDate} initialDate={defaultDate} />
+            <MiniCalendarMultiSelect
+              selected={dates}
+              onToggle={toggleDate}
+              initialDate={defaultDate}
+              highlighted={requestedDates}
+            />
+            {requestedDates.length > 0 ? (
+              <span className="flex items-center gap-1.5 text-[11px] text-muted">
+                <span className="inline-block h-3 w-3 rounded bg-orange-100 ring-1 ring-orange-300" />
+                {staffName}さんが出勤希望を出している日
+              </span>
+            ) : null}
           </div>
           {dates.length === 0 ? (
             <p className="text-xs text-red-600">少なくとも1つ日付を選択してください。</p>
@@ -3873,15 +3892,19 @@ function MiniCalendarMultiSelect({
   selected,
   onToggle,
   initialDate,
+  highlighted = [],
 }: {
   selected: string[];
   onToggle: (dateStr: string) => void;
   initialDate: string;
+  // 薄く色を付ける日（シフト作成で、選んだスタッフが出勤希望を出している日）
+  highlighted?: string[];
 }) {
   const [initialYear, initialMonth] = initialDate.split("-").map(Number);
   const [viewYear, setViewYear] = useState(initialYear);
   const [viewMonth, setViewMonth] = useState(initialMonth);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+  const highlightedSet = useMemo(() => new Set(highlighted), [highlighted]);
   const todayStr = useMemo(() => todayJst(), []);
 
   const cells = useMemo(() => {
@@ -3951,8 +3974,11 @@ function MiniCalendarMultiSelect({
                   ? "cursor-not-allowed text-muted/50"
                   : selectedSet.has(c.dateStr)
                     ? "bg-primary font-semibold text-primary-foreground"
-                    : "text-foreground hover:bg-background"
+                    : highlightedSet.has(c.dateStr)
+                      ? "bg-orange-100 font-medium text-orange-900 ring-1 ring-orange-300 hover:bg-orange-200"
+                      : "text-foreground hover:bg-background"
               }`}
+              data-highlighted={!isPast && !selectedSet.has(c.dateStr) && highlightedSet.has(c.dateStr) ? "true" : undefined}
             >
               {c.day}
             </button>
