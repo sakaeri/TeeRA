@@ -1062,7 +1062,10 @@ function DayDetailModal({
                 >
                   <div className="min-w-0">
                     <span className="font-medium">{row.staffName}さん</span>
-                    {row.note ? <span className="ml-2 truncate text-xs text-muted">メモ: {row.note}</span> : null}
+                    {/* 長いメモでも枠からはみ出さないよう、名前の下に折り返して全部出す */}
+                    {row.note ? (
+                      <p className="mt-1 whitespace-pre-wrap break-words text-xs text-muted">メモ: {row.note}</p>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                     <OrderAssignDropdown
