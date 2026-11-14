@@ -162,6 +162,36 @@ type ShiftRequestRow = {
   note: string | null;
 };
 
+// 1回の申請で複数の日を出したシフト希望は、同じ申請の日が分かるように同じ色を付ける
+// （管理側から「一度にまとめて出した日をセットで見たい」という希望）。1日だけの申請は色なし。
+const REQUEST_GROUP_COLORS = [
+  "bg-sky-100 text-sky-900 ring-sky-300",
+  "bg-violet-100 text-violet-900 ring-violet-300",
+  "bg-emerald-100 text-emerald-900 ring-emerald-300",
+  "bg-rose-100 text-rose-900 ring-rose-300",
+  "bg-teal-100 text-teal-900 ring-teal-300",
+  "bg-fuchsia-100 text-fuchsia-900 ring-fuchsia-300",
+  "bg-lime-100 text-lime-900 ring-lime-300",
+  "bg-indigo-100 text-indigo-900 ring-indigo-300",
+];
+type RequestGroup = { colorClass: string | null; dates: string[] };
+function buildRequestGroups(requests: ShiftRequestRow[], todayStr: string): Map<string, RequestGroup> {
+  const groups = new Map<string, RequestGroup>();
+  const multi = requests
+    .filter((r) => r.desire === "WORK")
+    .map((r) => ({ id: r.id, dates: r.dates.filter((d) => d >= todayStr).sort() }))
+    .sort((a, b) => (a.dates[0] ?? "").localeCompare(b.dates[0] ?? ""));
+  let i = 0;
+  for (const r of multi) {
+    const colorClass = r.dates.length >= 2 ? REQUEST_GROUP_COLORS[i++ % REQUEST_GROUP_COLORS.length] : null;
+    groups.set(r.id, { colorClass, dates: r.dates });
+  }
+  return groups;
+}
+function shortDate(d: string) {
+  return `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+}
+
 type RecruitmentRow = {
   id: string;
   title: string;
@@ -384,6 +414,9 @@ export function CalendarView({
     }
   }
 
+  // シフト希望：同じ申請で出した日に同じ色を付けるための対応表（一覧と日別詳細で同じ色にする）
+  const requestGroups = useMemo(() => buildRequestGroups(shiftRequests, todayJst()), [shiftRequests]);
+
   const shiftsByDate = useMemo(() => {
     const map = new Map<string, ShiftRow[]>();
     for (const s of shifts) {
@@ -567,7 +600,7 @@ export function CalendarView({
       ) : null}
 
       <div className="order-1 sm:order-2">
-        <ShiftRequestsSection requests={shiftRequests} onNavigate={navigateToDate} />
+        <ShiftRequestsSection requests={shiftRequests} groups={requestGroups} onNavigate={navigateToDate} />
       </div>
 
       <div className="order-3 flex flex-1 flex-col overflow-x-clip bg-white p-1.5 sm:block sm:rounded-2xl sm:p-4">
@@ -711,7 +744,13 @@ export function CalendarView({
           affordableMaxEntries={affordableMaxEntries}
           dayShiftRequests={shiftRequests
             .filter((r) => r.desire === "WORK" && r.dates.includes(selectedDate))
-            .map((r) => ({ requestId: r.id, staffUserId: r.staffUserId, staffName: r.staffName, note: r.note }))}
+            .map((r) => ({
+              requestId: r.id,
+              staffUserId: r.staffUserId,
+              staffName: r.staffName,
+              note: r.note,
+              group: requestGroups.get(r.id) ?? null,
+            }))}
           onNavigate={navigateToDate}
           onCreateShift={() => setShowAssignForm(true)}
           onCreateShiftForStaff={(staffUserId) => {
@@ -929,7 +968,14 @@ function DayDetailModal({
   staffOptions: StaffOption[];
   requestedStaffUserIds: string[];
   affordableMaxEntries: number;
-  dayShiftRequests: { requestId: string; staffUserId: string; staffName: string; note: string | null }[];
+  dayShiftRequests: {
+    requestId: string;
+    staffUserId: string;
+    staffName: string;
+    note: string | null;
+    // 同じ申請で出した日（2日以上なら色付き）
+    group: RequestGroup | null;
+  }[];
   onNavigate: (dateStr: string) => void;
   onCreateShift: () => void;
   onCreateShiftForStaff: (staffUserId: string) => void;
@@ -1057,6 +1103,14 @@ function DayDetailModal({
                   <div className="min-w-0">
                     <span className="font-medium">{row.staffName}さん</span>
                     {row.note ? <span className="ml-2 truncate text-xs text-muted">メモ: {row.note}</span> : null}
+                    {row.group?.colorClass ? (
+                      <span
+                        className={`mt-1 block w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${row.group.colorClass}`}
+                        data-testid="request-group"
+                      >
+                        同じ申請：{row.group.dates.map(shortDate).join("・")}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                     <OrderAssignDropdown
@@ -4397,9 +4451,11 @@ function RecruitmentFormModal({
 // 時間だけ選んで確定する旧「マッチさせる」操作は廃止した。
 function ShiftRequestsSection({
   requests,
+  groups,
   onNavigate,
 }: {
   requests: ShiftRequestRow[];
+  groups: Map<string, RequestGroup>;
   onNavigate: (dateStr: string) => void;
 }) {
   const todayStr = todayJst();
@@ -4458,8 +4514,24 @@ function ShiftRequestsSection({
                   onClick={() => onNavigate(date)}
                   className="flex w-full items-center justify-between rounded-xl bg-orange-50/50 px-4 py-3 text-left shadow-sm ring-1 ring-orange-200/70 hover:bg-orange-100/60"
                 >
-                  <span className="font-semibold text-orange-900">{dateLabel}</span>
-                  <span className="rounded-full bg-orange-200/70 px-2.5 py-1 text-xs font-semibold text-orange-900">
+                  <span className="flex min-w-0 flex-col gap-1.5">
+                    <span className="font-semibold text-orange-900">{dateLabel}</span>
+                    {/* 誰の希望か。1回の申請で複数の日を出した人は、同じ申請の日に同じ色が付く */}
+                    <span className="flex flex-wrap gap-1">
+                      {rows.map((r) => {
+                        const color = groups.get(r.requestId)?.colorClass;
+                        return (
+                          <span
+                            key={r.requestId}
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${color ? `ring-1 ${color}` : "bg-white/80 text-foreground/80"}`}
+                          >
+                            {r.staffName}
+                          </span>
+                        );
+                      })}
+                    </span>
+                  </span>
+                  <span className="shrink-0 self-start rounded-full bg-orange-200/70 px-2.5 py-1 text-xs font-semibold text-orange-900">
                     {rows.length}名
                   </span>
                 </button>
