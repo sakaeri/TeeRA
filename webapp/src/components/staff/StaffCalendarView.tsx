@@ -820,9 +820,12 @@ function RequestWizard({
             {dates.length > 0 ? <p className="text-xs text-muted">{dates.length}日を選択中</p> : null}
             {alreadyRequestedSelected.length > 0 ? (
               <div className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-900" data-testid="already-requested">
+                <p className="font-semibold">
+                  {alreadyRequestedSelected.length === 1 ? "この日" : "これらの日"}は申請済みですが、追加で申請しますか？
+                </p>
                 {alreadyRequestedSelected.map((d) => (
                   <p key={d}>
-                    {Number(d.slice(5, 7))}/{Number(d.slice(8, 10))}はもう申請済みです（
+                    {Number(d.slice(5, 7))}/{Number(d.slice(8, 10))}（申請済み：
                     {requestedByDate
                       .get(d)!
                       .map((r) => `${r.desire === "WORK" ? "出勤希望" : "休み希望"}${r.note ? `・備考：${r.note}` : ""}`)

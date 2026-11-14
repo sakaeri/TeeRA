@@ -4,7 +4,7 @@ import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 import { loginViaEmail } from "./_lib/login.mjs";
 
 // スタッフのシフト希望申請で、その会社に申請済みの日に薄く色が付き、選ぶと
-// 「もう申請済みです（出勤希望・備考：…）」と注意が出る（申請自体はできる）。
+// 「この日は申請済みですが、追加で申請しますか？」と注意が出る（申請自体はできる）。
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -68,7 +68,7 @@ try {
   await wizard.getByRole("button", { name: "12", exact: true }).click();
   await wizard.getByRole("button", { name: "13", exact: true }).click();
   const warn = await staff.getByTestId("already-requested").innerText();
-  log("申請済みの日を選ぶと、申請の内容つきで注意が出る", warn.includes(`${m}/12はもう申請済みです（出勤希望・備考：早番希望）`) && !warn.includes(`${m}/13`));
+  log("申請済みの日を選ぶと、申請の内容つきで注意が出る", warn.includes("この日は申請済みですが、追加で申請しますか？") && warn.includes(`${m}/12（申請済み：出勤希望・備考：早番希望）`) && !warn.includes(`${m}/13`));
   await staff.screenshot({ path: "/tmp/already.png" });
   await wizard.getByRole("button", { name: "次へ" }).click();
   await wizard.getByRole("button", { name: /申請する/ }).last().click();
