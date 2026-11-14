@@ -6,6 +6,8 @@ import { canManageShifts, isCompanyScopeAdmin } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import {
   createAssignedShift,
+  findConflictingShifts,
+  findPendingOffRequest,
   cancelShift,
   dismissShiftRequest,
   updateShiftTime,
@@ -80,6 +82,29 @@ export async function createAssignedShiftAction(input: {
   const conflictsByDate: { date: string; conflicts: { id: string; startTime: string | null; endTime: string | null }[] }[] = [];
   const createdShiftIds: string[] = [];
 
+  // 先に全部の日を確かめてから作る（何も書き込まない）。以前は1日ずつ作りながら確かめ、途中で
+  // 重なり・休み希望が見つかると作った分のシフトを消して戻していたが、そのシフトで「対応済み」に
+  // なったシフト希望などは戻らず、確認画面を閉じるとシフト希望が消えてしまっていた。
+  for (const date of input.dates) {
+    const day = new Date(`${date}T00:00:00.000Z`);
+    if (!input.confirmedOffDates?.includes(date) && (await findPendingOffRequest(prisma, input.staffUserId, day))) {
+      offRequestDates.push(date);
+    }
+    if (!input.overridesByDate?.[date]?.length) {
+      const conflicts = await findConflictingShifts(prisma, {
+        staffUserId: input.staffUserId,
+        date: day,
+        startTime: input.startTime,
+        endTime: input.endTime,
+        isAllDay: input.isAllDay,
+        isUndecided: input.isUndecided,
+      });
+      if (conflicts.length > 0) conflictsByDate.push({ date, conflicts });
+    }
+  }
+  if (offRequestDates.length > 0) return { status: "off_request" as const, offRequestDates };
+  if (conflictsByDate.length > 0) return { status: "conflict" as const, conflictsByDate };
+
   for (const date of input.dates) {
     const result = await createAssignedShift({
       companyId: shiftCompanyId,
@@ -111,7 +136,13 @@ export async function createAssignedShiftAction(input: {
     // all-or-nothing across the whole date range: roll back this pass's
     // successes so a retry with confirmedOffDates/overridesByDate doesn't
     // double-create them.
+    // （先に確かめているので、ここに来るのはその間に別の操作が割り込んだ時だけ）
     if (createdShiftIds.length > 0) {
+      // 作った分で「対応済み」にしたシフト希望を、まだ対応していない状態に戻してからシフトを消す
+      await prisma.shiftRequest.updateMany({
+        where: { matchedShiftId: { in: createdShiftIds } },
+        data: { status: "PENDING", matchedShiftId: null },
+      });
       await prisma.shift.deleteMany({ where: { id: { in: createdShiftIds } } });
     }
     if (offRequestDates.length > 0) {
