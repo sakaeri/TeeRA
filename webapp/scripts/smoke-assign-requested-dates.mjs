@@ -66,6 +66,13 @@ try {
   const after = await modal.locator("button[data-highlighted=true]").allInnerTexts();
   log("選択を外した日にも色が付く（ほかの人の希望の20日には付かない）", JSON.stringify(after.map((t) => t.trim()).sort()) === JSON.stringify(["10", "12"]));
 
+  // 過ぎた日のシフト希望は、日別の詳細にも出さない（シフトを作れないため）
+  const yesterday = psql(`select to_char((now() at time zone 'Asia/Tokyo')::date - 1, 'YYYY-MM-DD');`);
+  psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status) values (gen_random_uuid()::text, '${ishihara}', '${companyId}', 'WORK', ARRAY['${yesterday}']::date[], 'PENDING');`);
+  await page.goto(`http://localhost:3000/company/calendar?date=${yesterday}`);
+  await page.waitForTimeout(2500);
+  log("過ぎた日の詳細には、シフト希望（シフト作成・見送る）が出ない", (await page.locator("li", { hasText: "石原克己さん" }).count()) === 0);
+
   console.log(process.exitCode ? "ASSIGN REQUESTED DATES SMOKE TEST HAD FAILURES" : "ASSIGN REQUESTED DATES SMOKE TEST PASSED");
 } catch (e) {
   console.error(e);

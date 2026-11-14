@@ -711,8 +711,9 @@ export function CalendarView({
             .filter((r) => r.desire === "WORK" && r.dates.includes(selectedDate))
             .map((r) => r.staffUserId)}
           affordableMaxEntries={affordableMaxEntries}
+          // 過ぎた日のシフト希望は出さない（上の一覧と同じ。過去の日にはシフトを作れないため）
           dayShiftRequests={shiftRequests
-            .filter((r) => r.desire === "WORK" && r.dates.includes(selectedDate))
+            .filter((r) => r.desire === "WORK" && r.dates.includes(selectedDate) && selectedDate >= todayStr)
             .map((r) => ({ requestId: r.id, staffUserId: r.staffUserId, staffName: r.staffName, note: r.note }))}
           onNavigate={navigateToDate}
           onCreateShift={() => setShowAssignForm(true)}
