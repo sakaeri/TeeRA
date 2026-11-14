@@ -40,6 +40,7 @@ type PendingRequestRow = {
   companyName: string;
   desire: "WORK" | "OFF";
   status: "PENDING" | "MATCHED" | "DISMISSED";
+  note?: string | null;
 };
 
 type Company = { id: string; name: string };
@@ -375,6 +376,7 @@ export function StaffCalendarView({
           month={month}
           companies={companies}
           initialDate={wizardInitialDate}
+          pendingRequests={pendingRequests}
           onClose={() => {
             setShowWizard(false);
             setWizardInitialDate(null);
@@ -593,12 +595,16 @@ function RequestWizard({
   month,
   companies,
   initialDate,
+  pendingRequests,
   onClose,
 }: {
   year: number;
   month: number;
   companies: Company[];
   initialDate: string | null;
+  // もう出している希望（申請済みの日に薄く色を付け、選んだら注意を出す。同じ日を何度も
+  // 申請してしまうのを防ぐため。早番・遅番を別々に出すこともあるので、申請自体は止めない）
+  pendingRequests: PendingRequestRow[];
   onClose: () => void;
 }) {
   const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
@@ -629,6 +635,13 @@ function RequestWizard({
     });
   }
   const selectedCompanyName = companies.find((c) => c.id === companyId)?.name ?? "";
+  // 選んでいる会社に申請済みの日（見送られた分は除く）
+  const requestedByDate = new Map<string, PendingRequestRow[]>();
+  for (const r of pendingRequests) {
+    if (r.companyId !== companyId || r.status === "DISMISSED") continue;
+    requestedByDate.set(r.date, [...(requestedByDate.get(r.date) ?? []), r]);
+  }
+  const alreadyRequestedSelected = dates.filter((d) => requestedByDate.has(d));
 
   function toggleDate(dateStr: string) {
     setDates((prev) => (prev.includes(dateStr) ? prev.filter((d) => d !== dateStr) : [...prev, dateStr].sort()));
@@ -777,15 +790,19 @@ function RequestWizard({
                 const dateStr = c.dateStr;
                 const dow = new Date(dateStr + "T00:00:00Z").getUTCDay();
                 const selected = dates.includes(dateStr);
+                const requested = requestedByDate.has(dateStr);
                 return (
                   <button
                     key={i}
                     type="button"
                     onClick={() => toggleDate(dateStr)}
+                    data-requested={requested ? "true" : undefined}
                     className={`rounded-lg py-1.5 text-xs ${
                       selected
                         ? "bg-primary font-semibold text-primary-foreground"
-                        : `hover:bg-background ${weekdayColor(dow, dateStr)}`
+                        : requested
+                          ? `bg-sky-50 ring-1 ring-sky-200 hover:bg-sky-100 ${weekdayColor(dow, dateStr)}`
+                          : `hover:bg-background ${weekdayColor(dow, dateStr)}`
                     }`}
                   >
                     {c.day}
@@ -794,7 +811,27 @@ function RequestWizard({
               })}
             </div>
 
+            {requestedByDate.size > 0 ? (
+              <p className="flex items-center gap-1.5 text-[11px] text-muted">
+                <span className="inline-block h-3 w-3 rounded bg-sky-50 ring-1 ring-sky-200" />
+                {selectedCompanyName}に申請済みの日
+              </p>
+            ) : null}
             {dates.length > 0 ? <p className="text-xs text-muted">{dates.length}日を選択中</p> : null}
+            {alreadyRequestedSelected.length > 0 ? (
+              <div className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-900" data-testid="already-requested">
+                {alreadyRequestedSelected.map((d) => (
+                  <p key={d}>
+                    {Number(d.slice(5, 7))}/{Number(d.slice(8, 10))}はもう申請済みです（
+                    {requestedByDate
+                      .get(d)!
+                      .map((r) => `${r.desire === "WORK" ? "出勤希望" : "休み希望"}${r.note ? `・備考：${r.note}` : ""}`)
+                      .join("／")}
+                    ）
+                  </p>
+                ))}
+              </div>
+            ) : null}
 
             <textarea
               value={note}

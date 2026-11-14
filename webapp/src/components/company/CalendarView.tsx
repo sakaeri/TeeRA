@@ -295,6 +295,8 @@ export function CalendarView({
   }
   const [showAssignForm, setShowAssignForm] = useState(initialCreate === "shift");
   const [assignFormStaffUserId, setAssignFormStaffUserId] = useState<string | undefined>(undefined);
+  // シフト希望の行の「シフト作成」から開いた時の、その希望（同じ申請で出した日に色を付ける）
+  const [assignFormRequestId, setAssignFormRequestId] = useState<string | undefined>(undefined);
   const [showRecruitForm, setShowRecruitForm] = useState(initialCreate === "recruit");
   // 「よく使う操作」から来た時の指定（?create=）は一度開いたら消す（再読み込みで
   // 何度も開かないように）
@@ -714,8 +716,9 @@ export function CalendarView({
             .map((r) => ({ requestId: r.id, staffUserId: r.staffUserId, staffName: r.staffName, note: r.note }))}
           onNavigate={navigateToDate}
           onCreateShift={() => setShowAssignForm(true)}
-          onCreateShiftForStaff={(staffUserId) => {
+          onCreateShiftForStaff={(staffUserId, requestId) => {
             setAssignFormStaffUserId(staffUserId);
+            setAssignFormRequestId(requestId);
             setShowAssignForm(true);
           }}
           onClose={() => setSelectedDate(null)}
@@ -753,10 +756,11 @@ export function CalendarView({
           placementRates={placementRates}
           defaultDate={selectedDate ?? todayStr}
           defaultStaffUserId={assignFormStaffUserId}
-          shiftRequests={shiftRequests}
+          sourceRequest={shiftRequests.find((r) => r.id === assignFormRequestId)}
           onClose={() => {
             setShowAssignForm(false);
             setAssignFormStaffUserId(undefined);
+            setAssignFormRequestId(undefined);
           }}
         />
       ) : null}
@@ -933,7 +937,7 @@ function DayDetailModal({
   dayShiftRequests: { requestId: string; staffUserId: string; staffName: string; note: string | null }[];
   onNavigate: (dateStr: string) => void;
   onCreateShift: () => void;
-  onCreateShiftForStaff: (staffUserId: string) => void;
+  onCreateShiftForStaff: (staffUserId: string, requestId?: string) => void;
   onClose: () => void;
 }) {
   const [selectedTab, setTab] = useState<"shifts" | "client" | "recruit">("shifts");
@@ -1067,7 +1071,7 @@ function DayDetailModal({
                     />
                     <button
                       type="button"
-                      onClick={() => onCreateShiftForStaff(row.staffUserId)}
+                      onClick={() => onCreateShiftForStaff(row.staffUserId, row.requestId)}
                       className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/15"
                     >
                       シフト作成
@@ -3265,7 +3269,7 @@ function AssignShiftModal({
   placementRates,
   defaultDate,
   defaultStaffUserId,
-  shiftRequests = [],
+  sourceRequest,
   onClose,
 }: {
   staffOptions: StaffOption[];
@@ -3276,8 +3280,9 @@ function AssignShiftModal({
   placementRates: TaskNameRow[];
   defaultDate: string;
   defaultStaffUserId?: string;
-  // 選んだスタッフが出勤希望を出している日を、日付の選択で薄く色付けする補助に使う
-  shiftRequests?: ShiftRequestRow[];
+  // シフト希望の行から開いた時の、その希望。同じ申請（1回の申請）で出した日だけを、日付の選択で
+  // 薄く色付けする補助に使う（同じスタッフでも、別の申請で出した日には付けない）
+  sourceRequest?: ShiftRequestRow;
   onClose: () => void;
 }) {
   const [teamId, setTeamId] = useState("");
@@ -3426,10 +3431,8 @@ function AssignShiftModal({
       ? clients.find((c) => c.id === companyRelationshipId)?.name
       : "社内";
   const staffName = staffOptions.find((s) => s.id === staffUserId)?.name;
-  // 選んだスタッフが出勤希望を出している日（日付の選択の補助として薄く色を付ける）
-  const requestedDates = staffUserId
-    ? [...new Set(shiftRequests.filter((r) => r.desire === "WORK" && r.staffUserId === staffUserId).flatMap((r) => r.dates))]
-    : [];
+  // 同じ申請で希望した日（日付の選択の補助として薄く色を付ける）。スタッフを選び直したら付けない
+  const requestedDates = sourceRequest && sourceRequest.staffUserId === staffUserId ? sourceRequest.dates : [];
   const dateLabels = dates.map((d) => {
     const dt = new Date(d + "T00:00:00Z");
     return `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
@@ -3744,7 +3747,7 @@ function AssignShiftModal({
             {requestedDates.length > 0 ? (
               <span className="flex items-center gap-1.5 text-[11px] text-muted">
                 <span className="inline-block h-3 w-3 rounded bg-orange-100 ring-1 ring-orange-300" />
-                {staffName}さんが出勤希望を出している日
+                {staffName}さんが同じ申請で希望した日{sourceRequest?.note ? `（備考：${sourceRequest.note}）` : ""}
               </span>
             ) : null}
           </div>

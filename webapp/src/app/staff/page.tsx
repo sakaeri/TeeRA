@@ -93,6 +93,7 @@ export default async function StaffHomePage({
         companyName: r.company.name,
         desire: r.desire,
         status: r.status,
+        note: r.note,
       })),
     )
     .filter((r) => r.date >= todayStr);
