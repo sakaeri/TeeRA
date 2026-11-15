@@ -26,6 +26,7 @@ export default async function AccountPage({
         userName={user.name}
         userEmail={user.email}
         hasPassword={user.passwordHash !== null}
+        weekStartsMonday={user.weekStartsMonday}
         emailChangeNotice={emailChangeNotice}
         pendingPasswordEffectiveAt={
           user.pendingPasswordEffectiveAt && user.pendingPasswordEffectiveAt > new Date()

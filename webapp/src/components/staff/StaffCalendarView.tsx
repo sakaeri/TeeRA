@@ -1,5 +1,6 @@
 "use client";
 
+import { leadingBlankCount, orderedWeekdays, useMondayFirst } from "@/components/week/WeekStart";
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { submitShiftRequestAction } from "@/app/staff/actions";
@@ -128,9 +129,8 @@ const REPORT_STATE: Record<Exclude<ReportState, null>, { label: string; tagClass
   },
 };
 
-function buildMonthCells(year: number, month: number) {
-  const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
-  const startDow = firstOfMonth.getUTCDay();
+function buildMonthCells(year: number, month: number, mondayFirst: boolean) {
+  const startDow = leadingBlankCount(year, month, mondayFirst);
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const out: { dateStr: string | null; day: number | null }[] = [];
   for (let i = 0; i < startDow; i++) out.push({ dateStr: null, day: null });
@@ -191,7 +191,8 @@ export function StaffCalendarView({
     return map;
   }, [filteredRequests]);
 
-  const cells = useMemo(() => buildMonthCells(year, month), [year, month]);
+  const mondayFirst = useMondayFirst();
+  const cells = useMemo(() => buildMonthCells(year, month, mondayFirst), [year, month, mondayFirst]);
 
   const CONFIRMED_SLOT_BUDGET = 5;
   // 月によって5行/6行と変わっても月カード全体の縦幅は一定に保ち（＋ボタンの
@@ -255,9 +256,9 @@ export function StaffCalendarView({
 
       <div ref={swipeContainerRef} className="flex flex-1 flex-col sm:contents" style={swipeStyle}>
       <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
-        {WEEKDAYS.map((w, i) => (
-          <div key={w} className={`py-1 text-center text-xs font-semibold ${weekdayColor(i)}`}>
-            {w}
+        {orderedWeekdays(mondayFirst).map(({ dow, label }) => (
+          <div key={label} className={`py-1 text-center text-xs font-semibold ${weekdayColor(dow)}`}>
+            {label}
           </div>
         ))}
       </div>
@@ -625,7 +626,8 @@ function RequestWizard({
   const [view, setView] = useState(() =>
     initialDate ? { y: Number(initialDate.slice(0, 4)), m: Number(initialDate.slice(5, 7)) } : { y: year, m: month },
   );
-  const cells = useMemo(() => buildMonthCells(view.y, view.m), [view]);
+  const mondayFirst = useMondayFirst();
+  const cells = useMemo(() => buildMonthCells(view.y, view.m, mondayFirst), [view, mondayFirst]);
   const todayYm = todayJst().slice(0, 7);
   const viewYm = `${view.y}-${String(view.m).padStart(2, "0")}`;
   function shiftViewMonth(delta: number) {
@@ -780,9 +782,9 @@ function RequestWizard({
               </button>
             </div>
             <div className="grid grid-cols-7 gap-1">
-              {WEEKDAYS.map((w, i) => (
-                <div key={w} className={`py-0.5 text-center text-[10px] font-semibold ${weekdayColor(i)}`}>
-                  {w}
+              {orderedWeekdays(mondayFirst).map(({ dow, label }) => (
+                <div key={label} className={`py-0.5 text-center text-[10px] font-semibold ${weekdayColor(dow)}`}>
+                  {label}
                 </div>
               ))}
               {cells.map((c, i) => {

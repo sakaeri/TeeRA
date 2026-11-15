@@ -1,5 +1,6 @@
 "use client";
 
+import { leadingBlankCount, orderedWeekdays, useMondayFirst } from "@/components/week/WeekStart";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { PdfLink } from "@/components/PdfLink";
 import Link from "next/link";
@@ -405,9 +406,9 @@ export function CalendarView({
     return map;
   }, [shifts]);
 
+  const mondayFirst = useMondayFirst();
   const cells = useMemo(() => {
-    const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
-    const startDow = firstOfMonth.getUTCDay();
+    const startDow = leadingBlankCount(year, month, mondayFirst);
     const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
     const out: { dateStr: string | null; day: number | null }[] = [];
     for (let i = 0; i < startDow; i++) out.push({ dateStr: null, day: null });
@@ -416,7 +417,7 @@ export function CalendarView({
       out.push({ dateStr, day: d });
     }
     return out;
-  }, [year, month]);
+  }, [year, month, mondayFirst]);
 
   const atHistoryCutoff = Boolean(historyCutoff && historyCutoff.year === year && historyCutoff.month === month);
 
@@ -583,9 +584,9 @@ export function CalendarView({
       <div className="order-3 flex flex-1 flex-col overflow-x-clip bg-white p-1.5 sm:block sm:rounded-2xl sm:p-4">
       <div ref={swipeContainerRef} className="flex flex-1 flex-col sm:contents" style={swipeStyle}>
       <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
-        {WEEKDAYS.map((w, i) => (
-          <div key={w} className={`py-1 text-center text-xs font-semibold ${weekdayColor(i)}`}>
-            {w}
+        {orderedWeekdays(mondayFirst).map(({ dow, label }) => (
+          <div key={label} className={`py-1 text-center text-xs font-semibold ${weekdayColor(dow)}`}>
+            {label}
           </div>
         ))}
       </div>
@@ -3931,10 +3932,10 @@ function MiniCalendarMultiSelect({
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const highlightedSet = useMemo(() => new Set(highlighted), [highlighted]);
   const todayStr = useMemo(() => todayJst(), []);
+  const mondayFirst = useMondayFirst();
 
   const cells = useMemo(() => {
-    const firstOfMonth = new Date(Date.UTC(viewYear, viewMonth - 1, 1));
-    const startDow = firstOfMonth.getUTCDay();
+    const startDow = leadingBlankCount(viewYear, viewMonth, mondayFirst);
     const daysInMonth = new Date(Date.UTC(viewYear, viewMonth, 0)).getUTCDate();
     const out: { dateStr: string | null; day: number | null }[] = [];
     for (let i = 0; i < startDow; i++) out.push({ dateStr: null, day: null });
@@ -3943,7 +3944,7 @@ function MiniCalendarMultiSelect({
       out.push({ dateStr, day: d });
     }
     return out;
-  }, [viewYear, viewMonth]);
+  }, [viewYear, viewMonth, mondayFirst]);
 
   function prevMonth() {
     if (viewMonth === 1) {
@@ -3980,8 +3981,8 @@ function MiniCalendarMultiSelect({
         </button>
       </div>
       <div className="mb-1 grid grid-cols-7 text-center text-[11px] text-muted">
-        {WEEKDAYS.map((w) => (
-          <span key={w}>{w}</span>
+        {orderedWeekdays(mondayFirst).map(({ label }) => (
+          <span key={label}>{label}</span>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1">

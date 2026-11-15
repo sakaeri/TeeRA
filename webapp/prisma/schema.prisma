@@ -40,6 +40,8 @@ model User {
   shippingRecipientName      String? // お届け先氏名。アカウント名(name)とは別に持つ
   // 業務委託のスタッフが会社へ出す請求書に載せるインボイス（適格請求書発行事業者）登録番号。任意
   invoiceRegistrationNumber  String?
+  // カレンダーの週の始まり（false=日曜始まり、true=月曜始まり）。アカウント設定で本人が選ぶ
+  weekStartsMonday           Boolean   @default(false)
   // — 家族宛て等、本人以外に送る場合もあるため name 自体は上書きしない。
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt

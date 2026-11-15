@@ -1,6 +1,7 @@
 import { requireCompanyAdminOrEditor, listMyMemberships } from "@/lib/auth/session";
 import { hasAnyTeamManagementRole, isLeaderOnly } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
+import { WeekStartProvider } from "@/components/week/WeekStart";
 import { CompanyShell } from "@/components/company/CompanyShell";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -46,7 +47,7 @@ export default async function CompanyLayout({
       showStaffScreenLink={membership.canWorkShifts || hasAnyTeamManagementRole(membership)}
       leaderOnly={isLeaderOnly(membership)}
     >
-      {children}
+      <WeekStartProvider mondayFirst={user.weekStartsMonday}>{children}</WeekStartProvider>
     </CompanyShell>
   );
 }
