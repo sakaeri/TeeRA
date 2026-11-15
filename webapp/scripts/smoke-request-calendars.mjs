@@ -69,6 +69,8 @@ try {
     .locator("[data-requested=true]")
     .allInnerTexts();
   log("田中さんの申請は10・12・15日に色が付く", JSON.stringify(tanakaDays) === JSON.stringify(["10", "12", "15"]));
+  const note = page.getByTestId("request-note");
+  log("備考はカレンダーの下に出る", (await note.innerText()).includes("備考：早番希望"));
   await page.screenshot({ path: "/tmp/rcal-dashboard.png" });
 
   console.log(process.exitCode ? "REQUEST CALENDARS SMOKE TEST HAD FAILURES" : "REQUEST CALENDARS SMOKE TEST PASSED");

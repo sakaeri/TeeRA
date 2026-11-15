@@ -1006,7 +1006,6 @@ function UnconfirmedShiftPopup({ entries, onClose }: { entries: UnconfirmedShift
               <p className="font-medium">
                 {r.staffName}さん（{DESIRE_LABEL[r.desire] ?? r.desire}）
               </p>
-              {r.note ? <p className="whitespace-pre-wrap break-words text-xs text-muted">{r.note}</p> : null}
             </div>
             <Link
               href={`/company/calendar?date=${r.dates[0]}`}
@@ -1017,6 +1016,12 @@ function UnconfirmedShiftPopup({ entries, onClose }: { entries: UnconfirmedShift
           </div>
           {/* 申請した日を月のカレンダーで示す（色の付いた日を押すと、その日のカレンダーが開く） */}
           <RequestDatesCalendar dates={r.dates} hrefFor={(d) => `/company/calendar?date=${d}`} />
+          {/* 備考は大事なので、カレンダーの下に目立つように出す（長くても上の並びを崩さない） */}
+          {r.note ? (
+            <p className="whitespace-pre-wrap break-words rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950" data-testid="request-note">
+              備考：{r.note}
+            </p>
+          ) : null}
         </div>
       ))}
       {entries.length === 0 ? <p className="text-center text-muted">未確定の希望シフトはありません。</p> : null}
