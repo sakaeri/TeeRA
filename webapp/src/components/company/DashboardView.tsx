@@ -1,5 +1,6 @@
 "use client";
 
+import { RequestDatesCalendar } from "@/components/company/RequestCalendars";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { PdfLink } from "@/components/PdfLink";
 import Link from "next/link";
@@ -999,24 +1000,39 @@ function UnconfirmedShiftPopup({ entries, onClose }: { entries: UnconfirmedShift
       onClose={onClose}
     >
       {entries.map((r) => (
-        <Link
-          key={r.id}
-          href={`/company/calendar?date=${r.dates[0]}`}
-          className="flex flex-col items-start gap-2 rounded-xl border border-border/60 p-4 text-sm hover:border-primary/60 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div>
-            <p className="font-medium">
-              {r.staffName}さん（{DESIRE_LABEL[r.desire] ?? r.desire}）
-            </p>
-            <p className="text-muted">
-              {r.dates.map((d) => formatDateJa(d)).join("、")}
-              {r.note ? ` ・${r.note}` : ""}
-            </p>
+        <div key={r.id} className="flex flex-col gap-2 rounded-xl border border-border/60 p-4 text-sm">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="font-medium">
+                {r.staffName}さん（{DESIRE_LABEL[r.desire] ?? r.desire}）
+              </p>
+            </div>
+            <Link
+              href={`/company/calendar?date=${r.dates[0]}`}
+              className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+            >
+              カレンダーで確認
+            </Link>
           </div>
-          <span className="hidden shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground sm:inline-block">
-            カレンダーで確認
-          </span>
-        </Link>
+          {/* 申請した日を月のカレンダーで示す（色の付いた日を押すと、その日のカレンダーが開く） */}
+          <RequestDatesCalendar dates={r.dates} hrefFor={(d) => `/company/calendar?date=${d}`} />
+          {/* 備考は大事なので、カレンダーの下に目立つように出す（長くても上の並びを崩さない） */}
+          {r.note ? (
+            <p className="whitespace-pre-wrap break-words rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950" data-testid="request-note">
+              備考：{r.note}
+            </p>
+          ) : null}
+          {/* その申請の日が最初から全部選ばれた状態でシフト作成を開く（入れない日だけ外す） */}
+          {r.desire === "WORK" ? (
+            <Link
+              href={`/company/calendar?y=${Number(r.dates[0].slice(0, 4))}&m=${Number(r.dates[0].slice(5, 7))}&assignRequest=${r.id}`}
+              className="self-center rounded-lg border border-primary px-4 py-2 text-xs font-semibold text-primary hover:bg-primary/5"
+              data-testid="create-shift-from-request"
+            >
+              この申請でシフトを作る
+            </Link>
+          ) : null}
+        </div>
       ))}
       {entries.length === 0 ? <p className="text-center text-muted">未確定の希望シフトはありません。</p> : null}
     </PopupShell>

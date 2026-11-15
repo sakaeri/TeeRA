@@ -32,6 +32,8 @@ export default async function CompanyCalendarPage({
   const dateParam = typeof sp.date === "string" && sp.date ? sp.date : undefined;
   // ホームの「よく使う操作」から、シフト作成・募集作成を開いた状態で来る
   const initialCreate = sp.create === "shift" || sp.create === "recruit" ? sp.create : undefined;
+  // ダッシュボードの「未確定シフト」の「この申請でシフトを作る」から来た時の、その申請
+  const initialAssignRequestId = typeof sp.assignRequest === "string" && sp.assignRequest ? sp.assignRequest : undefined;
   const [dateYear, dateMonth] = dateParam ? dateParam.split("-").map(Number) : [];
   const year = Number(sp.y) || dateYear || today.year;
   const month = Number(sp.m) || dateMonth || today.month;
@@ -273,6 +275,7 @@ export default async function CompanyCalendarPage({
         companyName={company.name}
         initialSelectedDate={dateParam}
         initialCreate={initialCreate}
+        initialAssignRequestId={initialAssignRequestId}
         historyCutoff={historyCutoff}
       />
     </main>

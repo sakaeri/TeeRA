@@ -254,6 +254,7 @@ export function CalendarView({
   companyName,
   initialSelectedDate,
   initialCreate,
+  initialAssignRequestId,
   historyCutoff,
 }: {
   year: number;
@@ -278,6 +279,8 @@ export function CalendarView({
   companyName: string;
   initialSelectedDate?: string;
   initialCreate?: "shift" | "recruit";
+  // 「未確定シフト」の「この申請でシフトを作る」から来た時の申請（そのスタッフ・その申請の日で開く）
+  initialAssignRequestId?: string;
   historyCutoff?: { year: number; month: number } | null;
 }) {
   const router = useRouter();
@@ -293,17 +296,23 @@ export function CalendarView({
     setPrevInitialSelectedDate(initialSelectedDate);
     if (initialSelectedDate) setSelectedDate(initialSelectedDate);
   }
-  const [showAssignForm, setShowAssignForm] = useState(initialCreate === "shift");
-  const [assignFormStaffUserId, setAssignFormStaffUserId] = useState<string | undefined>(undefined);
+  const initialAssignRequest = initialAssignRequestId
+    ? shiftRequests.find((r) => r.id === initialAssignRequestId && r.desire === "WORK")
+    : undefined;
+  const [showAssignForm, setShowAssignForm] = useState(initialCreate === "shift" || Boolean(initialAssignRequest));
+  const [assignFormStaffUserId, setAssignFormStaffUserId] = useState<string | undefined>(initialAssignRequest?.staffUserId);
   // シフト希望の行の「シフト作成」から開いた時の、その希望（同じ申請で出した日に色を付ける）
-  const [assignFormRequestId, setAssignFormRequestId] = useState<string | undefined>(undefined);
+  const [assignFormRequestId, setAssignFormRequestId] = useState<string | undefined>(initialAssignRequest?.id);
+  // 「この申請でシフトを作る」から開いた時は、その申請の日を最初から全部選んでおく
+  const [assignPreselectRequestDates, setAssignPreselectRequestDates] = useState(Boolean(initialAssignRequest));
   const [showRecruitForm, setShowRecruitForm] = useState(initialCreate === "recruit");
   // 「よく使う操作」から来た時の指定（?create=）は一度開いたら消す（再読み込みで
   // 何度も開かないように）
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (url.searchParams.has("create")) {
+    if (url.searchParams.has("create") || url.searchParams.has("assignRequest")) {
       url.searchParams.delete("create");
+      url.searchParams.delete("assignRequest");
       window.history.replaceState(null, "", url);
     }
   }, []);
@@ -569,7 +578,6 @@ export function CalendarView({
       ) : null}
 
       <div className="order-1 sm:order-2">
-        <ShiftRequestsSection requests={shiftRequests} onNavigate={navigateToDate} />
       </div>
 
       <div className="order-3 flex flex-1 flex-col overflow-x-clip bg-white p-1.5 sm:block sm:rounded-2xl sm:p-4">
@@ -758,10 +766,12 @@ export function CalendarView({
           defaultDate={selectedDate ?? todayStr}
           defaultStaffUserId={assignFormStaffUserId}
           sourceRequest={shiftRequests.find((r) => r.id === assignFormRequestId)}
+          preselectRequestDates={assignPreselectRequestDates}
           onClose={() => {
             setShowAssignForm(false);
             setAssignFormStaffUserId(undefined);
             setAssignFormRequestId(undefined);
+            setAssignPreselectRequestDates(false);
           }}
         />
       ) : null}
@@ -3274,6 +3284,7 @@ function AssignShiftModal({
   defaultDate,
   defaultStaffUserId,
   sourceRequest,
+  preselectRequestDates = false,
   onClose,
 }: {
   staffOptions: StaffOption[];
@@ -3287,6 +3298,7 @@ function AssignShiftModal({
   // シフト希望の行から開いた時の、その希望。同じ申請（1回の申請）で出した日だけを、日付の選択で
   // 薄く色付けする補助に使う（同じスタッフでも、別の申請で出した日には付けない）
   sourceRequest?: ShiftRequestRow;
+  preselectRequestDates?: boolean;
   onClose: () => void;
 }) {
   const [teamId, setTeamId] = useState("");
@@ -3329,7 +3341,11 @@ function AssignShiftModal({
   const [step, setStep] = useState<AssignStep>(steps[0]);
   const [clientSearch, setClientSearch] = useState("");
   const [staffUserId, setStaffUserId] = useState(defaultStaffUserId ?? "");
-  const [dates, setDates] = useState<string[]>([defaultDate]);
+  // 「この申請でシフトを作る」から開いた時は、その申請のこれからの日を最初から選んでおく（入れない日だけ外す）
+  const requestFutureDates = (sourceRequest?.dates ?? []).filter((d) => d >= todayJst()).sort();
+  const [dates, setDates] = useState<string[]>(
+    preselectRequestDates && requestFutureDates.length > 0 ? requestFutureDates : [defaultDate],
+  );
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("18:00");
   const [isUndecided, setIsUndecided] = useState(false);
@@ -3745,7 +3761,7 @@ function AssignShiftModal({
             <MiniCalendarMultiSelect
               selected={dates}
               onToggle={toggleDate}
-              initialDate={defaultDate}
+              initialDate={[...dates].sort()[0] ?? defaultDate}
               highlighted={requestedDates}
             />
             {requestedDates.length > 0 ? (
@@ -3986,6 +4002,7 @@ function MiniCalendarMultiSelect({
                       : "text-foreground hover:bg-background"
               }`}
               data-highlighted={!isPast && !selectedSet.has(c.dateStr) && highlightedSet.has(c.dateStr) ? "true" : undefined}
+              data-selected={selectedSet.has(c.dateStr) ? "true" : undefined}
             >
               {c.day}
             </button>
@@ -4423,88 +4440,6 @@ function RecruitmentFormModal({
   );
 }
 
-// 休み希望は会社の承認・操作が要らない記録なのでここには出さない（本人が
-// 希望を出している日にアサインしようとした時、その場で警告する形にした）。
-// 出勤希望は日付ごとにまとめ、「確認」でその日のカレンダー詳細に飛んで
-// そちらでアサイン/シフト作成する — 何の仕事にマッチするか分からないまま
-// 時間だけ選んで確定する旧「マッチさせる」操作は廃止した。
-function ShiftRequestsSection({
-  requests,
-  onNavigate,
-}: {
-  requests: ShiftRequestRow[];
-  onNavigate: (dateStr: string) => void;
-}) {
-  const todayStr = todayJst();
-  // 日付が今日より前になった希望は、対応する意味が無いのでここには出さない
-  // （明示的な「見送る」操作は不要 — 過ぎた日は自動的に一覧から消える）。
-  const workRequests = requests.filter((r) => r.desire === "WORK");
-
-  const byDate = new Map<string, { requestId: string; staffUserId: string; staffName: string; note: string | null }[]>();
-  for (const r of workRequests) {
-    for (const d of r.dates) {
-      if (d < todayStr) continue;
-      if (!byDate.has(d)) byDate.set(d, []);
-      byDate.get(d)!.push({ requestId: r.id, staffUserId: r.staffUserId, staffName: r.staffName, note: r.note });
-    }
-  }
-  const sortedDates = [...byDate.keys()].sort();
-  const totalCount = [...byDate.values()].reduce((sum, rows) => sum + rows.length, 0);
-  // 一覧の下部に置くとカレンダーの下にスクロールしないと気付かれにくい
-  // ため、カレンダーの上に折りたたみ式で置く。件数があるうちは開いた
-  // 状態で気付きやすくし、対応すべきものが無い時はセクションごと非表示
-  // にしてカレンダーの視認性を保つ。
-  const [isOpen, setIsOpen] = useState(true);
-
-  if (totalCount === 0) return null;
-
-  return (
-    <div className="mb-4 rounded-xl border border-border bg-white/60">
-      <button
-        type="button"
-        onClick={() => setIsOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-5 py-3 text-left text-sm font-semibold"
-      >
-        <span>
-          シフト希望　{totalCount}件
-        </span>
-        <svg
-          viewBox="0 0 20 20"
-          fill="none"
-          className={`h-4 w-4 shrink-0 text-muted transition-transform ${isOpen ? "rotate-180" : ""}`}
-          aria-hidden
-        >
-          <path d="M5 7.5l5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-      {isOpen ? (
-        <div className="max-h-[40vh] overflow-y-auto border-t border-border px-5 pb-5 pt-4">
-        <ul className="flex flex-col gap-2 text-sm">
-          {sortedDates.map((date) => {
-            const rows = byDate.get(date)!;
-            const dt = new Date(`${date}T00:00:00Z`);
-            const dateLabel = `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
-            return (
-              <li key={date}>
-                <button
-                  type="button"
-                  onClick={() => onNavigate(date)}
-                  className="flex w-full items-center justify-between rounded-xl bg-orange-50/50 px-4 py-3 text-left shadow-sm ring-1 ring-orange-200/70 hover:bg-orange-100/60"
-                >
-                  <span className="font-semibold text-orange-900">{dateLabel}</span>
-                  <span className="rounded-full bg-orange-200/70 px-2.5 py-1 text-xs font-semibold text-orange-900">
-                    {rows.length}名
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 // シフト希望を「今回は対応しない」と明示するための操作 — 過去日になれば
 // 自動的に一覧から消えるが、対応するつもりのない希望がそれまでずっと
