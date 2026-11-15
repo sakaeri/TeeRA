@@ -90,12 +90,11 @@ try {
   // shift without any task/workplace context — was retired; resolving a
   // shift request now goes through the same day-detail flow as any other
   // assignment).
-  await admin.goto(`http://localhost:3000/company/calendar?y=${targetYear}&m=${targetMonth}`);
-  let calBody = await admin.textContent("body");
-  log("pending shift request visible to admin (日付＋人数のみ、氏名は出さない)", calBody.includes(targetLabel) && calBody.includes("1名"));
-
-  await admin.getByRole("button", { name: new RegExp(targetLabel) }).click();
-  await admin.waitForTimeout(300);
+  // カレンダー上部のシフト希望の欄はなくした。日付を開くと、その日の詳細に希望が出る
+  const targetIso = `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(targetDay).padStart(2, "0")}`;
+  await admin.goto(`http://localhost:3000/company/calendar?date=${targetIso}`);
+  await admin.waitForTimeout(2500);
+  log("pending shift request visible to admin in the day detail", (await admin.locator("li", { hasText: "シフト作成" }).count()) >= 1);
   let bodyText = await admin.textContent("body");
   log("確認で日別詳細が開き＋シフトを作成が表示される", bodyText.includes("＋シフトを作成"));
 
@@ -117,7 +116,7 @@ try {
   // day 15 underneath is still open (selectedDate never got cleared) — the
   // server action's revalidatePath already refreshed the route's data, so it
   // should now show the newly-created shift without any extra click.
-  calBody = await admin.textContent("body");
+  let calBody = await admin.textContent("body");
   const dayDetailMatch = calBody.match(new RegExp(`${targetLabel}[\\s\\S]{0,300}`));
   console.log("day detail snippet:", dayDetailMatch?.[0]);
   log("matched shift appears in day detail panel", Boolean(dayDetailMatch && dayDetailMatch[0].includes("カレンダースタッフ")));

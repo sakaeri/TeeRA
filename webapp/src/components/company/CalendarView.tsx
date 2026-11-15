@@ -279,7 +279,7 @@ export function CalendarView({
   companyName: string;
   initialSelectedDate?: string;
   initialCreate?: "shift" | "recruit";
-  // 「未確定シフト」の「この申請でシフトを作る」から来た時の申請（そのスタッフ・その申請の日で開く）
+  // 「未確定シフト」の「シフトを作る」から来た時の申請（そのスタッフ・その申請の日で開く）
   initialAssignRequestId?: string;
   historyCutoff?: { year: number; month: number } | null;
 }) {
@@ -303,7 +303,7 @@ export function CalendarView({
   const [assignFormStaffUserId, setAssignFormStaffUserId] = useState<string | undefined>(initialAssignRequest?.staffUserId);
   // シフト希望の行の「シフト作成」から開いた時の、その希望（同じ申請で出した日に色を付ける）
   const [assignFormRequestId, setAssignFormRequestId] = useState<string | undefined>(initialAssignRequest?.id);
-  // 「この申請でシフトを作る」から開いた時は、その申請の日を最初から全部選んでおく
+  // 「シフトを作る」から開いた時は、その申請の日を最初から全部選んでおく
   const [assignPreselectRequestDates, setAssignPreselectRequestDates] = useState(Boolean(initialAssignRequest));
   const [showRecruitForm, setShowRecruitForm] = useState(initialCreate === "recruit");
   // 「よく使う操作」から来た時の指定（?create=）は一度開いたら消す（再読み込みで
@@ -3341,7 +3341,7 @@ function AssignShiftModal({
   const [step, setStep] = useState<AssignStep>(steps[0]);
   const [clientSearch, setClientSearch] = useState("");
   const [staffUserId, setStaffUserId] = useState(defaultStaffUserId ?? "");
-  // 「この申請でシフトを作る」から開いた時は、その申請のこれからの日を最初から選んでおく（入れない日だけ外す）
+  // 「シフトを作る」から開いた時は、その申請のこれからの日を最初から選んでおく（入れない日だけ外す）
   const requestFutureDates = (sourceRequest?.dates ?? []).filter((d) => d >= todayJst()).sort();
   const [dates, setDates] = useState<string[]>(
     preselectRequestDates && requestFutureDates.length > 0 ? requestFutureDates : [defaultDate],
@@ -3451,6 +3451,8 @@ function AssignShiftModal({
       ? clients.find((c) => c.id === companyRelationshipId)?.name
       : "社内";
   const staffName = staffOptions.find((s) => s.id === staffUserId)?.name;
+  // 誰のシフトを作っているのか、どの段階でも分かるように見出しに名前を出す
+  const assignTitle = staffName ? `${staffName}さんのシフトを作成` : "シフトを作成";
   // 同じ申請で希望した日（日付の選択の補助として薄く色を付ける）。スタッフを選び直したら付けない
   const requestedDates = sourceRequest && sourceRequest.staffUserId === staffUserId ? sourceRequest.dates : [];
   const dateLabels = dates.map((d) => {
@@ -3480,7 +3482,7 @@ function AssignShiftModal({
 
   if (step === "team") {
     return (
-      <Modal title="シフトを作成" onClose={onClose}>
+      <Modal title={assignTitle} onClose={onClose}>
         <div className="flex flex-col gap-3">
           <h3 className="font-serif-jp text-lg font-semibold">どのチームのシフトを作成しますか？</h3>
           <div className="flex flex-col gap-2">
@@ -3502,7 +3504,7 @@ function AssignShiftModal({
 
   if (step === "workplace") {
     return (
-      <Modal title="シフトを作成" onClose={onClose}>
+      <Modal title={assignTitle} onClose={onClose}>
         <div className="flex flex-col gap-3">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">勤務先を選択</h3>
@@ -3570,7 +3572,7 @@ function AssignShiftModal({
     // からの選択／自由入力のみ（単価表への登録は行わない — 派遣会社側で
     // 業務報告提出時に自動的に登録される既存の仕組みに任せる）。
     return (
-      <Modal title="シフトを作成" onClose={onClose}>
+      <Modal title={assignTitle} onClose={onClose}>
         <div className="flex flex-col gap-3">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">{workplaceName}・業務内容を選択</h3>
@@ -3614,7 +3616,7 @@ function AssignShiftModal({
 
   if (step === "task") {
     return (
-      <Modal title="シフトを作成" onClose={onClose}>
+      <Modal title={assignTitle} onClose={onClose}>
         <div className="flex flex-col gap-3">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">{workplaceName}・業務内容を選択</h3>
@@ -3678,7 +3680,7 @@ function AssignShiftModal({
 
   if (step === "staff") {
     return (
-      <Modal title="シフトを作成" onClose={onClose}>
+      <Modal title={assignTitle} onClose={onClose}>
         <div className="flex flex-col gap-3">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">
@@ -3710,7 +3712,7 @@ function AssignShiftModal({
 
   if (step === "datetime") {
     return (
-      <Modal title="シフトを作成" onClose={onClose}>
+      <Modal title={assignTitle} onClose={onClose}>
         <div className="flex flex-col gap-3">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">
@@ -3801,7 +3803,7 @@ function AssignShiftModal({
 
   // step === "confirm"
   return (
-    <Modal title="シフトを作成" onClose={onClose}>
+    <Modal title={assignTitle} onClose={onClose}>
       <div className="flex flex-col gap-3">
         {backButton}
         <h3 className="font-serif-jp text-lg font-semibold">内容を確認してください</h3>

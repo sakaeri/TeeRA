@@ -76,7 +76,7 @@ try {
   await modal.getByText("日付を選択（複数選択可）").waitFor();
   const selected = await modal.locator("button[data-selected=true]").allInnerTexts();
   log("申請の日（10・12・15日）が最初から選ばれている", JSON.stringify(selected.map((t) => t.trim())) === JSON.stringify(["10", "12", "15"]));
-  log("田中さんが選ばれている", (await modal.innerText()).includes("田中"));
+  log("見出しに誰のシフトか出る（田中さんのシフトを作成）", (await modal.innerText()).includes("田中さんのシフトを作成"));
   log("URLから申請の指定が消える", !page.url().includes("assignRequest"));
   await page.screenshot({ path: "/tmp/rcal-assign.png" });
 
