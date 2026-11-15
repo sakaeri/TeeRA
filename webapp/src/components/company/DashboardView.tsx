@@ -1001,19 +1001,9 @@ function UnconfirmedShiftPopup({ entries, onClose }: { entries: UnconfirmedShift
     >
       {entries.map((r) => (
         <div key={r.id} className="flex flex-col gap-2 rounded-xl border border-border/60 p-4 text-sm">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="font-medium">
-                {r.staffName}さん（{DESIRE_LABEL[r.desire] ?? r.desire}）
-              </p>
-            </div>
-            <Link
-              href={`/company/calendar?date=${r.dates[0]}`}
-              className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
-            >
-              カレンダーで確認
-            </Link>
-          </div>
+          <p className="font-medium">
+            {r.staffName}さん（{DESIRE_LABEL[r.desire] ?? r.desire}）
+          </p>
           {/* 申請した日を月のカレンダーで示す（色の付いた日を押すと、その日のカレンダーが開く） */}
           <RequestDatesCalendar dates={r.dates} hrefFor={(d) => `/company/calendar?date=${d}`} />
           {/* 備考は大事なので、カレンダーの下に目立つように出す（長くても上の並びを崩さない） */}
@@ -1022,16 +1012,24 @@ function UnconfirmedShiftPopup({ entries, onClose }: { entries: UnconfirmedShift
               備考：{r.note}
             </p>
           ) : null}
-          {/* その申請の日が最初から全部選ばれた状態でシフト作成を開く（入れない日だけ外す） */}
-          {r.desire === "WORK" ? (
+          {/* 確認と作成を下に横並び。作成（その申請の日が全部選ばれた状態で開く）が主な操作なので塗りつぶし */}
+          <div className="grid grid-cols-2 gap-2">
             <Link
-              href={`/company/calendar?y=${Number(r.dates[0].slice(0, 4))}&m=${Number(r.dates[0].slice(5, 7))}&assignRequest=${r.id}`}
-              className="self-center rounded-lg border border-primary px-4 py-2 text-xs font-semibold text-primary hover:bg-primary/5"
-              data-testid="create-shift-from-request"
+              href={`/company/calendar?date=${r.dates[0]}`}
+              className="rounded-lg border border-primary px-3 py-2 text-center text-xs font-semibold text-primary hover:bg-primary/5"
             >
-              この申請でシフトを作る
+              カレンダーで確認
             </Link>
-          ) : null}
+            {r.desire === "WORK" ? (
+              <Link
+                href={`/company/calendar?y=${Number(r.dates[0].slice(0, 4))}&m=${Number(r.dates[0].slice(5, 7))}&assignRequest=${r.id}`}
+                className="rounded-lg bg-primary px-3 py-2 text-center text-xs font-semibold text-primary-foreground"
+                data-testid="create-shift-from-request"
+              >
+                シフトを作る
+              </Link>
+            ) : null}
+          </div>
         </div>
       ))}
       {entries.length === 0 ? <p className="text-center text-muted">未確定の希望シフトはありません。</p> : null}
