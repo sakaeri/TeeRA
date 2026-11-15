@@ -3,8 +3,9 @@ import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 // シフト希望を月のカレンダーで見せる：
-// ・カレンダーの上の「シフト希望」：日ごとの人数をカレンダーで示し、押すとその日の詳細が開く
-// ・ダッシュボードの「未確定シフト」：スタッフの申請ごとに、申請した日を小さなカレンダーで示す
+// ・カレンダーの上の「シフト希望」の欄はなくした（シフトはスタッフごとに作るので、日ごとの人数は不要）
+// ・ダッシュボードの「未確定シフト」：スタッフの申請ごとに、申請した日を小さなカレンダーで示し、
+//   「この申請でシフトを作る」で、その申請の日が全部選ばれた状態でシフト作成が開く
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -46,17 +47,10 @@ try {
   psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status, note) values (gen_random_uuid()::text, '${a}', '${companyId}', 'WORK', ARRAY['${ym}-10','${ym}-12','${ym}-15']::date[], 'PENDING', '早番希望');`);
   psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status) values (gen_random_uuid()::text, '${b}', '${companyId}', 'WORK', ARRAY['${ym}-12']::date[], 'PENDING');`);
 
-  // --- カレンダーの上のシフト希望 ---
+  // --- カレンダーの上の「シフト希望」の欄はなくした ---
   await page.goto("http://localhost:3000/company/calendar");
   await page.waitForTimeout(2500);
-  const cal = page.getByTestId("request-count-calendar");
-  log("シフト希望は月のカレンダーで出る（希望の多い来月から）", (await cal.innerText()).includes(`${y}年${m}月`));
-  const counts = await cal.locator("button[data-count]").evaluateAll((els) => els.map((e) => `${e.textContent}`));
-  log("希望の日に人数が出る（10日1名・12日2名・15日1名）", JSON.stringify(counts) === JSON.stringify(["101名", "122名", "151名"]));
-  await page.screenshot({ path: "/tmp/rcal-calendar.png" });
-  await cal.locator("button[data-count='2']").click();
-  await page.waitForTimeout(1200);
-  log("日付を押すとその日の詳細が開く（2人の希望）", (await page.locator("li", { hasText: "田中さん" }).count()) === 1 && (await page.locator("li", { hasText: "佐藤さん" }).count()) === 1);
+  log("カレンダーの上にシフト希望の欄は出ない", (await page.getByTestId("request-count-calendar").count()) === 0);
 
   // --- ダッシュボードの未確定シフト ---
   await page.goto("http://localhost:3000/company?open=unconfirmed");
@@ -72,6 +66,19 @@ try {
   const note = page.getByTestId("request-note");
   log("備考はカレンダーの下に出る", (await note.innerText()).includes("備考：早番希望"));
   await page.screenshot({ path: "/tmp/rcal-dashboard.png" });
+
+  // --- 「この申請でシフトを作る」：そのスタッフ・その申請の日が全部選ばれた状態でシフト作成が開く ---
+  await page.locator("div.rounded-xl", { hasText: "田中さん（出勤希望）" }).last().getByTestId("create-shift-from-request").click();
+  await page.waitForURL(/\/company\/calendar/);
+  const modal = page.locator("div.fixed.inset-0.z-20").last();
+  await modal.getByRole("button", { name: /社内（自社スタッフとして勤務）/ }).click({ timeout: 60000 });
+  await modal.getByRole("button", { name: "業務内容を選ばずに次へ" }).click();
+  await modal.getByText("日付を選択（複数選択可）").waitFor();
+  const selected = await modal.locator("button[data-selected=true]").allInnerTexts();
+  log("申請の日（10・12・15日）が最初から選ばれている", JSON.stringify(selected.map((t) => t.trim())) === JSON.stringify(["10", "12", "15"]));
+  log("田中さんが選ばれている", (await modal.innerText()).includes("田中"));
+  log("URLから申請の指定が消える", !page.url().includes("assignRequest"));
+  await page.screenshot({ path: "/tmp/rcal-assign.png" });
 
   console.log(process.exitCode ? "REQUEST CALENDARS SMOKE TEST HAD FAILURES" : "REQUEST CALENDARS SMOKE TEST PASSED");
 } catch (e) {

@@ -1022,6 +1022,16 @@ function UnconfirmedShiftPopup({ entries, onClose }: { entries: UnconfirmedShift
               備考：{r.note}
             </p>
           ) : null}
+          {/* その申請の日が最初から全部選ばれた状態でシフト作成を開く（入れない日だけ外す） */}
+          {r.desire === "WORK" ? (
+            <Link
+              href={`/company/calendar?y=${Number(r.dates[0].slice(0, 4))}&m=${Number(r.dates[0].slice(5, 7))}&assignRequest=${r.id}`}
+              className="self-center rounded-lg border border-primary px-4 py-2 text-xs font-semibold text-primary hover:bg-primary/5"
+              data-testid="create-shift-from-request"
+            >
+              この申請でシフトを作る
+            </Link>
+          ) : null}
         </div>
       ))}
       {entries.length === 0 ? <p className="text-center text-muted">未確定の希望シフトはありません。</p> : null}
