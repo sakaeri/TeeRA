@@ -277,8 +277,7 @@ function WeekStartSetting({ initialMondayFirst }: { initialMondayFirst: boolean 
   );
   return (
     <div>
-      <h2 className="mb-1 font-serif-jp text-lg font-bold text-primary">カレンダーの週の始まり</h2>
-      <p className="mb-3 text-xs text-muted">シフトカレンダーや日付を選ぶカレンダーの並びを、自分の見やすい方に変えられます（ほかの人の表示は変わりません）。</p>
+      <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">カレンダーの週の始まり</h2>
       <div className="flex gap-2" data-testid="week-start-setting">
         {option(false, "日曜始まり")}
         {option(true, "月曜始まり")}
