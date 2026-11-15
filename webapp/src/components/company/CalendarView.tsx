@@ -1,5 +1,6 @@
 "use client";
 
+import { RequestCountCalendar } from "@/components/company/RequestCalendars";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { PdfLink } from "@/components/PdfLink";
 import Link from "next/link";
@@ -4479,27 +4480,12 @@ function ShiftRequestsSection({
       </button>
       {isOpen ? (
         <div className="max-h-[40vh] overflow-y-auto border-t border-border px-5 pb-5 pt-4">
-        <ul className="flex flex-col gap-2 text-sm">
-          {sortedDates.map((date) => {
-            const rows = byDate.get(date)!;
-            const dt = new Date(`${date}T00:00:00Z`);
-            const dateLabel = `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
-            return (
-              <li key={date}>
-                <button
-                  type="button"
-                  onClick={() => onNavigate(date)}
-                  className="flex w-full items-center justify-between rounded-xl bg-orange-50/50 px-4 py-3 text-left shadow-sm ring-1 ring-orange-200/70 hover:bg-orange-100/60"
-                >
-                  <span className="font-semibold text-orange-900">{dateLabel}</span>
-                  <span className="rounded-full bg-orange-200/70 px-2.5 py-1 text-xs font-semibold text-orange-900">
-                    {rows.length}名
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        {/* 希望が出ている日を月のカレンダーで示す（人数の多い日ほど濃い。押すとその日の詳細） */}
+        <RequestCountCalendar
+          countsByDate={new Map(sortedDates.map((d) => [d, byDate.get(d)!.length]))}
+          todayStr={todayStr}
+          onSelect={onNavigate}
+        />
         </div>
       ) : null}
     </div>
