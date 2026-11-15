@@ -1,14 +1,13 @@
 "use client";
 
+import { leadingBlankCount, orderedWeekdays, useMondayFirst } from "@/components/week/WeekStart";
 import Link from "next/link";
 
 // シフト希望を「箇条書きの日付」ではなく、月のカレンダーで見せるための部品。
 // （管理側から「希望日が箇条書きで分かりにくい」という声があったため）
 
-const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
-
-function monthCells(year: number, month: number) {
-  const startDow = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+function monthCells(year: number, month: number, mondayFirst: boolean) {
+  const startDow = leadingBlankCount(year, month, mondayFirst);
   const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const cells: (string | null)[] = Array.from({ length: startDow }, () => null);
   for (let d = 1; d <= days; d++) cells.push(`${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
@@ -22,6 +21,7 @@ function weekdayClass(i: number) {
 // 1件の申請で出した日を、月ごとの小さなカレンダーで示す（希望の日に色。押すとその日のカレンダーへ）
 export function RequestDatesCalendar({ dates, hrefFor }: { dates: string[]; hrefFor: (date: string) => string }) {
   const set = new Set(dates);
+  const mondayFirst = useMondayFirst();
   const months = [...new Set(dates.map((d) => d.slice(0, 7)))].sort();
   return (
     <div className="flex flex-wrap justify-center gap-3" data-testid="request-dates-calendar">
@@ -33,12 +33,12 @@ export function RequestDatesCalendar({ dates, hrefFor }: { dates: string[]; href
               {y}年{m}月
             </p>
             <div className="grid grid-cols-7 gap-0.5 text-center text-[10px]">
-              {WEEKDAYS.map((w, i) => (
-                <span key={w} className={weekdayClass(i)}>
-                  {w}
+              {orderedWeekdays(mondayFirst).map(({ dow, label }) => (
+                <span key={label} className={weekdayClass(dow)}>
+                  {label}
                 </span>
               ))}
-              {monthCells(y, m).map((d, i) =>
+              {monthCells(y, m, mondayFirst).map((d, i) =>
                 d === null ? (
                   <span key={i} />
                 ) : set.has(d) ? (

@@ -1,6 +1,7 @@
 import { requireCompanyStaffRole, listMyMemberships } from "@/lib/auth/session";
 import { hasAnyTeamManagementRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
+import { WeekStartProvider } from "@/components/week/WeekStart";
 import { getStaffPointsBalance } from "@/lib/domain/promo";
 import { listOpenRecruitmentsForStaff } from "@/lib/domain/recruitment";
 import { countUnsubmittedReports } from "@/lib/domain/workReports";
@@ -62,7 +63,7 @@ export default async function StaffLayout({
       pendingContractCompanies={pendingContractCompanies}
       isContractor={contractorCompanies.length > 0}
     >
-      {children}
+      <WeekStartProvider mondayFirst={user.weekStartsMonday}>{children}</WeekStartProvider>
     </StaffShell>
   );
 }

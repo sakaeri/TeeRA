@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useActionState } from "react";
+import { useState, useEffect, useActionState, useTransition } from "react";
 import {
   changePasswordAction,
   requestEmailChangeAction,
@@ -8,6 +8,7 @@ import {
   removePasswordAction,
   logoutAllDevicesAction,
   cancelPendingPasswordResetAction,
+  setWeekStartAction,
 } from "@/app/actions/account";
 import type { FormState } from "@/app/actions/auth";
 import { PushNotificationToggle } from "@/components/account/PushNotificationToggle";
@@ -247,12 +248,52 @@ function ChangeEmailForm({ currentEmail }: { currentEmail: string }) {
   );
 }
 
+// カレンダーの週の始まり（日曜始まり／月曜始まり）。押した時点で保存し、全部のカレンダーに反映する
+function WeekStartSetting({ initialMondayFirst }: { initialMondayFirst: boolean }) {
+  const [mondayFirst, setMondayFirst] = useState(initialMondayFirst);
+  const [saved, setSaved] = useState(false);
+  const [pending, startTransition] = useTransition();
+  function choose(value: boolean) {
+    if (value === mondayFirst) return;
+    setMondayFirst(value);
+    setSaved(false);
+    startTransition(async () => {
+      await setWeekStartAction(value);
+      setSaved(true);
+    });
+  }
+  const option = (value: boolean, label: string) => (
+    <button
+      type="button"
+      onClick={() => choose(value)}
+      disabled={pending}
+      aria-pressed={mondayFirst === value}
+      className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${
+        mondayFirst === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-white text-foreground"
+      }`}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div>
+      <h2 className="mb-3 font-serif-jp text-lg font-bold text-primary">カレンダーの週の始まり</h2>
+      <div className="flex gap-2" data-testid="week-start-setting">
+        {option(false, "日曜始まり")}
+        {option(true, "月曜始まり")}
+      </div>
+      {saved ? <p className="mt-2 text-xs text-green-700">保存しました。</p> : null}
+    </div>
+  );
+}
+
 export function AccountView({
   userName,
   userEmail,
   hasPassword,
   emailChangeNotice,
   pendingPasswordEffectiveAt,
+  weekStartsMonday = false,
 }: {
   userName: string;
   userEmail: string;
@@ -260,6 +301,7 @@ export function AccountView({
   emailChangeNotice?: "success" | "error";
   // 「パスワードを忘れた」から申し込み中の再設定が有効になる日時（表示用）
   pendingPasswordEffectiveAt?: string;
+  weekStartsMonday?: boolean;
 }) {
   const [hasPasswordState, setHasPasswordState] = useState(hasPassword);
   // パスワードの設定/削除は、成功直後にこのセクションのフォーム自体が
@@ -307,6 +349,10 @@ export function AccountView({
 
       <section className="rounded-2xl border border-border bg-white/60 p-6">
         <PushNotificationToggle />
+      </section>
+
+      <section className="rounded-2xl border border-border bg-white/60 p-6">
+        <WeekStartSetting initialMondayFirst={weekStartsMonday} />
       </section>
 
       <section className="rounded-2xl border border-border bg-white/60 p-6">

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { signOut } from "@/auth";
 import { verifySession } from "@/lib/auth/session";
+import { prisma } from "@/lib/prisma";
 import {
   ChangePasswordSchema,
   ChangeEmailSchema,
@@ -149,4 +150,11 @@ export async function confirmEmailChangeAction(token: string) {
     redirect("/account?emailChange=error");
   }
   redirect("/account?emailChange=success");
+}
+
+// カレンダーの週の始まり（日曜／月曜）を本人が選ぶ。全ページのカレンダーに効くので、レイアウトごと読み直す
+export async function setWeekStartAction(mondayFirst: boolean) {
+  const { userId } = await verifySession();
+  await prisma.user.update({ where: { id: userId }, data: { weekStartsMonday: mondayFirst === true } });
+  revalidatePath("/", "layout");
 }
