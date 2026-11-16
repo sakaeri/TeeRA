@@ -88,6 +88,8 @@ export default async function StaffHomePage({
     .flatMap((r) =>
       r.dates.map((d) => ({
         id: `${r.id}-${d.toISOString().slice(0, 10)}`,
+        requestId: r.id,
+        acknowledged: r.acknowledgedAt !== null,
         date: d.toISOString().slice(0, 10),
         companyId: r.companyId,
         companyName: r.company.name,

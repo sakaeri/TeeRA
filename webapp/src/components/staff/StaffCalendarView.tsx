@@ -4,7 +4,7 @@ import { allowedDesires } from "@/lib/requestDesire";
 import { leadingBlankCount, orderedWeekdays, useMondayFirst } from "@/components/week/WeekStart";
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { submitShiftRequestAction } from "@/app/staff/actions";
+import { submitShiftRequestAction, cancelOwnShiftRequestDateAction } from "@/app/staff/actions";
 import { todayJst, nowJstHHMM } from "@/lib/date";
 import { holidayName } from "@/lib/holidays";
 import { useMonthSwipe } from "@/lib/useMonthSwipe";
@@ -37,6 +37,10 @@ type ShiftRow = {
 
 type PendingRequestRow = {
   id: string;
+  // 取り消し用（1件の申請が複数日を持つため、行のidとは別）
+  requestId?: string;
+  // 休み希望を会社が「休みで確定」したか
+  acknowledged?: boolean;
   date: string;
   companyId: string;
   companyName: string;
@@ -277,7 +281,10 @@ export function StaffCalendarView({
           // 見送り済みはもう対応する必要のない過去の記録でしかなく、複数
           // 件溜まるとカレンダーの枠を圧迫して見た目も良くないため、日
           // セルのバッジには出さない（日付詳細を開けば確認できる）。
-          const dayRequests = (requestsByDate.get(dateStr) ?? []).filter((r) => r.status !== "DISMISSED");
+          // 休みで確定した日でも、会社がシフトを入れた場合はシフトの方を出す
+          const dayRequests = (requestsByDate.get(dateStr) ?? []).filter(
+            (r) => r.status !== "DISMISSED" && !(r.desire === "OFF" && dayShifts.length > 0),
+          );
           const isToday = dateStr === todayStr;
           const totalCount = dayShifts.length + dayRequests.length;
           const visibleShifts = dayShifts.slice(0, CONFIRMED_SLOT_BUDGET);
@@ -320,10 +327,12 @@ export function StaffCalendarView({
                     </span>
                   );
                 })}
+                {/* 申請中（出勤・休みとも）＝薄い青、休みで確定＝グレー（シフト確定は上の緑） */}
                 {visibleRequests.map((r) =>
-                  r.desire === "OFF" ? (
+                  r.desire === "OFF" && r.acknowledged ? (
                     <span
                       key={r.id}
+                      data-request-tag="off-confirmed"
                       className="block w-full rounded bg-gray-200 px-0.5 py-px text-center text-[8px] font-medium leading-tight text-gray-700"
                     >
                       休み
@@ -331,9 +340,10 @@ export function StaffCalendarView({
                   ) : (
                     <span
                       key={r.id}
-                      className="block w-full overflow-hidden text-clip whitespace-nowrap rounded bg-orange-100 px-0 py-px text-center text-[8px] font-medium leading-tight tracking-tighter text-orange-900"
+                      data-request-tag={r.desire === "OFF" ? "off-pending" : "work-pending"}
+                      className="block w-full overflow-hidden text-clip whitespace-nowrap rounded bg-sky-100 px-0 py-px text-center text-[8px] font-medium leading-tight tracking-tighter text-sky-900"
                     >
-                      希望申請中
+                      {r.desire === "OFF" ? "休み申請中" : "出勤申請中"}
                     </span>
                   ),
                 )}
@@ -512,17 +522,29 @@ function DayDetailPanel({
               );
             })}
             {requests.map((r) =>
-              r.desire === "OFF" ? (
-                <DetailAccordionItem key={r.id} dotClassName="bg-gray-400" primary="休み申請済み">
-                  <p>所属会社：{r.companyName}</p>
-                </DetailAccordionItem>
-              ) : r.status === "DISMISSED" ? (
-                <DetailAccordionItem key={r.id} dotClassName="bg-gray-400" primary="今回は見送られました">
+              r.status === "DISMISSED" ? (
+                <DetailAccordionItem
+                  key={r.id}
+                  dotClassName="bg-gray-400"
+                  primary={r.desire === "OFF" ? "休みは見送られました" : "今回は見送られました"}
+                >
                   <p>所属会社：{r.companyName}</p>
                 </DetailAccordionItem>
               ) : (
-                <DetailAccordionItem key={r.id} dotClassName="bg-orange-500" primary="会社の回答待ちです">
+                <DetailAccordionItem
+                  key={r.id}
+                  dotClassName={r.desire === "OFF" && r.acknowledged ? "bg-gray-400" : "bg-sky-500"}
+                  primary={
+                    r.desire === "OFF"
+                      ? r.acknowledged
+                        ? "休み（会社が確定しました）"
+                        : "休み申請中（会社の確認待ち）"
+                      : "出勤申請中（会社の回答待ち）"
+                  }
+                >
                   <p>所属会社：{r.companyName}</p>
+                  {r.note ? <p className="whitespace-pre-wrap break-words">備考：{r.note}</p> : null}
+                  {r.requestId && date >= todayJst() ? <CancelRequestButton requestId={r.requestId} date={date} desire={r.desire} confirmedOff={r.desire === "OFF" && Boolean(r.acknowledged)} /> : null}
                 </DetailAccordionItem>
               ),
             )}
@@ -906,6 +928,65 @@ function RequestWizard({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// 自分の申請をこの日だけ取り消す。確定した休みの取り消しは会社に通知される
+function CancelRequestButton({
+  requestId,
+  date,
+  desire,
+  confirmedOff,
+}: {
+  requestId: string;
+  date: string;
+  desire: "WORK" | "OFF";
+  confirmedOff: boolean;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  if (!confirming) {
+    return (
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className="mt-1 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-background"
+        data-testid="cancel-request"
+      >
+        この日の{desire === "OFF" ? "休み" : "出勤"}申請を取り消す
+      </button>
+    );
+  }
+  return (
+    <div className="mt-1 flex flex-col gap-1.5 rounded-lg bg-background px-3 py-2">
+      <p className="text-xs">
+        {confirmedOff ? "会社が確定した休みです。取り消すと会社に知らせます。取り消しますか？" : "この日の申請を取り消しますか？"}
+      </p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() =>
+            startTransition(async () => {
+              try {
+                await cancelOwnShiftRequestDateAction(requestId, date);
+              } catch {
+                setError("取り消せませんでした。");
+              }
+            })
+          }
+          className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+          data-testid="cancel-request-confirm"
+        >
+          取り消す
+        </button>
+        <button type="button" onClick={() => setConfirming(false)} className="rounded-lg border border-border px-3 py-1.5 text-xs">
+          やめる
+        </button>
+      </div>
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </div>
   );
 }

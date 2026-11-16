@@ -154,6 +154,26 @@ export async function notifyCompanyOfWorkReportSubmission(workReportId: string) 
   });
 }
 
+// 会社が「休みで確定」した休み希望を、スタッフが取り消したらすぐプッシュで知らせる
+// （確定した休みを前提に組んだ予定が変わるため）。チームのマネージャー・リーダー（チームが無ければ本部）へ
+export async function notifyCompanyOfConfirmedOffCancelled(params: {
+  companyId: string;
+  teamId: string | null;
+  staffUserId: string;
+  date: Date;
+}) {
+  const staff = await prisma.user.findUnique({ where: { id: params.staffUserId }, select: { name: true } });
+  if (!staff) return;
+  const date = params.date.toISOString().slice(0, 10);
+  const [, m, d] = date.split("-").map(Number);
+  const pushTargetUserIds = params.teamId ? await teamManagerUserIds(params.teamId) : await companyAdminUserIds(params.companyId);
+  await sendPushToUsers(pushTargetUserIds, {
+    title: "確定した休みが取り消されました",
+    body: `${staff.name}さん・${m}/${d}（出勤できるようになりました）`,
+    url: `/company/calendar?date=${date}`,
+  });
+}
+
 // 募集（オーダー）にスタッフが応募したら、募集を出したチームのマネージャー・リーダー
 // （チームの無い募集は本部の管理者・編集者）へプッシュ通知だけ送る（メールは送らない）。
 // 押すとカレンダーのその日の詳細が開く。
