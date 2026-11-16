@@ -617,7 +617,7 @@ export async function getStaffUpcomingShiftDatesAction(staffUserId: string) {
   return [...new Set(shifts.map((sh) => sh.date.toISOString().slice(0, 10)))];
 }
 
-// 休み希望を「確認した」（ダッシュボードの未確定シフトから消す。休み希望自体は有効なまま、
+// 休み希望を「休みで確定」（ダッシュボードの未確定シフトから消す。休み希望自体は有効なまま、
 // カレンダーやシフト作成の日付選択には引き続き出る）
 export async function acknowledgeOffRequestAction(requestId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
@@ -626,6 +626,14 @@ export async function acknowledgeOffRequestAction(requestId: string) {
   await prisma.shiftRequest.update({ where: { id: requestId }, data: { acknowledgedAt: new Date() } });
   // ここでは画面を読み直さない（未確定シフトの一覧を開いたまま続けて確認できるように）。
   // 件数は一覧を閉じた時に読み直す（DashboardViewのclosePopup）
+}
+
+// 休み希望を「見送る」（休みにできない時）。未確定シフトから消え、スタッフ側には「休みは見送られました」と出る
+export async function dismissOffRequestAction(requestId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const request = await prisma.shiftRequest.findUnique({ where: { id: requestId } });
+  if (!request || request.companyId !== membership.companyId || request.desire !== "OFF") throw new Error("forbidden");
+  await prisma.shiftRequest.update({ where: { id: requestId }, data: { status: "DISMISSED" } });
 }
 
 export async function dismissShiftRequestAction(requestId: string, date: string) {

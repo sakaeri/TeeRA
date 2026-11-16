@@ -1,6 +1,7 @@
 "use server";
 
 import { allowedDesires } from "@/lib/requestDesire";
+import { notifyCompanyOfConfirmedOffCancelled } from "@/lib/domain/emailNotifications";
 
 import { revalidatePath } from "next/cache";
 import type { NoteAttachmentInput } from "@/lib/noteAttachments";
@@ -232,6 +233,31 @@ export async function submitShiftRequestAction(input: {
     dates: input.dates.map((d) => new Date(`${d}T00:00:00.000Z`)),
     note: input.note,
   });
+  revalidatePath("/staff");
+}
+
+// スタッフが自分のシフト希望（出勤・休み）を1日分取り消す。会社の回答前のもの（PENDING）だけ。
+// 会社が「休みで確定」した休みを取り消したときは、会社へプッシュで知らせる
+export async function cancelOwnShiftRequestDateAction(requestId: string, date: string) {
+  const { userId } = await requireCompanyStaffRole();
+  const request = await prisma.shiftRequest.findUnique({ where: { id: requestId } });
+  if (!request || request.staffUserId !== userId || request.status !== "PENDING") throw new Error("forbidden");
+  const day = new Date(`${date}T00:00:00.000Z`);
+  const remaining = request.dates.filter((d) => d.getTime() !== day.getTime());
+  if (remaining.length === request.dates.length) throw new Error("forbidden");
+  if (remaining.length === 0) {
+    await prisma.shiftRequest.delete({ where: { id: request.id } });
+  } else {
+    await prisma.shiftRequest.update({ where: { id: request.id }, data: { dates: remaining } });
+  }
+  if (request.desire === "OFF" && request.acknowledgedAt) {
+    await notifyCompanyOfConfirmedOffCancelled({
+      companyId: request.companyId,
+      teamId: request.teamId,
+      staffUserId: userId,
+      date: day,
+    }).catch(() => {});
+  }
   revalidatePath("/staff");
 }
 

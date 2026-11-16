@@ -3,7 +3,7 @@ import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 // 休み希望を会社側でも見えるようにする：
-// ・ダッシュボードの「未確定シフト」に休み希望のカードが出て、「確認した」で消える（休み希望自体は有効なまま）
+// ・ダッシュボードの「未確定シフト」に休み希望のカードが出て、「休みで確定」で消える（休み希望自体は有効なまま）
 // ・出勤希望のカードのカレンダーに、そのスタッフの休み希望の日を薄い赤で添える
 // ・シフト作成の日付選択で、選んだスタッフの休み希望の日が薄い赤になる
 // ・日付の詳細に、その日の休み希望が表示だけされる
@@ -54,12 +54,12 @@ try {
   const offCard = cards.filter({ hasText: "田中さん（休み希望）" });
   log("休み希望のカードに備考が出る", (await offCard.innerText()).includes("備考：通院"));
   await page.screenshot({ path: "/tmp/offreq-dashboard.png", fullPage: true });
-  await offCard.getByTestId("acknowledge-off-request").click();
+  await offCard.getByTestId("acknowledge-off-request").click(); // 「休みで確定」
   await page.waitForTimeout(1500);
   const afterAck = await page.getByTestId("unconfirmed-card").count();
   console.log("cards after ack", afterAck);
   await page.screenshot({ path: "/tmp/offreq-afterack.png" });
-  log("「確認した」で休み希望のカードが消える", afterAck === 1);
+  log("「休みで確定」で休み希望のカードが消える", afterAck === 1);
   // 一覧を閉じると件数が読み直される（出勤希望の1件だけになる）
   await page.getByRole("button", { name: "✕" }).first().click();
   await page.waitForTimeout(2000);

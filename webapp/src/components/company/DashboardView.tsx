@@ -5,7 +5,7 @@ import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { PdfLink } from "@/components/PdfLink";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { acknowledgeOffRequestAction } from "@/app/company/calendar/actions";
+import { acknowledgeOffRequestAction, dismissOffRequestAction } from "@/app/company/calendar/actions";
 import { REQUIRED_DOCUMENT_LABEL, type RequiredDocument } from "@/lib/requiredDocuments";
 import {
   createManualTodoAction,
@@ -496,7 +496,7 @@ export function DashboardView({
   const filterByTeam = <T extends { teamKey: string }>(rows: T[]) => (teamFilter ? rows.filter((r) => r.teamKey === teamFilter) : rows);
   // 「月末にまとめて」の依頼主の、その月の分だけに絞る（やることリストのまとめから開いたとき）
   const [groupFilter, setGroupFilter] = useState<string | null>(initialGroupFilter ?? null);
-  // 未確定シフトで休み希望を「確認した」時は、一覧を閉じた時に件数を読み直す
+  // 未確定シフトで休み希望を「休みで確定」「見送る」した時は、一覧を閉じた時に件数を読み直す
   const router = useRouter();
   const [needsRefresh, setNeedsRefresh] = useState(false);
   function closePopup() {
@@ -1044,13 +1044,14 @@ function UnconfirmedShiftPopup({
   onClose: () => void;
   onAcknowledged: () => void;
 }) {
-  // 休み希望の「確認した」を押したものは、すぐ一覧から消す（件数は一覧を閉じた時に読み直す）
+  // 休み希望の「休みで確定」「見送る」を押したものは、すぐ一覧から消す（件数は一覧を閉じた時に読み直す）
   const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
   const [, startTransition] = useTransition();
-  function acknowledge(id: string) {
+  function acknowledge(id: string, dismiss = false) {
     setAcknowledged((prev) => new Set(prev).add(id));
     startTransition(async () => {
-      await acknowledgeOffRequestAction(id);
+      if (dismiss) await dismissOffRequestAction(id);
+      else await acknowledgeOffRequestAction(id);
       onAcknowledged();
     });
   }
@@ -1102,17 +1103,27 @@ function UnconfirmedShiftPopup({
                 シフトを作る
               </Link>
             ) : (
-              // 休み希望は会社が操作するものではないので、確認したら一覧から消す（休み希望自体は有効なまま）
+              // 休み希望は「休みで確定」か「見送る」で一覧から消える（スタッフ側の表示も変わる）
               <button
                 type="button"
                 onClick={() => acknowledge(r.id)}
                 className="rounded-lg bg-primary px-3 py-2 text-center text-xs font-semibold text-primary-foreground"
                 data-testid="acknowledge-off-request"
               >
-                確認した
+                休みで確定
               </button>
             )}
           </div>
+          {r.desire === "OFF" ? (
+            <button
+              type="button"
+              onClick={() => acknowledge(r.id, true)}
+              className="self-center text-xs text-muted underline hover:text-red-700"
+              data-testid="dismiss-off-request"
+            >
+              休みにできないので見送る
+            </button>
+          ) : null}
         </div>
       ))}
       {visible.length === 0 ? <p className="text-center text-muted">未確定の希望シフトはありません。</p> : null}

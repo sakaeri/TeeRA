@@ -181,7 +181,7 @@ export function computeKpis(
 
   return {
     shortageCount,
-    // 出勤希望と、まだ「確認した」を押していない休み希望（これからの日があるもの）を数える
+    // 出勤希望と、まだ「休みで確定」していない休み希望（これからの日があるもの）を数える
     unconfirmedShiftCount: data.shiftRequests.filter(isUnconfirmedRequest).length,
     pendingReportCount: data.pendingReports.length,
     pendingContractCount: data.pendingContractStaff.length,
@@ -212,7 +212,7 @@ export function computeShortageEntries(data: DashboardData) {
 }
 
 // ダッシュボードの「未確定シフト」に出すもの：出勤希望（シフトを作るか見送るまで）と、
-// 会社がまだ「確認した」を押していない休み希望（これからの日があるもの）
+// 会社がまだ「休みで確定」していない休み希望（これからの日があるもの）
 function isUnconfirmedRequest(r: { desire: string; acknowledgedAt: Date | null; dates: Date[] }) {
   if (r.desire === "WORK") return true;
   const today = new Date(`${todayJst()}T00:00:00.000Z`);
