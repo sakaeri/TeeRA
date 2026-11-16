@@ -2269,7 +2269,7 @@ function AllowedRequestDesireSetting({ membershipId, initial }: { membershipId: 
   const router = useRouter();
   return (
     <div className="rounded-lg border border-border p-3 text-sm">
-      <p className="mb-2 font-semibold">申請できる希望</p>
+      <p className="mb-2 font-semibold">シフト希望の申請</p>
       <div className="grid grid-cols-3 gap-1.5" data-testid="allowed-request-desire">
         {ALLOWED_REQUEST_DESIRE_OPTIONS.map((o) => (
           <button

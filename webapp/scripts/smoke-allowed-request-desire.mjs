@@ -3,7 +3,7 @@ import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 import { loginViaEmail } from "./_lib/login.mjs";
 
-// 会社がスタッフごとに「申請できる希望」（出勤希望と休み希望／出勤希望だけ／休み希望だけ）を決められる。
+// 会社がスタッフごとに「シフト希望の申請」（自由選択／出勤のみ／休みのみ）を決められる。
 // 1種類だけにすると、スタッフの申請画面では選ぶ画面を飛ばして、その希望で申請する。
 
 function log(label, ok) {
