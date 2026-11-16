@@ -1,5 +1,6 @@
 "use client";
 
+import { allowedDesires } from "@/lib/requestDesire";
 import { leadingBlankCount, orderedWeekdays, useMondayFirst } from "@/components/week/WeekStart";
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
@@ -44,7 +45,7 @@ type PendingRequestRow = {
   note?: string | null;
 };
 
-type Company = { id: string; name: string };
+type Company = { id: string; name: string; allowedRequestDesire?: string };
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -609,7 +610,10 @@ function RequestWizard({
   onClose: () => void;
 }) {
   const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
-  const [desire, setDesire] = useState<"WORK" | "OFF">("WORK");
+  // 会社がこのスタッフに出せるようにしている希望（1種類だけなら、選ぶ画面を飛ばす）
+  const desiresFor = (id: string) => allowedDesires(companies.find((c) => c.id === id)?.allowedRequestDesire);
+  const [desire, setDesire] = useState<"WORK" | "OFF">(() => desiresFor(companies[0]?.id ?? "")[0]);
+  const singleDesire = desiresFor(companyId).length === 1;
   const [dates, setDates] = useState<string[]>(initialDate ? [initialDate] : []);
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
@@ -618,7 +622,9 @@ function RequestWizard({
   // 勤務先が1つしかない場合は①のステップを飛ばして②から始める（多くの
   // スタッフは所属先が1つだけなので、わざわざ選ばせる意味が無い）。
   const skipCompanyStep = companies.length <= 1;
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(skipCompanyStep ? 2 : 1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(
+    skipCompanyStep ? (desiresFor(companies[0]?.id ?? "").length === 1 ? 3 : 2) : 1,
+  );
 
   // 申請する月は前後に切り替えられる（開いた時はカレンダーで見ていた月、
   // 日付から開いた時はその日の月）。今月より前には戻れない。選んだ日付は
@@ -704,7 +710,11 @@ function RequestWizard({
             <button
               type="button"
               disabled={!companyId}
-              onClick={() => setStep(2)}
+              onClick={() => {
+                const ds = desiresFor(companyId);
+                if (!ds.includes(desire)) setDesire(ds[0]);
+                setStep(ds.length === 1 ? 3 : 2);
+              }}
               className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
               次へ
@@ -847,13 +857,15 @@ function RequestWizard({
             />
 
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setStep(2)}
-                className="rounded-lg border border-border px-4 py-2 text-sm"
-              >
-                戻る
-              </button>
+              {!(singleDesire && skipCompanyStep) ? (
+                <button
+                  type="button"
+                  onClick={() => setStep(singleDesire ? 1 : 2)}
+                  className="rounded-lg border border-border px-4 py-2 text-sm"
+                >
+                  戻る
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={dates.length === 0}

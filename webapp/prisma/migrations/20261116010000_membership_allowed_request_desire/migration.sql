@@ -1,0 +1,1 @@
+ALTER TABLE "CompanyMembership" ADD COLUMN IF NOT EXISTS "allowedRequestDesire" TEXT NOT NULL DEFAULT 'BOTH';

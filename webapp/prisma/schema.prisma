@@ -241,6 +241,9 @@ model CompanyMembership {
   // にした）。true の場合のみ/staff/*への入場とシフト割当候補への表示を許す。
   canWorkShifts Boolean @default(false)
 
+  // このスタッフが出せるシフト希望の種類（会社が決める）。BOTH=出勤・休みの両方、WORK=出勤希望だけ、OFF=休み希望だけ
+  allowedRequestDesire String @default("BOTH")
+
   // 給与明細（業務委託は支払明細）を電子で受け取ることへの本人の同意（所得税法上、電子交付には同意が要る）。
   // 同意するとスタッフのアプリの「給料明細」で発行済みの明細を見られる
   payslipEConsentAt DateTime?
