@@ -564,8 +564,12 @@ export async function addPlacementRateVersion(params: {
   effectiveFrom: Date;
   createdByUserId: string;
 }) {
-  assertPositiveAmount(params.amount);
-  if (params.holidayAmount != null) assertPositiveAmount(params.holidayAmount);
+  // 依頼主向けの単価は「請求なし」（0円。研修など）にできる。0円のシフトは請求書に載せない
+  const noCharge = Boolean(params.companyRelationshipId) && params.amount === 0;
+  if (!noCharge) {
+    assertPositiveAmount(params.amount);
+    if (params.holidayAmount != null) assertPositiveAmount(params.holidayAmount);
+  }
   const rate = await registerPlacementTaskName({
     companyId: params.companyId,
     companyRelationshipId: params.companyRelationshipId,
@@ -576,7 +580,7 @@ export async function addPlacementRateVersion(params: {
       placementRateId: rate.id,
       wageType: params.wageType,
       amount: params.amount,
-      holidayAmount: params.holidayAmount ?? null,
+      holidayAmount: noCharge ? null : (params.holidayAmount ?? null),
       effectiveFrom: params.effectiveFrom,
       createdByUserId: params.createdByUserId,
     },

@@ -1221,6 +1221,9 @@ function PlacementRatesTab({
   const [amendAmount, setAmendAmount] = useState("");
   const [amendHolidayAmount, setAmendHolidayAmount] = useState("");
   const [amendEffectiveFrom, setAmendEffectiveFrom] = useState(todayJst());
+  // 「請求なし」（研修など。0円として保存し、請求書に載せない）
+  const [amendNoCharge, setAmendNoCharge] = useState(false);
+  const [newNoCharge, setNewNoCharge] = useState(false);
   const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
   const [newTaskNameMode, setNewTaskNameMode] = useState<"pick" | "custom">("custom");
@@ -1234,6 +1237,7 @@ function PlacementRatesTab({
     setShowNewForm(true);
     setNewTaskName("");
     setNewTaskNameMode(knownTaskNames.length > 0 ? "pick" : "custom");
+    setNewNoCharge(false);
   }
 
   const amendingRate = rates.find((r) => r.id === amendingId) ?? null;
@@ -1244,17 +1248,18 @@ function PlacementRatesTab({
     setAmendAmount("");
     setAmendHolidayAmount("");
     setAmendEffectiveFrom(todayJst());
+    setAmendNoCharge(false);
   }
 
   function submitAmend(r: PlacementRate) {
-    if (!amendAmount || Number(amendAmount) <= 0) return;
+    if (!amendNoCharge && (!amendAmount || Number(amendAmount) <= 0)) return;
     startTransition(async () => {
       await addPlacementRateVersionAction({
         companyRelationshipId: relationshipId,
         taskName: r.taskName,
         wageType: amendWageType,
-        amount: Number(amendAmount),
-        holidayAmount: Number(amendHolidayAmount) > 0 ? Number(amendHolidayAmount) : null,
+        amount: amendNoCharge ? 0 : Number(amendAmount),
+        holidayAmount: !amendNoCharge && Number(amendHolidayAmount) > 0 ? Number(amendHolidayAmount) : null,
         effectiveFrom: amendEffectiveFrom,
       });
       setAmendingId(null);
@@ -1275,14 +1280,14 @@ function PlacementRatesTab({
   }
 
   function submitNewTask() {
-    if (!newTaskName.trim() || !newAmount || Number(newAmount) <= 0) return;
+    if (!newTaskName.trim() || (!newNoCharge && (!newAmount || Number(newAmount) <= 0))) return;
     startTransition(async () => {
       await addPlacementRateVersionAction({
         companyRelationshipId: relationshipId,
         taskName: newTaskName.trim(),
         wageType: newWageType,
-        amount: Number(newAmount),
-        holidayAmount: Number(newHolidayAmount) > 0 ? Number(newHolidayAmount) : null,
+        amount: newNoCharge ? 0 : Number(newAmount),
+        holidayAmount: !newNoCharge && Number(newHolidayAmount) > 0 ? Number(newHolidayAmount) : null,
         effectiveFrom: newEffectiveFrom,
       });
       setShowNewForm(false);
@@ -1380,6 +1385,12 @@ function PlacementRatesTab({
               </button>
             </div>
             <div className="flex flex-wrap items-end gap-2">
+              <label className="flex w-full items-center gap-1.5 text-xs font-semibold" data-testid="amend-no-charge">
+                <input type="checkbox" checked={amendNoCharge} onChange={(e) => setAmendNoCharge(e.target.checked)} />
+                請求なし（研修など。請求書に載せません）
+              </label>
+              {!amendNoCharge ? (
+                <>
               <select
                 value={amendWageType}
                 onChange={(e) => setAmendWageType(e.target.value as "HOURLY" | "DAILY" | "MONTHLY")}
@@ -1409,6 +1420,8 @@ function PlacementRatesTab({
                 aria-label="土日祝の金額"
                 className="w-28 rounded-lg border border-border px-2 py-2 text-sm"
               />
+                </>
+              ) : null}
               <label className="flex flex-col gap-0.5 text-xs">
                 <span className="text-muted">開始日</span>
                 <input
@@ -1421,7 +1434,7 @@ function PlacementRatesTab({
             </div>
             <button
               type="button"
-              disabled={pending || !amendAmount || Number(amendAmount) <= 0}
+              disabled={pending || (!amendNoCharge && (!amendAmount || Number(amendAmount) <= 0))}
               onClick={() => submitAmend(amendingRate)}
               className="mt-3 self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
@@ -1497,6 +1510,12 @@ function PlacementRatesTab({
                 </div>
               )}
               <div className="flex flex-wrap items-end gap-2">
+                <label className="flex w-full items-center gap-1.5 text-xs font-semibold" data-testid="new-no-charge">
+                  <input type="checkbox" checked={newNoCharge} onChange={(e) => setNewNoCharge(e.target.checked)} />
+                  請求なし（研修など。請求書に載せません）
+                </label>
+                {!newNoCharge ? (
+                  <>
                 <select
                   value={newWageType}
                   onChange={(e) => setNewWageType(e.target.value as "HOURLY" | "DAILY" | "MONTHLY")}
@@ -1526,6 +1545,8 @@ function PlacementRatesTab({
                   aria-label="土日祝の金額"
                   className="w-28 rounded-lg border border-border px-2 py-2 text-sm"
                 />
+                  </>
+                ) : null}
                 <label className="flex flex-col gap-0.5 text-xs">
                   <span className="text-muted">開始日</span>
                   <input
@@ -1538,7 +1559,7 @@ function PlacementRatesTab({
               </div>
               <button
                 type="button"
-                disabled={pending || !newTaskName.trim() || !newAmount || Number(newAmount) <= 0}
+                disabled={pending || !newTaskName.trim() || (!newNoCharge && (!newAmount || Number(newAmount) <= 0))}
                 onClick={submitNewTask}
                 className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
               >
