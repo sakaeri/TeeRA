@@ -123,6 +123,9 @@ type PendingReportEntry = {
   comment: string | null;
   taskName: string | null;
   isUnscheduled: boolean;
+  workplaceName: string;
+  companyRelationshipId: string | null;
+  workplaceLocked: boolean;
 };
 
 type PendingContractStaff = { userId: string; name: string };
@@ -618,7 +621,7 @@ export function DashboardView({
         />
       ) : null}
       {reportDetail ? (
-        <WorkReportDetailModal entry={reportDetail} onClose={() => setReportDetail(null)} />
+        <WorkReportDetailModal entry={reportDetail} workplaceOptions={contractClients} onClose={() => setReportDetail(null)} />
       ) : null}
       {openPopup === "contracts" ? (
         <PendingContractPopup
@@ -1201,7 +1204,15 @@ function PendingReportsPopup({
   );
 }
 
-function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; onClose: () => void }) {
+function WorkReportDetailModal({
+  entry,
+  workplaceOptions,
+  onClose,
+}: {
+  entry: PendingReportEntry;
+  workplaceOptions: ClientOption[];
+  onClose: () => void;
+}) {
   const [pending, startTransition] = useTransition();
   // 設定＞業務報告タブと同じ3つの操作（承認／スタッフに直してもらう／
   // 時間を直して確認してもらう）をここからも行えるようにする。
@@ -1225,6 +1236,9 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
           {entry.isUnscheduled ? <UnscheduledBadge /> : null}
           {entry.staffName}・{entry.teamName ?? "自社"}・{formatDateJa(entry.date)}
           {entry.taskName ? `・${entry.taskName}` : ""}
+        </p>
+        <p className="-mt-3 mb-4 text-xs text-muted" data-testid="report-workplace">
+          勤務先：{entry.workplaceName}
         </p>
 
         {entry.outcome === "出勤した" ? (
@@ -1268,6 +1282,9 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
               initialClockOut={entry.clockOut}
               initialBreakMinutes={entry.breakMinutes}
               onDone={onClose}
+              workplaceOptions={workplaceOptions}
+              currentRelationshipId={entry.companyRelationshipId}
+              workplaceLocked={entry.workplaceLocked}
             />
             <button
               type="button"

@@ -62,6 +62,7 @@ export default async function StaffTimecardPage({ searchParams }: PageProps<"/st
           companyId: s.companyId,
           companyName: s.company.name,
           workplaceName: s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? null,
+          workplaceChangedFrom: s.workReport?.workplaceChangedFrom ?? null,
           startTime: s.startTime,
           endTime: s.endTime,
           taskName: s.workReport?.taskName ?? s.taskName,

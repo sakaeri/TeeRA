@@ -16,9 +16,19 @@ type Row = {
   clockOutTime: string | null;
   breakMinutes: number;
   isUnscheduled: boolean;
+  workplaceName?: string;
+  companyRelationshipId?: string | null;
+  workplaceLocked?: boolean;
 };
 
-export function WorkReportsQueue({ reports }: { reports: Row[] }) {
+export function WorkReportsQueue({
+  reports,
+  workplaceOptions,
+}: {
+  reports: Row[];
+  // 「時間を直して確認してもらう」で勤務先も選び直せるようにする選択肢（社内と自社の依頼主）
+  workplaceOptions?: { id: string; name: string }[];
+}) {
   const [pending, startTransition] = useTransition();
   const [correctingId, setCorrectingId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
@@ -71,6 +81,7 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
                 </div>
                 <p className="mt-0.5 text-sm text-muted">
                   {r.date}
+                  {r.workplaceName ? <span className="ml-2">{r.workplaceName}</span> : null}
                   {r.taskName ? <span className="ml-2">{r.taskName}</span> : null}
                 </p>
                 {worked ? (
@@ -140,6 +151,9 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
               initialClockOut={correctingReport.clockOutTime}
               initialBreakMinutes={correctingReport.breakMinutes}
               onDone={() => setCorrectingId(null)}
+              workplaceOptions={workplaceOptions}
+              currentRelationshipId={correctingReport.companyRelationshipId ?? null}
+              workplaceLocked={correctingReport.workplaceLocked}
             />
           </div>
         </div>

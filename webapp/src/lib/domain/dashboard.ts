@@ -260,7 +260,7 @@ function formatJstTime(date: Date) {
   }).format(date);
 }
 
-export function computePendingReportEntries(data: DashboardData) {
+export function computePendingReportEntries(data: DashboardData, companyId?: string) {
   return data.pendingReports.map((r) => ({
     id: r.id,
     teamKey: r.shift.teamId ?? "none",
@@ -281,6 +281,12 @@ export function computePendingReportEntries(data: DashboardData) {
     comment: r.comment,
     taskName: r.taskName ?? r.shift.taskName,
     isUnscheduled: r.shift.createdVia === "STAFF_REPORT",
+    workplaceName: r.shift.companyRelationship
+      ? (r.shift.companyRelationship.clientCompany?.name ?? r.shift.companyRelationship.proxyName ?? "依頼主")
+      : "社内",
+    companyRelationshipId: r.shift.companyRelationshipId,
+    // 依頼主のオーダーから入ったシフトや、派遣会社と共有しているシフトは勤務先を変えられない
+    workplaceLocked: Boolean(r.shift.publicRecruitmentId) || (companyId !== undefined && r.shift.companyId !== companyId),
   }));
 }
 

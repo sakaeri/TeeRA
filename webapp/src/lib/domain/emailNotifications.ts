@@ -663,6 +663,21 @@ export async function notifyStaffShiftReleased(params: { staffUserId: string; da
   });
 }
 
+// 勤務先を振り替えた（元の勤務先がキャンセルになった等）ことをスタッフ本人に知らせる
+export async function notifyStaffWorkplaceChanged(params: {
+  staffUserId: string;
+  date: Date;
+  fromName: string;
+  toName: string;
+  timeLabel: string;
+}) {
+  await sendPushToUser(params.staffUserId, {
+    title: "勤務先が変わりました",
+    body: `${params.date.toISOString().slice(0, 10)}：${params.fromName} → ${params.toName}（${params.timeLabel}）`,
+    url: "/staff",
+  });
+}
+
 const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
 
 // シフトの出勤時間が決まった・変わったことをスタッフ本人に知らせる。見逃すと
