@@ -392,6 +392,11 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
           <p className="text-sm">
             企業が打刻内容を修正しました。内容を確認してください。
           </p>
+          {shift.workplaceChangedFrom ? (
+            <p className="text-sm font-semibold" data-testid="workplace-changed">
+              勤務先：{shift.workplaceChangedFrom} → {shift.workplaceName ?? "社内"}
+            </p>
+          ) : null}
           <p className="text-sm text-muted">
             {shift.clockInTime ?? "--:--"}〜{shift.clockOutTime ?? "--:--"}（休憩{shift.breakMinutes}分／実働{" "}
             {(shift.computedMinutes / 60).toFixed(1)} 時間）

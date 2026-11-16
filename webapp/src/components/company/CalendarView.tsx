@@ -20,6 +20,8 @@ import {
   saveRecruitmentPublicDraftAction,
   assignStaffToRecruitmentAction,
   cancelShiftAction,
+  listTransferTargetsAction,
+  transferShiftAction,
   previewShiftCancellationAction,
   updateShiftTimeAction,
   bulkUpdateShiftTimesAction,
@@ -2992,12 +2994,34 @@ function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName:
   const [fee, setFee] = useState("0");
   const [handling, setHandling] = useState<"HOLD" | "RELEASE">("HOLD");
   const [notifyStaff, setNotifyStaff] = useState(true);
+  // 「別の勤務先に振り替える」：元のシフトは解除と同じ扱いで解除し、同じ日に別の勤務先のシフトを作る
+  const [transfer, setTransfer] = useState(false);
+  const [targets, setTargets] = useState<Awaited<ReturnType<typeof listTransferTargetsAction>> | null>(null);
+  const [transferTo, setTransferTo] = useState<string | null>(null);
+  const [transferStart, setTransferStart] = useState("09:00");
+  const [transferEnd, setTransferEnd] = useState("18:00");
+  const [transferUndecided, setTransferUndecided] = useState(false);
+  function chooseTransfer(on: boolean) {
+    setTransfer(on);
+    if (on && !targets) {
+      listTransferTargetsAction(shiftId)
+        .then((t) => {
+          setTargets(t);
+          setTransferStart(t.startTime ?? "09:00");
+          setTransferEnd(t.endTime ?? "18:00");
+          setTransferUndecided(t.isUndecided);
+        })
+        .catch(() => setError("勤務先の一覧を取得できませんでした。"));
+    }
+  }
 
   function start() {
     setOpen(true);
     setError(null);
     setReason(null);
     setPreview(null);
+    setTransfer(false);
+    setTransferTo(null);
     startTransition(async () => {
       try {
         const p = await previewShiftCancellationAction(shiftId);
@@ -3018,10 +3042,30 @@ function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName:
 
   const isHeld = preview?.status === "ON_HOLD";
   const needsReason = Boolean(preview?.isClientShift) || isHeld;
-  const releasing = needsReason ? reason === "OWN" || handling === "RELEASE" : true;
+  const releasing = !transfer && (needsReason ? reason === "OWN" || handling === "RELEASE" : true);
+  const transferReady =
+    transfer && transferTo !== null && (transferUndecided || (Boolean(transferStart) && Boolean(transferEnd) && transferEnd > transferStart));
 
   function confirm() {
     setError(null);
+    if (transfer) {
+      startTransition(async () => {
+        const result = await transferShiftAction(shiftId, {
+          reason: needsReason ? (reason ?? undefined) : "OWN",
+          feeAmount: reason === "CLIENT" ? Number(fee) || 0 : undefined,
+          companyRelationshipId: transferTo ?? "",
+          startTime: transferUndecided ? null : transferStart,
+          endTime: transferUndecided ? null : transferEnd,
+          isUndecided: transferUndecided,
+        });
+        if (result.status === "error") {
+          setError(result.reason);
+          return;
+        }
+        setOpen(false);
+      });
+      return;
+    }
     startTransition(async () => {
       const result = await cancelShiftAction(
         shiftId,
@@ -3105,14 +3149,116 @@ function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName:
                   <fieldset className="flex flex-col gap-1 text-xs">
                     <legend className="mb-1 font-semibold text-muted">スタッフの扱い</legend>
                     <label className="flex items-center gap-2">
-                      <input type="radio" name={`handling-${shiftId}`} checked={handling === "HOLD"} onChange={() => setHandling("HOLD")} />
+                      <input
+                        type="radio"
+                        name={`handling-${shiftId}`}
+                        checked={!transfer && handling === "HOLD"}
+                        onChange={() => {
+                          setHandling("HOLD");
+                          chooseTransfer(false);
+                        }}
+                      />
                       {isHeld ? "調整中のまま（あとで振り替える）" : "調整中にしておく（あとで振り替えるか休みにするかを決める）"}
                     </label>
                     <label className="flex items-center gap-2">
-                      <input type="radio" name={`handling-${shiftId}`} checked={handling === "RELEASE"} onChange={() => setHandling("RELEASE")} />
+                      <input
+                        type="radio"
+                        name={`handling-${shiftId}`}
+                        checked={!transfer && handling === "RELEASE"}
+                        onChange={() => {
+                          setHandling("RELEASE");
+                          chooseTransfer(false);
+                        }}
+                      />
                       休みにする
                     </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name={`handling-${shiftId}`}
+                        checked={transfer}
+                        onChange={() => chooseTransfer(true)}
+                        data-testid="transfer-radio"
+                      />
+                      別の勤務先に振り替える
+                    </label>
                   </fieldset>
+                </div>
+              ) : null}
+
+              {!needsReason || reason === "OWN" ? (
+                <fieldset className="flex flex-col gap-1 text-xs">
+                  <legend className="mb-1 font-semibold text-muted">スタッフの扱い</legend>
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name={`after-${shiftId}`} checked={!transfer} onChange={() => chooseTransfer(false)} />
+                    休みにする
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name={`after-${shiftId}`}
+                      checked={transfer}
+                      onChange={() => chooseTransfer(true)}
+                      data-testid="transfer-radio"
+                    />
+                    別の勤務先に振り替える
+                  </label>
+                </fieldset>
+              ) : null}
+
+              {transfer ? (
+                <div className="flex flex-col gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs" data-testid="transfer-form">
+                  {!targets ? (
+                    <p className="text-muted">読み込み中…</p>
+                  ) : (
+                    <>
+                      <label className="flex flex-col gap-0.5">
+                        <span className="text-muted">振り替える勤務先</span>
+                        <select
+                          value={transferTo ?? ""}
+                          onChange={(e) => setTransferTo(e.target.value === "__none" ? null : e.target.value)}
+                          className="rounded-lg border border-border bg-white px-2 py-1.5 text-sm"
+                          data-testid="transfer-to"
+                        >
+                          {transferTo === null ? <option value="__none">選んでください</option> : null}
+                          {targets.options
+                            .filter((o) => o.id !== targets.currentRelationshipId)
+                            .map((o) => (
+                              <option key={o.id || "inhouse"} value={o.id}>
+                                {o.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <label className="flex items-center gap-1.5">
+                        <input type="checkbox" checked={transferUndecided} onChange={(e) => setTransferUndecided(e.target.checked)} />
+                        時間未定
+                      </label>
+                      {!transferUndecided ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="flex flex-col gap-0.5">
+                            <span className="text-muted">開始</span>
+                            <input
+                              type="time"
+                              value={transferStart}
+                              onChange={(e) => setTransferStart(e.target.value)}
+                              className="rounded-lg border border-border bg-white px-2 py-1.5 text-sm"
+                            />
+                          </label>
+                          <label className="flex flex-col gap-0.5">
+                            <span className="text-muted">終了</span>
+                            <input
+                              type="time"
+                              value={transferEnd}
+                              onChange={(e) => setTransferEnd(e.target.value)}
+                              className="rounded-lg border border-border bg-white px-2 py-1.5 text-sm"
+                            />
+                          </label>
+                        </div>
+                      ) : null}
+                      <p className="text-muted">元のシフトは解除され、同じ日に選んだ勤務先のシフトが作られます。スタッフに「勤務先が変わりました」と通知します。</p>
+                    </>
+                  )}
                 </div>
               ) : null}
 
@@ -3131,11 +3277,18 @@ function CancelShiftButton({ shiftId, staffName }: { shiftId: string; staffName:
             </button>
             <button
               type="button"
-              disabled={pending || !preview || (needsReason && reason === null)}
+              disabled={pending || !preview || (needsReason && reason === null) || (transfer && !transferReady)}
               onClick={confirm}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              className={`rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 ${transfer ? "bg-primary" : "bg-red-600"}`}
+              data-testid="cancel-shift-confirm"
             >
-              {needsReason && reason === "CLIENT" && handling === "HOLD" ? (isHeld ? "調整中のままにする" : "調整中にする") : "解除する"}
+              {transfer
+                ? "解除して振り替える"
+                : needsReason && reason === "CLIENT" && handling === "HOLD"
+                  ? isHeld
+                    ? "調整中のままにする"
+                    : "調整中にする"
+                  : "解除する"}
             </button>
           </div>
         </Modal>

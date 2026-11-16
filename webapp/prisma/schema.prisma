@@ -1061,6 +1061,8 @@ model WorkReport {
   // NEEDS_CONFIRMATION状態のときのみ意味を持つ。
   correctedByUserId    String?
   correctedAt          DateTime?
+  // 会社が「時間を直して確認してもらう」で勤務先も変えた時の、変更前の勤務先名（スタッフの確認画面に出す）
+  workplaceChangedFrom String?
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 

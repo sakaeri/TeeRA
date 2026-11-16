@@ -158,6 +158,11 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
             clockOutTime: r.clockOut ? formatJstTime(r.clockOut) : null,
             breakMinutes: r.breakMinutes,
             isUnscheduled: r.shift.createdVia === "STAFF_REPORT",
+            workplaceName: r.shift.companyRelationship
+              ? (r.shift.companyRelationship.clientCompany?.name ?? r.shift.companyRelationship.proxyName ?? "依頼主")
+              : "社内",
+            companyRelationshipId: r.shift.companyRelationshipId,
+            workplaceLocked: Boolean(r.shift.publicRecruitmentId) || r.shift.companyId !== membership.companyId,
           };
         })}
       />

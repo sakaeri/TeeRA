@@ -123,6 +123,9 @@ type PendingReportEntry = {
   comment: string | null;
   taskName: string | null;
   isUnscheduled: boolean;
+  workplaceName: string;
+  companyRelationshipId: string | null;
+  workplaceLocked: boolean;
 };
 
 type PendingContractStaff = { userId: string; name: string };
@@ -618,7 +621,7 @@ export function DashboardView({
         />
       ) : null}
       {reportDetail ? (
-        <WorkReportDetailModal entry={reportDetail} onClose={() => setReportDetail(null)} />
+        <WorkReportDetailModal entry={reportDetail} workplaceOptions={contractClients} onClose={() => setReportDetail(null)} />
       ) : null}
       {openPopup === "contracts" ? (
         <PendingContractPopup
@@ -1201,7 +1204,15 @@ function PendingReportsPopup({
   );
 }
 
-function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; onClose: () => void }) {
+function WorkReportDetailModal({
+  entry,
+  workplaceOptions,
+  onClose,
+}: {
+  entry: PendingReportEntry;
+  workplaceOptions: ClientOption[];
+  onClose: () => void;
+}) {
   const [pending, startTransition] = useTransition();
   // 設定＞業務報告タブと同じ3つの操作（承認／スタッフに直してもらう／
   // 時間を直して確認してもらう）をここからも行えるようにする。
@@ -1221,11 +1232,14 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
             ✕
           </button>
         </div>
-        <p className="mb-4 text-xs text-muted">
-          {entry.isUnscheduled ? <UnscheduledBadge /> : null}
-          {entry.staffName}・{entry.teamName ?? "自社"}・{formatDateJa(entry.date)}
-          {entry.taskName ? `・${entry.taskName}` : ""}
-        </p>
+        <div className="mb-4 flex flex-col gap-0.5 text-xs text-muted">
+          <p>
+            {entry.isUnscheduled ? <UnscheduledBadge /> : null}
+            {entry.staffName}・{entry.teamName ?? "自社"}・{formatDateJa(entry.date)}
+            {entry.taskName ? `・${entry.taskName}` : ""}
+          </p>
+          <p data-testid="report-workplace">勤務先：{entry.workplaceName}</p>
+        </div>
 
         {entry.outcome === "出勤した" ? (
           <>
@@ -1268,11 +1282,14 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
               initialClockOut={entry.clockOut}
               initialBreakMinutes={entry.breakMinutes}
               onDone={onClose}
+              workplaceOptions={workplaceOptions}
+              currentRelationshipId={entry.companyRelationshipId}
+              workplaceLocked={entry.workplaceLocked}
             />
             <button
               type="button"
               onClick={() => setMode("choose")}
-              className="mt-2 w-full rounded-lg border border-border px-4 py-2 text-sm text-foreground/70"
+              className="mt-2 w-full py-1.5 text-xs text-muted underline"
             >
               戻る
             </button>
@@ -1317,7 +1334,7 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
             </div>
           </div>
         ) : (
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-5 flex flex-col gap-2">
             <button
               type="button"
               disabled={pending}
@@ -1331,28 +1348,30 @@ function WorkReportDetailModal({ entry, onClose }: { entry: PendingReportEntry; 
                   onClose();
                 })
               }
-              className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+              className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
               承認する
             </button>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => setMode("reject")}
-              className="flex-1 rounded-lg border border-border px-4 py-2 text-sm text-foreground/70 disabled:opacity-60"
-            >
-              スタッフに直してもらう
-            </button>
-            {entry.outcome === "出勤した" ? (
+            <div className={`grid gap-2 ${entry.outcome === "出勤した" ? "grid-cols-2" : "grid-cols-1"}`}>
+              {entry.outcome === "出勤した" ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => setMode("correct")}
+                  className="rounded-lg border border-primary px-2 py-2.5 text-xs font-semibold text-primary disabled:opacity-60"
+                >
+                  時間・勤務先を直す
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => setMode("correct")}
-                className="w-full rounded-lg border border-border px-4 py-2 text-sm text-foreground/70 disabled:opacity-60"
+                onClick={() => setMode("reject")}
+                className="rounded-lg border border-border px-2 py-2.5 text-xs font-semibold text-foreground/70 disabled:opacity-60"
               >
-                時間を直して確認してもらう
+                スタッフに直してもらう
               </button>
-            ) : null}
+            </div>
           </div>
         )}
       </div>

@@ -70,7 +70,7 @@ try {
   let adminBody = await admin.textContent("body");
   log("管理者に承認待ちの報告が見える", adminBody.includes("修正確認太郎"));
 
-  await admin.getByRole("button", { name: "時間を直して確認してもらう" }).click();
+  await admin.getByRole("button", { name: "時間・勤務先を直す" }).click();
   await admin.waitForTimeout(200);
   const popup = admin.locator("div.fixed.inset-0.z-40").last();
   const clockInInput = popup.locator("label", { hasText: "出勤時刻" }).locator("input");
@@ -153,7 +153,7 @@ try {
   await admin.waitForTimeout(400);
   await admin.getByRole("button", { name: "確認する" }).click();
   await admin.waitForTimeout(400);
-  await admin.getByRole("button", { name: "時間を直して確認してもらう" }).click();
+  await admin.getByRole("button", { name: "時間・勤務先を直す" }).click();
   await admin.waitForTimeout(200);
   const dashModal = admin.locator("div.fixed.inset-0.z-30").last();
   await dashModal.locator("label", { hasText: "休憩" }).locator("input").fill("30");

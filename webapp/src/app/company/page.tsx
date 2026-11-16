@@ -76,7 +76,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
   const autoTodos = computeAutoTodoItems(dashboardData, pendingShipments);
   const shortageEntries = computeShortageEntries(dashboardData);
   const unconfirmedShiftEntries = computeUnconfirmedShiftEntries(dashboardData);
-  const pendingReportEntries = computePendingReportEntries(dashboardData);
+  const pendingReportEntries = computePendingReportEntries(dashboardData, membership.companyId);
   const pendingContractStaff = dashboardData.pendingContractStaff;
   const expiringContractStaff = dashboardData.expiringContractStaff;
   const duePaidLeaveGrants = dashboardData.duePaidLeaveGrants;

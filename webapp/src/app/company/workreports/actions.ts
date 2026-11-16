@@ -25,6 +25,7 @@ const WORKREPORT_ERROR_LABEL: Record<string, string> = {
   forbidden: "権限がありません",
   not_pending_confirmation: "この業務報告は確認待ちの状態ではありません",
   not_pending: "この業務報告は既に処理されています。画面を更新してください。",
+  workplace_locked: "このシフトは勤務先を変えられません（依頼主のオーダーから入ったシフトなど）",
 };
 
 export async function approveWorkReportAction(workReportId: string) {
@@ -71,11 +72,35 @@ export async function correctWorkReportAction(input: {
   clockIn: string; // "HH:MM"
   clockOut: string; // "HH:MM"
   breakMinutes: number;
+  // 勤務先も変える時（""＝社内）。省略すれば変えない
+  companyRelationshipId?: string;
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   try {
     const report = await assertCanApprove(input.workReportId, membership.companyId, null);
     if (!canManage(membership, report.shift.teamId)) throw new Error("forbidden");
+
+    // 勤務先の変更：自社名義で、依頼主のオーダーから入ったものでないシフトだけ。行き先は社内か自社の依頼主
+    let workplaceChange: { shiftId: string; companyRelationshipId: string | null; fromName: string } | undefined;
+    const newRelId = input.companyRelationshipId === undefined ? undefined : input.companyRelationshipId || null;
+    if (newRelId !== undefined && newRelId !== (report.shift.companyRelationshipId ?? null)) {
+      const shift = await prisma.shift.findUniqueOrThrow({
+        where: { id: report.shift.id },
+        include: { companyRelationship: { include: { clientCompany: true } } },
+      });
+      if (shift.companyId !== membership.companyId || shift.publicRecruitmentId) throw new Error("workplace_locked");
+      if (newRelId) {
+        const rel = await prisma.companyRelationship.findUnique({ where: { id: newRelId } });
+        if (!rel || rel.agencyCompanyId !== membership.companyId) throw new Error("forbidden");
+      }
+      workplaceChange = {
+        shiftId: shift.id,
+        companyRelationshipId: newRelId,
+        fromName: shift.companyRelationship
+          ? (shift.companyRelationship.clientCompany?.name ?? shift.companyRelationship.proxyName ?? "依頼主")
+          : "社内",
+      };
+    }
 
     // 打刻時刻はJSTの壁時計として入力される（このアプリの日付/時刻はすべて
     // JST前提）。+09:00オフセットを明示してUTCのDateインスタンスに変換する。
@@ -86,6 +111,7 @@ export async function correctWorkReportAction(input: {
       clockIn: new Date(`${day}T${input.clockIn}:00.000+09:00`),
       clockOut: new Date(`${day}T${input.clockOut}:00.000+09:00`),
       breakMinutes: input.breakMinutes,
+      workplaceChange,
     });
     revalidatePath("/company/settings");
     revalidatePath("/company");

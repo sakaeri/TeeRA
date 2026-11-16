@@ -267,7 +267,7 @@ export async function listPendingReportsForCompany(companyId: string) {
         ],
       },
     },
-    include: { shift: { include: { companyRelationship: true, team: true } }, staff: true },
+    include: { shift: { include: { companyRelationship: { include: { clientCompany: true } }, team: true } }, staff: true },
     orderBy: { createdAt: "asc" },
   });
 }
@@ -442,6 +442,8 @@ export async function correctAndReturnWorkReport(params: {
   clockIn: Date;
   clockOut: Date;
   breakMinutes: number;
+  // 勤務先も変える時（新しい勤務先＝nullなら社内、変更前の勤務先名）
+  workplaceChange?: { shiftId: string; companyRelationshipId: string | null; fromName: string };
 }) {
   const rawMinutes = Math.round((params.clockOut.getTime() - params.clockIn.getTime()) / 60000);
   const computedMinutes = Math.max(rawMinutes - params.breakMinutes, 0);
@@ -457,9 +459,19 @@ export async function correctAndReturnWorkReport(params: {
       approvalStatus: "NEEDS_CONFIRMATION",
       correctedByUserId: params.correctedByUserId,
       correctedAt: new Date(),
+      workplaceChangedFrom: params.workplaceChange ? params.workplaceChange.fromName : null,
     },
   });
   if (result.count === 0) throw new Error("not_pending");
+  if (params.workplaceChange) {
+    await prisma.shift.update({
+      where: { id: params.workplaceChange.shiftId },
+      data: {
+        companyRelationshipId: params.workplaceChange.companyRelationshipId,
+        source: params.workplaceChange.companyRelationshipId ? "CLIENT" : "INHOUSE",
+      },
+    });
+  }
 }
 
 // スタッフが企業側の修正内容に「これで合っています」と確認する —

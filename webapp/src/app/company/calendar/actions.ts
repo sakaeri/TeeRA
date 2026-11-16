@@ -31,6 +31,7 @@ import {
   notifyStaffShiftTimeChanged,
   notifyAgencyOfClientTimeChanges,
   notifyRecruitmentAnnouncement,
+  notifyStaffWorkplaceChanged,
 } from "@/lib/domain/emailNotifications";
 import type { WageType } from "@/generated/prisma/enums";
 
@@ -427,6 +428,122 @@ export async function cancelShiftAction(
     }
     throw error;
   }
+  revalidatePath("/company/calendar");
+  revalidatePath("/company");
+  return { status: "ok" as const };
+}
+
+// 解除画面の「別の勤務先に振り替える」で選べる勤務先（社内と、自社の依頼主）と、元のシフトの時間
+export async function listTransferTargetsAction(shiftId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const shift = await prisma.shift.findUniqueOrThrow({ where: { id: shiftId } });
+  if (shift.companyId !== membership.companyId || !canManageShifts(membership, shift.teamId)) throw new Error("forbidden");
+  const clients = await prisma.companyRelationship.findMany({
+    where: { agencyCompanyId: membership.companyId, status: "ACTIVE" },
+    include: { clientCompany: true },
+    orderBy: { createdAt: "asc" },
+  });
+  return {
+    currentRelationshipId: shift.companyRelationshipId ?? "",
+    startTime: shift.startTime,
+    endTime: shift.endTime,
+    isUndecided: shift.isUndecided || shift.isAllDay,
+    options: [
+      { id: "", name: "社内" },
+      ...clients.map((c) => ({ id: c.id, name: c.clientCompany?.name ?? c.proxyName ?? "依頼主" })),
+    ],
+  };
+}
+
+const TRANSFER_ERROR_LABEL: Record<string, string> = {
+  ...CANCEL_SHIFT_ERROR_LABEL,
+  same_workplace: "今と同じ勤務先です。別の勤務先を選んでください。",
+  conflict: "その時間には、このスタッフの別のシフトがあります。",
+  invalid_time: "開始時刻と終了時刻を入力してください。",
+  invalid_workplace: "選べない勤務先です。",
+};
+
+// 「別の勤務先に振り替える」：元のシフトは解除と同じ扱い（依頼主都合ならキャンセル料を記録）で解除し、
+// 同じ日に新しい勤務先のシフトを作る。スタッフには「勤務先が変わりました」と知らせる
+export async function transferShiftAction(
+  shiftId: string,
+  input: {
+    reason?: "CLIENT" | "OWN";
+    feeAmount?: number;
+    companyRelationshipId: string;
+    startTime: string | null;
+    endTime: string | null;
+    isUndecided: boolean;
+  },
+) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  const shift = await prisma.shift.findUniqueOrThrow({
+    where: { id: shiftId },
+    include: { companyRelationship: { include: { clientCompany: true } } },
+  });
+  const fail = (code: string) => ({ status: "error" as const, reason: TRANSFER_ERROR_LABEL[code] ?? "振り替えできませんでした。" });
+  if (shift.companyId !== membership.companyId || !canManageShifts(membership, shift.teamId)) return fail("forbidden");
+  const newRelId = input.companyRelationshipId || null;
+  if (newRelId === (shift.companyRelationshipId ?? null)) return fail("same_workplace");
+  let newRel: { agencyCompanyId: string | null; status: string; proxyName: string | null; clientCompany: { name: string } | null } | null = null;
+  if (newRelId) {
+    newRel = await prisma.companyRelationship.findUnique({ where: { id: newRelId }, include: { clientCompany: true } });
+    if (!newRel || newRel.agencyCompanyId !== membership.companyId || newRel.status !== "ACTIVE") return fail("invalid_workplace");
+  }
+  if (!input.isUndecided && (!input.startTime || !input.endTime)) return fail("invalid_time");
+
+  // 先に重なりを確かめる（元のシフトは解除するので除く）。重なりがあれば何も変えない
+  const conflicts = (
+    await findConflictingShifts(prisma, {
+      staffUserId: shift.staffUserId,
+      date: shift.date,
+      startTime: input.isUndecided ? null : input.startTime,
+      endTime: input.isUndecided ? null : input.endTime,
+      isAllDay: false,
+      isUndecided: input.isUndecided,
+    })
+  ).filter((c) => c.id !== shift.id);
+  if (conflicts.length > 0) return fail("conflict");
+
+  try {
+    await cancelShift({
+      shiftId,
+      actorCompanyId: membership.companyId,
+      actorUserId: userId,
+      clientCancellationFee: input.reason === "CLIENT" ? (input.feeAmount ?? 0) : undefined,
+      holdForReassignment: false,
+      reasonGiven: input.reason !== undefined,
+    });
+  } catch (error) {
+    if (error instanceof Error) return fail(error.message);
+    throw error;
+  }
+  const created = await createAssignedShift({
+    companyId: membership.companyId,
+    teamId: shift.teamId ?? undefined,
+    staffUserId: shift.staffUserId,
+    date: shift.date,
+    startTime: input.isUndecided ? null : input.startTime,
+    endTime: input.isUndecided ? null : input.endTime,
+    isAllDay: false,
+    isUndecided: input.isUndecided,
+    companyRelationshipId: newRelId ?? undefined,
+    confirmedByUserId: userId,
+    createdByCompanyId: membership.companyId,
+    confirmedDespiteOffRequest: true,
+  });
+  if (created.status !== "created") return fail("conflict");
+
+  const nameOf = (rel: { clientCompany?: { name: string } | null; proxyName?: string | null } | null) =>
+    rel ? (rel.clientCompany?.name ?? rel.proxyName ?? "依頼主") : "社内";
+  await notifyStaffWorkplaceChanged({
+    staffUserId: shift.staffUserId,
+    date: shift.date,
+    fromName: nameOf(shift.companyRelationship),
+    toName: nameOf(newRel),
+    timeLabel: input.isUndecided ? "時間未定" : `${input.startTime}〜${input.endTime}`,
+  }).catch((err) => console.error("[notify] workplace changed failed", err));
+
   revalidatePath("/company/calendar");
   revalidatePath("/company");
   return { status: "ok" as const };

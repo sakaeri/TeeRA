@@ -16,9 +16,19 @@ type Row = {
   clockOutTime: string | null;
   breakMinutes: number;
   isUnscheduled: boolean;
+  workplaceName?: string;
+  companyRelationshipId?: string | null;
+  workplaceLocked?: boolean;
 };
 
-export function WorkReportsQueue({ reports }: { reports: Row[] }) {
+export function WorkReportsQueue({
+  reports,
+  workplaceOptions,
+}: {
+  reports: Row[];
+  // 「時間を直して確認してもらう」で勤務先も選び直せるようにする選択肢（社内と自社の依頼主）
+  workplaceOptions?: { id: string; name: string }[];
+}) {
   const [pending, startTransition] = useTransition();
   const [correctingId, setCorrectingId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
@@ -71,6 +81,7 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
                 </div>
                 <p className="mt-0.5 text-sm text-muted">
                   {r.date}
+                  {r.workplaceName ? <span className="ml-2">{r.workplaceName}</span> : null}
                   {r.taskName ? <span className="ml-2">{r.taskName}</span> : null}
                 </p>
                 {worked ? (
@@ -112,7 +123,7 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
                         onClick={() => setCorrectingId(r.id)}
                         className="rounded-lg border border-border px-3 py-2 text-sm text-foreground/70 disabled:opacity-60"
                       >
-                        時間を直して確認してもらう
+                        時間・勤務先を直す
                       </button>
                     ) : null}
                   </div>
@@ -128,7 +139,7 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">
-                時間を直して確認してもらう（{correctingReport.staffName} — {correctingReport.date}）
+                時間・勤務先を直す（{correctingReport.staffName} — {correctingReport.date}）
               </h4>
               <button type="button" onClick={() => setCorrectingId(null)} aria-label="閉じる" className="text-muted hover:text-primary">
                 ✕
@@ -140,6 +151,9 @@ export function WorkReportsQueue({ reports }: { reports: Row[] }) {
               initialClockOut={correctingReport.clockOutTime}
               initialBreakMinutes={correctingReport.breakMinutes}
               onDone={() => setCorrectingId(null)}
+              workplaceOptions={workplaceOptions}
+              currentRelationshipId={correctingReport.companyRelationshipId ?? null}
+              workplaceLocked={correctingReport.workplaceLocked}
             />
           </div>
         </div>
