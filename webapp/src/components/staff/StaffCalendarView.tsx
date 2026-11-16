@@ -155,6 +155,7 @@ export function StaffCalendarView({
   shifts,
   pendingRequests,
   reportShifts = [],
+  bulkReportCount = 0,
 }: {
   year: number;
   month: number;
@@ -162,6 +163,7 @@ export function StaffCalendarView({
   shifts: ShiftRow[];
   pendingRequests: PendingRequestRow[];
   reportShifts?: ReportShiftRow[];
+  bulkReportCount?: number;
 }) {
   const [showWizard, setShowWizard] = useState(false);
   // 「＋」で開く、何をするか選ぶメニュー（業務報告／シフト希望）
@@ -386,6 +388,7 @@ export function StaffCalendarView({
       {showMenu ? (
         <PlusMenu
           reportShifts={reportShifts}
+          bulkReportCount={bulkReportCount}
           onRequest={() => {
             setShowMenu(false);
             setShowWizard(true);
@@ -1022,10 +1025,12 @@ function CancelRequestButton({
 // 「＋」で開くメニュー。業務報告（報告がまだのシフト・シフト外の勤務）と、シフト希望の申請を選ぶ
 function PlusMenu({
   reportShifts,
+  bulkReportCount,
   onRequest,
   onClose,
 }: {
   reportShifts: ReportShiftRow[];
+  bulkReportCount: number;
   onRequest: () => void;
   onClose: () => void;
 }) {
@@ -1033,6 +1038,16 @@ function PlusMenu({
     <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/30 p-4 pb-28" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()} data-testid="plus-menu">
         <p className="mb-2 text-sm font-semibold text-primary">業務報告をする</p>
+        {/* 前日以前の未提出が2件以上なら、まとめて報告へ */}
+        {bulkReportCount >= 2 ? (
+          <Link
+            href="/staff/timecard?bulk=1"
+            className="mb-2 block rounded-lg bg-primary px-3 py-2 text-center text-sm font-semibold text-primary-foreground"
+            data-testid="plus-bulk-report"
+          >
+            まとめて報告（{bulkReportCount}件）
+          </Link>
+        ) : null}
         {reportShifts.length > 0 ? (
           <ul className="mb-2 flex flex-col gap-1.5">
             {reportShifts.map((s) => {
