@@ -636,6 +636,16 @@ function BulkReportModal({ shifts, onClose }: { shifts: ShiftRow[]; onClose: () 
   );
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // 「全部の日を同じ時間にする」：1回入れて、出勤の行すべてに反映する
+  const [allIn, setAllIn] = useState("");
+  const [allOut, setAllOut] = useState("");
+  const [allBreak, setAllBreak] = useState("0");
+  const allInvalid = !allIn || !allOut || allOut <= allIn;
+  function applyToAll() {
+    setRows((prev) =>
+      prev.map((r) => (r.kind === "WORKED" ? { ...r, clockIn: allIn, clockOut: allOut, breakMinutes: allBreak } : r)),
+    );
+  }
   const byId = new Map(shifts.map((s) => [s.id, s]));
   const update = (i: number, patch: Partial<Row>) => setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const included = rows.filter((r) => r.kind !== "LATER");
@@ -692,8 +702,40 @@ function BulkReportModal({ shifts, onClose }: { shifts: ShiftRow[]; onClose: () 
           </button>
         </div>
         <p className="mb-3 text-xs text-muted">
-          予定の時刻が入っています。実際と違う日だけ直してください。欠勤・勤務先キャンセルは▼で選べます（「あとで」は報告せずに残します）。
+          予定の時刻が入っています。時間がそろっている時は下の「全部の日を同じ時間にする」が便利です。欠勤・勤務先キャンセルは▼で選べます（「あとで」は報告せずに残します）。
         </p>
+        <div className="mb-3 rounded-xl bg-background p-2.5 text-xs" data-testid="bulk-report-all">
+          <p className="mb-1.5 font-semibold text-primary">全部の日を同じ時間にする</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            <label className="flex flex-col gap-0.5">
+              <span className="text-muted">出勤</span>
+              <input type="time" value={allIn} onChange={(e) => setAllIn(e.target.value)} className="rounded-lg border border-border bg-white px-1.5 py-1" />
+            </label>
+            <label className="flex flex-col gap-0.5">
+              <span className="text-muted">退勤</span>
+              <input type="time" value={allOut} onChange={(e) => setAllOut(e.target.value)} className="rounded-lg border border-border bg-white px-1.5 py-1" />
+            </label>
+            <label className="flex flex-col gap-0.5">
+              <span className="text-muted">休憩（分）</span>
+              <input
+                type="number"
+                min={0}
+                value={allBreak}
+                onChange={(e) => setAllBreak(e.target.value)}
+                className="rounded-lg border border-border bg-white px-1.5 py-1"
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            disabled={allInvalid}
+            onClick={applyToAll}
+            className="mt-2 w-full rounded-lg border border-primary bg-white px-3 py-1.5 font-semibold text-primary disabled:opacity-50"
+            data-testid="bulk-report-apply-all"
+          >
+            全部に反映
+          </button>
+        </div>
         <ul className="-mx-1 flex flex-1 flex-col gap-2 overflow-y-auto px-1">
           {rows.map((r, i) => {
             const s = byId.get(r.shiftId)!;

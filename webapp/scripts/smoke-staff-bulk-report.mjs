@@ -71,13 +71,21 @@ try {
   await rows.nth(3).locator("input[type=number]").fill("60");
   // 昨日は「あとで」
   await rows.nth(4).getByTestId("bulk-report-kind").selectOption("LATER");
+  // 「全部の日を同じ時間にする」で 08:30〜17:30・休憩45分 → 出勤の行（3日前・2日前）に反映
+  const all = modal.getByTestId("bulk-report-all");
+  await all.locator("input[type=time]").nth(0).fill("08:30");
+  await all.locator("input[type=time]").nth(1).fill("17:30");
+  await all.locator("input[type=number]").fill("45");
+  await modal.getByTestId("bulk-report-apply-all").click();
+  // 2日前だけ休憩60分に直す
+  await rows.nth(3).locator("input[type=number]").fill("60");
   await staff.screenshot({ path: "/tmp/bulk-report.png" });
   log("ボタンに何をいくつ出すかが出る", (await modal.getByTestId("bulk-report-submit").innerText()).includes("出勤2件・欠勤1件・キャンセル1件を提出"));
   await modal.getByTestId("bulk-report-submit").click();
-  await staff.waitForTimeout(3000);
+  await modal.waitFor({ state: "hidden", timeout: 60000 });
   const rep = (id) => psql(`select coalesce(to_char(("clockIn" at time zone 'UTC') at time zone 'Asia/Tokyo', 'HH24:MI'), '') || '-' || coalesce(to_char(("clockOut" at time zone 'UTC') at time zone 'Asia/Tokyo', 'HH24:MI'), '') || '/' || coalesce("breakMinutes"::text, '') || '/' || ("submittedAt" is not null) from "WorkReport" where "shiftId"='${id}';`);
-  log("3日前は予定どおり 09:00-18:00 で提出", rep(s1) === "09:00-18:00/0/true");
-  log("2日前は上の行と同じ 09:00-18:00・休憩60分で提出", rep(s2) === "09:00-18:00/60/true");
+  log("3日前は「全部に反映」の 08:30-17:30・休憩45分で提出", rep(s1) === "08:30-17:30/45/true");
+  log("2日前は 08:30-17:30・休憩60分（直した分）で提出", rep(s2) === "08:30-17:30/60/true");
   log("「あとで」の昨日は報告されずに残る", rep(s3) === "" || rep(s3).endsWith("/false"));
   const outcome = (id) => psql(`select outcome || '/' || ("submittedAt" is not null) from "WorkReport" where "shiftId"='${id}';`);
   log("5日前は欠勤として報告", outcome(s5) === "ABSENT/true");
