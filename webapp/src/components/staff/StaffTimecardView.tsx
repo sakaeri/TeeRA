@@ -45,10 +45,12 @@ export function StaffTimecardView({
   shifts,
   knownTaskNamesByCompany,
   unscheduledCompanies,
+  openUnscheduled = false,
 }: {
   shifts: ShiftRow[];
   knownTaskNamesByCompany: Record<string, string[]>;
   unscheduledCompanies: UnscheduledCompanyOption[];
+  openUnscheduled?: boolean;
 }) {
   const actionable = shifts.filter((s) => !isDone(s));
   const done = shifts.filter(isDone);
@@ -92,7 +94,11 @@ export function StaffTimecardView({
         <p className="text-sm text-muted">対応が必要な報告はありません。</p>
       ) : null}
 
-      <UnscheduledReportButton companies={unscheduledCompanies} knownTaskNamesByCompany={knownTaskNamesByCompany} />
+      <UnscheduledReportButton
+        companies={unscheduledCompanies}
+        knownTaskNamesByCompany={knownTaskNamesByCompany}
+        initialOpen={openUnscheduled}
+      />
 
       {pastDone.length > 0 ? (
         <details className="rounded-2xl bg-white/70 p-4 shadow-sm ring-1 ring-black/5">

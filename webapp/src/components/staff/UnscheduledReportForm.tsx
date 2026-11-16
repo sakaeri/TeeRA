@@ -16,11 +16,14 @@ export type UnscheduledCompanyOption = {
 export function UnscheduledReportButton({
   companies,
   knownTaskNamesByCompany,
+  initialOpen = false,
 }: {
   companies: UnscheduledCompanyOption[];
   knownTaskNamesByCompany: Record<string, string[]>;
+  // カレンダーの「＋」から来た時は最初から開く
+  initialOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [done, setDone] = useState(false);
 
   if (companies.length === 0) return null;

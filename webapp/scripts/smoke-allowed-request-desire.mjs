@@ -68,7 +68,8 @@ try {
     await popup.last().getByRole("button", { name: "✕" }).click().catch(() => {});
     await staff.waitForTimeout(300);
   }
-  await staff.getByRole("button", { name: "シフト希望を申請する" }).click();
+  await staff.getByTestId("staff-plus").click();
+  await staff.getByTestId("plus-request").click();
   await staff.waitForTimeout(300);
   const wizard = staff.locator("div.fixed.inset-0").filter({ hasText: "シフト希望申請" }).last();
   const text = await wizard.innerText();
@@ -87,7 +88,8 @@ try {
   await admin.waitForTimeout(1500);
   await staff.reload();
   await staff.waitForTimeout(1500);
-  await staff.getByRole("button", { name: "シフト希望を申請する" }).click();
+  await staff.getByTestId("staff-plus").click();
+  await staff.getByTestId("plus-request").click();
   await staff.waitForTimeout(300);
   log("両方に戻すと、選ぶ画面が出る", (await wizard.innerText()).includes("出勤希望・休み希望を選んでください"));
 

@@ -146,6 +146,14 @@ export default async function StaffHomePage({
           };
         })}
         pendingRequests={requestRows}
+        // 「＋」のメニューに出す、業務報告がまだのシフト（今日の分と前日以前の未提出）
+        reportShifts={popupCandidates.map((s) => ({
+          id: s.id,
+          date: s.date,
+          label: s.workplaceName ?? s.companyName,
+          startTime: s.startTime,
+          endTime: s.endTime,
+        }))}
       />
     </main>
   );
