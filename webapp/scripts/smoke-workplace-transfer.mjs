@@ -66,8 +66,9 @@ try {
   const reportId = psql(`with ins as (insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "clockIn", "clockOut", "breakMinutes", "computedMinutes", "approvalStatus", "submittedAt", "updatedAt") values (gen_random_uuid()::text, '${pastShift}', '${staffId}', 'WORKED', '${yesterday} 00:00', '${yesterday} 09:00', 60, 480, 'PENDING', now(), now()) returning id) select id from ins;`);
   await page.goto(`http://localhost:3000/company?open=reports&reportId=${reportId}`);
   await page.waitForTimeout(2500);
+  await page.screenshot({ path: "/tmp/wpt-detail.png" });
   log("業務報告の確認に「勤務先：社内」が出る", (await page.getByTestId("report-workplace").innerText()).includes("勤務先：社内"));
-  await page.getByRole("button", { name: "時間を直して確認してもらう" }).click();
+  await page.getByRole("button", { name: "時間・勤務先を直す" }).click();
   await page.getByTestId("correction-workplace").selectOption({ label: "Aゴルフ場" });
   await page.screenshot({ path: "/tmp/wpt-correct.png" });
   await page.getByRole("button", { name: "保存してスタッフに確認してもらう" }).click();

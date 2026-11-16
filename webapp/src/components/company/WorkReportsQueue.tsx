@@ -123,7 +123,7 @@ export function WorkReportsQueue({
                         onClick={() => setCorrectingId(r.id)}
                         className="rounded-lg border border-border px-3 py-2 text-sm text-foreground/70 disabled:opacity-60"
                       >
-                        時間を直して確認してもらう
+                        時間・勤務先を直す
                       </button>
                     ) : null}
                   </div>
@@ -139,7 +139,7 @@ export function WorkReportsQueue({
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">
-                時間を直して確認してもらう（{correctingReport.staffName} — {correctingReport.date}）
+                時間・勤務先を直す（{correctingReport.staffName} — {correctingReport.date}）
               </h4>
               <button type="button" onClick={() => setCorrectingId(null)} aria-label="閉じる" className="text-muted hover:text-primary">
                 ✕
