@@ -45,10 +45,12 @@ export function StaffTimecardView({
   shifts,
   knownTaskNamesByCompany,
   unscheduledCompanies,
+  openUnscheduled = false,
 }: {
   shifts: ShiftRow[];
   knownTaskNamesByCompany: Record<string, string[]>;
   unscheduledCompanies: UnscheduledCompanyOption[];
+  openUnscheduled?: boolean;
 }) {
   const actionable = shifts.filter((s) => !isDone(s));
   const done = shifts.filter(isDone);
@@ -62,9 +64,23 @@ export function StaffTimecardView({
   const isTodaySubmitted = (s: ShiftRow) => s.date === today && s.approvalStatus === "PENDING" && isDone(s);
   const upcomingToday = [...actionable.filter((s) => !needsReportNow(s)), ...done.filter(isTodaySubmitted)];
   const pastDone = done.filter((s) => !isTodaySubmitted(s));
+  // まとめて報告できるもの：前日以前で、まだ一度も出していない報告（差し戻しは理由を見て1件ずつ直す）
+  const bulkTargets = unsubmitted.filter((s) => s.date < today && !s.submittedAt && !s.rejectionReason);
+  const [showBulk, setShowBulk] = useState(false);
 
   return (
     <div className="flex flex-col gap-6">
+      {bulkTargets.length >= 2 ? (
+        <button
+          type="button"
+          onClick={() => setShowBulk(true)}
+          className="w-full rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm"
+          data-testid="bulk-report-open"
+        >
+          まとめて報告（{bulkTargets.length}件）
+        </button>
+      ) : null}
+      {showBulk ? <BulkReportModal shifts={bulkTargets} onClose={() => setShowBulk(false)} /> : null}
       {unsubmitted.length > 0 ? (
         <section>
           <h2 className="mb-2 text-sm font-bold text-red-700">未提出の業務報告（{unsubmitted.length}件）</h2>
@@ -92,7 +108,11 @@ export function StaffTimecardView({
         <p className="text-sm text-muted">対応が必要な報告はありません。</p>
       ) : null}
 
-      <UnscheduledReportButton companies={unscheduledCompanies} knownTaskNamesByCompany={knownTaskNamesByCompany} />
+      <UnscheduledReportButton
+        companies={unscheduledCompanies}
+        knownTaskNamesByCompany={knownTaskNamesByCompany}
+        initialOpen={openUnscheduled}
+      />
 
       {pastDone.length > 0 ? (
         <details className="rounded-2xl bg-white/70 p-4 shadow-sm ring-1 ring-black/5">
@@ -594,5 +614,228 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
         </>
       )}
     </li>
+  );
+}
+
+// 前日以前の未提出の業務報告を、一覧でまとめて提出する。時刻はシフトの予定時刻を最初から入れておき
+// （時間未定は空欄）、違う日だけ直す。チェックを外した日（欠勤など）は報告せずに残す
+function BulkReportModal({ shifts, onClose }: { shifts: ShiftRow[]; onClose: () => void }) {
+  // 各行の扱い：出勤（時刻を入れて報告）／欠勤／勤務先キャンセル／あとで（報告せずに残す）
+  type Kind = "WORKED" | "ABSENT" | "CANCELLED_BY_EMPLOYER" | "LATER";
+  type Row = { shiftId: string; kind: Kind; clockIn: string; clockOut: string; breakMinutes: string };
+  const [rows, setRows] = useState<Row[]>(() =>
+    [...shifts]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((s) => ({
+        shiftId: s.id,
+        kind: "WORKED" as Kind,
+        clockIn: s.clockInTime ?? s.startTime ?? "",
+        clockOut: s.clockOutTime ?? s.endTime ?? "",
+        breakMinutes: String(s.breakMinutes || 0),
+      })),
+  );
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  // 「全部の日を同じ時間にする」：1回入れて、出勤の行すべてに反映する
+  const [allIn, setAllIn] = useState("");
+  const [allOut, setAllOut] = useState("");
+  const [allBreak, setAllBreak] = useState("0");
+  const allInvalid = !allIn || !allOut || allOut <= allIn;
+  function applyToAll() {
+    setRows((prev) =>
+      prev.map((r) => (r.kind === "WORKED" ? { ...r, clockIn: allIn, clockOut: allOut, breakMinutes: allBreak } : r)),
+    );
+  }
+  const byId = new Map(shifts.map((s) => [s.id, s]));
+  const update = (i: number, patch: Partial<Row>) => setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const included = rows.filter((r) => r.kind !== "LATER");
+  const invalid = included.some((r) => r.kind === "WORKED" && (!r.clockIn || !r.clockOut || r.clockOut <= r.clockIn));
+  const countOf = (k: Kind) => rows.filter((r) => r.kind === k).length;
+  const submitLabel = [
+    countOf("WORKED") ? `出勤${countOf("WORKED")}件` : "",
+    countOf("ABSENT") ? `欠勤${countOf("ABSENT")}件` : "",
+    countOf("CANCELLED_BY_EMPLOYER") ? `キャンセル${countOf("CANCELLED_BY_EMPLOYER")}件` : "",
+  ]
+    .filter(Boolean)
+    .join("・");
+
+  function submitAll() {
+    setError(null);
+    startTransition(async () => {
+      let ok = 0;
+      for (const r of included) {
+        try {
+          if (r.kind === "WORKED") {
+            await submitWorkReportAction({
+              shiftId: r.shiftId,
+              outcome: "WORKED",
+              taskName: byId.get(r.shiftId)?.taskName ?? undefined,
+              breakMinutes: Number(r.breakMinutes) || 0,
+              clockInTime: r.clockIn,
+              clockOutTime: r.clockOut,
+            });
+          } else {
+            await submitWorkReportAction({ shiftId: r.shiftId, outcome: r.kind as "ABSENT" | "CANCELLED_BY_EMPLOYER" });
+          }
+          ok += 1;
+        } catch {
+          setError(`${ok}件提出しました。残りは提出できませんでした。もう一度お試しください。`);
+          return;
+        }
+      }
+      showToast(`${ok}件の業務報告を提出しました ✓`);
+      onClose();
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-3" onClick={onClose}>
+      <div
+        className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl bg-white p-4 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+        data-testid="bulk-report"
+      >
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">まとめて報告</h3>
+          <button type="button" onClick={onClose} className="text-muted">
+            ✕
+          </button>
+        </div>
+        <p className="mb-3 text-xs text-muted">
+          予定の時刻が入っています。時間がそろっている時は下の「全部の日を同じ時間にする」が便利です。欠勤・勤務先キャンセルは▼で選べます（「あとで」は報告せずに残します）。
+        </p>
+        <div className="mb-3 rounded-xl bg-background p-2.5 text-xs" data-testid="bulk-report-all">
+          <p className="mb-1.5 font-semibold text-primary">全部の日を同じ時間にする</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            <label className="flex flex-col gap-0.5">
+              <span className="text-muted">出勤</span>
+              <input type="time" value={allIn} onChange={(e) => setAllIn(e.target.value)} className="rounded-lg border border-border bg-white px-1.5 py-1" />
+            </label>
+            <label className="flex flex-col gap-0.5">
+              <span className="text-muted">退勤</span>
+              <input type="time" value={allOut} onChange={(e) => setAllOut(e.target.value)} className="rounded-lg border border-border bg-white px-1.5 py-1" />
+            </label>
+            <label className="flex flex-col gap-0.5">
+              <span className="text-muted">休憩（分）</span>
+              <input
+                type="number"
+                min={0}
+                value={allBreak}
+                onChange={(e) => setAllBreak(e.target.value)}
+                className="rounded-lg border border-border bg-white px-1.5 py-1"
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            disabled={allInvalid}
+            onClick={applyToAll}
+            className="mt-2 w-full rounded-lg border border-primary bg-white px-3 py-1.5 font-semibold text-primary disabled:opacity-50"
+            data-testid="bulk-report-apply-all"
+          >
+            全部に反映
+          </button>
+        </div>
+        <ul className="-mx-1 flex flex-1 flex-col gap-2 overflow-y-auto px-1">
+          {rows.map((r, i) => {
+            const s = byId.get(r.shiftId)!;
+            const dt = new Date(`${s.date}T00:00:00Z`);
+            const wd = ["日", "月", "火", "水", "木", "金", "土"][dt.getUTCDay()];
+            return (
+              <li
+                key={r.shiftId}
+                className={`rounded-xl border p-2.5 text-xs ${r.kind === "LATER" ? "border-dashed border-border opacity-60" : "border-border"}`}
+                data-testid="bulk-report-row"
+              >
+                <div className={`flex items-center justify-between gap-2 ${r.kind === "WORKED" ? "mb-1.5" : ""}`}>
+                  <span className="min-w-0 truncate font-semibold">
+                    {dt.getUTCMonth() + 1}月{dt.getUTCDate()}日（{wd}）{s.workplaceName ?? s.companyName}
+                  </span>
+                  <select
+                    value={r.kind}
+                    onChange={(e) => update(i, { kind: e.target.value as Kind })}
+                    className="shrink-0 rounded-lg border border-border bg-white px-1.5 py-1 text-xs"
+                    data-testid="bulk-report-kind"
+                  >
+                    <option value="WORKED">出勤</option>
+                    <option value="ABSENT">欠勤</option>
+                    <option value="CANCELLED_BY_EMPLOYER">勤務先キャンセル</option>
+                    <option value="LATER">あとで</option>
+                  </select>
+                </div>
+                {r.kind === "WORKED" ? (
+                  <>
+                    {i > 0 ? (
+                      <div className="mb-1 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            update(i, {
+                              clockIn: rows[i - 1].clockIn,
+                              clockOut: rows[i - 1].clockOut,
+                              breakMinutes: rows[i - 1].breakMinutes,
+                            })
+                          }
+                          className="rounded-full border border-border px-2 py-0.5 text-[11px] text-primary"
+                        >
+                          上の行と同じ
+                        </button>
+                      </div>
+                    ) : null}
+                <div className="grid grid-cols-3 gap-1.5">
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-muted">出勤</span>
+                    <input
+                      type="time"
+                      value={r.clockIn}
+                     
+                      onChange={(e) => update(i, { clockIn: e.target.value })}
+                      className="rounded-lg border border-border px-1.5 py-1"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-muted">退勤</span>
+                    <input
+                      type="time"
+                      value={r.clockOut}
+                     
+                      onChange={(e) => update(i, { clockOut: e.target.value })}
+                      className="rounded-lg border border-border px-1.5 py-1"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-muted">休憩（分）</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={r.breakMinutes}
+                     
+                      onChange={(e) => update(i, { breakMinutes: e.target.value })}
+                      className="rounded-lg border border-border px-1.5 py-1"
+                    />
+                  </label>
+                </div>
+                    {!r.clockIn || !r.clockOut ? <p className="mt-1 text-red-600">出勤・退勤の時刻を入れてください。</p> : null}
+                    {r.clockIn && r.clockOut && r.clockOut <= r.clockIn ? (
+                      <p className="mt-1 text-red-600">退勤時刻が出勤時刻より前になっています。</p>
+                    ) : null}
+                  </>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+        {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
+        <button
+          type="button"
+          disabled={pending || included.length === 0 || invalid}
+          onClick={submitAll}
+          className="mt-3 w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-60"
+          data-testid="bulk-report-submit"
+        >
+          {pending ? "提出中…" : included.length > 0 ? `${submitLabel}を提出` : "提出するものがありません"}
+        </button>
+      </div>
+    </div>
   );
 }

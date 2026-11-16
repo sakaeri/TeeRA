@@ -356,7 +356,7 @@ export async function sendShiftReminderEmail(
        ${infoRow("勤務先", params.companyName)}
        ${params.taskLabel ? infoRow("業務内容", params.taskLabel) : ""}
        ${recruitmentDetailsHtml}
-       ${button(params.appUrl, "タイムカードを開く")}`,
+       ${button(params.appUrl, "業務報告を開く")}`,
     ),
   );
 }

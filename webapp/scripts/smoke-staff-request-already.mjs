@@ -55,7 +55,8 @@ try {
     await popup.last().getByRole("button", { name: "✕" }).click().catch(() => {});
     await staff.waitForTimeout(300);
   }
-  await staff.getByRole("button", { name: "シフト希望を申請する" }).click();
+  await staff.getByTestId("staff-plus").click();
+  await staff.getByTestId("plus-request").click();
   await staff.waitForTimeout(300);
   const wizard = staff.locator("div.fixed.inset-0").filter({ hasText: "シフト希望申請" }).last();
   await wizard.getByRole("button", { name: "出勤希望" }).click();

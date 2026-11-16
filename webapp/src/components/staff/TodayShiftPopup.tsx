@@ -11,7 +11,7 @@ import { ShiftCard, type ShiftRow } from "@/components/staff/StaffTimecardView";
 // 気づいてもらうのが狙い）。対応済みになった（shiftsが空になった）
 // 場合は自動で閉じる。
 // 今日のシフトに加え、前日以前の未提出も（数件まで）出す。それ以上ある
-// 場合はmoreUnsubmittedCountでタイムカードへ案内する。
+// 場合はmoreUnsubmittedCountで業務報告のページへ案内する。
 export function TodayShiftPopup({
   shifts,
   moreUnsubmittedCount = 0,
@@ -45,7 +45,7 @@ export function TodayShiftPopup({
         </ul>
         {moreUnsubmittedCount > 0 ? (
           <Link href="/staff/timecard" className="mt-3 block text-center text-sm font-semibold text-primary underline">
-            ほかに未提出が{moreUnsubmittedCount}件あります（タイムカードへ）
+            ほかに未提出が{moreUnsubmittedCount}件あります（業務報告へ）
           </Link>
         ) : null}
       </div>

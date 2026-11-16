@@ -49,6 +49,8 @@ type PendingRequestRow = {
   note?: string | null;
 };
 
+type ReportShiftRow = { id: string; date: string; label: string; startTime: string | null; endTime: string | null };
+
 type Company = { id: string; name: string; allowedRequestDesire?: string };
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -152,14 +154,18 @@ export function StaffCalendarView({
   companies,
   shifts,
   pendingRequests,
+  reportShifts = [],
 }: {
   year: number;
   month: number;
   companies: Company[];
   shifts: ShiftRow[];
   pendingRequests: PendingRequestRow[];
+  reportShifts?: ReportShiftRow[];
 }) {
   const [showWizard, setShowWizard] = useState(false);
+  // 「＋」で開く、何をするか選ぶメニュー（業務報告／シフト希望）
+  const [showMenu, setShowMenu] = useState(false);
   const [wizardInitialDate, setWizardInitialDate] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [companyFilter, setCompanyFilter] = useState("");
@@ -356,16 +362,37 @@ export function StaffCalendarView({
 
       <button
         type="button"
-        onClick={() => setShowWizard(true)}
-        aria-label="シフト希望を申請する"
-        className="fixed bottom-8 right-8 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-2xl text-primary-foreground shadow-lg"
+        onClick={() => {
+          if (showWizard) setShowWizard(false);
+          else setShowMenu((v) => !v);
+        }}
+        aria-label="業務報告・シフト希望"
+        data-testid="staff-plus"
+        className={`fixed bottom-8 right-8 ${showMenu ? "z-40" : "z-10"} flex h-14 w-14 items-center justify-center rounded-full bg-primary text-2xl text-primary-foreground shadow-lg`}
       >
         <span
-          className={`inline-block transition-transform duration-200 ${showWizard ? "rotate-45" : "rotate-0"}`}
+          className={`inline-block transition-transform duration-200 ${showWizard || showMenu ? "rotate-45" : "rotate-0"}`}
         >
           ＋
         </span>
+        {/* 業務報告がまだのシフトの数（報告を忘れにくくする） */}
+        {reportShifts.length > 0 && !showMenu && !showWizard ? (
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[11px] font-bold text-white">
+            {reportShifts.length}
+          </span>
+        ) : null}
       </button>
+
+      {showMenu ? (
+        <PlusMenu
+          reportShifts={reportShifts}
+          onRequest={() => {
+            setShowMenu(false);
+            setShowWizard(true);
+          }}
+          onClose={() => setShowMenu(false)}
+        />
+      ) : null}
 
       {selectedDay ? (
         <DayDetailPanel
@@ -698,6 +725,7 @@ function RequestWizard({
             ✕
           </button>
         </div>
+        <p className="-mt-2 mb-3 text-[11px] text-muted">これからの出勤・休みの希望を出す画面です。働いた報告は「＋」の「業務報告」からです。</p>
 
         <div className="mb-3 flex items-center gap-1.5">
           {([1, 2, 3, 4] as const).map((s) => (
@@ -987,6 +1015,64 @@ function CancelRequestButton({
         </button>
       </div>
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
+    </div>
+  );
+}
+
+// 「＋」で開くメニュー。業務報告（報告がまだのシフト・シフト外の勤務）と、シフト希望の申請を選ぶ
+function PlusMenu({
+  reportShifts,
+  onRequest,
+  onClose,
+}: {
+  reportShifts: ReportShiftRow[];
+  onRequest: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/30 p-4 pb-28" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()} data-testid="plus-menu">
+        <p className="mb-2 text-sm font-semibold text-primary">業務報告をする</p>
+        {reportShifts.length > 0 ? (
+          <ul className="mb-2 flex flex-col gap-1.5">
+            {reportShifts.map((s) => {
+              const dt = new Date(`${s.date}T00:00:00Z`);
+              return (
+                <li key={s.id}>
+                  <Link
+                    href={`/staff/timecard#shift-${s.id}`}
+                    className="flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm hover:bg-orange-100"
+                    data-testid="plus-report-shift"
+                  >
+                    <span>
+                      {dt.getUTCMonth() + 1}月{dt.getUTCDate()}日（{WEEKDAYS[dt.getUTCDay()]}）{s.label}
+                      {s.startTime ? <span className="ml-1 text-xs text-muted">{s.startTime}〜{s.endTime}</span> : null}
+                    </span>
+                    <span className="shrink-0 whitespace-nowrap pl-2 text-xs font-semibold text-orange-800">報告する ›</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="mb-2 rounded-lg bg-background px-3 py-2 text-xs text-muted">提出待ちの業務報告はありません。</p>
+        )}
+        <Link
+          href="/staff/timecard?unscheduled=1"
+          className="mb-4 block rounded-lg border border-dashed border-primary/50 px-3 py-2 text-center text-xs font-semibold text-primary"
+        >
+          シフト外で働いた日を報告する
+        </Link>
+        <p className="mb-2 text-sm font-semibold text-primary">シフト希望を出す</p>
+        <button
+          type="button"
+          onClick={onRequest}
+          className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+          data-testid="plus-request"
+        >
+          出勤・休みの希望を出す
+        </button>
+      </div>
     </div>
   );
 }
