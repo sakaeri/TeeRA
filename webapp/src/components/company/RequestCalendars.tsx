@@ -19,10 +19,22 @@ function weekdayClass(i: number) {
 }
 
 // 1件の申請で出した日を、月ごとの小さなカレンダーで示す（希望の日に色。押すとその日のカレンダーへ）
-export function RequestDatesCalendar({ dates, hrefFor }: { dates: string[]; hrefFor: (date: string) => string }) {
+// tone="off" は休み希望の申請（希望の日を薄い赤で）。offDates は出勤希望のカードに、そのスタッフの休み希望の日を薄い赤で添える
+export function RequestDatesCalendar({
+  dates,
+  hrefFor,
+  tone = "work",
+  offDates = [],
+}: {
+  dates: string[];
+  hrefFor: (date: string) => string;
+  tone?: "work" | "off";
+  offDates?: string[];
+}) {
   const set = new Set(dates);
+  const offSet = new Set(offDates);
   const mondayFirst = useMondayFirst();
-  const months = [...new Set(dates.map((d) => d.slice(0, 7)))].sort();
+  const months = [...new Set([...dates, ...offDates].map((d) => d.slice(0, 7)))].sort();
   return (
     <div className="flex flex-wrap justify-center gap-3" data-testid="request-dates-calendar">
       {months.map((ym) => {
@@ -45,11 +57,17 @@ export function RequestDatesCalendar({ dates, hrefFor }: { dates: string[]; href
                   <Link
                     key={d}
                     href={hrefFor(d)}
-                    className="rounded bg-orange-200 py-0.5 font-semibold text-orange-900 hover:bg-orange-300"
+                    className={`rounded py-0.5 font-semibold ${
+                      tone === "off" ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-orange-200 text-orange-900 hover:bg-orange-300"
+                    }`}
                     data-requested="true"
                   >
                     {Number(d.slice(8, 10))}
                   </Link>
+                ) : offSet.has(d) ? (
+                  <span key={d} className="rounded bg-red-50 py-0.5 text-red-600 ring-1 ring-inset ring-red-200" data-off="true">
+                    {Number(d.slice(8, 10))}
+                  </span>
                 ) : (
                   <span key={d} className="py-0.5 text-foreground/40">
                     {Number(d.slice(8, 10))}

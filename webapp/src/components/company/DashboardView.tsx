@@ -4,6 +4,8 @@ import { RequestDatesCalendar } from "@/components/company/RequestCalendars";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { PdfLink } from "@/components/PdfLink";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { acknowledgeOffRequestAction } from "@/app/company/calendar/actions";
 import { REQUIRED_DOCUMENT_LABEL, type RequiredDocument } from "@/lib/requiredDocuments";
 import {
   createManualTodoAction,
@@ -98,6 +100,8 @@ type UnconfirmedShiftEntry = {
   desire: string;
   dates: string[];
   note: string | null;
+  // 出勤希望のカードに添える、そのスタッフの休み希望の日
+  offDates: string[];
 };
 
 type PendingReportEntry = {
@@ -490,10 +494,17 @@ export function DashboardView({
   const filterByTeam = <T extends { teamKey: string }>(rows: T[]) => (teamFilter ? rows.filter((r) => r.teamKey === teamFilter) : rows);
   // 「月末にまとめて」の依頼主の、その月の分だけに絞る（やることリストのまとめから開いたとき）
   const [groupFilter, setGroupFilter] = useState<string | null>(initialGroupFilter ?? null);
+  // 未確定シフトで休み希望を「確認した」時は、一覧を閉じた時に件数を読み直す
+  const router = useRouter();
+  const [needsRefresh, setNeedsRefresh] = useState(false);
   function closePopup() {
     setOpenPopup(null);
     setTeamFilter(null);
     setGroupFilter(null);
+    if (needsRefresh) {
+      setNeedsRefresh(false);
+      router.refresh();
+    }
   }
   // 通知メール・プッシュから「未確定シフト」を開いた状態で来たときの指定（?open=unconfirmed）は
   // 一度開いたら消す（再読み込みで何度も開かないように）
@@ -587,7 +598,11 @@ export function DashboardView({
         <ShortagePopup entries={shortageEntries} onClose={() => setOpenPopup(null)} />
       ) : null}
       {openPopup === "unconfirmed" ? (
-        <UnconfirmedShiftPopup entries={filterByTeam(unconfirmedShiftEntries)} onClose={closePopup} />
+        <UnconfirmedShiftPopup
+          entries={filterByTeam(unconfirmedShiftEntries)}
+          onClose={closePopup}
+          onAcknowledged={() => setNeedsRefresh(true)}
+        />
       ) : null}
       {openPopup === "reports" ? (
         <PendingReportsPopup
@@ -992,20 +1007,50 @@ const DESIRE_LABEL: Record<string, string> = {
   OFF: "休み希望",
 };
 
-function UnconfirmedShiftPopup({ entries, onClose }: { entries: UnconfirmedShiftEntry[]; onClose: () => void }) {
+function UnconfirmedShiftPopup({
+  entries,
+  onClose,
+  onAcknowledged,
+}: {
+  entries: UnconfirmedShiftEntry[];
+  onClose: () => void;
+  onAcknowledged: () => void;
+}) {
+  // 休み希望の「確認した」を押したものは、すぐ一覧から消す（件数は一覧を閉じた時に読み直す）
+  const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
+  const [, startTransition] = useTransition();
+  function acknowledge(id: string) {
+    setAcknowledged((prev) => new Set(prev).add(id));
+    startTransition(async () => {
+      await acknowledgeOffRequestAction(id);
+      onAcknowledged();
+    });
+  }
+  const visible = entries.filter((r) => !acknowledged.has(r.id));
   return (
     <PopupShell
       title="未確定シフト"
       subtitle="スタッフから提出された希望シフトです。ここから直接カレンダーで確認できます"
       onClose={onClose}
     >
-      {entries.map((r) => (
-        <div key={r.id} className="flex flex-col gap-2 rounded-xl border border-border/60 p-4 text-sm">
+      {visible.map((r) => (
+        <div key={r.id} className="flex flex-col gap-2 rounded-xl border border-border/60 p-4 text-sm" data-testid="unconfirmed-card">
           <p className="font-medium">
             {r.staffName}さん（{DESIRE_LABEL[r.desire] ?? r.desire}）
           </p>
           {/* 申請した日を月のカレンダーで示す（色の付いた日を押すと、その日のカレンダーが開く） */}
-          <RequestDatesCalendar dates={r.dates} hrefFor={(d) => `/company/calendar?date=${d}`} />
+          <RequestDatesCalendar
+            dates={r.dates}
+            hrefFor={(d) => `/company/calendar?date=${d}`}
+            tone={r.desire === "OFF" ? "off" : "work"}
+            offDates={r.offDates}
+          />
+          {r.desire === "WORK" && r.offDates.length > 0 ? (
+            <p className="flex items-center gap-1.5 text-[11px] text-muted">
+              <span className="inline-block h-3 w-3 rounded bg-red-50 ring-1 ring-red-200" />
+              {r.staffName}さんの休み希望
+            </p>
+          ) : null}
           {/* 備考は大事なので、カレンダーの下に目立つように出す（長くても上の並びを崩さない） */}
           {r.note ? (
             <p className="whitespace-pre-wrap break-words rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950" data-testid="request-note">
@@ -1028,11 +1073,21 @@ function UnconfirmedShiftPopup({ entries, onClose }: { entries: UnconfirmedShift
               >
                 シフトを作る
               </Link>
-            ) : null}
+            ) : (
+              // 休み希望は会社が操作するものではないので、確認したら一覧から消す（休み希望自体は有効なまま）
+              <button
+                type="button"
+                onClick={() => acknowledge(r.id)}
+                className="rounded-lg bg-primary px-3 py-2 text-center text-xs font-semibold text-primary-foreground"
+                data-testid="acknowledge-off-request"
+              >
+                確認した
+              </button>
+            )}
           </div>
         </div>
       ))}
-      {entries.length === 0 ? <p className="text-center text-muted">未確定の希望シフトはありません。</p> : null}
+      {visible.length === 0 ? <p className="text-center text-muted">未確定の希望シフトはありません。</p> : null}
     </PopupShell>
   );
 }

@@ -601,6 +601,17 @@ export async function deleteRecruitmentAnnouncementAction(announcementId: string
   return { status: "ok" as const };
 }
 
+// 休み希望を「確認した」（ダッシュボードの未確定シフトから消す。休み希望自体は有効なまま、
+// カレンダーやシフト作成の日付選択には引き続き出る）
+export async function acknowledgeOffRequestAction(requestId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const request = await prisma.shiftRequest.findUnique({ where: { id: requestId } });
+  if (!request || request.companyId !== membership.companyId || request.desire !== "OFF") throw new Error("forbidden");
+  await prisma.shiftRequest.update({ where: { id: requestId }, data: { acknowledgedAt: new Date() } });
+  // ここでは画面を読み直さない（未確定シフトの一覧を開いたまま続けて確認できるように）。
+  // 件数は一覧を閉じた時に読み直す（DashboardViewのclosePopup）
+}
+
 export async function dismissShiftRequestAction(requestId: string, date: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   await dismissShiftRequest({

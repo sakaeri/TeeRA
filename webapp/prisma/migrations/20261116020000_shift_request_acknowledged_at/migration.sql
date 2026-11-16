@@ -1,0 +1,1 @@
+ALTER TABLE "ShiftRequest" ADD COLUMN IF NOT EXISTS "acknowledgedAt" TIMESTAMP(3);

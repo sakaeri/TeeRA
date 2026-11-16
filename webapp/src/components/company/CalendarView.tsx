@@ -724,6 +724,10 @@ export function CalendarView({
           dayShiftRequests={shiftRequests
             .filter((r) => r.desire === "WORK" && r.dates.includes(selectedDate) && selectedDate >= todayStr)
             .map((r) => ({ requestId: r.id, staffUserId: r.staffUserId, staffName: r.staffName, note: r.note }))}
+          // その日に休み希望を出している人（表示だけ。過ぎた日は出さない）
+          dayOffRequests={shiftRequests
+            .filter((r) => r.desire === "OFF" && r.dates.includes(selectedDate) && selectedDate >= todayStr)
+            .map((r) => ({ requestId: r.id, staffName: r.staffName, note: r.note }))}
           onNavigate={navigateToDate}
           onCreateShift={() => setShowAssignForm(true)}
           onCreateShiftForStaff={(staffUserId, requestId) => {
@@ -767,6 +771,7 @@ export function CalendarView({
           defaultDate={selectedDate ?? todayStr}
           defaultStaffUserId={assignFormStaffUserId}
           sourceRequest={shiftRequests.find((r) => r.id === assignFormRequestId)}
+          offRequests={shiftRequests.filter((r) => r.desire === "OFF")}
           preselectRequestDates={assignPreselectRequestDates}
           onClose={() => {
             setShowAssignForm(false);
@@ -932,6 +937,7 @@ function DayDetailModal({
   requestedStaffUserIds,
   affordableMaxEntries,
   dayShiftRequests,
+  dayOffRequests = [],
   onNavigate,
   onCreateShift,
   onCreateShiftForStaff,
@@ -947,6 +953,7 @@ function DayDetailModal({
   requestedStaffUserIds: string[];
   affordableMaxEntries: number;
   dayShiftRequests: { requestId: string; staffUserId: string; staffName: string; note: string | null }[];
+  dayOffRequests?: { requestId: string; staffName: string; note: string | null }[];
   onNavigate: (dateStr: string) => void;
   onCreateShift: () => void;
   onCreateShiftForStaff: (staffUserId: string, requestId?: string) => void;
@@ -1096,6 +1103,19 @@ function DayDetailModal({
                 </li>
               ))}
             </ul>
+          ) : null}
+          {dayOffRequests.length > 0 ? (
+            <div className="mb-3 rounded-xl bg-red-50/60 px-3.5 py-2.5 text-sm ring-1 ring-red-200/70" data-testid="day-off-requests">
+              <p className="mb-1 text-xs font-semibold text-red-700">休み希望</p>
+              <ul className="flex flex-col gap-1">
+                {dayOffRequests.map((row) => (
+                  <li key={row.requestId}>
+                    <span className="font-medium">{row.staffName}さん</span>
+                    {row.note ? <p className="whitespace-pre-wrap break-words text-xs text-muted">備考: {row.note}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
           {shifts.filter((s) => canEditShiftTime(s, isPastDay)).length >= 2 ? (
             <button
@@ -3285,6 +3305,7 @@ function AssignShiftModal({
   defaultDate,
   defaultStaffUserId,
   sourceRequest,
+  offRequests = [],
   preselectRequestDates = false,
   onClose,
 }: {
@@ -3299,6 +3320,8 @@ function AssignShiftModal({
   // シフト希望の行から開いた時の、その希望。同じ申請（1回の申請）で出した日だけを、日付の選択で
   // 薄く色付けする補助に使う（同じスタッフでも、別の申請で出した日には付けない）
   sourceRequest?: ShiftRequestRow;
+  // 休み希望（選んだスタッフの休み希望の日を日付の選択で薄い赤にする）
+  offRequests?: ShiftRequestRow[];
   preselectRequestDates?: boolean;
   onClose: () => void;
 }) {
@@ -3456,6 +3479,10 @@ function AssignShiftModal({
   const assignTitle = staffName ? `${staffName}さんのシフトを作成` : "シフトを作成";
   // 同じ申請で希望した日（日付の選択の補助として薄く色を付ける）。スタッフを選び直したら付けない
   const requestedDates = sourceRequest && sourceRequest.staffUserId === staffUserId ? sourceRequest.dates : [];
+  // 選んだスタッフの休み希望（シフトはスタッフごとに作るので、その人の休みたい日が分かるように）
+  const staffOffRequests = staffUserId ? offRequests.filter((r) => r.staffUserId === staffUserId) : [];
+  const staffOffDates = staffOffRequests.flatMap((r) => r.dates);
+  const staffOffNotes = staffOffRequests.map((r) => r.note).filter((n): n is string => Boolean(n));
   const dateLabels = dates.map((d) => {
     const dt = new Date(d + "T00:00:00Z");
     return `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
@@ -3766,11 +3793,18 @@ function AssignShiftModal({
               onToggle={toggleDate}
               initialDate={[...dates].sort()[0] ?? defaultDate}
               highlighted={requestedDates}
+              offDates={staffOffDates}
             />
             {requestedDates.length > 0 ? (
               <span className="flex items-center gap-1.5 text-[11px] text-muted">
                 <span className="inline-block h-3 w-3 rounded bg-orange-100 ring-1 ring-orange-300" />
                 {staffName}さんが同じ申請で希望した日{sourceRequest?.note ? `（備考：${sourceRequest.note}）` : ""}
+              </span>
+            ) : null}
+            {staffOffDates.some((d) => d >= todayJst()) ? (
+              <span className="flex items-start gap-1.5 text-[11px] text-muted" data-testid="off-legend">
+                <span className="mt-0.5 inline-block h-3 w-3 shrink-0 rounded bg-red-50 ring-1 ring-red-200" />
+                {staffName}さんの休み希望{staffOffNotes.length > 0 ? `（備考：${staffOffNotes.join("／")}）` : ""}
               </span>
             ) : null}
           </div>
@@ -3919,18 +3953,22 @@ function MiniCalendarMultiSelect({
   onToggle,
   initialDate,
   highlighted = [],
+  offDates = [],
 }: {
   selected: string[];
   onToggle: (dateStr: string) => void;
   initialDate: string;
   // 薄く色を付ける日（シフト作成で、選んだスタッフが出勤希望を出している日）
   highlighted?: string[];
+  // 薄い赤を付ける日（選んだスタッフが休み希望を出している日。選ぶことはできる）
+  offDates?: string[];
 }) {
   const [initialYear, initialMonth] = initialDate.split("-").map(Number);
   const [viewYear, setViewYear] = useState(initialYear);
   const [viewMonth, setViewMonth] = useState(initialMonth);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const highlightedSet = useMemo(() => new Set(highlighted), [highlighted]);
+  const offSet = useMemo(() => new Set(offDates), [offDates]);
   const todayStr = useMemo(() => todayJst(), []);
   const mondayFirst = useMondayFirst();
 
@@ -4000,12 +4038,15 @@ function MiniCalendarMultiSelect({
                   ? "cursor-not-allowed text-muted/50"
                   : selectedSet.has(c.dateStr)
                     ? "bg-primary font-semibold text-primary-foreground"
-                    : highlightedSet.has(c.dateStr)
-                      ? "bg-orange-100 font-medium text-orange-900 ring-1 ring-orange-300 hover:bg-orange-200"
-                      : "text-foreground hover:bg-background"
+                    : offSet.has(c.dateStr)
+                      ? "bg-red-50 font-medium text-red-700 ring-1 ring-red-200 hover:bg-red-100"
+                      : highlightedSet.has(c.dateStr)
+                        ? "bg-orange-100 font-medium text-orange-900 ring-1 ring-orange-300 hover:bg-orange-200"
+                        : "text-foreground hover:bg-background"
               }`}
               data-highlighted={!isPast && !selectedSet.has(c.dateStr) && highlightedSet.has(c.dateStr) ? "true" : undefined}
               data-selected={selectedSet.has(c.dateStr) ? "true" : undefined}
+              data-off={!isPast && !selectedSet.has(c.dateStr) && offSet.has(c.dateStr) ? "true" : undefined}
             >
               {c.day}
             </button>

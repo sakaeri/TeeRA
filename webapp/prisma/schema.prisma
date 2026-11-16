@@ -905,6 +905,8 @@ model ShiftRequest {
   note           String?
   status         ShiftRequestStatus @default(PENDING)
   matchedShiftId String?
+  // 休み希望を会社が「確認した」日時（ダッシュボードの未確定シフトから消す。休み希望自体は有効なまま）
+  acknowledgedAt DateTime?
   createdAt      DateTime           @default(now())
 
   staff   User    @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
