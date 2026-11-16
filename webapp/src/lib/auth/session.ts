@@ -90,6 +90,7 @@ export async function listMyMemberships(userId: string) {
     companyId: m.companyId,
     companyName: m.company.name,
     role: m.role,
+    allowedRequestDesire: m.allowedRequestDesire,
   }));
 }
 

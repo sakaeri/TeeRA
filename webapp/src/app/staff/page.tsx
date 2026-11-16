@@ -110,7 +110,7 @@ export default async function StaffHomePage({
       <StaffCalendarView
         year={year}
         month={month}
-        companies={myMemberships.map((m) => ({ id: m.companyId, name: m.companyName }))}
+        companies={myMemberships.map((m) => ({ id: m.companyId, name: m.companyName, allowedRequestDesire: m.allowedRequestDesire }))}
         shifts={shifts.map((s) => {
           const report = reportDisplay(s.workReport);
           return {

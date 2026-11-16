@@ -18,6 +18,7 @@ import {
   setStaffTeamsAction,
   deleteStaffAction,
   setStaffHireDateAction,
+  setStaffAllowedRequestDesireAction,
   grantStaffPaidLeaveAction,
   adjustStaffPaidLeaveBalanceAction,
   updateStaffAddressPhoneAction,
@@ -30,6 +31,7 @@ import {
   endStaffContractAction,
 } from "@/app/company/contracts/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
+import { ALLOWED_REQUEST_DESIRE_OPTIONS, normalizeAllowedRequestDesire } from "@/lib/requestDesire";
 import { CopyUrlField } from "@/components/CopyUrlField";
 import { ImageDropzone } from "@/components/ImageDropzone";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -71,6 +73,7 @@ type StaffMonthDetail = {
   membershipId: string;
   name: string;
   isProxy: boolean;
+  allowedRequestDesire: string;
   viaAgencyRelationshipId: string | null;
   viaAgencyRelationshipName: string | null;
   currentAddress: string | null;
@@ -902,6 +905,12 @@ export function StaffDetailPanel({
                     </div>
                   );
                 })()}
+
+                <AllowedRequestDesireSetting
+                  key={data.membershipId}
+                  membershipId={data.membershipId}
+                  initial={normalizeAllowedRequestDesire(data.allowedRequestDesire)}
+                />
 
                 <div className="rounded-lg border border-border p-3 text-sm">
                   <p className="mb-2 font-semibold">有給休暇</p>
@@ -2249,6 +2258,41 @@ function StaffTaskRatesTab({
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// このスタッフが出せるシフト希望の種類。押した時点で保存する
+function AllowedRequestDesireSetting({ membershipId, initial }: { membershipId: string; initial: string }) {
+  const [value, setValue] = useState(initial);
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  return (
+    <div className="rounded-lg border border-border p-3 text-sm">
+      <p className="mb-2 font-semibold">申請できる希望</p>
+      <div className="grid grid-cols-3 gap-1.5" data-testid="allowed-request-desire">
+        {ALLOWED_REQUEST_DESIRE_OPTIONS.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            disabled={pending}
+            aria-pressed={value === o.value}
+            onClick={() => {
+              if (o.value === value) return;
+              setValue(o.value);
+              startTransition(async () => {
+                await setStaffAllowedRequestDesireAction(membershipId, o.value);
+                router.refresh();
+              });
+            }}
+            className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+              value === o.value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-white text-foreground"
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

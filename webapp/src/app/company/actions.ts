@@ -1,5 +1,7 @@
 "use server";
 
+import { normalizeAllowedRequestDesire } from "@/lib/requestDesire";
+
 import { normalizeClosingDay } from "@/lib/closingPeriod";
 import { revalidatePath } from "next/cache";
 import type { NoteAttachmentInput } from "@/lib/noteAttachments";
@@ -703,6 +705,19 @@ export async function updateStaffAgencyTagAction(membershipId: string, viaAgency
   }
   await updateStaffAgencyTag({ membershipId, viaAgencyRelationshipId });
   revalidatePath("/company/roster");
+}
+
+// スタッフが出せるシフト希望の種類（出勤希望と休み希望／出勤希望だけ／休み希望だけ）を会社が決める
+export async function setStaffAllowedRequestDesireAction(membershipId: string, value: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageCompanySettings(membership)) throw new Error("forbidden");
+  await assertMembershipOwnedByCompany(membershipId, membership.companyId);
+  await prisma.companyMembership.update({
+    where: { id: membershipId },
+    data: { allowedRequestDesire: normalizeAllowedRequestDesire(value) },
+  });
+  revalidatePath("/company/roster");
+  revalidatePath("/staff");
 }
 
 export async function setStaffHireDateAction(membershipId: string, hireDate: string | null) {

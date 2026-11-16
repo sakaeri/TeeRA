@@ -350,6 +350,7 @@ export async function getStaffMonthDetail(params: {
     membershipId: membership.id,
     name: membership.user.name,
     isProxy: membership.user.isProxy,
+    allowedRequestDesire: membership.allowedRequestDesire,
     viaAgencyRelationshipId: membership.viaAgencyRelationshipId,
     viaAgencyRelationshipName: membership.viaAgencyRelationship?.proxyName ?? null,
     currentAddress: membership.user.address,

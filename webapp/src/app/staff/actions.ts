@@ -1,5 +1,7 @@
 "use server";
 
+import { allowedDesires } from "@/lib/requestDesire";
+
 import { revalidatePath } from "next/cache";
 import type { NoteAttachmentInput } from "@/lib/noteAttachments";
 import { requireCompanyStaffRole } from "@/lib/auth/session";
@@ -210,6 +212,8 @@ export async function submitShiftRequestAction(input: {
     where: { userId_companyId: { userId, companyId: input.companyId } },
   });
   if (!membership) throw new Error("forbidden");
+  // 会社がこのスタッフに出せないようにしている種類の希望は受け付けない（古い画面のままでも出せないように）
+  if (!allowedDesires(membership.allowedRequestDesire).includes(input.desire)) throw new Error("desire_not_allowed");
 
   // チーム宛の通知（シフト希望ダイジェスト）を正しく届けるため、その会社内で
   // 所属しているチームをteamIdとして記録する。複数チームに同時所属している
