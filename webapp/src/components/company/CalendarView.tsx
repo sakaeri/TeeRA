@@ -12,6 +12,7 @@ import { shiftListTimeLabel } from "@/lib/shiftListTimeLabel";
 import { useClickOutside } from "@/lib/useClickOutside";
 import {
   createAssignedShiftAction,
+  getStaffUpcomingShiftDatesAction,
   createPublicRecruitmentAction,
   updateMaxEntriesAction,
   deleteRecruitmentAction,
@@ -3378,8 +3379,23 @@ function AssignShiftModal({
     { date: string; conflicts: { id: string; startTime: string | null; endTime: string | null }[] }[] | null
   >(null);
   const [offRequestDates, setOffRequestDates] = useState<string[] | null>(null);
-  const [offConfirmChecked, setOffConfirmChecked] = useState(false);
+  // 休み希望の日ごとの「確認済み」（全部の日を確認済みにするか外すと作成できる）
+  const [offConfirmedDates, setOffConfirmedDates] = useState<Set<string>>(new Set());
   const [overrideChecked, setOverrideChecked] = useState(false);
+  // 確認画面で「この日は外す」：その日だけ選択から外す（日付の画面に戻らなくていい）
+  function removeOffDate(date: string) {
+    setDates((prev) => prev.filter((d) => d !== date));
+    setOffConfirmedDates((prev) => {
+      const next = new Set(prev);
+      next.delete(date);
+      return next;
+    });
+    setOffRequestDates((prev) => {
+      const next = (prev ?? []).filter((d) => d !== date);
+      return next.length > 0 ? next : null;
+    });
+  }
+  const allOffHandled = offRequestDates === null || offRequestDates.every((d) => offConfirmedDates.has(d));
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
@@ -3421,7 +3437,7 @@ function AssignShiftModal({
     setConflictsByDate(null);
     setOverrideChecked(false);
     setOffRequestDates(null);
-    setOffConfirmChecked(false);
+    setOffConfirmedDates(new Set());
   }
 
   function toggleDate(d: string) {
@@ -3451,11 +3467,11 @@ function AssignShiftModal({
           viaAgencyRelationshipId: agencyRelationshipId || undefined,
           taskName: taskName || undefined,
           overridesByDate,
-          confirmedOffDates: offRequestDates ?? undefined,
+          confirmedOffDates: offRequestDates?.filter((d) => offConfirmedDates.has(d)),
         });
         if (result.status === "off_request") {
           setOffRequestDates(result.offRequestDates);
-          setOffConfirmChecked(false);
+          setOffConfirmedDates(new Set());
         } else if (result.status === "conflict") {
           setConflictsByDate(result.conflictsByDate);
           setOverrideChecked(false);
@@ -3483,6 +3499,21 @@ function AssignShiftModal({
   const staffOffRequests = staffUserId ? offRequests.filter((r) => r.staffUserId === staffUserId) : [];
   const staffOffDates = staffOffRequests.flatMap((r) => r.dates);
   const staffOffNotes = staffOffRequests.map((r) => r.note).filter((n): n is string => Boolean(n));
+  // 選んだスタッフのこれからのシフト（シフト作成済みの日を薄い緑に）。スタッフを選ぶたびに読み込む
+  const [staffShiftDates, setStaffShiftDates] = useState<{ staffUserId: string; dates: string[] } | null>(null);
+  useEffect(() => {
+    if (!staffUserId) return;
+    let cancelled = false;
+    getStaffUpcomingShiftDatesAction(staffUserId)
+      .then((ds) => {
+        if (!cancelled) setStaffShiftDates({ staffUserId, dates: ds });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [staffUserId]);
+  const shiftDatesForStaff = staffShiftDates?.staffUserId === staffUserId ? staffShiftDates.dates : [];
   const dateLabels = dates.map((d) => {
     const dt = new Date(d + "T00:00:00Z");
     return `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
@@ -3794,17 +3825,24 @@ function AssignShiftModal({
               initialDate={[...dates].sort()[0] ?? defaultDate}
               highlighted={requestedDates}
               offDates={staffOffDates}
+              shiftDates={shiftDatesForStaff}
             />
             {requestedDates.length > 0 ? (
               <span className="flex items-center gap-1.5 text-[11px] text-muted">
-                <span className="inline-block h-3 w-3 rounded bg-orange-100 ring-1 ring-orange-300" />
+                <span className="inline-block h-3 w-3 rounded ring-2 ring-inset ring-blue-400" />
                 {staffName}さんが同じ申請で希望した日{sourceRequest?.note ? `（備考：${sourceRequest.note}）` : ""}
               </span>
             ) : null}
             {staffOffDates.some((d) => d >= todayJst()) ? (
               <span className="flex items-start gap-1.5 text-[11px] text-muted" data-testid="off-legend">
-                <span className="mt-0.5 inline-block h-3 w-3 shrink-0 rounded bg-red-50 ring-1 ring-red-200" />
+                <span className="mt-0.5 inline-block h-3 w-3 shrink-0 rounded ring-2 ring-inset ring-red-400" />
                 {staffName}さんの休み希望{staffOffNotes.length > 0 ? `（備考：${staffOffNotes.join("／")}）` : ""}
+              </span>
+            ) : null}
+            {shiftDatesForStaff.length > 0 ? (
+              <span className="flex items-center gap-1.5 text-[11px] text-muted">
+                <span className="inline-block h-3 w-3 rounded bg-green-100" />
+                {staffName}さんのシフト作成済みの日
               </span>
             ) : null}
           </div>
@@ -3885,17 +3923,44 @@ function AssignShiftModal({
         </dl>
 
         {offRequestDates && !conflictsByDate ? (
-          <div className="rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-800">
+          <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-xs text-red-800" data-testid="off-confirm">
             <p className="mb-2 font-semibold">休み希望が出ている日があります。</p>
-            <ul className="mb-2 list-disc pl-4">
-              {offRequestDates.map((date) => (
-                <li key={date}>{date}</li>
-              ))}
+            <ul className="flex flex-col gap-2">
+              {offRequestDates.map((date) => {
+                const dt = new Date(`${date}T00:00:00Z`);
+                return (
+                  <li key={date} className="flex items-center justify-between gap-2" data-testid="off-confirm-row">
+                    <span className="font-medium">
+                      {dt.getUTCMonth() + 1}月{dt.getUTCDate()}日（{WEEKDAYS[dt.getUTCDay()]}）
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <label className="flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={offConfirmedDates.has(date)}
+                          onChange={(e) =>
+                            setOffConfirmedDates((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(date);
+                              else next.delete(date);
+                              return next;
+                            })
+                          }
+                        />
+                        確認済み
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => removeOffDate(date)}
+                        className="rounded-full border border-red-300 bg-white px-2.5 py-1 font-semibold text-red-700 hover:bg-red-100"
+                      >
+                        この日は外す
+                      </button>
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
-            <label className="flex items-center gap-1">
-              <input type="checkbox" checked={offConfirmChecked} onChange={(e) => setOffConfirmChecked(e.target.checked)} />
-              スタッフ本人と確認済み
-            </label>
           </div>
         ) : null}
 
@@ -3925,7 +3990,7 @@ function AssignShiftModal({
             !staffUserId ||
             dates.length === 0 ||
             (conflictsByDate !== null && !overrideChecked) ||
-            (offRequestDates !== null && !conflictsByDate && !offConfirmChecked)
+            (offRequestDates !== null && !conflictsByDate && !allOffHandled)
           }
           onClick={() => submit()}
           className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
@@ -3954,10 +4019,13 @@ function MiniCalendarMultiSelect({
   initialDate,
   highlighted = [],
   offDates = [],
+  shiftDates = [],
 }: {
   selected: string[];
   onToggle: (dateStr: string) => void;
   initialDate: string;
+  // 薄い緑で塗る日（選んだスタッフのシフトを作成済みの日）
+  shiftDates?: string[];
   // 薄く色を付ける日（シフト作成で、選んだスタッフが出勤希望を出している日）
   highlighted?: string[];
   // 薄い赤を付ける日（選んだスタッフが休み希望を出している日。選ぶことはできる）
@@ -3969,6 +4037,7 @@ function MiniCalendarMultiSelect({
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const highlightedSet = useMemo(() => new Set(highlighted), [highlighted]);
   const offSet = useMemo(() => new Set(offDates), [offDates]);
+  const shiftSet = useMemo(() => new Set(shiftDates), [shiftDates]);
   const todayStr = useMemo(() => todayJst(), []);
   const mondayFirst = useMondayFirst();
 
@@ -4033,20 +4102,28 @@ function MiniCalendarMultiSelect({
               type="button"
               disabled={isPast}
               onClick={() => onToggle(c.dateStr!)}
+              // 色分け：選択中＝濃い緑、シフト作成済み＝薄い緑の塗り、出勤希望（同じ申請）＝青枠、休み希望＝赤枠
               className={`rounded-lg py-1.5 text-xs ${
                 isPast
                   ? "cursor-not-allowed text-muted/50"
                   : selectedSet.has(c.dateStr)
                     ? "bg-primary font-semibold text-primary-foreground"
-                    : offSet.has(c.dateStr)
-                      ? "bg-red-50 font-medium text-red-700 ring-1 ring-red-200 hover:bg-red-100"
-                      : highlightedSet.has(c.dateStr)
-                        ? "bg-orange-100 font-medium text-orange-900 ring-1 ring-orange-300 hover:bg-orange-200"
-                        : "text-foreground hover:bg-background"
+                    : shiftSet.has(c.dateStr)
+                      ? "bg-green-100 font-medium text-green-900 hover:bg-green-200"
+                      : "text-foreground hover:bg-background"
+              } ${
+                isPast
+                  ? ""
+                  : offSet.has(c.dateStr)
+                    ? "ring-2 ring-inset ring-red-400"
+                    : highlightedSet.has(c.dateStr)
+                      ? "ring-2 ring-inset ring-blue-400"
+                      : ""
               }`}
               data-highlighted={!isPast && !selectedSet.has(c.dateStr) && highlightedSet.has(c.dateStr) ? "true" : undefined}
               data-selected={selectedSet.has(c.dateStr) ? "true" : undefined}
-              data-off={!isPast && !selectedSet.has(c.dateStr) && offSet.has(c.dateStr) ? "true" : undefined}
+              data-off={!isPast && offSet.has(c.dateStr) ? "true" : undefined}
+              data-shift={!isPast && shiftSet.has(c.dateStr) ? "true" : undefined}
             >
               {c.day}
             </button>

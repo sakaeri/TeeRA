@@ -99,6 +99,19 @@ export async function loadDashboardData(companyId: string) {
   // scalarリストなのでPrisma側の範囲フィルタでは絞り込めず、取得後にJSで
   // 判定する。
   const shiftRequests = allShiftRequests.filter((sr) => sr.dates.some((d) => d >= today));
+  // 未確定シフトのカードに「シフト作成済み」の日を薄い緑で出すため、希望を出しているスタッフのこれからのシフト
+  const requestStaffIds = [...new Set(shiftRequests.map((r) => r.staffUserId))];
+  const requestStaffShifts = requestStaffIds.length
+    ? await prisma.shift.findMany({
+        where: {
+          companyId,
+          staffUserId: { in: requestStaffIds },
+          date: { gte: today },
+          status: { notIn: ["SUPERSEDED", "CANCELLED"] },
+        },
+        select: { staffUserId: true, date: true },
+      })
+    : [];
   // 承認を「月末にまとめて」にしている仮の依頼主の分は、月の途中は出さない（件数・やること・アイコンの数字）
   const todayStr = todayJst();
   const pendingReports = allPendingReports.filter(
@@ -108,6 +121,7 @@ export async function loadDashboardData(companyId: string) {
   return {
     shortageRecruitments,
     shiftRequests,
+    requestStaffShifts,
     pendingReports,
     pendingContractStaff,
     expiringContractStaff,
@@ -214,6 +228,11 @@ export function computeUnconfirmedShiftEntries(data: DashboardData) {
     const ds = r.dates.map((d) => d.toISOString().slice(0, 10)).filter((d) => d >= todayStr);
     offDatesByStaff.set(r.staffUserId, [...(offDatesByStaff.get(r.staffUserId) ?? []), ...ds]);
   }
+  const shiftDatesByStaff = new Map<string, string[]>();
+  for (const sh of data.requestStaffShifts) {
+    if (!sh.staffUserId) continue;
+    shiftDatesByStaff.set(sh.staffUserId, [...(shiftDatesByStaff.get(sh.staffUserId) ?? []), sh.date.toISOString().slice(0, 10)]);
+  }
   return data.shiftRequests.filter(isUnconfirmedRequest).map((r) => ({
     id: r.id,
     teamKey: r.teamId ?? "none",
@@ -222,6 +241,7 @@ export function computeUnconfirmedShiftEntries(data: DashboardData) {
     dates: r.dates.map((d) => d.toISOString().slice(0, 10)),
     note: r.note,
     offDates: r.desire === "WORK" ? (offDatesByStaff.get(r.staffUserId) ?? []) : [],
+    shiftDates: shiftDatesByStaff.get(r.staffUserId) ?? [],
   }));
 }
 

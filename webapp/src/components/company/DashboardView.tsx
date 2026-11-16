@@ -102,6 +102,8 @@ type UnconfirmedShiftEntry = {
   note: string | null;
   // 出勤希望のカードに添える、そのスタッフの休み希望の日
   offDates: string[];
+  // そのスタッフのシフトを作成済みの日
+  shiftDates: string[];
 };
 
 type PendingReportEntry = {
@@ -1007,6 +1009,32 @@ const DESIRE_LABEL: Record<string, string> = {
   OFF: "休み希望",
 };
 
+// 申請カレンダーの色の意味（出てくる色だけ並べる）
+function RequestColorLegend({ work, off, shift }: { work: boolean; off: boolean; shift: boolean }) {
+  return (
+    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
+      {work ? (
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-3 w-3 rounded ring-2 ring-inset ring-blue-400" />
+          出勤希望
+        </span>
+      ) : null}
+      {off ? (
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-3 w-3 rounded ring-2 ring-inset ring-red-400" />
+          休み希望
+        </span>
+      ) : null}
+      {shift ? (
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-3 w-3 rounded bg-green-100" />
+          シフト作成済み
+        </span>
+      ) : null}
+    </p>
+  );
+}
+
 function UnconfirmedShiftPopup({
   entries,
   onClose,
@@ -1044,13 +1072,13 @@ function UnconfirmedShiftPopup({
             hrefFor={(d) => `/company/calendar?date=${d}`}
             tone={r.desire === "OFF" ? "off" : "work"}
             offDates={r.offDates}
+            shiftDates={r.shiftDates}
           />
-          {r.desire === "WORK" && r.offDates.length > 0 ? (
-            <p className="flex items-center gap-1.5 text-[11px] text-muted">
-              <span className="inline-block h-3 w-3 rounded bg-red-50 ring-1 ring-red-200" />
-              {r.staffName}さんの休み希望
-            </p>
-          ) : null}
+          <RequestColorLegend
+            work={r.desire === "WORK"}
+            off={r.desire === "OFF" || r.offDates.length > 0}
+            shift={r.shiftDates.some((d) => [...r.dates, ...r.offDates].some((x) => x.slice(0, 7) === d.slice(0, 7)))}
+          />
           {/* 備考は大事なので、カレンダーの下に目立つように出す（長くても上の並びを崩さない） */}
           {r.note ? (
             <p className="whitespace-pre-wrap break-words rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950" data-testid="request-note">

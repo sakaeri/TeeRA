@@ -601,6 +601,22 @@ export async function deleteRecruitmentAnnouncementAction(announcementId: string
   return { status: "ok" as const };
 }
 
+// シフト作成の日付選択で「シフト作成済み」の日を薄い緑にするため、そのスタッフのこれからのシフトの日付
+export async function getStaffUpcomingShiftDatesAction(staffUserId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const today = new Date(`${new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)}T00:00:00.000Z`);
+  const shifts = await prisma.shift.findMany({
+    where: {
+      companyId: membership.companyId,
+      staffUserId,
+      date: { gte: today },
+      status: { notIn: ["SUPERSEDED", "CANCELLED"] },
+    },
+    select: { date: true },
+  });
+  return [...new Set(shifts.map((sh) => sh.date.toISOString().slice(0, 10)))];
+}
+
 // 休み希望を「確認した」（ダッシュボードの未確定シフトから消す。休み希望自体は有効なまま、
 // カレンダーやシフト作成の日付選択には引き続き出る）
 export async function acknowledgeOffRequestAction(requestId: string) {

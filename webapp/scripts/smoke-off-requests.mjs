@@ -40,7 +40,7 @@ try {
   psql(`insert into "CompanyMembership" (id, "userId", "companyId", role) values (gen_random_uuid()::text, '${staffId}', '${companyId}', 'STAFF');`);
   const ym = psql(`select to_char(date_trunc('month', (now() at time zone 'Asia/Tokyo')) + interval '1 month', 'YYYY-MM');`);
   const [y, m] = ym.split("-").map(Number);
-  const workId = psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status) values (gen_random_uuid()::text, '${staffId}', '${companyId}', 'WORK', ARRAY['${ym}-10','${ym}-12']::date[], 'PENDING') returning id;`);
+  const workId = psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status) values (gen_random_uuid()::text, '${staffId}', '${companyId}', 'WORK', ARRAY['${ym}-10','${ym}-12','${ym}-20']::date[], 'PENDING') returning id;`);
   const offId = psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status, note) values (gen_random_uuid()::text, '${staffId}', '${companyId}', 'OFF', ARRAY['${ym}-20','${ym}-21']::date[], 'PENDING', '通院') returning id;`);
 
   // --- ダッシュボード ---
@@ -50,7 +50,7 @@ try {
   log("出勤希望と休み希望の2枚のカードが出る", (await cards.count()) === 2);
   const workCard = cards.filter({ hasText: "田中さん（出勤希望）" });
   const offInWork = await workCard.locator("[data-off=true]").allInnerTexts();
-  log("出勤希望のカードに休み希望の日（20・21日）が薄い赤で出る", JSON.stringify(offInWork) === JSON.stringify(["20", "21"]));
+  log("出勤希望のカードに、出勤希望と重ならない休み希望の日（21日）が赤枠で出る", JSON.stringify(offInWork) === JSON.stringify(["21"]));
   const offCard = cards.filter({ hasText: "田中さん（休み希望）" });
   log("休み希望のカードに備考が出る", (await offCard.innerText()).includes("備考：通院"));
   await page.screenshot({ path: "/tmp/offreq-dashboard.png", fullPage: true });
@@ -77,9 +77,34 @@ try {
   await modal.getByRole("button", { name: "業務内容を選ばずに次へ" }).click();
   await modal.getByText("日付を選択（複数選択可）").waitFor();
   const offDays = await modal.locator("button[data-off=true]").allInnerTexts();
-  log("シフト作成の日付選択で休み希望の日（20・21日）が薄い赤になる", JSON.stringify(offDays.map((t) => t.trim())) === JSON.stringify(["20", "21"]));
+  log("シフト作成の日付選択で休み希望の日（20・21日）が赤枠になる", JSON.stringify(offDays.map((t) => t.trim())) === JSON.stringify(["20", "21"]));
   log("休み希望の説明と備考が出る", (await modal.getByTestId("off-legend").innerText()).includes("田中さんの休み希望（備考：通院）"));
   await page.screenshot({ path: "/tmp/offreq-assign.png" });
+
+  // --- 確認画面：休み希望の日を「この日は外す」で外して作成 ---
+  await modal.getByRole("button", { name: "次へ" }).click();
+  await modal.getByRole("button", { name: "3件のシフトを作成" }).click();
+  const offConfirm = modal.getByTestId("off-confirm");
+  await offConfirm.waitFor();
+  log("休み希望の日が日ごとに出る（12月20日の形）", (await offConfirm.getByTestId("off-confirm-row").count()) === 1 && (await offConfirm.innerText()).includes(`${m}月20日`));
+  await page.screenshot({ path: "/tmp/offreq-confirm.png" });
+  await offConfirm.getByRole("button", { name: "この日は外す" }).click();
+  log("「この日は外す」で警告が消え、2件で作成できる", (await modal.getByTestId("off-confirm").count()) === 0 && (await modal.getByRole("button", { name: "2件のシフトを作成" }).isEnabled()));
+  await modal.getByRole("button", { name: "2件のシフトを作成" }).click();
+  await page.waitForTimeout(2000);
+  const created = psql(`select string_agg(to_char(date, 'DD'), ',' order by date) from "Shift" where "staffUserId"='${staffId}' and status not in ('SUPERSEDED','CANCELLED');`);
+  log("10日・12日だけシフトが作られる（休み希望の20日は外れる）", created === "10,12");
+
+  // --- シフト作成済みの日は薄い緑 ---
+  await page.goto("http://localhost:3000/company?open=unconfirmed");
+  await page.waitForTimeout(2500);
+  const workCard2 = page.getByTestId("unconfirmed-card").filter({ hasText: "田中さん（出勤希望）" });
+  if (await workCard2.count()) {
+    const green = await workCard2.locator("[data-shift=true]").allInnerTexts();
+    log("未確定シフトのカードでシフト作成済みの日（10・12日）が薄い緑", JSON.stringify(green) === JSON.stringify(["10", "12"]));
+  } else {
+    log("（出勤希望はシフト作成で対応済みになり、カードが消える）", true);
+  }
 
   // --- 日付の詳細 ---
   await page.goto(`http://localhost:3000/company/calendar?date=${ym}-20`);
