@@ -276,9 +276,9 @@ export async function runShiftRequestDigest() {
   // メール・プッシュから開いたとき、ダッシュボードの「未確定シフト」の一覧を開いた状態にする
   const digestUrl = "/company?open=unconfirmed";
   for (const company of companies) {
-    // ダッシュボードの「未確定シフト」と同じく、出勤希望だけを数える
+    // ダッシュボードの「未確定シフト」と同じく、出勤希望と、まだ確認していない休み希望を数える
     const requests = await prisma.shiftRequest.findMany({
-      where: { companyId: company.id, status: "PENDING", desire: "WORK" },
+      where: { companyId: company.id, status: "PENDING", OR: [{ desire: "WORK" }, { acknowledgedAt: null }] },
       select: { staffUserId: true, dates: true },
     });
     const pending = requests.filter((r) => r.dates.some((d) => d >= today));
