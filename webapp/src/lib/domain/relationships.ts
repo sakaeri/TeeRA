@@ -556,7 +556,9 @@ export async function getClientMonthDetail(params: {
         id: r.id,
         taskName: r.taskName,
         currentLabel: current
-          ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円${current.holidayAmount != null ? `／土日祝${current.holidayAmount}円` : ""}`
+          ? current.amount === 0
+            ? "請求なし"
+            : `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円${current.holidayAmount != null ? `／土日祝${current.holidayAmount}円` : ""}`
           : "単価未設定",
         unpriced: !current,
         // 業務内容ごとの例外（falseなら依頼主共通の規定に従う）
@@ -565,7 +567,9 @@ export async function getClientMonthDetail(params: {
           id: v.id,
           label:
             v.wageType && v.amount != null
-              ? `${WAGE_TYPE_LABEL[v.wageType]}${v.amount}円${v.holidayAmount != null ? `／土日祝${v.holidayAmount}円` : ""}`
+              ? v.amount === 0
+                ? "請求なし"
+                : `${WAGE_TYPE_LABEL[v.wageType]}${v.amount}円${v.holidayAmount != null ? `／土日祝${v.holidayAmount}円` : ""}`
               : "単価未設定（終了）",
           effectiveFrom: v.effectiveFrom.toISOString().slice(0, 10),
         })),

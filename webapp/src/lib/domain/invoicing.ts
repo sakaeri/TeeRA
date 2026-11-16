@@ -148,6 +148,8 @@ async function regenerateLines(invoiceId: string) {
       if (autoShiftIds.has(s.id)) {
         await tx.invoiceLine.deleteMany({ where: { invoiceId: invoice.id, shiftId: s.id } });
       }
+      // 「請求なし」（0円。研修など）の業務内容は請求書に載せない（単価未設定の注意にも出さない）
+      if (rate === 0) continue;
 
       await tx.invoiceLine.create({
         data: {
