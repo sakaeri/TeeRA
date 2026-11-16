@@ -64,6 +64,9 @@ try {
   // --- ② 業務報告：勤務先の表示と、直して確認してもらうで勤務先を変える ---
   const pastShift = psql(`with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, date, "startTime", "endTime", status, "createdVia", "updatedAt") values (gen_random_uuid()::text, '${companyId}', '${staffId}', 'INHOUSE', '${yesterday}', '09:00', '18:00', 'CONFIRMED', 'ASSIGN', now()) returning id) select id from ins;`);
   const reportId = psql(`with ins as (insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "clockIn", "clockOut", "breakMinutes", "computedMinutes", "approvalStatus", "submittedAt", "updatedAt") values (gen_random_uuid()::text, '${pastShift}', '${staffId}', 'WORKED', '${yesterday} 00:00', '${yesterday} 09:00', 60, 480, 'PENDING', now(), now()) returning id) select id from ins;`);
+  await page.goto("http://localhost:3000/company?open=reports");
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: "/tmp/wpt-list.png" });
   await page.goto(`http://localhost:3000/company?open=reports&reportId=${reportId}`);
   await page.waitForTimeout(2500);
   await page.screenshot({ path: "/tmp/wpt-detail.png" });

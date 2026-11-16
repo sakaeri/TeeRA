@@ -1183,21 +1183,29 @@ function PendingReportsPopup({
         )
       ) : null}
       {entries.map((r) => (
-        <div key={r.id} className="flex items-center justify-between rounded-xl border border-border/60 p-4 text-sm">
-          <div>
-            <p className="font-medium">{r.staffName}</p>
-            <p className="text-muted">
-              {r.teamName ?? "自社"}・{formatDateJa(r.date)}・{formatTimeRange(r.startTime, r.endTime)}
+        // カード全体を押すと確認画面が開く。1行目：名前、2行目：日付と時間、3行目：チーム・勤務先（変な所で折り返さないよう分ける）
+        <button
+          key={r.id}
+          type="button"
+          onClick={() => onSelect(r)}
+          className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-white p-4 text-left text-sm hover:bg-background"
+          data-testid="pending-report-row"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">
+              {r.isUnscheduled ? <UnscheduledBadge /> : null}
+              {r.staffName}
+            </p>
+            <p className="mt-0.5 flex flex-wrap gap-x-2 text-foreground/80">
+              <span className="whitespace-nowrap">{formatDateJa(r.date)}</span>
+              <span className="whitespace-nowrap">{formatTimeRange(r.startTime, r.endTime)}</span>
+            </p>
+            <p className="mt-0.5 truncate text-xs text-muted">
+              {[r.teamName, r.workplaceName, r.taskName].filter(Boolean).join("・")}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => onSelect(r)}
-            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
-          >
-            確認する
-          </button>
-        </div>
+          <span className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">確認する</span>
+        </button>
       ))}
       {entries.length === 0 ? <p className="text-center text-muted">承認待ちの業務報告はありません。</p> : null}
     </PopupShell>
