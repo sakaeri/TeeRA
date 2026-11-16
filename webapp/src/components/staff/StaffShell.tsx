@@ -78,7 +78,7 @@ function GearIcon({ className }: { className?: string }) {
 const NAV = [
   { href: "/staff", label: "カレンダー", Icon: CalendarIcon },
   { href: "/staff/recruitments", label: "募集", Icon: MegaphoneIcon },
-  { href: "/staff/timecard", label: "タイムカード", Icon: ClockIcon },
+  { href: "/staff/timecard", label: "業務報告", Icon: ClockIcon },
   { href: "/staff/notices", label: "お知らせ", Icon: BellIcon },
   { href: "/staff/contracts", label: "設定", Icon: GearIcon },
 ];

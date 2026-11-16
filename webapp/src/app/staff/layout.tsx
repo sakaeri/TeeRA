@@ -43,7 +43,7 @@ export default async function StaffLayout({
   const pendingContractCompanies = [
     ...new Map(pendingContracts.map((c) => [c.template.company.id, c.template.company])).values(),
   ];
-  // ナビの「タイムカード」バッジ用 — 業務報告が未提出の件数（所属する全社分）
+  // ナビの「業務報告」バッジ用 — 業務報告が未提出の件数（所属する全社分）
   const unsubmittedReportCount = await countUnsubmittedReports(
     userId,
     myMemberships.map((m) => m.companyId),

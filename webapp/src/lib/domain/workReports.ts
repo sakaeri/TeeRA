@@ -309,7 +309,7 @@ function needsReportConditions() {
   ];
 }
 
-// ナビの「タイムカード」バッジ用 — 報告が必要なのにまだ出ていない件数。
+// ナビの「業務報告」バッジ用 — 報告が必要なのにまだ出ていない件数。
 // 今日のこれから勤務するシフト（まだ退勤していない）は数えない。
 export async function countUnsubmittedReports(staffUserId: string, companyIds: string[]) {
   const todayStart = new Date(`${todayJst()}T00:00:00.000Z`);
