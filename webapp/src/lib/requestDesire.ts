@@ -3,9 +3,9 @@
 export type AllowedRequestDesire = "BOTH" | "WORK" | "OFF";
 
 export const ALLOWED_REQUEST_DESIRE_OPTIONS: { value: AllowedRequestDesire; label: string }[] = [
-  { value: "BOTH", label: "両方" },
-  { value: "WORK", label: "出勤希望だけ" },
-  { value: "OFF", label: "休み希望だけ" },
+  { value: "BOTH", label: "自由選択" },
+  { value: "WORK", label: "出勤のみ" },
+  { value: "OFF", label: "休みのみ" },
 ];
 
 export function normalizeAllowedRequestDesire(value: unknown): AllowedRequestDesire {

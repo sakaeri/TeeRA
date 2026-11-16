@@ -45,7 +45,7 @@ try {
   const ym = psql(`select to_char(date_trunc('month', (now() at time zone 'Asia/Tokyo')) + interval '1 month', 'YYYY-MM');`);
   const [y, m] = ym.split("-").map(Number);
 
-  // --- 会社：名簿のスタッフ詳細で「休み希望だけ」にする ---
+  // --- 会社：名簿のスタッフ詳細で「休みのみ」にする ---
   await admin.goto("http://localhost:3000/company/roster");
   await admin.waitForTimeout(2000);
   await admin.locator("tbody tr", { hasText: "種類スタッフ" }).click();
@@ -53,8 +53,8 @@ try {
   await admin.locator("div.fixed.inset-0.z-30").first().getByRole("button", { name: "契約書管理" }).click();
   const setting = admin.getByTestId("allowed-request-desire");
   await setting.waitFor({ timeout: 60000 });
-  log("最初は「両方」", (await setting.getByRole("button", { name: "両方" }).getAttribute("aria-pressed")) === "true");
-  await setting.getByRole("button", { name: "休み希望だけ" }).click();
+  log("最初は「自由選択」", (await setting.getByRole("button", { name: "自由選択" }).getAttribute("aria-pressed")) === "true");
+  await setting.getByRole("button", { name: "休みのみ" }).click();
   await admin.waitForTimeout(1500);
   log("設定が保存される", psql(`select "allowedRequestDesire" from "CompanyMembership" where "userId"='${staffId}';`) === "OFF");
   await admin.screenshot({ path: "/tmp/rdesire-admin.png" });
@@ -82,8 +82,8 @@ try {
   await staff.waitForTimeout(1200);
   log("休み希望として申請される", psql(`select desire from "ShiftRequest" where "staffUserId"='${staffId}';`) === "OFF");
 
-  // --- 会社：「両方」に戻すと、スタッフは選べるようになる ---
-  await setting.getByRole("button", { name: "両方" }).click();
+  // --- 会社：「自由選択」に戻すと、スタッフは選べるようになる ---
+  await setting.getByRole("button", { name: "自由選択" }).click();
   await admin.waitForTimeout(1500);
   await staff.reload();
   await staff.waitForTimeout(1500);
