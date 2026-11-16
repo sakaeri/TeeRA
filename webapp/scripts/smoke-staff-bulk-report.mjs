@@ -52,6 +52,20 @@ try {
   const s5 = mk(day(5), "09:00", "18:00");
 
   await loginViaEmail(staff, staffEmail, "password123");
+  // カレンダーの「＋」→「まとめて報告（5件）」から、まとめて報告が開いた状態で業務報告のページへ
+  await staff.goto("http://localhost:3000/staff");
+  await staff.waitForTimeout(1500);
+  const popup = staff.locator("div.fixed.inset-0.z-30");
+  if (await popup.count()) {
+    await popup.last().getByRole("button", { name: "✕" }).click().catch(() => {});
+    await staff.waitForTimeout(300);
+  }
+  await staff.getByTestId("staff-plus").click();
+  log("「＋」のメニューに「まとめて報告（5件）」", (await staff.getByTestId("plus-bulk-report").innerText()).includes("まとめて報告（5件）"));
+  await staff.getByTestId("plus-bulk-report").click();
+  await staff.waitForURL(/bulk=1/);
+  await staff.getByTestId("bulk-report").waitFor({ timeout: 60000 });
+  log("押すとまとめて報告が開いた状態になる", (await staff.getByTestId("bulk-report").count()) === 1);
   await staff.goto("http://localhost:3000/staff/timecard");
   await staff.waitForTimeout(1500);
   log("下のメニューの名前が「業務報告」", (await staff.getByRole("link", { name: /業務報告/ }).count()) >= 1 && (await staff.getByRole("link", { name: "タイムカード" }).count()) === 0);

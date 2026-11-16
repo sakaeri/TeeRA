@@ -46,11 +46,13 @@ export function StaffTimecardView({
   knownTaskNamesByCompany,
   unscheduledCompanies,
   openUnscheduled = false,
+  openBulk = false,
 }: {
   shifts: ShiftRow[];
   knownTaskNamesByCompany: Record<string, string[]>;
   unscheduledCompanies: UnscheduledCompanyOption[];
   openUnscheduled?: boolean;
+  openBulk?: boolean;
 }) {
   const actionable = shifts.filter((s) => !isDone(s));
   const done = shifts.filter(isDone);
@@ -66,7 +68,7 @@ export function StaffTimecardView({
   const pastDone = done.filter((s) => !isTodaySubmitted(s));
   // まとめて報告できるもの：前日以前で、まだ一度も出していない報告（差し戻しは理由を見て1件ずつ直す）
   const bulkTargets = unsubmitted.filter((s) => s.date < today && !s.submittedAt && !s.rejectionReason);
-  const [showBulk, setShowBulk] = useState(false);
+  const [showBulk, setShowBulk] = useState(openBulk && bulkTargets.length >= 2);
 
   return (
     <div className="flex flex-col gap-6">

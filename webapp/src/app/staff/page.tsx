@@ -146,6 +146,8 @@ export default async function StaffHomePage({
           };
         })}
         pendingRequests={requestRows}
+        // 「まとめて報告」の対象（前日以前で、まだ一度も出していない報告）の件数
+        bulkReportCount={popupCandidates.filter((s) => s.date < todayStr && !s.submittedAt && !s.rejectionReason).length}
         // 「＋」のメニューに出す、業務報告がまだのシフト（今日の分と前日以前の未提出）
         reportShifts={popupCandidates.map((s) => ({
           id: s.id,

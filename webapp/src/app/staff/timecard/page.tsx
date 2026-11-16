@@ -17,7 +17,10 @@ function formatJstTime(date: Date) {
 export default async function StaffTimecardPage({ searchParams }: PageProps<"/staff/timecard">) {
   const { userId } = await requireCompanyStaffRole();
   // カレンダーの「＋」→「シフト外で働いた日を報告する」から来た時は、報告の画面を開いた状態にする
-  const openUnscheduled = (await searchParams).unscheduled === "1";
+  const sp = await searchParams;
+  const openUnscheduled = sp.unscheduled === "1";
+  // 「＋」→「まとめて報告」から来た時は、まとめて報告を開いた状態にする
+  const openBulk = sp.bulk === "1";
   const myMemberships = await listMyMemberships(userId);
   const companyIds = myMemberships.map((m) => m.companyId);
 
@@ -40,6 +43,7 @@ export default async function StaffTimecardPage({ searchParams }: PageProps<"/st
     <main className="mx-auto w-full max-w-2xl px-6 py-10">
       <StaffTimecardView
         openUnscheduled={openUnscheduled}
+        openBulk={openBulk}
         knownTaskNamesByCompany={knownTaskNames}
         unscheduledCompanies={myMemberships.map((m) => ({
           companyId: m.companyId,
