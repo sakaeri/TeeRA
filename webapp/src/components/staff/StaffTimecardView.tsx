@@ -620,13 +620,15 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
 // 前日以前の未提出の業務報告を、一覧でまとめて提出する。時刻はシフトの予定時刻を最初から入れておき
 // （時間未定は空欄）、違う日だけ直す。チェックを外した日（欠勤など）は報告せずに残す
 function BulkReportModal({ shifts, onClose }: { shifts: ShiftRow[]; onClose: () => void }) {
-  type Row = { shiftId: string; include: boolean; clockIn: string; clockOut: string; breakMinutes: string };
+  // 各行の扱い：出勤（時刻を入れて報告）／欠勤／勤務先キャンセル／あとで（報告せずに残す）
+  type Kind = "WORKED" | "ABSENT" | "CANCELLED_BY_EMPLOYER" | "LATER";
+  type Row = { shiftId: string; kind: Kind; clockIn: string; clockOut: string; breakMinutes: string };
   const [rows, setRows] = useState<Row[]>(() =>
     [...shifts]
       .sort((a, b) => a.date.localeCompare(b.date))
       .map((s) => ({
         shiftId: s.id,
-        include: true,
+        kind: "WORKED" as Kind,
         clockIn: s.clockInTime ?? s.startTime ?? "",
         clockOut: s.clockOutTime ?? s.endTime ?? "",
         breakMinutes: String(s.breakMinutes || 0),
@@ -636,8 +638,16 @@ function BulkReportModal({ shifts, onClose }: { shifts: ShiftRow[]; onClose: () 
   const [error, setError] = useState<string | null>(null);
   const byId = new Map(shifts.map((s) => [s.id, s]));
   const update = (i: number, patch: Partial<Row>) => setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)));
-  const included = rows.filter((r) => r.include);
-  const invalid = included.some((r) => !r.clockIn || !r.clockOut || r.clockOut <= r.clockIn);
+  const included = rows.filter((r) => r.kind !== "LATER");
+  const invalid = included.some((r) => r.kind === "WORKED" && (!r.clockIn || !r.clockOut || r.clockOut <= r.clockIn));
+  const countOf = (k: Kind) => rows.filter((r) => r.kind === k).length;
+  const submitLabel = [
+    countOf("WORKED") ? `出勤${countOf("WORKED")}件` : "",
+    countOf("ABSENT") ? `欠勤${countOf("ABSENT")}件` : "",
+    countOf("CANCELLED_BY_EMPLOYER") ? `キャンセル${countOf("CANCELLED_BY_EMPLOYER")}件` : "",
+  ]
+    .filter(Boolean)
+    .join("・");
 
   function submitAll() {
     setError(null);
@@ -645,14 +655,18 @@ function BulkReportModal({ shifts, onClose }: { shifts: ShiftRow[]; onClose: () 
       let ok = 0;
       for (const r of included) {
         try {
-          await submitWorkReportAction({
-            shiftId: r.shiftId,
-            outcome: "WORKED",
-            taskName: byId.get(r.shiftId)?.taskName ?? undefined,
-            breakMinutes: Number(r.breakMinutes) || 0,
-            clockInTime: r.clockIn,
-            clockOutTime: r.clockOut,
-          });
+          if (r.kind === "WORKED") {
+            await submitWorkReportAction({
+              shiftId: r.shiftId,
+              outcome: "WORKED",
+              taskName: byId.get(r.shiftId)?.taskName ?? undefined,
+              breakMinutes: Number(r.breakMinutes) || 0,
+              clockInTime: r.clockIn,
+              clockOutTime: r.clockOut,
+            });
+          } else {
+            await submitWorkReportAction({ shiftId: r.shiftId, outcome: r.kind as "ABSENT" | "CANCELLED_BY_EMPLOYER" });
+          }
           ok += 1;
         } catch {
           setError(`${ok}件提出しました。残りは提出できませんでした。もう一度お試しください。`);
@@ -678,7 +692,7 @@ function BulkReportModal({ shifts, onClose }: { shifts: ShiftRow[]; onClose: () 
           </button>
         </div>
         <p className="mb-3 text-xs text-muted">
-          予定の時刻が入っています。実際と違う日だけ直してください。出ていない日はチェックを外すと報告しません。
+          予定の時刻が入っています。実際と違う日だけ直してください。欠勤・勤務先キャンセルは▼で選べます（「あとで」は報告せずに残します）。
         </p>
         <ul className="-mx-1 flex flex-1 flex-col gap-2 overflow-y-auto px-1">
           {rows.map((r, i) => {
@@ -688,33 +702,51 @@ function BulkReportModal({ shifts, onClose }: { shifts: ShiftRow[]; onClose: () 
             return (
               <li
                 key={r.shiftId}
-                className={`rounded-xl border p-2.5 text-xs ${r.include ? "border-border" : "border-dashed border-border opacity-50"}`}
+                className={`rounded-xl border p-2.5 text-xs ${r.kind === "LATER" ? "border-dashed border-border opacity-60" : "border-border"}`}
                 data-testid="bulk-report-row"
               >
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <label className="flex min-w-0 items-center gap-1.5 font-semibold">
-                    <input type="checkbox" checked={r.include} onChange={(e) => update(i, { include: e.target.checked })} />
-                    <span className="truncate">
-                      {dt.getUTCMonth() + 1}月{dt.getUTCDate()}日（{wd}）{s.workplaceName ?? s.companyName}
-                    </span>
-                  </label>
-                  {i > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => update(i, { clockIn: rows[i - 1].clockIn, clockOut: rows[i - 1].clockOut, breakMinutes: rows[i - 1].breakMinutes })}
-                      className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[11px] text-primary"
-                    >
-                      上の行と同じ
-                    </button>
-                  ) : null}
+                <div className={`flex items-center justify-between gap-2 ${r.kind === "WORKED" ? "mb-1.5" : ""}`}>
+                  <span className="min-w-0 truncate font-semibold">
+                    {dt.getUTCMonth() + 1}月{dt.getUTCDate()}日（{wd}）{s.workplaceName ?? s.companyName}
+                  </span>
+                  <select
+                    value={r.kind}
+                    onChange={(e) => update(i, { kind: e.target.value as Kind })}
+                    className="shrink-0 rounded-lg border border-border bg-white px-1.5 py-1 text-xs"
+                    data-testid="bulk-report-kind"
+                  >
+                    <option value="WORKED">出勤</option>
+                    <option value="ABSENT">欠勤</option>
+                    <option value="CANCELLED_BY_EMPLOYER">勤務先キャンセル</option>
+                    <option value="LATER">あとで</option>
+                  </select>
                 </div>
+                {r.kind === "WORKED" ? (
+                  <>
+                    {i > 0 ? (
+                      <div className="mb-1 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            update(i, {
+                              clockIn: rows[i - 1].clockIn,
+                              clockOut: rows[i - 1].clockOut,
+                              breakMinutes: rows[i - 1].breakMinutes,
+                            })
+                          }
+                          className="rounded-full border border-border px-2 py-0.5 text-[11px] text-primary"
+                        >
+                          上の行と同じ
+                        </button>
+                      </div>
+                    ) : null}
                 <div className="grid grid-cols-3 gap-1.5">
                   <label className="flex flex-col gap-0.5">
                     <span className="text-muted">出勤</span>
                     <input
                       type="time"
                       value={r.clockIn}
-                      disabled={!r.include}
+                     
                       onChange={(e) => update(i, { clockIn: e.target.value })}
                       className="rounded-lg border border-border px-1.5 py-1"
                     />
@@ -724,7 +756,7 @@ function BulkReportModal({ shifts, onClose }: { shifts: ShiftRow[]; onClose: () 
                     <input
                       type="time"
                       value={r.clockOut}
-                      disabled={!r.include}
+                     
                       onChange={(e) => update(i, { clockOut: e.target.value })}
                       className="rounded-lg border border-border px-1.5 py-1"
                     />
@@ -735,15 +767,17 @@ function BulkReportModal({ shifts, onClose }: { shifts: ShiftRow[]; onClose: () 
                       type="number"
                       min={0}
                       value={r.breakMinutes}
-                      disabled={!r.include}
+                     
                       onChange={(e) => update(i, { breakMinutes: e.target.value })}
                       className="rounded-lg border border-border px-1.5 py-1"
                     />
                   </label>
                 </div>
-                {r.include && (!r.clockIn || !r.clockOut) ? <p className="mt-1 text-red-600">出勤・退勤の時刻を入れてください。</p> : null}
-                {r.include && r.clockIn && r.clockOut && r.clockOut <= r.clockIn ? (
-                  <p className="mt-1 text-red-600">退勤時刻が出勤時刻より前になっています。</p>
+                    {!r.clockIn || !r.clockOut ? <p className="mt-1 text-red-600">出勤・退勤の時刻を入れてください。</p> : null}
+                    {r.clockIn && r.clockOut && r.clockOut <= r.clockIn ? (
+                      <p className="mt-1 text-red-600">退勤時刻が出勤時刻より前になっています。</p>
+                    ) : null}
+                  </>
                 ) : null}
               </li>
             );
@@ -757,7 +791,7 @@ function BulkReportModal({ shifts, onClose }: { shifts: ShiftRow[]; onClose: () 
           className="mt-3 w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-60"
           data-testid="bulk-report-submit"
         >
-          {pending ? "提出中…" : `${included.length}件をまとめて提出`}
+          {pending ? "提出中…" : included.length > 0 ? `${submitLabel}を提出` : "提出するものがありません"}
         </button>
       </div>
     </div>

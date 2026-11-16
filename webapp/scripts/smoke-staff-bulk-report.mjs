@@ -48,6 +48,8 @@ try {
   const s1 = mk(day(3), "09:00", "18:00");
   const s2 = mk(day(2), "10:00", "15:00");
   const s3 = mk(day(1), null, null);
+  const s4 = mk(day(4), "09:00", "18:00");
+  const s5 = mk(day(5), "09:00", "18:00");
 
   await loginViaEmail(staff, staffEmail, "password123");
   await staff.goto("http://localhost:3000/staff/timecard");
@@ -56,22 +58,30 @@ try {
   await staff.getByTestId("bulk-report-open").click();
   const modal = staff.getByTestId("bulk-report");
   const rows = modal.getByTestId("bulk-report-row");
-  log("未提出の3件が並ぶ", (await rows.count()) === 3);
-  log("予定時刻が最初から入っている（3日前 09:00〜18:00）", (await rows.nth(0).locator("input[type=time]").nth(0).inputValue()) === "09:00" && (await rows.nth(0).locator("input[type=time]").nth(1).inputValue()) === "18:00");
-  log("時間未定の日は空欄で、そのままでは提出できない", (await rows.nth(2).locator("input[type=time]").nth(0).inputValue()) === "" && (await modal.getByTestId("bulk-report-submit").isDisabled()));
+  // 並びは古い順：5日前・4日前・3日前・2日前・昨日
+  log("未提出の5件が並ぶ", (await rows.count()) === 5);
+  log("予定時刻が最初から入っている（3日前 09:00〜18:00）", (await rows.nth(2).locator("input[type=time]").nth(0).inputValue()) === "09:00" && (await rows.nth(2).locator("input[type=time]").nth(1).inputValue()) === "18:00");
+  log("時間未定の日は空欄で、そのままでは提出できない", (await rows.nth(4).locator("input[type=time]").nth(0).inputValue()) === "" && (await modal.getByTestId("bulk-report-submit").isDisabled()));
+  // 5日前は欠勤、4日前は勤務先キャンセル（▼で選ぶと時刻欄が消える）
+  await rows.nth(0).getByTestId("bulk-report-kind").selectOption("ABSENT");
+  await rows.nth(1).getByTestId("bulk-report-kind").selectOption("CANCELLED_BY_EMPLOYER");
+  log("欠勤を選ぶと時刻欄が消える", (await rows.nth(0).locator("input[type=time]").count()) === 0);
   // 2日前は「上の行と同じ」で 09:00〜18:00 に、休憩60分
-  await rows.nth(1).getByRole("button", { name: "上の行と同じ" }).click();
-  await rows.nth(1).locator("input[type=number]").fill("60");
-  // 昨日は出ていない → チェックを外す
-  await rows.nth(2).locator("input[type=checkbox]").uncheck();
+  await rows.nth(3).getByRole("button", { name: "上の行と同じ" }).click();
+  await rows.nth(3).locator("input[type=number]").fill("60");
+  // 昨日は「あとで」
+  await rows.nth(4).getByTestId("bulk-report-kind").selectOption("LATER");
   await staff.screenshot({ path: "/tmp/bulk-report.png" });
-  log("2件をまとめて提出できる", (await modal.getByTestId("bulk-report-submit").innerText()).includes("2件をまとめて提出"));
+  log("ボタンに何をいくつ出すかが出る", (await modal.getByTestId("bulk-report-submit").innerText()).includes("出勤2件・欠勤1件・キャンセル1件を提出"));
   await modal.getByTestId("bulk-report-submit").click();
   await staff.waitForTimeout(3000);
   const rep = (id) => psql(`select coalesce(to_char(("clockIn" at time zone 'UTC') at time zone 'Asia/Tokyo', 'HH24:MI'), '') || '-' || coalesce(to_char(("clockOut" at time zone 'UTC') at time zone 'Asia/Tokyo', 'HH24:MI'), '') || '/' || coalesce("breakMinutes"::text, '') || '/' || ("submittedAt" is not null) from "WorkReport" where "shiftId"='${id}';`);
   log("3日前は予定どおり 09:00-18:00 で提出", rep(s1) === "09:00-18:00/0/true");
   log("2日前は上の行と同じ 09:00-18:00・休憩60分で提出", rep(s2) === "09:00-18:00/60/true");
-  log("チェックを外した昨日は報告されずに残る", rep(s3) === "" || rep(s3).endsWith("/false"));
+  log("「あとで」の昨日は報告されずに残る", rep(s3) === "" || rep(s3).endsWith("/false"));
+  const outcome = (id) => psql(`select outcome || '/' || ("submittedAt" is not null) from "WorkReport" where "shiftId"='${id}';`);
+  log("5日前は欠勤として報告", outcome(s5) === "ABSENT/true");
+  log("4日前は勤務先キャンセルとして報告", outcome(s4) === "CANCELLED_BY_EMPLOYER/true");
 
   console.log(process.exitCode ? "STAFF BULK REPORT SMOKE TEST HAD FAILURES" : "STAFF BULK REPORT SMOKE TEST PASSED");
 } catch (e) {
