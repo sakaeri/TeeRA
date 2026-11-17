@@ -59,7 +59,7 @@ try {
   await page.goto("http://localhost:3000/company?open=unconfirmed");
   await page.waitForTimeout(2500);
   const calendars = page.getByTestId("request-dates-calendar");
-  log("申請ごとに、申請した日の小さなカレンダーが出る", (await calendars.count()) === 2);
+  log("申請ごとに、申請した日の小さなカレンダーが出る（田中1・佐藤2）", (await calendars.count()) === 3);
   const tanakaDays = await page
     .locator("div.rounded-xl", { hasText: "田中さん（出勤希望）" })
     .last()
@@ -68,13 +68,13 @@ try {
   log("田中さんの申請は10・12・15日に色が付く", JSON.stringify(tanakaDays) === JSON.stringify(["10", "12", "15"]));
   const tanakaCard = page.locator("div.rounded-xl", { hasText: "田中さん（出勤希望）" }).last();
   log("備考はカレンダーの下の色の説明に出る", (await tanakaCard.getByTestId("request-legend").innerText()).includes("出勤希望（備考：早番希望）"));
-  // 1日ずつ申請した佐藤さんは1枚のカードにまとまる
+  // 1日ずつ申請した佐藤さんは、備考ごとにまとまる（備考なし／遅め希望）
   const satoCards = page.getByTestId("unconfirmed-card").filter({ hasText: "佐藤さん（出勤希望）" });
-  log("1日ずつ3回申請しても1枚のカードにまとまる", (await satoCards.count()) === 1 && (await satoCards.getByTestId("request-count").innerText()).includes("申請3件"));
-  const satoDays = await satoCards.locator("[data-requested=true]").allInnerTexts();
-  log("まとめたカードに3日分（12・18・19日）が出る", JSON.stringify(satoDays) === JSON.stringify(["12", "18", "19"]));
-  const ringOf = async (d) => (await satoCards.locator("[data-requested=true]", { hasText: new RegExp(`^${d}$`) }).getAttribute("class")) ?? "";
-  log("備考なし＝青、遅め希望＝紫で色分け", (await ringOf("12")).includes("ring-blue-400") && (await ringOf("18")).includes("ring-violet-500") && (await ringOf("19")).includes("ring-violet-500"));
+  log("佐藤さんは備考ごとに2枚（備考なし・遅め希望）", (await satoCards.count()) === 2);
+  const satoLate = satoCards.filter({ hasText: "備考：遅め希望" });
+  const satoNone = satoCards.filter({ hasNotText: "遅め希望" });
+  log("同じ備考（遅め希望）の2件は1枚にまとまる", (await satoLate.getByTestId("request-count").innerText()).includes("申請2件"));
+  log("遅め希望のカードは18・19日、備考なしのカードは12日", JSON.stringify(await satoLate.locator("[data-requested=true]").allInnerTexts()) === JSON.stringify(["18", "19"]) && JSON.stringify(await satoNone.locator("[data-requested=true]").allInnerTexts()) === JSON.stringify(["12"]));
   await page.screenshot({ path: "/tmp/rcal-grouped.png", fullPage: true });
   await page.screenshot({ path: "/tmp/rcal-dashboard.png" });
 
@@ -94,14 +94,14 @@ try {
   // 佐藤さんのまとめたカードの「シフトを作る」→ 3日分すべて選ばれた状態で開く
   await page.goto("http://localhost:3000/company?open=unconfirmed");
   await page.waitForTimeout(2500);
-  await page.getByTestId("unconfirmed-card").filter({ hasText: "佐藤さん（出勤希望）" }).getByTestId("create-shift-from-request").click();
+  await page.getByTestId("unconfirmed-card").filter({ hasText: "佐藤さん（出勤希望）" }).filter({ hasText: "備考：遅め希望" }).getByTestId("create-shift-from-request").click();
   await page.waitForURL(/\/company\/calendar/);
   const modal2 = page.locator("div.fixed.inset-0.z-20").last();
   await modal2.getByRole("button", { name: /社内（自社スタッフとして勤務）/ }).click({ timeout: 60000 });
   await modal2.getByRole("button", { name: "業務内容を選ばずに次へ" }).click();
   await modal2.getByText("日付を選択（複数選択可）").waitFor();
   const sel2 = await modal2.locator("button[data-selected=true]").allInnerTexts();
-  log("まとめたカードからは、全部の申請の日（12・18・19日）が選ばれる", JSON.stringify(sel2.map((t) => t.trim())) === JSON.stringify(["12", "18", "19"]));
+  log("遅め希望のカードからは、その備考の日（18・19日）だけが選ばれる", JSON.stringify(sel2.map((t) => t.trim())) === JSON.stringify(["18", "19"]));
 
   console.log(process.exitCode ? "REQUEST CALENDARS SMOKE TEST HAD FAILURES" : "REQUEST CALENDARS SMOKE TEST PASSED");
 } catch (e) {
