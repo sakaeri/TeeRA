@@ -59,7 +59,8 @@ try {
   await modal.getByText("日付を選択（複数選択可）").waitFor();
   const highlighted = await modal.locator("button[data-highlighted=true]").allInnerTexts();
   log("同じ申請で希望した日だけに色が付く（12日。10日は選択済み、別の申請の15日には付かない）", JSON.stringify(highlighted.map((t) => t.trim()).sort()) === JSON.stringify(["12"]));
-  log("色の意味と、その申請の備考が出る", (await modal.innerText()).includes("石原克己さんが同じ申請で希望した日（備考：早番希望）"));
+  const legend1 = await modal.getByTestId("work-legend").innerText();
+  log("色の意味と、その申請の備考が出る", legend1.includes("石原克己さんが同じ申請で希望した日") && legend1.includes("出勤希望（備考：早番希望）"));
   await page.screenshot({ path: "/tmp/ard.png" });
   // 10日の選択を外すと10日にも色が付く
   await modal.getByRole("button", { name: "10", exact: true }).click();
@@ -77,7 +78,10 @@ try {
   if (ymNow !== ym) await gm.getByRole("button", { name: "次の月" }).click();
   const allReq = await gm.locator("button[data-highlighted=true]").allInnerTexts();
   log("申請から開かなくても、石原さんの出勤希望（10・12・15日）が青枠になる", JSON.stringify(allReq.map((t) => t.trim()).sort()) === JSON.stringify(["10", "12", "15"]));
-  log("説明は「石原克己さんの出勤希望」と両方の備考", (await gm.innerText()).includes("石原克己さんの出勤希望（備考：早番希望／遅番希望）"));
+  const legend2 = await gm.getByTestId("work-legend").innerText();
+  log("説明は「石原克己さんの出勤希望」と、備考ごとの色の意味", legend2.includes("石原克己さんの出勤希望") && legend2.includes("出勤希望（備考：早番希望）") && legend2.includes("出勤希望（備考：遅番希望）"));
+  const ringOf = async (d) => (await gm.getByRole("button", { name: d, exact: true }).getAttribute("class")) ?? "";
+  log("備考ごとに枠の色が違う（早番＝紫、遅番＝橙）", (await ringOf("10")).includes("ring-violet-500") && (await ringOf("12")).includes("ring-violet-500") && (await ringOf("15")).includes("ring-orange-400"));
   await page.screenshot({ path: "/tmp/ard-generic.png" });
 
   // 過ぎた日のシフト希望は、日別の詳細にも出さない（シフトを作れないため）

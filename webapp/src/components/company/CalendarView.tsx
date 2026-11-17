@@ -1,5 +1,7 @@
 "use client";
 
+import { buildWorkRequestColors } from "@/lib/requestNoteColors";
+
 import { leadingBlankCount, orderedWeekdays, useMondayFirst } from "@/components/week/WeekStart";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { PdfLink } from "@/components/PdfLink";
@@ -3655,9 +3657,8 @@ function AssignShiftModal({
   const fromSourceRequest = Boolean(sourceRequest && sourceRequest.staffUserId === staffUserId);
   const staffWorkRequests = staffUserId ? workRequests.filter((r) => r.staffUserId === staffUserId) : [];
   const requestedDates = fromSourceRequest ? sourceRequest!.dates : staffWorkRequests.flatMap((r) => r.dates);
-  const workNotes = (fromSourceRequest ? [sourceRequest!] : staffWorkRequests)
-    .map((r) => r.note)
-    .filter((n): n is string => Boolean(n));
+  // 備考ごとに枠の色を分ける（備考なし＝青、備考ごとに紫・橙・水色）
+  const workColors = buildWorkRequestColors(fromSourceRequest ? [sourceRequest!] : staffWorkRequests);
   // 選んだスタッフの休み希望（シフトはスタッフごとに作るので、その人の休みたい日が分かるように）
   const staffOffRequests = staffUserId ? offRequests.filter((r) => r.staffUserId === staffUserId) : [];
   const staffOffDates = staffOffRequests.flatMap((r) => r.dates);
@@ -3987,15 +3988,22 @@ function AssignShiftModal({
               onToggle={toggleDate}
               initialDate={[...dates].sort()[0] ?? defaultDate}
               highlighted={requestedDates}
+              highlightRings={workColors.byDate}
               offDates={staffOffDates}
               shiftDates={shiftDatesForStaff}
             />
             {requestedDates.length > 0 ? (
-              <span className="flex items-center gap-1.5 text-[11px] text-muted">
-                <span className="inline-block h-3 w-3 rounded ring-2 ring-inset ring-blue-400" />
-                {fromSourceRequest ? `${staffName}さんが同じ申請で希望した日` : `${staffName}さんの出勤希望`}
-                {workNotes.length > 0 ? `（備考：${workNotes.join("／")}）` : ""}
-              </span>
+              <div className="flex flex-col gap-0.5" data-testid="work-legend">
+                <span className="text-[11px] text-muted">
+                  {fromSourceRequest ? `${staffName}さんが同じ申請で希望した日` : `${staffName}さんの出勤希望`}
+                </span>
+                {workColors.legend.map((l) => (
+                  <span key={l.ring} className="flex items-start gap-1.5 text-[11px] text-muted">
+                    <span className={`mt-0.5 inline-block h-3 w-3 shrink-0 rounded ring-2 ring-inset ${l.ring}`} />
+                    {l.label}
+                  </span>
+                ))}
+              </div>
             ) : null}
             {staffOffDates.some((d) => d >= todayJst()) ? (
               <span className="flex items-start gap-1.5 text-[11px] text-muted" data-testid="off-legend">
@@ -4182,6 +4190,7 @@ function MiniCalendarMultiSelect({
   onToggle,
   initialDate,
   highlighted = [],
+  highlightRings,
   offDates = [],
   shiftDates = [],
 }: {
@@ -4192,6 +4201,8 @@ function MiniCalendarMultiSelect({
   shiftDates?: string[];
   // 薄く色を付ける日（シフト作成で、選んだスタッフが出勤希望を出している日）
   highlighted?: string[];
+  // 出勤希望の枠の色（日付ごと。備考ごとの色分け）。無ければ青
+  highlightRings?: Record<string, string>;
   // 薄い赤を付ける日（選んだスタッフが休み希望を出している日。選ぶことはできる）
   offDates?: string[];
 }) {
@@ -4281,7 +4292,7 @@ function MiniCalendarMultiSelect({
                   : offSet.has(c.dateStr)
                     ? "ring-2 ring-inset ring-red-400"
                     : highlightedSet.has(c.dateStr)
-                      ? "ring-2 ring-inset ring-blue-400"
+                      ? `ring-2 ring-inset ${highlightRings?.[c.dateStr] ?? "ring-blue-400"}`
                       : ""
               }`}
               data-highlighted={!isPast && !selectedSet.has(c.dateStr) && highlightedSet.has(c.dateStr) ? "true" : undefined}
