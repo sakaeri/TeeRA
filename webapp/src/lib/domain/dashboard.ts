@@ -182,7 +182,8 @@ export function computeKpis(
   return {
     shortageCount,
     // 出勤希望と、まだ「休みで確定」していない休み希望（これからの日があるもの）を数える
-    unconfirmedShiftCount: data.shiftRequests.filter(isUnconfirmedRequest).length,
+    // スタッフごとにまとめた数（1日ずつ申請した人も1件と数える。未確定シフトのカードの数と同じ）
+    unconfirmedShiftCount: new Set(data.shiftRequests.filter(isUnconfirmedRequest).map((r) => `${r.staffUserId}:${r.desire}`)).size,
     pendingReportCount: data.pendingReports.length,
     pendingContractCount: data.pendingContractStaff.length,
     expiringContractCount: data.expiringContractStaff.length,
@@ -233,15 +234,38 @@ export function computeUnconfirmedShiftEntries(data: DashboardData) {
     if (!sh.staffUserId) continue;
     shiftDatesByStaff.set(sh.staffUserId, [...(shiftDatesByStaff.get(sh.staffUserId) ?? []), sh.date.toISOString().slice(0, 10)]);
   }
-  return data.shiftRequests.filter(isUnconfirmedRequest).map((r) => ({
-    id: r.id,
-    teamKey: r.teamId ?? "none",
-    staffName: r.staff.name,
-    desire: r.desire,
-    dates: r.dates.map((d) => d.toISOString().slice(0, 10)),
-    note: r.note,
-    offDates: r.desire === "WORK" ? (offDatesByStaff.get(r.staffUserId) ?? []) : [],
-    shiftDates: shiftDatesByStaff.get(r.staffUserId) ?? [],
+  // スタッフごと（出勤希望・休み希望それぞれ）に1枚のカードにまとめる。1日ずつ申請する人がいても見やすいように
+  const groups = new Map<
+    string,
+    {
+      id: string;
+      teamKey: string;
+      staffName: string;
+      desire: string;
+      requests: { id: string; dates: string[]; note: string | null }[];
+      offDates: string[];
+      shiftDates: string[];
+    }
+  >();
+  for (const r of data.shiftRequests.filter(isUnconfirmedRequest)) {
+    const key = `${r.staffUserId}:${r.desire}`;
+    const g = groups.get(key) ?? {
+      id: r.id,
+      teamKey: r.teamId ?? "none",
+      staffName: r.staff.name,
+      desire: r.desire,
+      requests: [],
+      offDates: r.desire === "WORK" ? (offDatesByStaff.get(r.staffUserId) ?? []) : [],
+      shiftDates: shiftDatesByStaff.get(r.staffUserId) ?? [],
+    };
+    g.requests.push({ id: r.id, dates: r.dates.map((d) => d.toISOString().slice(0, 10)), note: r.note });
+    groups.set(key, g);
+  }
+  return [...groups.values()].map((g) => ({
+    ...g,
+    requestIds: g.requests.map((r) => r.id),
+    dates: [...new Set(g.requests.flatMap((r) => r.dates))].sort(),
+    notes: [...new Set(g.requests.map((r) => r.note?.trim()).filter((n): n is string => Boolean(n)))],
   }));
 }
 
@@ -330,9 +354,10 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
   // 出勤希望と、まだ確認していない休み希望。1件ずつ並べると長くなるので、チームごとに「◯件あります」の1行にまとめ、
   // タップするとそのチームの分だけの一覧（未確定シフトのポップアップ）が開く。
   const today = new Date(`${todayJst()}T00:00:00.000Z`);
-  const workRequests = shiftRequests.filter(
-    (r) => r.dates.some((d) => d >= today) && (r.desire === "WORK" || r.acknowledgedAt === null),
-  );
+  const workRequests = shiftRequests
+    .filter((r) => r.dates.some((d) => d >= today) && (r.desire === "WORK" || r.acknowledgedAt === null))
+    // スタッフごと（出勤・休みそれぞれ）に1件と数える（未確定シフトのカードの数と同じ）
+    .filter((r, i, arr) => arr.findIndex((x) => x.staffUserId === r.staffUserId && x.desire === r.desire) === i);
   for (const group of groupByTeam(workRequests.map((r) => ({ teamId: r.teamId, teamName: r.team?.name ?? null })))) {
     items.push({
       id: `shift-team-${group.key}`,

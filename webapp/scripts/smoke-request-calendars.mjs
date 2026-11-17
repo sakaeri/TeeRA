@@ -45,7 +45,10 @@ try {
   const ym = psql(`select to_char(date_trunc('month', (now() at time zone 'Asia/Tokyo')) + interval '1 month', 'YYYY-MM');`);
   const [y, m] = ym.split("-").map(Number);
   psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status, note) values (gen_random_uuid()::text, '${a}', '${companyId}', 'WORK', ARRAY['${ym}-10','${ym}-12','${ym}-15']::date[], 'PENDING', '早番希望');`);
-  psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status) values (gen_random_uuid()::text, '${b}', '${companyId}', 'WORK', ARRAY['${ym}-12']::date[], 'PENDING');`);
+  // 佐藤さんは1日ずつ3回申請（備考なし・遅め希望・遅め希望）→ 1枚のカードにまとまる
+  psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status, "createdAt") values (gen_random_uuid()::text, '${b}', '${companyId}', 'WORK', ARRAY['${ym}-12']::date[], 'PENDING', now() - interval '3 minutes');`);
+  psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status, note, "createdAt") values (gen_random_uuid()::text, '${b}', '${companyId}', 'WORK', ARRAY['${ym}-18']::date[], 'PENDING', '遅め希望', now() - interval '2 minutes');`);
+  psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status, note, "createdAt") values (gen_random_uuid()::text, '${b}', '${companyId}', 'WORK', ARRAY['${ym}-19']::date[], 'PENDING', '遅め希望', now() - interval '1 minutes');`);
 
   // --- カレンダーの上の「シフト希望」の欄はなくした ---
   await page.goto("http://localhost:3000/company/calendar");
@@ -63,8 +66,16 @@ try {
     .locator("[data-requested=true]")
     .allInnerTexts();
   log("田中さんの申請は10・12・15日に色が付く", JSON.stringify(tanakaDays) === JSON.stringify(["10", "12", "15"]));
-  const note = page.getByTestId("request-note");
-  log("備考はカレンダーの下に出る", (await note.innerText()).includes("備考：早番希望"));
+  const tanakaCard = page.locator("div.rounded-xl", { hasText: "田中さん（出勤希望）" }).last();
+  log("備考はカレンダーの下の色の説明に出る", (await tanakaCard.getByTestId("request-legend").innerText()).includes("出勤希望（備考：早番希望）"));
+  // 1日ずつ申請した佐藤さんは1枚のカードにまとまる
+  const satoCards = page.getByTestId("unconfirmed-card").filter({ hasText: "佐藤さん（出勤希望）" });
+  log("1日ずつ3回申請しても1枚のカードにまとまる", (await satoCards.count()) === 1 && (await satoCards.getByTestId("request-count").innerText()).includes("申請3件"));
+  const satoDays = await satoCards.locator("[data-requested=true]").allInnerTexts();
+  log("まとめたカードに3日分（12・18・19日）が出る", JSON.stringify(satoDays) === JSON.stringify(["12", "18", "19"]));
+  const ringOf = async (d) => (await satoCards.locator("[data-requested=true]", { hasText: new RegExp(`^${d}$`) }).getAttribute("class")) ?? "";
+  log("備考なし＝青、遅め希望＝紫で色分け", (await ringOf("12")).includes("ring-blue-400") && (await ringOf("18")).includes("ring-violet-500") && (await ringOf("19")).includes("ring-violet-500"));
+  await page.screenshot({ path: "/tmp/rcal-grouped.png", fullPage: true });
   await page.screenshot({ path: "/tmp/rcal-dashboard.png" });
 
   // --- 「この申請でシフトを作る」：そのスタッフ・その申請の日が全部選ばれた状態でシフト作成が開く ---
@@ -79,6 +90,18 @@ try {
   log("見出しに誰のシフトか出る（田中さんのシフトを作成）", (await modal.innerText()).includes("田中さんのシフトを作成"));
   log("URLから申請の指定が消える", !page.url().includes("assignRequest"));
   await page.screenshot({ path: "/tmp/rcal-assign.png" });
+
+  // 佐藤さんのまとめたカードの「シフトを作る」→ 3日分すべて選ばれた状態で開く
+  await page.goto("http://localhost:3000/company?open=unconfirmed");
+  await page.waitForTimeout(2500);
+  await page.getByTestId("unconfirmed-card").filter({ hasText: "佐藤さん（出勤希望）" }).getByTestId("create-shift-from-request").click();
+  await page.waitForURL(/\/company\/calendar/);
+  const modal2 = page.locator("div.fixed.inset-0.z-20").last();
+  await modal2.getByRole("button", { name: /社内（自社スタッフとして勤務）/ }).click({ timeout: 60000 });
+  await modal2.getByRole("button", { name: "業務内容を選ばずに次へ" }).click();
+  await modal2.getByText("日付を選択（複数選択可）").waitFor();
+  const sel2 = await modal2.locator("button[data-selected=true]").allInnerTexts();
+  log("まとめたカードからは、全部の申請の日（12・18・19日）が選ばれる", JSON.stringify(sel2.map((t) => t.trim())) === JSON.stringify(["12", "18", "19"]));
 
   console.log(process.exitCode ? "REQUEST CALENDARS SMOKE TEST HAD FAILURES" : "REQUEST CALENDARS SMOKE TEST PASSED");
 } catch (e) {
