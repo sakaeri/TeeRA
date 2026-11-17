@@ -182,7 +182,8 @@ export function computeKpis(
   return {
     shortageCount,
     // 出勤希望と、まだ「休みで確定」していない休み希望（これからの日があるもの）を数える
-    unconfirmedShiftCount: data.shiftRequests.filter(isUnconfirmedRequest).length,
+    // 未確定シフトのカードの数（出勤希望はスタッフ×備考、休み希望はスタッフごと）
+    unconfirmedShiftCount: new Set(data.shiftRequests.filter(isUnconfirmedRequest).map(requestGroupKey)).size,
     pendingReportCount: data.pendingReports.length,
     pendingContractCount: data.pendingContractStaff.length,
     expiringContractCount: data.expiringContractStaff.length,
@@ -211,6 +212,12 @@ export function computeShortageEntries(data: DashboardData) {
     .filter((r) => r.filled < r.maxEntries);
 }
 
+// 未確定シフトのまとめ方：出勤希望はスタッフ×備考（同じ備考の申請だけまとめてシフトを作れるように）、
+// 休み希望はスタッフごと
+function requestGroupKey(r: { staffUserId: string; desire: string; note: string | null }) {
+  return r.desire === "WORK" ? `${r.staffUserId}:WORK:${r.note?.trim() ?? ""}` : `${r.staffUserId}:OFF`;
+}
+
 // ダッシュボードの「未確定シフト」に出すもの：出勤希望（シフトを作るか見送るまで）と、
 // 会社がまだ「休みで確定」していない休み希望（これからの日があるもの）
 function isUnconfirmedRequest(r: { desire: string; acknowledgedAt: Date | null; dates: Date[] }) {
@@ -233,15 +240,47 @@ export function computeUnconfirmedShiftEntries(data: DashboardData) {
     if (!sh.staffUserId) continue;
     shiftDatesByStaff.set(sh.staffUserId, [...(shiftDatesByStaff.get(sh.staffUserId) ?? []), sh.date.toISOString().slice(0, 10)]);
   }
-  return data.shiftRequests.filter(isUnconfirmedRequest).map((r) => ({
-    id: r.id,
-    teamKey: r.teamId ?? "none",
-    staffName: r.staff.name,
-    desire: r.desire,
-    dates: r.dates.map((d) => d.toISOString().slice(0, 10)),
-    note: r.note,
-    offDates: r.desire === "WORK" ? (offDatesByStaff.get(r.staffUserId) ?? []) : [],
-    shiftDates: shiftDatesByStaff.get(r.staffUserId) ?? [],
+  // 出勤希望はスタッフ×備考ごと、休み希望はスタッフごとに1枚のカードにまとめる（1日ずつ申請する人がいても見やすいように）
+  const groups = new Map<
+    string,
+    {
+      id: string;
+      teamKey: string;
+      staffName: string;
+      desire: string;
+      requests: { id: string; dates: string[]; note: string | null }[];
+      offDates: string[];
+      shiftDates: string[];
+    }
+  >();
+  for (const r of data.shiftRequests.filter(isUnconfirmedRequest)) {
+    const key = requestGroupKey(r);
+    const g = groups.get(key) ?? {
+      id: r.id,
+      teamKey: r.teamId ?? "none",
+      staffName: r.staff.name,
+      desire: r.desire,
+      requests: [],
+      offDates: r.desire === "WORK" ? (offDatesByStaff.get(r.staffUserId) ?? []) : [],
+      shiftDates: shiftDatesByStaff.get(r.staffUserId) ?? [],
+    };
+    g.requests.push({ id: r.id, dates: r.dates.map((d) => d.toISOString().slice(0, 10)), note: r.note });
+    groups.set(key, g);
+  }
+  // 同じスタッフのカード（備考ごと・休み希望）は並べて出す
+  const staffOrder: string[] = [];
+  for (const k of groups.keys()) {
+    const staffId = k.split(":")[0];
+    if (!staffOrder.includes(staffId)) staffOrder.push(staffId);
+  }
+  const sorted = [...groups.entries()]
+    .sort(([a], [b]) => staffOrder.indexOf(a.split(":")[0]) - staffOrder.indexOf(b.split(":")[0]))
+    .map(([, g]) => g);
+  return sorted.map((g) => ({
+    ...g,
+    requestIds: g.requests.map((r) => r.id),
+    dates: [...new Set(g.requests.flatMap((r) => r.dates))].sort(),
+    notes: [...new Set(g.requests.map((r) => r.note?.trim()).filter((n): n is string => Boolean(n)))],
   }));
 }
 
@@ -330,9 +369,10 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
   // 出勤希望と、まだ確認していない休み希望。1件ずつ並べると長くなるので、チームごとに「◯件あります」の1行にまとめ、
   // タップするとそのチームの分だけの一覧（未確定シフトのポップアップ）が開く。
   const today = new Date(`${todayJst()}T00:00:00.000Z`);
-  const workRequests = shiftRequests.filter(
-    (r) => r.dates.some((d) => d >= today) && (r.desire === "WORK" || r.acknowledgedAt === null),
-  );
+  const workRequests = shiftRequests
+    .filter((r) => r.dates.some((d) => d >= today) && (r.desire === "WORK" || r.acknowledgedAt === null))
+    // カードの単位（出勤希望はスタッフ×備考、休み希望はスタッフ）で1件と数える
+    .filter((r, i, arr) => arr.findIndex((x) => requestGroupKey(x) === requestGroupKey(r)) === i);
   for (const group of groupByTeam(workRequests.map((r) => ({ teamId: r.teamId, teamName: r.team?.name ?? null })))) {
     items.push({
       id: `shift-team-${group.key}`,

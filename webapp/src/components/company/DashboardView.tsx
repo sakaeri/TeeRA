@@ -5,6 +5,7 @@ import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { PdfLink } from "@/components/PdfLink";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { buildWorkRequestColors, type NoteColor } from "@/lib/requestNoteColors";
 import { acknowledgeOffRequestAction, dismissOffRequestAction } from "@/app/company/calendar/actions";
 import { REQUIRED_DOCUMENT_LABEL, type RequiredDocument } from "@/lib/requiredDocuments";
 import {
@@ -99,7 +100,10 @@ type UnconfirmedShiftEntry = {
   staffName: string;
   desire: string;
   dates: string[];
-  note: string | null;
+  // スタッフごとにまとめた申請（1日ずつ申請した人も1枚のカードに）
+  requestIds: string[];
+  requests: { id: string; dates: string[]; note: string | null }[];
+  notes: string[];
   // 出勤希望のカードに添える、そのスタッフの休み希望の日
   offDates: string[];
   // そのスタッフのシフトを作成済みの日
@@ -1013,15 +1017,28 @@ const DESIRE_LABEL: Record<string, string> = {
 };
 
 // 申請カレンダーの色の意味（出てくる色だけ並べる）
-function RequestColorLegend({ work, off, shift }: { work: boolean; off: boolean; shift: boolean }) {
+function RequestColorLegend({
+  work,
+  off,
+  shift,
+  workLegend,
+}: {
+  work: boolean;
+  off: boolean;
+  shift: boolean;
+  // 備考ごとの色分けの説明（出勤希望）
+  workLegend?: NoteColor[];
+}) {
   return (
-    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
-      {work ? (
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded ring-2 ring-inset ring-blue-400" />
-          出勤希望
-        </span>
-      ) : null}
+    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted" data-testid="request-legend">
+      {work
+        ? (workLegend ?? [{ ring: "ring-blue-400", label: "出勤希望" }]).map((l) => (
+            <span key={l.ring} className="flex items-center gap-1">
+              <span className={`inline-block h-3 w-3 shrink-0 rounded ring-2 ring-inset ${l.ring}`} />
+              {l.label}
+            </span>
+          ))
+        : null}
       {off ? (
         <span className="flex items-center gap-1">
           <span className="inline-block h-3 w-3 rounded ring-2 ring-inset ring-red-400" />
@@ -1050,11 +1067,14 @@ function UnconfirmedShiftPopup({
   // 休み希望の「休みで確定」「見送る」を押したものは、すぐ一覧から消す（件数は一覧を閉じた時に読み直す）
   const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
   const [, startTransition] = useTransition();
-  function acknowledge(id: string, dismiss = false) {
-    setAcknowledged((prev) => new Set(prev).add(id));
+  // まとめたカードの申請すべてに対して行う
+  function acknowledge(entry: UnconfirmedShiftEntry, dismiss = false) {
+    setAcknowledged((prev) => new Set(prev).add(entry.id));
     startTransition(async () => {
-      if (dismiss) await dismissOffRequestAction(id);
-      else await acknowledgeOffRequestAction(id);
+      for (const id of entry.requestIds) {
+        if (dismiss) await dismissOffRequestAction(id);
+        else await acknowledgeOffRequestAction(id);
+      }
       onAcknowledged();
     });
   }
@@ -1065,10 +1085,19 @@ function UnconfirmedShiftPopup({
       subtitle="スタッフから提出された希望シフトです。ここから直接カレンダーで確認できます"
       onClose={onClose}
     >
-      {visible.map((r) => (
+      {visible.map((r) => {
+        const workColors = r.desire === "WORK" ? buildWorkRequestColors(r.requests) : null;
+        return (
         <div key={r.id} className="flex flex-col gap-2 rounded-xl border border-border/60 p-4 text-sm" data-testid="unconfirmed-card">
-          <p className="font-medium">
-            {r.staffName}さん（{DESIRE_LABEL[r.desire] ?? r.desire}）
+          <p className="flex items-center justify-between gap-2 font-medium">
+            <span>
+              {r.staffName}さん（{DESIRE_LABEL[r.desire] ?? r.desire}）
+            </span>
+            {r.requests.length > 1 ? (
+              <span className="shrink-0 rounded-full bg-background px-2 py-0.5 text-[11px] text-muted" data-testid="request-count">
+                申請{r.requests.length}件
+              </span>
+            ) : null}
           </p>
           {/* 申請した日を月のカレンダーで示す（色の付いた日を押すと、その日のカレンダーが開く） */}
           <RequestDatesCalendar
@@ -1077,16 +1106,18 @@ function UnconfirmedShiftPopup({
             tone={r.desire === "OFF" ? "off" : "work"}
             offDates={r.offDates}
             shiftDates={r.shiftDates}
+            ringByDate={workColors?.byDate}
           />
           <RequestColorLegend
             work={r.desire === "WORK"}
             off={r.desire === "OFF" || r.offDates.length > 0}
             shift={r.shiftDates.some((d) => [...r.dates, ...r.offDates].some((x) => x.slice(0, 7) === d.slice(0, 7)))}
+            workLegend={workColors?.legend}
           />
-          {/* 備考は大事なので、カレンダーの下に目立つように出す（長くても上の並びを崩さない） */}
-          {r.note ? (
+          {/* 休み希望の備考は、カレンダーの下に目立つように出す（出勤希望の備考は上の色の説明に出る） */}
+          {r.desire === "OFF" && r.notes.length > 0 ? (
             <p className="whitespace-pre-wrap break-words rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950" data-testid="request-note">
-              備考：{r.note}
+              備考：{r.notes.join("／")}
             </p>
           ) : null}
           {/* 確認と作成を下に横並び。作成（その申請の日が全部選ばれた状態で開く）が主な操作なので塗りつぶし */}
@@ -1099,7 +1130,7 @@ function UnconfirmedShiftPopup({
             </Link>
             {r.desire === "WORK" ? (
               <Link
-                href={`/company/calendar?y=${Number(r.dates[0].slice(0, 4))}&m=${Number(r.dates[0].slice(5, 7))}&assignRequest=${r.id}`}
+                href={`/company/calendar?y=${Number(r.dates[0].slice(0, 4))}&m=${Number(r.dates[0].slice(5, 7))}&assignRequest=${r.requestIds.join(",")}`}
                 className="rounded-lg bg-primary px-3 py-2 text-center text-xs font-semibold text-primary-foreground"
                 data-testid="create-shift-from-request"
               >
@@ -1109,7 +1140,7 @@ function UnconfirmedShiftPopup({
               // 休み希望は「休みで確定」か「見送る」で一覧から消える（スタッフ側の表示も変わる）
               <button
                 type="button"
-                onClick={() => acknowledge(r.id)}
+                onClick={() => acknowledge(r)}
                 className="rounded-lg bg-primary px-3 py-2 text-center text-xs font-semibold text-primary-foreground"
                 data-testid="acknowledge-off-request"
               >
@@ -1120,7 +1151,7 @@ function UnconfirmedShiftPopup({
           {r.desire === "OFF" ? (
             <button
               type="button"
-              onClick={() => acknowledge(r.id, true)}
+              onClick={() => acknowledge(r, true)}
               className="self-center text-xs text-muted underline hover:text-red-700"
               data-testid="dismiss-off-request"
             >
@@ -1128,7 +1159,8 @@ function UnconfirmedShiftPopup({
             </button>
           ) : null}
         </div>
-      ))}
+        );
+      })}
       {visible.length === 0 ? <p className="text-center text-muted">未確定の希望シフトはありません。</p> : null}
     </PopupShell>
   );

@@ -68,12 +68,12 @@ try {
   await admin.waitForTimeout(2500);
   const offCards = admin.getByTestId("unconfirmed-card").filter({ hasText: "（休み希望）" });
   await offCards.filter({ hasText: "備考" }).count();
-  // カードはカレンダーの日で見分ける
-  const card20 = offCards.filter({ has: admin.locator("[data-requested=true]", { hasText: /^20$/ }) });
-  const card22 = offCards.filter({ has: admin.locator("[data-requested=true]", { hasText: /^22$/ }) });
-  await card20.getByTestId("acknowledge-off-request").click();
-  await card22.getByTestId("dismiss-off-request").click();
+  // 1人分の休み希望（20日・22日の2件）は1枚のカードにまとまる
+  log("同じスタッフの休み希望2件は1枚のカードにまとまる", (await offCards.count()) === 1 && (await offCards.getByTestId("request-count").innerText()).includes("申請2件"));
+  // 「休みで確定」はまとめた2件すべてに効く。そのあと22日だけ「見送る」に変える（会社側で個別に見送る時）
+  await offCards.getByTestId("acknowledge-off-request").click();
   await admin.waitForTimeout(1500);
+  psql(`update "ShiftRequest" set status='DISMISSED', "acknowledgedAt"=null where "staffUserId"='${staffId}' and desire='OFF' and dates[1]='${ym}-22';`);
   log("休みで確定・見送るで、休み希望のカードが両方消える", (await admin.getByTestId("unconfirmed-card").filter({ hasText: "（休み希望）" }).count()) === 0);
   log("20日は確定、22日は見送り", psql(`select string_agg(to_char(dates[1], 'DD') || ':' || status || ':' || ("acknowledgedAt" is not null), ',' order by dates[1]) from "ShiftRequest" where "staffUserId"='${staffId}' and desire='OFF';`) === "20:PENDING:true,22:DISMISSED:false");
 

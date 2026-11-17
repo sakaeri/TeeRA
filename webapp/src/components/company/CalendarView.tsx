@@ -302,13 +302,18 @@ export function CalendarView({
     setPrevInitialSelectedDate(initialSelectedDate);
     if (initialSelectedDate) setSelectedDate(initialSelectedDate);
   }
-  const initialAssignRequest = initialAssignRequestId
-    ? shiftRequests.find((r) => r.id === initialAssignRequestId && r.desire === "WORK")
-    : undefined;
+  // 「シフトを作る」から来た時の申請（スタッフごとにまとめたカードからは、その人の複数の申請がカンマ区切りで来る）
+  const initialAssignRequests = (initialAssignRequestId ?? "")
+    .split(",")
+    .map((id) => shiftRequests.find((r) => r.id === id && r.desire === "WORK"))
+    .filter((r): r is ShiftRequestRow => Boolean(r));
+  const initialAssignRequest = initialAssignRequests[0];
   const [showAssignForm, setShowAssignForm] = useState(initialCreate === "shift" || Boolean(initialAssignRequest));
   const [assignFormStaffUserId, setAssignFormStaffUserId] = useState<string | undefined>(initialAssignRequest?.staffUserId);
   // シフト希望の行の「シフト作成」から開いた時の、その希望（同じ申請で出した日に色を付ける）
-  const [assignFormRequestId, setAssignFormRequestId] = useState<string | undefined>(initialAssignRequest?.id);
+  const [assignFormRequestId, setAssignFormRequestId] = useState<string | undefined>(
+    initialAssignRequests.length > 0 ? initialAssignRequests.map((r) => r.id).join(",") : undefined,
+  );
   // 「シフトを作る」から開いた時は、その申請の日を最初から全部選んでおく
   const [assignPreselectRequestDates, setAssignPreselectRequestDates] = useState(Boolean(initialAssignRequest));
   const [showRecruitForm, setShowRecruitForm] = useState(initialCreate === "recruit");
@@ -775,7 +780,10 @@ export function CalendarView({
           placementRates={placementRates}
           defaultDate={selectedDate ?? todayStr}
           defaultStaffUserId={assignFormStaffUserId}
-          sourceRequest={shiftRequests.find((r) => r.id === assignFormRequestId)}
+          sourceRequests={(assignFormRequestId ?? "")
+            .split(",")
+            .map((id) => shiftRequests.find((r) => r.id === id))
+            .filter((r): r is ShiftRequestRow => Boolean(r))}
           offRequests={shiftRequests.filter((r) => r.desire === "OFF")}
           workRequests={shiftRequests.filter((r) => r.desire === "WORK")}
           preselectRequestDates={assignPreselectRequestDates}
@@ -3461,7 +3469,7 @@ function AssignShiftModal({
   placementRates,
   defaultDate,
   defaultStaffUserId,
-  sourceRequest,
+  sourceRequests = [],
   offRequests = [],
   workRequests = [],
   preselectRequestDates = false,
@@ -3477,7 +3485,8 @@ function AssignShiftModal({
   defaultStaffUserId?: string;
   // シフト希望の行から開いた時の、その希望。同じ申請（1回の申請）で出した日だけを、日付の選択で
   // 薄く色付けする補助に使う（同じスタッフでも、別の申請で出した日には付けない）
-  sourceRequest?: ShiftRequestRow;
+  // 申請から開いた時のその申請（スタッフごとにまとめたカードからは複数）
+  sourceRequests?: ShiftRequestRow[];
   // 休み希望（選んだスタッフの休み希望の日を日付の選択で薄い赤にする）
   offRequests?: ShiftRequestRow[];
   // 出勤希望（申請から開いていない時も、選んだスタッフの出勤希望の日を青枠にする）
@@ -3526,7 +3535,7 @@ function AssignShiftModal({
   const [clientSearch, setClientSearch] = useState("");
   const [staffUserId, setStaffUserId] = useState(defaultStaffUserId ?? "");
   // 「シフトを作る」から開いた時は、その申請のこれからの日を最初から選んでおく（入れない日だけ外す）
-  const requestFutureDates = (sourceRequest?.dates ?? []).filter((d) => d >= todayJst()).sort();
+  const requestFutureDates = [...new Set(sourceRequests.flatMap((r) => r.dates))].filter((d) => d >= todayJst()).sort();
   const [dates, setDates] = useState<string[]>(
     preselectRequestDates && requestFutureDates.length > 0 ? requestFutureDates : [defaultDate],
   );
@@ -3654,11 +3663,12 @@ function AssignShiftModal({
   const assignTitle = staffName ? `${staffName}さんのシフトを作成` : "シフトを作成";
   // 同じ申請で希望した日（日付の選択の補助として薄く色を付ける）。スタッフを選び直したら付けない
   // 申請から開いた時はその申請の日だけ、それ以外は選んだスタッフの出勤希望の日すべて
-  const fromSourceRequest = Boolean(sourceRequest && sourceRequest.staffUserId === staffUserId);
+  const fromSourceRequest = sourceRequests.length > 0 && sourceRequests.every((r) => r.staffUserId === staffUserId);
   const staffWorkRequests = staffUserId ? workRequests.filter((r) => r.staffUserId === staffUserId) : [];
-  const requestedDates = fromSourceRequest ? sourceRequest!.dates : staffWorkRequests.flatMap((r) => r.dates);
+  const shownWorkRequests = fromSourceRequest ? sourceRequests : staffWorkRequests;
+  const requestedDates = shownWorkRequests.flatMap((r) => r.dates);
   // 備考ごとに枠の色を分ける（備考なし＝青、備考ごとに紫・橙・水色）
-  const workColors = buildWorkRequestColors(fromSourceRequest ? [sourceRequest!] : staffWorkRequests);
+  const workColors = buildWorkRequestColors(shownWorkRequests);
   // 選んだスタッフの休み希望（シフトはスタッフごとに作るので、その人の休みたい日が分かるように）
   const staffOffRequests = staffUserId ? offRequests.filter((r) => r.staffUserId === staffUserId) : [];
   const staffOffDates = staffOffRequests.flatMap((r) => r.dates);
@@ -3995,7 +4005,7 @@ function AssignShiftModal({
             {requestedDates.length > 0 ? (
               <div className="flex flex-col gap-0.5" data-testid="work-legend">
                 <span className="text-[11px] text-muted">
-                  {fromSourceRequest ? `${staffName}さんが同じ申請で希望した日` : `${staffName}さんの出勤希望`}
+                  {fromSourceRequest && sourceRequests.length === 1 ? `${staffName}さんが同じ申請で希望した日` : `${staffName}さんの出勤希望`}
                 </span>
                 {workColors.legend.map((l) => (
                   <span key={l.ring} className="flex items-start gap-1.5 text-[11px] text-muted">

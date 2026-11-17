@@ -26,6 +26,7 @@ export function RequestDatesCalendar({
   tone = "work",
   offDates = [],
   shiftDates = [],
+  ringByDate,
 }: {
   dates: string[];
   hrefFor: (date: string) => string;
@@ -33,6 +34,8 @@ export function RequestDatesCalendar({
   offDates?: string[];
   // そのスタッフのシフトを作成済みの日（薄い緑の塗り）
   shiftDates?: string[];
+  // 出勤希望の枠の色（日付ごと。備考ごとの色分け）。無ければ青
+  ringByDate?: Record<string, string>;
 }) {
   const set = new Set(dates);
   const offSet = new Set(offDates);
@@ -42,7 +45,7 @@ export function RequestDatesCalendar({
     const ring = set.has(d)
       ? tone === "off"
         ? "ring-2 ring-inset ring-red-400"
-        : "ring-2 ring-inset ring-blue-400"
+        : `ring-2 ring-inset ${ringByDate?.[d] ?? "ring-blue-400"}`
       : offSet.has(d)
         ? "ring-2 ring-inset ring-red-400"
         : "";
