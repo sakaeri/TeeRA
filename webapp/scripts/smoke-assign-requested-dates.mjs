@@ -66,6 +66,20 @@ try {
   const after = await modal.locator("button[data-highlighted=true]").allInnerTexts();
   log("選択を外した日にも色が付く（ほかの人の希望の20日には付かない）", JSON.stringify(after.map((t) => t.trim()).sort()) === JSON.stringify(["10", "12"]));
 
+  // 申請から開かずに「シフトを作成」からスタッフを選んだ時も、そのスタッフの出勤希望（全部の申請）が青枠で出る
+  await page.goto("http://localhost:3000/company/calendar?create=shift");
+  const gm = page.locator("div.fixed.inset-0.z-20").last();
+  await gm.getByRole("button", { name: /社内（自社スタッフとして勤務）/ }).click({ timeout: 60000 });
+  await gm.getByRole("button", { name: "業務内容を選ばずに次へ" }).click();
+  await gm.getByRole("button", { name: "石原克己" }).click();
+  await gm.getByText("日付を選択（複数選択可）").waitFor();
+  const ymNow = psql(`select to_char((now() at time zone 'Asia/Tokyo'), 'YYYY-MM');`);
+  if (ymNow !== ym) await gm.getByRole("button", { name: "次の月" }).click();
+  const allReq = await gm.locator("button[data-highlighted=true]").allInnerTexts();
+  log("申請から開かなくても、石原さんの出勤希望（10・12・15日）が青枠になる", JSON.stringify(allReq.map((t) => t.trim()).sort()) === JSON.stringify(["10", "12", "15"]));
+  log("説明は「石原克己さんの出勤希望」と両方の備考", (await gm.innerText()).includes("石原克己さんの出勤希望（備考：早番希望／遅番希望）"));
+  await page.screenshot({ path: "/tmp/ard-generic.png" });
+
   // 過ぎた日のシフト希望は、日別の詳細にも出さない（シフトを作れないため）
   const yesterday = psql(`select to_char((now() at time zone 'Asia/Tokyo')::date - 1, 'YYYY-MM-DD');`);
   psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status) values (gen_random_uuid()::text, '${ishihara}', '${companyId}', 'WORK', ARRAY['${yesterday}']::date[], 'PENDING');`);
