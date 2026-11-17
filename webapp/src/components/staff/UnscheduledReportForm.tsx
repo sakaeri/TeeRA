@@ -69,7 +69,8 @@ function UnscheduledReportModal({
 }) {
   const [pending, startTransition] = useTransition();
   const [companyId, setCompanyId] = useState(companies[0].companyId);
-  const [relationshipId, setRelationshipId] = useState("");
+  // 勤務先は最初は選ばない（自社のまま出してしまうのを防ぐ）。null＝未選択、""＝自社
+  const [relationshipId, setRelationshipId] = useState<string | null>(null);
   const [date, setDate] = useState(todayJst());
   const [clockIn, setClockIn] = useState("");
   const [clockOut, setClockOut] = useState("");
@@ -126,7 +127,7 @@ function UnscheduledReportModal({
                 value={companyId}
                 onChange={(e) => {
                   setCompanyId(e.target.value);
-                  setRelationshipId("");
+                  setRelationshipId(null);
                   setTaskName("");
                 }}
                 className="rounded-lg border border-border px-3 py-2"
@@ -143,10 +144,12 @@ function UnscheduledReportModal({
           <label className="flex flex-col gap-1">
             <span className="text-xs text-muted">勤務先</span>
             <select
-              value={relationshipId}
-              onChange={(e) => setRelationshipId(e.target.value)}
-              className="rounded-lg border border-border px-3 py-2"
+              value={relationshipId ?? "__none"}
+              onChange={(e) => setRelationshipId(e.target.value === "__none" ? null : e.target.value)}
+              className={`rounded-lg border border-border px-3 py-2 ${relationshipId === null ? "text-muted" : ""}`}
+              data-testid="unscheduled-workplace"
             >
+              {relationshipId === null ? <option value="__none">選んでください</option> : null}
               <option value="">自社（{company.companyName}）</option>
               {company.workplaces.map((w) => (
                 <option key={w.companyRelationshipId} value={w.companyRelationshipId}>
@@ -184,14 +187,14 @@ function UnscheduledReportModal({
             </datalist>
           </label>
 
-          <div className="flex flex-wrap items-end gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1">
               <span className="text-xs text-muted">出勤</span>
               <input
                 type="time"
                 value={clockIn}
                 onChange={(e) => setClockIn(e.target.value)}
-                className="rounded-lg border border-border px-2 py-2"
+                className="w-full rounded-lg border border-border px-2 py-2"
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -200,7 +203,7 @@ function UnscheduledReportModal({
                 type="time"
                 value={clockOut}
                 onChange={(e) => setClockOut(e.target.value)}
-                className="rounded-lg border border-border px-2 py-2"
+                className="w-full rounded-lg border border-border px-2 py-2"
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -210,7 +213,7 @@ function UnscheduledReportModal({
                 min="0"
                 value={breakMinutes}
                 onChange={(e) => setBreakMinutes(e.target.value)}
-                className="w-20 rounded-lg border border-border px-2 py-2"
+                className="w-full rounded-lg border border-border px-2 py-2"
               />
             </label>
           </div>
@@ -230,7 +233,7 @@ function UnscheduledReportModal({
         {error ? <p className="mt-3 text-xs text-red-600">{error}</p> : null}
         <button
           type="button"
-          disabled={pending || !date || !clockIn || !clockOut}
+          disabled={pending || relationshipId === null || !date || !clockIn || !clockOut}
           onClick={submit}
           className="mt-4 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
