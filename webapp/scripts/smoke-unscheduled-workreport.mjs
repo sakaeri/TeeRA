@@ -70,8 +70,10 @@ try {
   const modal = staff.locator("div.fixed.inset-0.z-40").last();
   const workplaceOptions = await modal.locator("label", { hasText: "勤務先" }).locator("option").allTextContents();
   log("勤務先に自社と配属済みの依頼主が出る", workplaceOptions.some((o) => o.startsWith("自社")) && workplaceOptions.includes("テスト現場"));
+  log("勤務先は最初は選ばれていない（選ぶまで提出できない）", workplaceOptions[0] === "選んでください" && (await modal.getByRole("button", { name: "業務報告を提出する" }).isDisabled()));
 
   await modal.locator("label", { hasText: "勤務先" }).locator("select").selectOption(relId);
+  await staff.screenshot({ path: "/tmp/unsched.png" });
   await modal.locator("label", { hasText: "勤務日" }).locator("input").fill(yesterday);
   await modal.locator("label", { hasText: "業務内容" }).locator("input").fill("緊急対応");
   await modal.locator("label", { hasText: "出勤" }).first().locator("input").fill("09:00");
@@ -101,6 +103,7 @@ try {
   await staff.goto("http://localhost:3000/staff/timecard");
   await staff.getByRole("button", { name: "＋シフト外の勤務を報告する" }).click();
   const modal2 = staff.locator("div.fixed.inset-0.z-40").last();
+  await modal2.locator("label", { hasText: "勤務先" }).locator("select").selectOption(relId);
   await modal2.locator("label", { hasText: "勤務日" }).locator("input").fill(yesterday);
   await modal2.locator("label", { hasText: "出勤" }).first().locator("input").fill("10:00");
   await modal2.locator("label", { hasText: "退勤" }).locator("input").fill("12:00");
