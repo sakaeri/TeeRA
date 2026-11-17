@@ -775,6 +775,7 @@ export function CalendarView({
           defaultStaffUserId={assignFormStaffUserId}
           sourceRequest={shiftRequests.find((r) => r.id === assignFormRequestId)}
           offRequests={shiftRequests.filter((r) => r.desire === "OFF")}
+          workRequests={shiftRequests.filter((r) => r.desire === "WORK")}
           preselectRequestDates={assignPreselectRequestDates}
           onClose={() => {
             setShowAssignForm(false);
@@ -3460,6 +3461,7 @@ function AssignShiftModal({
   defaultStaffUserId,
   sourceRequest,
   offRequests = [],
+  workRequests = [],
   preselectRequestDates = false,
   onClose,
 }: {
@@ -3476,6 +3478,8 @@ function AssignShiftModal({
   sourceRequest?: ShiftRequestRow;
   // 休み希望（選んだスタッフの休み希望の日を日付の選択で薄い赤にする）
   offRequests?: ShiftRequestRow[];
+  // 出勤希望（申請から開いていない時も、選んだスタッフの出勤希望の日を青枠にする）
+  workRequests?: ShiftRequestRow[];
   preselectRequestDates?: boolean;
   onClose: () => void;
 }) {
@@ -3647,7 +3651,13 @@ function AssignShiftModal({
   // 誰のシフトを作っているのか、どの段階でも分かるように見出しに名前を出す
   const assignTitle = staffName ? `${staffName}さんのシフトを作成` : "シフトを作成";
   // 同じ申請で希望した日（日付の選択の補助として薄く色を付ける）。スタッフを選び直したら付けない
-  const requestedDates = sourceRequest && sourceRequest.staffUserId === staffUserId ? sourceRequest.dates : [];
+  // 申請から開いた時はその申請の日だけ、それ以外は選んだスタッフの出勤希望の日すべて
+  const fromSourceRequest = Boolean(sourceRequest && sourceRequest.staffUserId === staffUserId);
+  const staffWorkRequests = staffUserId ? workRequests.filter((r) => r.staffUserId === staffUserId) : [];
+  const requestedDates = fromSourceRequest ? sourceRequest!.dates : staffWorkRequests.flatMap((r) => r.dates);
+  const workNotes = (fromSourceRequest ? [sourceRequest!] : staffWorkRequests)
+    .map((r) => r.note)
+    .filter((n): n is string => Boolean(n));
   // 選んだスタッフの休み希望（シフトはスタッフごとに作るので、その人の休みたい日が分かるように）
   const staffOffRequests = staffUserId ? offRequests.filter((r) => r.staffUserId === staffUserId) : [];
   const staffOffDates = staffOffRequests.flatMap((r) => r.dates);
@@ -3983,7 +3993,8 @@ function AssignShiftModal({
             {requestedDates.length > 0 ? (
               <span className="flex items-center gap-1.5 text-[11px] text-muted">
                 <span className="inline-block h-3 w-3 rounded ring-2 ring-inset ring-blue-400" />
-                {staffName}さんが同じ申請で希望した日{sourceRequest?.note ? `（備考：${sourceRequest.note}）` : ""}
+                {fromSourceRequest ? `${staffName}さんが同じ申請で希望した日` : `${staffName}さんの出勤希望`}
+                {workNotes.length > 0 ? `（備考：${workNotes.join("／")}）` : ""}
               </span>
             ) : null}
             {staffOffDates.some((d) => d >= todayJst()) ? (
