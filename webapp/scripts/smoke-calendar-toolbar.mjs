@@ -95,9 +95,17 @@ try {
   const hanakoId = addStaff("絞込花子", "hanako");
   addStaff("関係ない太郎", "taro");
   // 出勤希望：シフトのある日（枠は出ない）と、まだシフトの無い日（青枠）。休みで確定した日（「休み」の札）
-  const freeDays = [2, 3, 4, 5, 6].map((d) => `${today.slice(0, 8)}${String(d).padStart(2, "0")}`).filter((d) => d !== today && d !== staffDay);
-  const workOnlyDay = freeDays[0];
-  const offDay = freeDays[1];
+  // 希望は今日以降だけ出す（過ぎた日の希望は出さない）ので、同じ月の今日より後の日を使う
+  const lastDay = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).getUTCDate();
+  const dayStr = (d) => `${today.slice(0, 8)}${String(d).padStart(2, "0")}`;
+  const futureDays = Array.from({ length: lastDay }, (_, i) => dayStr(i + 1)).filter((d) => d > today && d !== staffDay);
+  const pastDays = Array.from({ length: lastDay }, (_, i) => dayStr(i + 1)).filter((d) => d < today && d !== staffDay);
+  const enoughFutureDays = futureDays.length >= 4;
+  const workOnlyDay = futureDays[0] ?? dayStr(lastDay);
+  const offDay = futureDays[1] ?? dayStr(lastDay);
+  const offRequestDay = futureDays[2] ?? dayStr(lastDay);
+  const pastRequestDay = pastDays[0];
+  const freeDays = [workOnlyDay, offDay, futureDays[3] ?? dayStr(lastDay)];
   // 依頼主（ゴルフ場）の現場：札は「袖ケ浦」のように頭の部分だけ、時間未定なら2行目は出さない
   const golfDay = freeDays[2];
   const golfRel = rel("袖ケ浦カンツリー倶楽部");
@@ -107,6 +115,8 @@ try {
   );
   psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status) values (gen_random_uuid()::text, '${hanakoId}', '${companyId}', 'WORK', ARRAY['${staffDay}','${workOnlyDay}']::date[], 'PENDING');`);
   psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status, "acknowledgedAt") values (gen_random_uuid()::text, '${hanakoId}', '${companyId}', 'OFF', ARRAY['${offDay}']::date[], 'PENDING', now());`);
+  psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status) values (gen_random_uuid()::text, '${hanakoId}', '${companyId}', 'OFF', ARRAY['${offRequestDay}']::date[], 'PENDING');`);
+  if (pastRequestDay) psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status) values (gen_random_uuid()::text, '${hanakoId}', '${companyId}', 'WORK', ARRAY['${pastRequestDay}']::date[], 'PENDING');`);
 
   await page.goto("http://localhost:3000/company/calendar");
   const [y, m] = today.split("-").map(Number);
@@ -173,13 +183,18 @@ try {
     staffCellText.includes("自社") && !staffCellText.includes("絞込") && (staffDay < today ? staffCellText.includes("未報告") : staffCellText.includes("9:00〜")),
   );
   const legendBox = await page.getByTestId("staff-request-legend").boundingBox();
-  log("色の説明（出勤希望・休み希望・休み確定・未報告）が1行に収まる", legendBox.height < 20 && (await page.getByTestId("staff-request-legend").innerText()).includes("未報告"));
+  log("色の説明は出勤希望だけ（休み・未報告の説明は出さない）", legendBox.height < 20 && !(await page.getByTestId("staff-request-legend").innerText()).includes("未報告"));
   const cellOf = (d) => page.locator(`button:has(> span:text-is("${Number(d.slice(8, 10))}"))`).first();
   log("出勤希望の日にシフトを作った日は枠を出さない（名前の札だけ）", (await staffCell.getAttribute("data-request-desire")) === null);
-  log("まだシフトの無い出勤希望の日は青枠", (await cellOf(workOnlyDay).getAttribute("data-request-desire")) === "WORK");
+  if (enoughFutureDays) {
+    log("まだシフトの無い出勤希望の日は青枠", (await cellOf(workOnlyDay).getAttribute("data-request-desire")) === "WORK");
+    const offReqCell = cellOf(offRequestDay);
+    log("休み希望はマスの枠ではなく「休み希望」の札", (await offReqCell.innerText()).includes("休み希望") && !((await offReqCell.getAttribute("class")) ?? "").includes("ring-red-400"));
+  }
+  if (pastRequestDay) log("過ぎた日の希望は出さない", (await cellOf(pastRequestDay).getAttribute("data-request-desire")) === null);
   const golfText = await cellOf(golfDay).innerText();
   log("ゴルフ場の名前は頭の部分だけ（袖ケ浦）・時間未定は「未定」を書かない", golfText.includes("袖ケ浦") && !golfText.includes("カンツリー") && !golfText.includes("未定"));
-  log("休みで確定した日は「休み」の札", (await cellOf(offDay).getAttribute("data-request-desire")) === "OFF_CONFIRMED" && (await cellOf(offDay).innerText()).includes("休み"));
+  if (enoughFutureDays) log("休みで確定した日は「休み」の札", (await cellOf(offDay).getAttribute("data-request-desire")) === "OFF_CONFIRMED" && (await cellOf(offDay).innerText()).includes("休み"));
   log("色の説明が出る", (await page.getByTestId("staff-request-legend").count()) === 1);
   // PDF（シフト表）もそのスタッフだけ
   const pdfRes = await page.request.get(`http://localhost:3000/api/calendar/pdf?y=${y}&m=${m}&staff=${hanakoId}`);

@@ -449,7 +449,7 @@ export function CalendarView({
         : "";
 
   // スタッフで絞り込み中は、その人の出勤希望（青枠）・休み希望（赤枠）を日付に出す。
-  // 休みで確定した日は枠ではなく「休み」の札（確定したものは札、まだ希望のものは枠）。
+  // 休み希望は「休み希望」の札（その札だけ赤枠）、休みで確定した日は「休み」の札。
   // 出勤希望の日にシフトを作った日は、希望はもう叶っているので枠を出さない（名前の札だけ）。
   const staffRequestDesireByDate = useMemo(() => {
     const map = new Map<string, "WORK" | "OFF" | "OFF_CONFIRMED">();
@@ -457,12 +457,14 @@ export function CalendarView({
     const shiftDates = new Set(shifts.filter((s) => s.status !== "CANCELLED").map((s) => s.date));
     for (const r of shiftRequests) {
       for (const d of r.dates) {
+        // 過ぎた日の希望はもう対応しようがないので出さない
+        if (d < todayStr) continue;
         if (r.desire === "OFF") map.set(d, r.acknowledged ? "OFF_CONFIRMED" : "OFF");
         else if (!shiftDates.has(d)) map.set(d, "WORK");
       }
     }
     return map;
-  }, [selectedStaffId, shiftRequests, shifts]);
+  }, [selectedStaffId, shiftRequests, shifts, todayStr]);
 
   // 日別詳細モーダルの＜＞やシフト希望一覧からの日付ジャンプ先が今表示中の
   // 月の外だった場合、selectedDateを変えるだけだと今の月分しか取得して
@@ -665,16 +667,6 @@ export function CalendarView({
               <span className="flex items-center gap-1">
                 <span className="h-2.5 w-2.5 rounded-sm ring-2 ring-inset ring-blue-400" />出勤希望
               </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-sm ring-2 ring-inset ring-red-400" />休み希望
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="rounded-sm bg-gray-200 px-0.5 py-px text-[9px] text-gray-700">休み</span>休み確定
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="rounded-sm px-0.5 py-px text-[9px] font-semibold text-red-600 ring-1 ring-inset ring-red-400">未報告</span>
-                報告まだ
-              </span>
             </span>
           ) : null}
           <span className="flex max-w-full items-center gap-1.5 rounded-full bg-primary/10 py-1 pl-3 pr-1 text-xs font-semibold text-primary">
@@ -788,6 +780,10 @@ export function CalendarView({
             ...(staffRequestDesireByDate.get(c.dateStr) === "OFF_CONFIRMED"
               ? [{ kind: "solid" as const, id: "off-confirmed", label: "休み", className: "bg-gray-200 text-gray-700" }]
               : []),
+            // 休み希望（まだ確認していない）は、マスの枠ではなく「休み希望」の札（その札だけ赤枠）
+            ...(staffRequestDesireByDate.get(c.dateStr) === "OFF"
+              ? [{ kind: "solid" as const, id: "off-request", label: "休み希望", className: "bg-white text-red-600 ring-1 ring-inset ring-red-400" }]
+              : []),
             ...staffTags.slice(0, confirmedSlotBudget),
             ...(recruitTag ? [recruitTag] : []),
             ...(orderTag ? [orderTag] : []),
@@ -802,11 +798,7 @@ export function CalendarView({
               className={`relative flex h-full flex-col items-stretch justify-start overflow-hidden rounded-lg rounded-tr-none px-0 py-1 text-left sm:h-[116px] sm:rounded-xl xl:h-[150px] sm:rounded-tr-none sm:p-1.5 ${
                 isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "hover:bg-background"
               } ${
-                staffRequestDesireByDate.get(c.dateStr) === "WORK"
-                  ? "ring-2 ring-inset ring-blue-400"
-                  : staffRequestDesireByDate.get(c.dateStr) === "OFF"
-                    ? "ring-2 ring-inset ring-red-400"
-                    : ""
+                staffRequestDesireByDate.get(c.dateStr) === "WORK" ? "ring-2 ring-inset ring-blue-400" : ""
               }`}
             >
               <span
