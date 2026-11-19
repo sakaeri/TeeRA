@@ -114,13 +114,37 @@ function shortStaffName(name: string) {
 // 月表示のスタッフ名タグ。状態は色で示し、欠勤・取消・調整中は名前の後ろにも書く。
 // 色の濃さ＝まだ対応が残っているか：出勤時間が未定（連絡がまだ）は濃い緑で一番目立たせ、
 // 時間が入ったら白地に緑の枠、勤務が終わって報告が出たら薄い緑で塗る。
-// スタッフで絞り込み中の札：名前の代わりに勤務先（依頼主は短くした名前、自社は業務内容）と時間
+// スタッフで絞り込み中の札：名前の代わりに勤務先（依頼主は短くした名前、自社は業務内容）と時間。
+// マスが狭いので、ゴルフ場によくある「ゴルフクラブ」「カントリー倶楽部」などの後ろの部分も外して、
+// 見分けに効く頭の部分だけにする（日付の詳細では正式な名前が見える）。
+const WORKPLACE_SUFFIXES = [
+  "カントリー倶楽部",
+  "カンツリー倶楽部",
+  "カントリークラブ",
+  "カンツリークラブ",
+  "ゴルフ倶楽部",
+  "ゴルフクラブ",
+  "ゴルフコース",
+  "ゴルフリンクス",
+  "ゴルフ場",
+  "倶楽部",
+  "クラブ",
+  "CC",
+];
+function shortWorkplaceName(name: string) {
+  const base = shortCompanyName(name).replace(/[（(].*$/, "");
+  for (const suffix of WORKPLACE_SUFFIXES) {
+    if (base.endsWith(suffix) && base.length > suffix.length) return base.slice(0, -suffix.length);
+  }
+  return base || name;
+}
 function shiftWorkplaceLabel(s: ShiftRow) {
-  if (s.clientName) return shortCompanyName(s.clientName);
+  if (s.clientName) return shortWorkplaceName(s.clientName);
   return s.taskName || "自社";
 }
+// 時間が決まっている時だけ2行目に出す（未定は札の色で分かるので書かない）
 function shiftTimeLabel(s: ShiftRow) {
-  if (s.isUndecided || s.isAllDay || !s.startTime) return "未定";
+  if (s.isUndecided || s.isAllDay || !s.startTime) return undefined;
   return `${s.startTime.replace(/^0/, "")}〜`;
 }
 
@@ -719,13 +743,24 @@ export function CalendarView({
           const staffTags: TagEntry[] = [
             ...confirmedShifts.map((s) => ({ kind: "solid" as const, id: s.id, ...shiftTag(s, todayStr, Boolean(selectedStaffId)) })),
             // 依頼主取消で休みになったものは、稼働中のシフトの後ろに並べる
-            ...leftOffShifts.map((h) => ({
-              kind: "solid" as const,
-              id: h.id,
-              label: `${h.staffName}（取消）`,
-              mobileLabel: `${shortStaffName(h.staffName)}（取消）`,
-              className: CANCELLED_TAG_CLASS,
-            })),
+            ...leftOffShifts.map((h) =>
+              selectedStaffId
+                ? {
+                    kind: "solid" as const,
+                    id: h.id,
+                    label: h.workplaceLabel === "自社" ? (h.taskName ?? "自社") : shortWorkplaceName(h.workplaceLabel),
+                    mobileLabel: h.workplaceLabel === "自社" ? (h.taskName ?? "自社") : shortWorkplaceName(h.workplaceLabel),
+                    subLabel: "取消",
+                    className: CANCELLED_TAG_CLASS,
+                  }
+                : {
+                    kind: "solid" as const,
+                    id: h.id,
+                    label: `${h.staffName}（取消）`,
+                    mobileLabel: `${shortStaffName(h.staffName)}（取消）`,
+                    className: CANCELLED_TAG_CLASS,
+                  },
+            ),
           ];
           const hasOverflow = staffTags.length > confirmedSlotBudget;
 
@@ -770,7 +805,12 @@ export function CalendarView({
                 {tagEntries.map((tag) => (
                   <span
                     key={tag.id}
-                    className={`block w-full overflow-hidden text-clip whitespace-nowrap rounded px-0 py-px text-center text-[8px] font-medium leading-tight tracking-tighter xl:text-[11px] xl:tracking-normal ${tag.className}`}
+                    className={`block w-full overflow-hidden text-clip whitespace-nowrap rounded text-center font-medium leading-tight xl:text-[11px] xl:tracking-normal ${
+                      // スタッフで絞り込み中は1日1〜2件なので、詰め込まずにゆったり出す
+                      tag.subLabel !== undefined || selectedStaffId
+                        ? "px-0.5 py-1 text-[9px] tracking-tight sm:text-[10px]"
+                        : "px-0 py-px text-[8px] tracking-tighter"
+                    } ${tag.className}`}
                   >
                     {tag.mobileLabel ? (
                       <>
@@ -780,7 +820,7 @@ export function CalendarView({
                     ) : (
                       tag.label
                     )}
-                    {tag.subLabel ? <span className="block opacity-80">{tag.subLabel}</span> : null}
+                    {tag.subLabel ? <span className="mt-0.5 block text-[8px] font-normal opacity-80 xl:text-[10px]">{tag.subLabel}</span> : null}
                   </span>
                 ))}
               </div>

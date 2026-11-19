@@ -86,6 +86,13 @@ try {
   const freeDays = [2, 3, 4, 5, 6].map((d) => `${today.slice(0, 8)}${String(d).padStart(2, "0")}`).filter((d) => d !== today && d !== staffDay);
   const workOnlyDay = freeDays[0];
   const offDay = freeDays[1];
+  // 依頼主（ゴルフ場）の現場：札は「袖ケ浦」のように頭の部分だけ、時間未定なら2行目は出さない
+  const golfDay = freeDays[2];
+  const golfRel = rel("袖ケ浦カンツリー倶楽部");
+  psql(
+    `insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", "taskName", date, "isAllDay", "isUndecided", status, "createdVia", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', '${hanakoId}', 'CLIENT', '${golfRel}', 'キャディ', '${golfDay}', false, true, 'CONFIRMED', 'ASSIGN', now(), now());`,
+  );
   psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status) values (gen_random_uuid()::text, '${hanakoId}', '${companyId}', 'WORK', ARRAY['${staffDay}','${workOnlyDay}']::date[], 'PENDING');`);
   psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status, "acknowledgedAt") values (gen_random_uuid()::text, '${hanakoId}', '${companyId}', 'OFF', ARRAY['${offDay}']::date[], 'PENDING', now());`);
 
@@ -152,6 +159,8 @@ try {
   const cellOf = (d) => page.locator(`button:has(> span:text-is("${Number(d.slice(8, 10))}"))`).first();
   log("出勤希望の日にシフトを作った日は枠を出さない（名前の札だけ）", (await staffCell.getAttribute("data-request-desire")) === null);
   log("まだシフトの無い出勤希望の日は青枠", (await cellOf(workOnlyDay).getAttribute("data-request-desire")) === "WORK");
+  const golfText = await cellOf(golfDay).innerText();
+  log("ゴルフ場の名前は頭の部分だけ（袖ケ浦）・時間未定は「未定」を書かない", golfText.includes("袖ケ浦") && !golfText.includes("カンツリー") && !golfText.includes("未定"));
   log("休みで確定した日は「休み」の札", (await cellOf(offDay).getAttribute("data-request-desire")) === "OFF_CONFIRMED" && (await cellOf(offDay).innerText()).includes("休み"));
   log("色の説明が出る", (await page.getByTestId("staff-request-legend").count()) === 1);
   await page.getByRole("button", { name: "絞り込み", exact: true }).click();
