@@ -7,6 +7,7 @@ import { type InvoicePdfData } from "@/lib/pdf/invoice";
 import { invoiceLineLayoutFromSnapshot } from "@/lib/invoiceLineGrouping";
 import { renderInvoicePdf, type InvoiceWorkRecord } from "@/lib/pdf/renderInvoicePdf";
 import { workRecordRowsForShiftIds } from "@/lib/domain/workRecord";
+import { invoiceRecipientName } from "@/lib/invoiceRecipient";
 
 export async function GET(request: Request, { params }: RouteContext<"/api/invoices/[id]/pdf">) {
   const { id } = await params;
@@ -31,7 +32,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
   }
   if (await isMonthHiddenByFreePlan(invoice.issuingCompanyId, invoice.periodLabel)) return freePlanHiddenResponse();
 
-  const clientName = invoice.companyRelationship.clientCompany?.name ?? invoice.companyRelationship.proxyName ?? "";
+  const clientName = invoiceRecipientName(invoice.companyRelationship);
 
   let data: InvoicePdfData;
   let workRecord: InvoiceWorkRecord | null = null;
@@ -46,7 +47,8 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
       sealOpacity: (snap.sealOpacity as number | null | undefined) ?? null,
       issuingCompanyAddress: invoice.issuingCompany.address,
       issuingCompanyPhoneNumber: invoice.issuingCompany.phoneNumber,
-      clientName,
+      // 発行時点の宛名（この機能より前に発行したものは今の宛名）
+      clientName: (snap.clientName as string | undefined) ?? clientName,
       periodLabel: snap.periodLabel as string,
       periodRangeLabel: (snap.periodRangeLabel as string | null | undefined) ?? null,
       dueDate: (snap.dueDate as string | undefined)?.slice(0, 10) ?? null,

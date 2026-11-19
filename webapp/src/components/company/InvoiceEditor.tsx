@@ -16,6 +16,7 @@ import {
   setInvoiceRegistrationNumberAction,
   issueInvoiceAction,
   reopenInvoiceForEditAction,
+  setInvoiceRecipientNameAction,
 } from "@/app/company/invoices/actions";
 
 type Line = {
@@ -63,6 +64,7 @@ const STATUS_LABEL: Record<string, string> = { DRAFT: "下書き", ISSUED: "発�
 export function InvoiceEditor({
   invoice,
   clientName,
+  recipientName,
   clientRelationshipId,
   willUseFreeQuota,
   pdfQuota,
@@ -92,10 +94,21 @@ export function InvoiceEditor({
     attachWorkRecord: boolean;
   };
   clientName: string;
+  // 請求書の宛名（直していればその名前。無ければ clientName と同じ）
+  recipientName?: string;
   willUseFreeQuota: boolean;
   pdfQuota: { remaining: number; quota: number; unlimited?: boolean; monthLabel?: string } | null;
 }) {
   const [pending, startTransition] = useTransition();
+  const currentRecipient = recipientName || clientName;
+  const [editingRecipient, setEditingRecipient] = useState(false);
+  const [recipientDraft, setRecipientDraft] = useState(currentRecipient);
+  function saveRecipient(name: string) {
+    startTransition(async () => {
+      await setInvoiceRecipientNameAction(invoice.id, name);
+      setEditingRecipient(false);
+    });
+  }
   const [dueDate, setDueDateState] = useState(invoice.dueDate);
   const [note, setNoteState] = useState(invoice.note);
   const [regNumber, setRegNumber] = useState(invoice.invoiceRegistrationNumber);
@@ -120,9 +133,72 @@ export function InvoiceEditor({
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="-mt-2 text-sm text-muted">
-        請求先：<span className="font-semibold text-foreground">{clientName}</span>
-      </p>
+      {/* 請求先（宛名）。現場の名前と請求先が違う時はここで直す（翌月以降の請求書にも使う） */}
+      <div className="-mt-2 text-sm text-muted" data-testid="invoice-recipient">
+        {editingRecipient ? (
+          <div className="flex flex-col gap-2 rounded-xl border border-border bg-white p-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs">請求書の宛名（「御中」は自動で付きます）</span>
+              <input
+                value={recipientDraft}
+                onChange={(e) => setRecipientDraft(e.target.value)}
+                maxLength={100}
+                className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+                data-testid="invoice-recipient-input"
+              />
+            </label>
+            <p className="text-xs">翌月以降の{clientName}の請求書にも、この宛名が使われます。発行済みの請求書は変わりません。</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={pending || !recipientDraft.trim()}
+                onClick={() => saveRecipient(recipientDraft)}
+                className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                保存する
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRecipientDraft(currentRecipient);
+                  setEditingRecipient(false);
+                }}
+                className="rounded-lg border border-border px-4 py-2 text-xs"
+              >
+                やめる
+              </button>
+              {currentRecipient !== clientName ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => saveRecipient("")}
+                  className="ml-auto rounded-lg px-2 py-2 text-xs text-primary underline"
+                >
+                  現場の名前（{clientName}）に戻す
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>
+              請求先：<span className="font-semibold text-foreground">{currentRecipient}</span> 御中
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setRecipientDraft(currentRecipient);
+                setEditingRecipient(true);
+              }}
+              className="text-xs text-primary underline"
+              data-testid="edit-invoice-recipient"
+            >
+              宛名を直す
+            </button>
+            {currentRecipient !== clientName ? <span className="w-full text-xs">現場：{clientName}</span> : null}
+          </p>
+        )}
+      </div>
 
       {invoice.unresolved.length > 0 ? (
         <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">

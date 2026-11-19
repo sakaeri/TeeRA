@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { type InvoicePdfData } from "@/lib/pdf/invoice";
 import { invoiceLineLayoutFromSnapshot } from "@/lib/invoiceLineGrouping";
 import { mergePdfs, renderInvoicePdf, type InvoiceWorkRecord } from "@/lib/pdf/renderInvoicePdf";
+import { invoiceRecipientName } from "@/lib/invoiceRecipient";
 
 export async function GET(request: Request) {
   const { userId } = await verifySession();
@@ -42,14 +43,15 @@ export async function GET(request: Request) {
   for (const invoice of invoicesThisMonth) {
     const latestIssue = invoice.issues.reduce((latest, i) => (i.issuedAt > latest.issuedAt ? i : latest));
     const snap = latestIssue.snapshot as unknown as Record<string, unknown>;
-    const clientName = invoice.companyRelationship.clientCompany?.name ?? invoice.companyRelationship.proxyName ?? "";
+    const clientName = invoiceRecipientName(invoice.companyRelationship);
     const data: InvoicePdfData = {
       issuingCompanyName: issuingCompany.name,
       sealImageDataUrl: (snap.sealImageDataUrl as string | null | undefined) ?? null,
       sealOpacity: (snap.sealOpacity as number | null | undefined) ?? null,
       issuingCompanyAddress: issuingCompany.address,
       issuingCompanyPhoneNumber: issuingCompany.phoneNumber,
-      clientName,
+      // 発行時点の宛名（この機能より前に発行したものは今の宛名）
+      clientName: (snap.clientName as string | undefined) ?? clientName,
       periodLabel: snap.periodLabel as string,
       periodRangeLabel: (snap.periodRangeLabel as string | null | undefined) ?? null,
       dueDate: (snap.dueDate as string | undefined)?.slice(0, 10) ?? null,

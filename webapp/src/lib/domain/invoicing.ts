@@ -7,6 +7,7 @@ import { hasRemainingPdfQuota } from "@/lib/domain/plans";
 import { workRecordRowsForShiftIds } from "@/lib/domain/workRecord";
 import { closingPeriod } from "@/lib/closingPeriod";
 import type { QuantityUnit } from "@/lib/quantityUnit";
+import { invoiceRecipientName } from "@/lib/invoiceRecipient";
 
 // 依頼主ごとの締め日（invoiceClosingDay）で「◯月分」の対象期間を決める（末日締めならその月の1日〜末日）
 export async function invoicePeriod(companyRelationshipId: string, periodLabel: string) {
@@ -474,7 +475,7 @@ export async function reopenInvoiceForEdit(invoiceId: string) {
 export async function issueInvoice(params: { invoiceId: string; issuedByUserId: string }) {
   const invoice = await prisma.invoice.findUniqueOrThrow({
     where: { id: params.invoiceId },
-    include: { lines: { orderBy: { sortOrder: "asc" } }, companyRelationship: true, issues: true },
+    include: { lines: { orderBy: { sortOrder: "asc" } }, companyRelationship: { include: { clientCompany: true } }, issues: true },
   });
   if (!invoice.dueDate) throw new Error("due_date_required");
 
@@ -519,6 +520,8 @@ export async function issueInvoice(params: { invoiceId: string; issuedByUserId: 
         countsAgainstQuota,
         snapshot: {
           periodLabel: invoice.periodLabel,
+          // 発行時点の宛名（後で宛名を直しても、発行済みの請求書は変わらない）
+          clientName: invoiceRecipientName(invoice.companyRelationship),
           // 締め日が末日でない依頼主は、発行した時点の対象期間を残す（後で締め日を変えても過去の請求書は変わらない）
           periodRangeLabel: closingPeriod(invoice.periodLabel, invoice.companyRelationship.invoiceClosingDay).rangeLabel,
           dueDate: invoice.dueDate?.toISOString(),
