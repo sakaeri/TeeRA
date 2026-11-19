@@ -152,7 +152,7 @@ function shiftTag(
   s: ShiftRow,
   todayStr: string,
   byWorkplace = false,
-): { label: string; mobileLabel: string; subLabel?: string; className: string } {
+): { label: string; mobileLabel: string; subLabel?: string; subLabelClassName?: string; className: string } {
   const tag = (suffix: string, className: string) =>
     byWorkplace
       ? { label: `${shiftWorkplaceLabel(s)}${suffix}`, mobileLabel: `${shiftWorkplaceLabel(s)}${suffix}`, subLabel: shiftTimeLabel(s), className }
@@ -165,8 +165,12 @@ function shiftTag(
   if (s.outcome === "ABSENT") return tag("（欠勤）", "bg-orange-100 text-orange-800");
   if (s.outcome === "CANCELLED_BY_EMPLOYER") return tag("（取消）", CANCELLED_TAG_CLASS);
   if (s.outcome === "WORKED") return tag("", "bg-emerald-100 text-emerald-900");
-  // 過去日なのに業務報告が出ていない（報告漏れ）
-  if (s.date < todayStr) return tag("", "bg-white text-emerald-900 ring-1 ring-inset ring-red-400");
+  // 過去日なのに業務報告が出ていない（報告漏れ）。スタッフで絞り込み中は、マスの赤枠（休み希望）と
+  // 見間違えないよう、2行目に赤い文字で「未報告」と出す
+  if (s.date < todayStr) {
+    const t = tag("", "bg-white text-emerald-900 ring-1 ring-inset ring-red-400");
+    return byWorkplace ? { ...t, subLabel: "未報告", subLabelClassName: "font-semibold text-red-600 opacity-100" } : t;
+  }
   // 出勤時間がまだ入っていない（終日で作った古いシフトも時間なしとして同じ扱い）
   if (s.isUndecided || s.isAllDay) return tag("", "bg-emerald-700 text-white");
   return tag("", "bg-white text-emerald-900 ring-1 ring-inset ring-emerald-500");
@@ -263,7 +267,15 @@ type DeletedOrderRow = {
 
 // mobileLabelはスマホ幅でだけ使う短い表示（スタッフ名を5文字で切ったもの）
 // subLabel：2行目（スタッフで絞り込み中の時間）
-type TagEntry = { kind: "solid"; id: string; label: string; mobileLabel?: string; subLabel?: string; className: string };
+type TagEntry = {
+  kind: "solid";
+  id: string;
+  label: string;
+  mobileLabel?: string;
+  subLabel?: string;
+  subLabelClassName?: string;
+  className: string;
+};
 
 // シフト作成モーダルの業務内容ステップで使う、依頼主ごとの業務名の登録
 // リスト。単価はここでは扱わない（単価は依頼主詳細で別途手動設定し、給与/
@@ -437,7 +449,7 @@ export function CalendarView({
         : "";
 
   // スタッフで絞り込み中は、その人の出勤希望（青枠）・休み希望（赤枠）を日付に出す。
-  // 休みで確定した日は枠ではなく「休み」の札（確定したものは札、まだ希望のものは枠）。
+  // 休み希望は「休み希望」の札（その札だけ赤枠）、休みで確定した日は「休み」の札。
   // 出勤希望の日にシフトを作った日は、希望はもう叶っているので枠を出さない（名前の札だけ）。
   const staffRequestDesireByDate = useMemo(() => {
     const map = new Map<string, "WORK" | "OFF" | "OFF_CONFIRMED">();
@@ -445,12 +457,14 @@ export function CalendarView({
     const shiftDates = new Set(shifts.filter((s) => s.status !== "CANCELLED").map((s) => s.date));
     for (const r of shiftRequests) {
       for (const d of r.dates) {
+        // 過ぎた日の希望はもう対応しようがないので出さない
+        if (d < todayStr) continue;
         if (r.desire === "OFF") map.set(d, r.acknowledged ? "OFF_CONFIRMED" : "OFF");
         else if (!shiftDates.has(d)) map.set(d, "WORK");
       }
     }
     return map;
-  }, [selectedStaffId, shiftRequests, shifts]);
+  }, [selectedStaffId, shiftRequests, shifts, todayStr]);
 
   // 日別詳細モーダルの＜＞やシフト希望一覧からの日付ジャンプ先が今表示中の
   // 月の外だった場合、selectedDateを変えるだけだと今の月分しか取得して
@@ -645,15 +659,13 @@ export function CalendarView({
       {filterLabel ? (
         <div className="order-2 mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 sm:order-1">
           {selectedStaffId ? (
-            <span className="order-last flex items-center gap-3 text-[11px] text-muted" data-testid="staff-request-legend">
+            // 色の説明は1行に収める（スマホ幅でも折り返さない大きさ）
+            <span
+              className="order-last flex w-full items-center gap-2.5 whitespace-nowrap text-[10px] leading-none text-muted sm:gap-3 sm:text-[11px]"
+              data-testid="staff-request-legend"
+            >
               <span className="flex items-center gap-1">
-                <span className="h-3 w-3 rounded ring-2 ring-inset ring-blue-400" />出勤希望
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-3 w-3 rounded ring-2 ring-inset ring-red-400" />休み希望
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="rounded bg-gray-200 px-1 text-[10px] text-gray-700">休み</span>休み確定
+                <span className="h-2.5 w-2.5 rounded-sm ring-2 ring-inset ring-blue-400" />出勤希望
               </span>
             </span>
           ) : null}
@@ -768,6 +780,10 @@ export function CalendarView({
             ...(staffRequestDesireByDate.get(c.dateStr) === "OFF_CONFIRMED"
               ? [{ kind: "solid" as const, id: "off-confirmed", label: "休み", className: "bg-gray-200 text-gray-700" }]
               : []),
+            // 休み希望（まだ確認していない）は、マスの枠ではなく「休み希望」の札（その札だけ赤枠）
+            ...(staffRequestDesireByDate.get(c.dateStr) === "OFF"
+              ? [{ kind: "solid" as const, id: "off-request", label: "休み希望", className: "bg-white text-red-600 ring-1 ring-inset ring-red-400" }]
+              : []),
             ...staffTags.slice(0, confirmedSlotBudget),
             ...(recruitTag ? [recruitTag] : []),
             ...(orderTag ? [orderTag] : []),
@@ -782,11 +798,7 @@ export function CalendarView({
               className={`relative flex h-full flex-col items-stretch justify-start overflow-hidden rounded-lg rounded-tr-none px-0 py-1 text-left sm:h-[116px] sm:rounded-xl xl:h-[150px] sm:rounded-tr-none sm:p-1.5 ${
                 isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "hover:bg-background"
               } ${
-                staffRequestDesireByDate.get(c.dateStr) === "WORK"
-                  ? "ring-2 ring-inset ring-blue-400"
-                  : staffRequestDesireByDate.get(c.dateStr) === "OFF"
-                    ? "ring-2 ring-inset ring-red-400"
-                    : ""
+                staffRequestDesireByDate.get(c.dateStr) === "WORK" ? "ring-2 ring-inset ring-blue-400" : ""
               }`}
             >
               <span
@@ -820,7 +832,11 @@ export function CalendarView({
                     ) : (
                       tag.label
                     )}
-                    {tag.subLabel ? <span className="mt-0.5 block text-[8px] font-normal opacity-80 xl:text-[10px]">{tag.subLabel}</span> : null}
+                    {tag.subLabel ? (
+                      <span className={`mt-0.5 block text-[8px] xl:text-[10px] ${tag.subLabelClassName ?? "font-normal opacity-80"}`}>
+                        {tag.subLabel}
+                      </span>
+                    ) : null}
                   </span>
                 ))}
               </div>
