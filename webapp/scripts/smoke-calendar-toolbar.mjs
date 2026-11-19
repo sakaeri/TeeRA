@@ -147,7 +147,8 @@ try {
   const staffCell = page.locator(`button:has(> span:text-is("${Number(staffDay.slice(8, 10))}"))`).first();
   const staffCellText = await staffCell.innerText();
   const todayCellStaff = await page.locator(`button:has(> span:text-is("${Number(today.slice(8, 10))}"))`).first().innerText();
-  log("そのスタッフのシフトだけが出る（他の人・募集は出ない）", staffCellText.includes("絞込") && !staffCellText.includes("太郎") && !todayCellStaff.includes("募集"));
+  log("そのスタッフのシフトだけが出る（他の人・募集は出ない）", !staffCellText.includes("太郎") && !todayCellStaff.includes("募集"));
+  log("札には名前ではなく勤務先と時間が出る", staffCellText.includes("自社") && staffCellText.includes("9:00〜") && !staffCellText.includes("絞込"));
   const cellOf = (d) => page.locator(`button:has(> span:text-is("${Number(d.slice(8, 10))}"))`).first();
   log("出勤希望の日にシフトを作った日は枠を出さない（名前の札だけ）", (await staffCell.getAttribute("data-request-desire")) === null);
   log("まだシフトの無い出勤希望の日は青枠", (await cellOf(workOnlyDay).getAttribute("data-request-desire")) === "WORK");
@@ -155,6 +156,7 @@ try {
   log("色の説明が出る", (await page.getByTestId("staff-request-legend").count()) === 1);
   await page.getByRole("button", { name: "絞り込み", exact: true }).click();
   const sheet4 = page.locator("div.fixed.inset-0.z-40").last();
+  log("最近使った絞り込みに種類（スタッフ）が出る", (await sheet4.innerText()).includes("スタッフ"));
   log("選択中の項目（スタッフ）は開いた状態で出る", (await sheet4.getByRole("button", { name: "絞込花子" }).count()) >= 1 && (await sheet4.getByText("たちつ多い社").count()) <= 1);
   await sheet4.getByRole("button", { name: "閉じる" }).click();
   await page.getByRole("button", { name: "絞り込みを解除" }).click();
