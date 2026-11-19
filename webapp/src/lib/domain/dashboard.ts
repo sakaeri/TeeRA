@@ -72,7 +72,7 @@ export async function loadDashboardData(companyId: string) {
       // いい、というのが期待挙動）。
       prisma.publicRecruitment.findMany({
         where: { companyId, status: "PUBLISHED", date: { gte: today } },
-        include: { entries: true },
+        include: { entries: true, companyRelationship: { select: { proxyName: true, clientCompany: { select: { name: true } } } } },
         orderBy: { date: "asc" },
       }),
       prisma.shiftRequest.findMany({
@@ -208,6 +208,7 @@ export function computeShortageEntries(data: DashboardData) {
       endTime: r.endTime,
       filled: r.entries.filter((e) => e.status !== "REJECTED").length,
       maxEntries: r.maxEntries,
+      clientName: r.companyRelationship?.clientCompany?.name ?? r.companyRelationship?.proxyName ?? null,
     }))
     .filter((r) => r.filled < r.maxEntries);
 }
@@ -347,15 +348,28 @@ export type AutoTodoItem = {
 // own consent) is a different kind of to-do — waiting on the staff, not the
 // admin — and is intentionally not surfaced here; see the roster's 確認待ち
 // label (listStaffWithSummary) for that state instead.
+// 欠員を「やること」に出すのは、勤務日の何日前から
+const SHORTAGE_TODO_DAYS_BEFORE = 3;
+
+function addDaysToDateStr(dateStr: string, days: number) {
+  const d = new Date(`${dateStr}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 export function computeAutoTodoItems(data: DashboardData, pendingShipments: PendingShipment[]): AutoTodoItem[] {
   const { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff, duePaidLeaveGrants } =
     data;
   const items: AutoTodoItem[] = [];
 
+  // 欠員は、スタッフ側の募集に出ていてスタッフが自分で応募するので、出したばかりのうちは
+  // 会社がやることは無い。勤務日の3日前になっても足りない時だけ「やること」に出す。
+  // 依頼主の代わりに出したオーダーは「やること」には出さない（欠員シフトの一覧には出る）。
+  const shortageDeadline = addDaysToDateStr(todayJst(), SHORTAGE_TODO_DAYS_BEFORE);
   for (const r of shortageRecruitments) {
     const filled = r.entries.filter((e) => e.status !== "REJECTED").length;
-    if (filled < r.maxEntries) {
-      const dateStr = r.date.toISOString().slice(0, 10);
+    const dateStr = r.date.toISOString().slice(0, 10);
+    if (filled < r.maxEntries && !r.companyRelationshipId && dateStr <= shortageDeadline) {
       items.push({
         id: `shortage-${r.id}`,
         kind: "欠員",

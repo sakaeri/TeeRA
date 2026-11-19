@@ -48,10 +48,23 @@ try {
 
   // ハードコードした日付だと時間が経つにつれ過去日/未来日の前提が崩れる
   // ため、実行時刻基準の相対日付にする。
-  const shortageDate = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  // 欠員は勤務日の3日前になっても足りない時だけ「やること」に出す
+  const shortageDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   psql(
     `insert into "PublicRecruitment" (id, "companyId", title, date, "startTime", "endTime", "maxEntries", "lockedTee", status, "updatedAt") ` +
       `values (gen_random_uuid()::text, '${companyId}', 'テスト事務所', '${shortageDate}', '09:00', '17:00', 1, 10, 'PUBLISHED', now());`,
+  );
+  const farShortageDate = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  psql(
+    `insert into "PublicRecruitment" (id, "companyId", title, date, "startTime", "endTime", "maxEntries", "lockedTee", status, "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', 'まだ先の募集', '${farShortageDate}', '09:00', '17:00', 1, 10, 'PUBLISHED', now());`,
+  );
+  // 依頼主（仮アカウント）の代わりに出したオーダーは、直前でも「やること」に出さない
+  const relId = `todolink-rel-${Date.now()}`;
+  psql(`insert into "CompanyRelationship" (id, "ownerCompanyId", "agencyCompanyId", "proxyName") values ('${relId}', '${companyId}', '${companyId}', '代行ゴルフ倶楽部');`);
+  psql(
+    `insert into "PublicRecruitment" (id, "companyId", "companyRelationshipId", title, date, "startTime", "endTime", "maxEntries", "lockedTee", status, "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', '${relId}', '代わりに出したオーダー', '${shortageDate}', '09:00', '17:00', 1, 0, 'PUBLISHED', now());`,
   );
 
   const workReportDate = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -80,6 +93,16 @@ try {
 
   await page.goto("http://localhost:3000/company");
   let body = await page.textContent("body");
+  log("3日前を過ぎて足りない募集はやることに出る", body.includes("テスト事務所"));
+  const todoRows = (await page.locator("li", { has: page.getByRole("link", { name: "カレンダーで確認" }) }).allInnerTexts()).join("\n");
+  log("まだ先の募集はやることに出ない", !todoRows.includes("まだ先の募集"));
+  log("代わりに出したオーダーはやることに出ない", !todoRows.includes("代わりに出したオーダー"));
+  // 欠員シフトの一覧には出る（代わりに出したオーダーは依頼主名つき）
+  await page.getByText("欠員件数").click();
+  const shortagePopup = await page.locator("div.fixed").filter({ hasText: "欠員シフト" }).last().innerText();
+  log("欠員シフトの一覧には先の募集も出る", shortagePopup.includes("まだ先の募集"));
+  log("代わりに出したオーダーは依頼主名つきで出る", shortagePopup.includes("代わりに出したオーダー（代行ゴルフ倶楽部）"));
+  await page.goto("http://localhost:3000/company");
   log("業務報告はやることリストで1件ずつではなく「未承認の業務報告が◯件あります」にまとまる", body.includes("未承認の業務報告が1件あります") && !body.includes("業務報告が未承認です"));
 
   // 欠員: カレンダーで確認 should deep-link straight to that day's detail

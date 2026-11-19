@@ -184,10 +184,10 @@ export default async function CompanyCalendarPage({
           dates: r.dates.map((d) => d.toISOString().slice(0, 10)),
           note: r.note,
         }))}
-        // 絞り込み中は関係のある募集だけ：依頼主で絞っているときは自社の募集は出さず
-        // （自社の募集は依頼主に結びついていないため）、チームで絞っているときはそのチームの募集だけ
+        // 絞り込み中は関係のある募集だけ：依頼主で絞っているときは、その依頼主の代わりに出したオーダーだけ
+        // （自社の募集は依頼主に結びついていないため出さない）、チームで絞っているときはそのチームの募集だけ
         recruitments={recruitments
-          .filter((r) => !relationshipId && (!teamId || r.teamId === teamId))
+          .filter((r) => (relationshipId ? r.companyRelationshipId === relationshipId : true) && (!teamId || r.teamId === teamId))
           .map((r) => ({
           id: r.id,
           title: r.title,
@@ -204,6 +204,7 @@ export default async function CompanyCalendarPage({
           hourlyWage: r.hourlyWage,
           wageType: r.wageType,
           extraItems: r.extraItems as { label: string; value: string }[],
+          clientName: r.companyRelationship?.clientCompany?.name ?? r.companyRelationship?.proxyName ?? null,
           announcements: r.announcements.map((a) => ({
             id: a.id,
             body: a.body,
