@@ -166,6 +166,7 @@ type ShiftRequestRow = {
   desire: string;
   dates: string[];
   note: string | null;
+  acknowledged?: boolean;
 };
 
 type RecruitmentRow = {
@@ -259,6 +260,7 @@ export function CalendarView({
   agencyTaskNamesByRelationship,
   placementRates,
   selectedRelationshipId,
+  selectedStaffId,
   companyName,
   initialSelectedDate,
   initialCreate,
@@ -284,6 +286,8 @@ export function CalendarView({
   agencyTaskNamesByRelationship: Record<string, string[]>;
   placementRates: TaskNameRow[];
   selectedRelationshipId?: string;
+  // スタッフで絞り込み中（そのスタッフのシフトと出勤・休み希望だけが渡ってくる）
+  selectedStaffId?: string;
   companyName: string;
   initialSelectedDate?: string;
   initialCreate?: "shift" | "recruit";
@@ -340,7 +344,8 @@ export function CalendarView({
   const swipe = useMonthSwipe({
     year: dataYear,
     month: dataMonth,
-    hrefFor: (y, m) => `?y=${y}&m=${m}${selectedTeamId ? `&team=${selectedTeamId}` : selectedRelationshipId ? `&rel=${selectedRelationshipId}` : ""}`,
+    hrefFor: (y, m) =>
+      `?y=${y}&m=${m}${selectedTeamId ? `&team=${selectedTeamId}` : selectedRelationshipId ? `&rel=${selectedRelationshipId}` : selectedStaffId ? `&staff=${selectedStaffId}` : ""}`,
     prevBlockedAt: historyCutoff ?? null,
   });
   const { year, month, containerRef: swipeContainerRef, style: swipeStyle, goToMonth } = swipe;
@@ -359,21 +364,50 @@ export function CalendarView({
       agencies.find((a) => a.id === selectedRelationshipId)?.name)
     : undefined;
   const teamName = selectedTeamId ? teams.find((t) => t.id === selectedTeamId)?.name : undefined;
+  const staffFilterName = selectedStaffId ? staffOptions.find((s) => s.id === selectedStaffId)?.name : undefined;
   const filterLabel =
-    [teamName, relationshipTypeLabel && relationshipName ? `${relationshipTypeLabel}：${relationshipName}` : null]
+    [
+      teamName,
+      relationshipTypeLabel && relationshipName ? `${relationshipTypeLabel}：${relationshipName}` : null,
+      staffFilterName ? `${staffFilterName}さん` : null,
+    ]
       .filter(Boolean)
       .join("・") || undefined;
 
-  function calendarUrl(overrides: { team?: string; rel?: string }) {
+  function calendarUrl(overrides: { team?: string; rel?: string; staff?: string }) {
     const params = new URLSearchParams({ y: String(year), m: String(month) });
     const team = overrides.team !== undefined ? overrides.team : (selectedTeamId ?? "");
     const rel = overrides.rel !== undefined ? overrides.rel : (selectedRelationshipId ?? "");
+    const staff = overrides.staff !== undefined ? overrides.staff : (selectedStaffId ?? "");
     if (team) params.set("team", team);
     if (rel) params.set("rel", rel);
+    if (staff) params.set("staff", staff);
     return `?${params.toString()}`;
   }
 
-  const filterQuery = selectedTeamId ? `&team=${selectedTeamId}` : selectedRelationshipId ? `&rel=${selectedRelationshipId}` : "";
+  const filterQuery = selectedTeamId
+    ? `&team=${selectedTeamId}`
+    : selectedRelationshipId
+      ? `&rel=${selectedRelationshipId}`
+      : selectedStaffId
+        ? `&staff=${selectedStaffId}`
+        : "";
+
+  // スタッフで絞り込み中は、その人の出勤希望（青枠）・休み希望（赤枠）を日付に出す。
+  // 休みで確定した日は枠ではなく「休み」の札（確定したものは札、まだ希望のものは枠）。
+  // 出勤希望の日にシフトを作った日は、希望はもう叶っているので枠を出さない（名前の札だけ）。
+  const staffRequestDesireByDate = useMemo(() => {
+    const map = new Map<string, "WORK" | "OFF" | "OFF_CONFIRMED">();
+    if (!selectedStaffId) return map;
+    const shiftDates = new Set(shifts.filter((s) => s.status !== "CANCELLED").map((s) => s.date));
+    for (const r of shiftRequests) {
+      for (const d of r.dates) {
+        if (r.desire === "OFF") map.set(d, r.acknowledged ? "OFF_CONFIRMED" : "OFF");
+        else if (!shiftDates.has(d)) map.set(d, "WORK");
+      }
+    }
+    return map;
+  }, [selectedStaffId, shiftRequests, shifts]);
 
   // 日別詳細モーダルの＜＞やシフト希望一覧からの日付ジャンプ先が今表示中の
   // 月の外だった場合、selectedDateを変えるだけだと今の月分しか取得して
@@ -566,12 +600,27 @@ export function CalendarView({
 
       {/* 絞り込み中は、何で絞っているかを出す（✕で全社に戻す） */}
       {filterLabel ? (
-        <div className="order-2 mb-2 flex sm:order-1">
+        <div className="order-2 mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 sm:order-1">
+          {selectedStaffId ? (
+            <span className="order-last flex items-center gap-3 text-[11px] text-muted" data-testid="staff-request-legend">
+              <span className="flex items-center gap-1">
+                <span className="h-3 w-3 rounded ring-2 ring-inset ring-blue-400" />出勤希望
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-3 w-3 rounded ring-2 ring-inset ring-red-400" />休み希望
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="rounded bg-gray-200 px-1 text-[10px] text-gray-700">休み</span>休み確定
+              </span>
+            </span>
+          ) : null}
           <span className="flex max-w-full items-center gap-1.5 rounded-full bg-primary/10 py-1 pl-3 pr-1 text-xs font-semibold text-primary">
-            <span className="truncate">{teamName ?? relationshipName}</span>
+            <span className="truncate" data-testid="calendar-filter-chip">
+              {teamName ?? relationshipName ?? (staffFilterName ? `${staffFilterName}さん` : "")}
+            </span>
             <button
               type="button"
-              onClick={() => router.push(calendarUrl({ team: "", rel: "" }))}
+              onClick={() => router.push(calendarUrl({ team: "", rel: "", staff: "" }))}
               aria-label="絞り込みを解除"
               className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full hover:bg-primary/15"
             >
@@ -662,6 +711,9 @@ export function CalendarView({
           const hasOverflow = staffTags.length > confirmedSlotBudget;
 
           const tagEntries: TagEntry[] = [
+            ...(staffRequestDesireByDate.get(c.dateStr) === "OFF_CONFIRMED"
+              ? [{ kind: "solid" as const, id: "off-confirmed", label: "休み", className: "bg-gray-200 text-gray-700" }]
+              : []),
             ...staffTags.slice(0, confirmedSlotBudget),
             ...(recruitTag ? [recruitTag] : []),
             ...(orderTag ? [orderTag] : []),
@@ -672,8 +724,15 @@ export function CalendarView({
               key={i}
               type="button"
               onClick={() => setSelectedDate(c.dateStr)}
+              data-request-desire={staffRequestDesireByDate.get(c.dateStr) ?? undefined}
               className={`relative flex h-full flex-col items-stretch justify-start overflow-hidden rounded-lg rounded-tr-none px-0 py-1 text-left sm:h-[116px] sm:rounded-xl xl:h-[150px] sm:rounded-tr-none sm:p-1.5 ${
                 isToday ? "bg-accent/25" : isSelected ? "bg-accent/10" : "hover:bg-background"
+              } ${
+                staffRequestDesireByDate.get(c.dateStr) === "WORK"
+                  ? "ring-2 ring-inset ring-blue-400"
+                  : staffRequestDesireByDate.get(c.dateStr) === "OFF"
+                    ? "ring-2 ring-inset ring-red-400"
+                    : ""
               }`}
             >
               <span
@@ -757,14 +816,24 @@ export function CalendarView({
       {showFilterSheet ? (
         <CalendarFilterSheet
           teams={teams}
+          staff={staffOptions}
           clients={clients}
           agencies={agencies}
-          selectedValue={selectedTeamId ? `team:${selectedTeamId}` : selectedRelationshipId ? `rel:${selectedRelationshipId}` : ""}
+          selectedValue={
+            selectedTeamId
+              ? `team:${selectedTeamId}`
+              : selectedRelationshipId
+                ? `rel:${selectedRelationshipId}`
+                : selectedStaffId
+                  ? `staff:${selectedStaffId}`
+                  : ""
+          }
           onSelect={(v) => {
             setShowFilterSheet(false);
-            if (v.startsWith("team:")) router.push(calendarUrl({ team: v.slice(5), rel: "" }));
-            else if (v.startsWith("rel:")) router.push(calendarUrl({ team: "", rel: v.slice(4) }));
-            else router.push(calendarUrl({ team: "", rel: "" }));
+            if (v.startsWith("team:")) router.push(calendarUrl({ team: v.slice(5), rel: "", staff: "" }));
+            else if (v.startsWith("rel:")) router.push(calendarUrl({ team: "", rel: v.slice(4), staff: "" }));
+            else if (v.startsWith("staff:")) router.push(calendarUrl({ team: "", rel: "", staff: v.slice(6) }));
+            else router.push(calendarUrl({ team: "", rel: "", staff: "" }));
           }}
           onClose={() => setShowFilterSheet(false)}
         />
@@ -5050,7 +5119,8 @@ function Field({
 }
 
 // 絞り込みの一覧（下から出る）。依頼主が多くても探しやすいように：
-// 上に検索欄、最近使った絞り込み（この端末で直近3つ）、チーム、
+// 上に検索欄、最近使った絞り込み（この端末で直近3つ）、その下に「チーム▼」「スタッフ▼」「依頼主▼」「派遣会社▼」。
+// 全部並ぶと目が疲れるので最初は折りたたみ、タップした項目だけ開く（選択中の項目・検索中は開いておく）。
 // 依頼主・派遣会社は今月シフトが多い順（件数つき）、今月0件はその下に名前順。
 const RECENT_FILTERS_KEY = "teera.calendarRecentFilters";
 type FilterOption = { value: string; label: string; group: string; count?: number };
@@ -5076,6 +5146,7 @@ function rememberRecentFilter(value: string) {
 
 function CalendarFilterSheet({
   teams,
+  staff,
   clients,
   agencies,
   selectedValue,
@@ -5083,6 +5154,7 @@ function CalendarFilterSheet({
   onClose,
 }: {
   teams: { id: string; name: string }[];
+  staff: { id: string; name: string }[];
   clients: { id: string; name: string; monthlyShiftCount?: number }[];
   agencies: { id: string; name: string; monthlyShiftCount?: number }[];
   selectedValue: string;
@@ -5096,6 +5168,7 @@ function CalendarFilterSheet({
     (b.monthlyShiftCount ?? 0) - (a.monthlyShiftCount ?? 0) || a.name.localeCompare(b.name, "ja");
   const options: FilterOption[] = [
     ...teams.map((t) => ({ value: `team:${t.id}`, label: t.name, group: "チーム" })),
+    ...[...staff].sort((a, b) => a.name.localeCompare(b.name, "ja")).map((m) => ({ value: `staff:${m.id}`, label: m.name, group: "スタッフ" })),
     ...[...clients].sort(byActivity).map((c) => ({ value: `rel:${c.id}`, label: c.name, group: "依頼主", count: c.monthlyShiftCount ?? 0 })),
     ...[...agencies].sort(byActivity).map((a) => ({ value: `rel:${a.id}`, label: a.name, group: "派遣会社", count: a.monthlyShiftCount ?? 0 })),
   ];
@@ -5104,9 +5177,17 @@ function CalendarFilterSheet({
   const recentOptions = q
     ? []
     : recent.map((v) => options.find((o) => o.value === v)).filter((o): o is FilterOption => Boolean(o));
-  const groups = ["チーム", "依頼主", "派遣会社"]
+  const groups = ["チーム", "スタッフ", "依頼主", "派遣会社"]
     .map((g) => ({ group: g, items: matched.filter((o) => o.group === g) }))
     .filter((g) => g.items.length > 0);
+  // 開いている項目（最初は選択中の項目だけ）
+  const [openGroups, setOpenGroups] = useState<string[]>(() => {
+    const sel = options.find((o) => o.value === selectedValue);
+    return sel ? [sel.group] : [];
+  });
+  function toggleGroup(g: string) {
+    setOpenGroups((prev) => (prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]));
+  }
 
   function choose(value: string) {
     rememberRecentFilter(value);
@@ -5146,7 +5227,7 @@ function CalendarFilterSheet({
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="依頼主・チームの名前で探す"
+          placeholder="チーム・スタッフ・依頼主の名前で探す"
           className="mb-3 w-full rounded-lg border border-border px-3 py-2 text-sm"
         />
         <div className="-mx-1 flex-1 overflow-y-auto px-1">
@@ -5169,14 +5250,40 @@ function CalendarFilterSheet({
               ))}
             </div>
           ) : null}
-          {groups.map((g) => (
-            <div key={g.group} className="mb-2">
-              <p className="px-3 pb-1 text-xs font-semibold text-muted">{g.group}</p>
-              {g.items.map((o) => (
-                <Row key={o.value} option={o} />
-              ))}
-            </div>
-          ))}
+          {groups.map((g) => {
+            // 検索中は見つかった項目を全部開いておく
+            const open = Boolean(q) || openGroups.includes(g.group);
+            const selectedInGroup = g.items.find((o) => o.value === selectedValue);
+            return (
+              <div key={g.group} className="mb-1 border-t border-border/60 first:border-t-0">
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(g.group)}
+                  aria-expanded={open}
+                  data-testid={`filter-group-${g.group}`}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-3 text-left text-sm font-semibold text-foreground"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    {g.group}
+                    <span className="text-xs font-normal text-muted">{g.items.length}</span>
+                    {selectedInGroup && !open ? (
+                      <span className="truncate text-xs font-normal text-primary">{selectedInGroup.label}</span>
+                    ) : null}
+                  </span>
+                  <svg viewBox="0 0 20 20" fill="none" className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`}>
+                    <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {open ? (
+                  <div className="pb-2">
+                    {g.items.map((o) => (
+                      <Row key={o.value} option={o} />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
           {q && groups.length === 0 ? <p className="py-6 text-center text-sm text-muted">見つかりませんでした。</p> : null}
         </div>
       </div>
