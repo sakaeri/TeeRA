@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { todayJst } from "@/lib/date";
 import { holidayName } from "@/lib/holidays";
+import { shortCompanyName } from "@/lib/shortCompanyName";
 import { useMonthSwipe } from "@/lib/useMonthSwipe";
 import { shiftListTimeLabel } from "@/lib/shiftListTimeLabel";
 import { useClickOutside } from "@/lib/useClickOutside";
@@ -113,12 +114,29 @@ function shortStaffName(name: string) {
 // 月表示のスタッフ名タグ。状態は色で示し、欠勤・取消・調整中は名前の後ろにも書く。
 // 色の濃さ＝まだ対応が残っているか：出勤時間が未定（連絡がまだ）は濃い緑で一番目立たせ、
 // 時間が入ったら白地に緑の枠、勤務が終わって報告が出たら薄い緑で塗る。
-function shiftTag(s: ShiftRow, todayStr: string): { label: string; mobileLabel: string; className: string } {
-  const tag = (suffix: string, className: string) => ({
-    label: `${s.staffName}${suffix}`,
-    mobileLabel: `${shortStaffName(s.staffName)}${suffix}`,
-    className,
-  });
+// スタッフで絞り込み中の札：名前の代わりに勤務先（依頼主は短くした名前、自社は業務内容）と時間
+function shiftWorkplaceLabel(s: ShiftRow) {
+  if (s.clientName) return shortCompanyName(s.clientName);
+  return s.taskName || "自社";
+}
+function shiftTimeLabel(s: ShiftRow) {
+  if (s.isUndecided || s.isAllDay || !s.startTime) return "未定";
+  return `${s.startTime.replace(/^0/, "")}〜`;
+}
+
+function shiftTag(
+  s: ShiftRow,
+  todayStr: string,
+  byWorkplace = false,
+): { label: string; mobileLabel: string; subLabel?: string; className: string } {
+  const tag = (suffix: string, className: string) =>
+    byWorkplace
+      ? { label: `${shiftWorkplaceLabel(s)}${suffix}`, mobileLabel: `${shiftWorkplaceLabel(s)}${suffix}`, subLabel: shiftTimeLabel(s), className }
+      : {
+          label: `${s.staffName}${suffix}`,
+          mobileLabel: `${shortStaffName(s.staffName)}${suffix}`,
+          className,
+        };
   if (s.status === "ON_HOLD") return tag("（調整中）", "bg-red-100 text-red-800");
   if (s.outcome === "ABSENT") return tag("（欠勤）", "bg-orange-100 text-orange-800");
   if (s.outcome === "CANCELLED_BY_EMPLOYER") return tag("（取消）", CANCELLED_TAG_CLASS);
@@ -220,7 +238,8 @@ type DeletedOrderRow = {
 };
 
 // mobileLabelはスマホ幅でだけ使う短い表示（スタッフ名を5文字で切ったもの）
-type TagEntry = { kind: "solid"; id: string; label: string; mobileLabel?: string; className: string };
+// subLabel：2行目（スタッフで絞り込み中の時間）
+type TagEntry = { kind: "solid"; id: string; label: string; mobileLabel?: string; subLabel?: string; className: string };
 
 // シフト作成モーダルの業務内容ステップで使う、依頼主ごとの業務名の登録
 // リスト。単価はここでは扱わない（単価は依頼主詳細で別途手動設定し、給与/
@@ -698,7 +717,7 @@ export function CalendarView({
           const reservedRows = (recruitTag ? 1 : 0) + (orderTag ? 1 : 0);
           const confirmedSlotBudget = 6 - reservedRows;
           const staffTags: TagEntry[] = [
-            ...confirmedShifts.map((s) => ({ kind: "solid" as const, id: s.id, ...shiftTag(s, todayStr) })),
+            ...confirmedShifts.map((s) => ({ kind: "solid" as const, id: s.id, ...shiftTag(s, todayStr, Boolean(selectedStaffId)) })),
             // 依頼主取消で休みになったものは、稼働中のシフトの後ろに並べる
             ...leftOffShifts.map((h) => ({
               kind: "solid" as const,
@@ -761,6 +780,7 @@ export function CalendarView({
                     ) : (
                       tag.label
                     )}
+                    {tag.subLabel ? <span className="block opacity-80">{tag.subLabel}</span> : null}
                   </span>
                 ))}
               </div>
@@ -5144,6 +5164,41 @@ function rememberRecentFilter(value: string) {
   }
 }
 
+// 絞り込みの種類ごとのマーク（見出しと「最近使った絞り込み」に付けて、何の絞り込みか分かるように）
+const FILTER_GROUP_STYLE: Record<string, { bg: string; path: string }> = {
+  // 人が3人
+  チーム: {
+    bg: "bg-violet-100 text-violet-700",
+    path: "M7 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm6 0a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM2.5 16c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5M8.5 16c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5",
+  },
+  // 人が1人
+  スタッフ: {
+    bg: "bg-emerald-100 text-emerald-700",
+    path: "M10 9.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM4.5 17c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5",
+  },
+  // 建物
+  依頼主: {
+    bg: "bg-sky-100 text-sky-700",
+    path: "M4 17V4.5h8V17M12 8.5h4V17M2.5 17h15M6.5 7.5h3M6.5 10.5h3M6.5 13.5h3",
+  },
+  // 握手（つながり）
+  派遣会社: {
+    bg: "bg-amber-100 text-amber-700",
+    path: "M3 10l3-3h3l2 2M17 10l-3-3h-2.5L8 10.5a1.2 1.2 0 0 0 1.7 1.7L11 11l3 3M6 13l2 2M9 13.5l1.5 1.5",
+  },
+};
+function FilterGroupIcon({ group }: { group: string }) {
+  const style = FILTER_GROUP_STYLE[group];
+  if (!style) return null;
+  return (
+    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${style.bg}`} aria-hidden="true">
+      <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5">
+        <path d={style.path} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
+  );
+}
+
 function CalendarFilterSheet({
   teams,
   staff,
@@ -5193,7 +5248,7 @@ function CalendarFilterSheet({
     rememberRecentFilter(value);
     onSelect(value);
   }
-  function Row({ option }: { option: FilterOption }) {
+  function Row({ option, showIcon = false }: { option: FilterOption; showIcon?: boolean }) {
     const selected = option.value === selectedValue;
     return (
       <button
@@ -5203,7 +5258,11 @@ function CalendarFilterSheet({
           selected ? "bg-primary/10 font-semibold text-primary" : "hover:bg-background"
         }`}
       >
-        <span className="min-w-0 truncate">{option.label}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          {showIcon ? <FilterGroupIcon group={option.group} /> : null}
+          <span className="min-w-0 truncate">{option.label}</span>
+          {showIcon ? <span className="shrink-0 text-[11px] font-normal text-muted">{option.group}</span> : null}
+        </span>
         {option.count !== undefined ? (
           <span className={`shrink-0 text-xs ${option.count > 0 ? "text-muted" : "text-border"}`}>今月{option.count}件</span>
         ) : null}
@@ -5246,7 +5305,7 @@ function CalendarFilterSheet({
             <div className="mb-2">
               <p className="px-3 pb-1 text-xs font-semibold text-muted">最近使った絞り込み</p>
               {recentOptions.map((o) => (
-                <Row key={`recent-${o.value}`} option={o} />
+                <Row key={`recent-${o.value}`} option={o} showIcon />
               ))}
             </div>
           ) : null}
@@ -5264,6 +5323,7 @@ function CalendarFilterSheet({
                   className="flex w-full items-center justify-between gap-2 px-3 py-3 text-left text-sm font-semibold text-foreground"
                 >
                   <span className="flex min-w-0 items-center gap-2">
+                    <FilterGroupIcon group={g.group} />
                     {g.group}
                     <span className="text-xs font-normal text-muted">{g.items.length}</span>
                     {selectedInGroup && !open ? (
