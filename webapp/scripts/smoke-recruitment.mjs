@@ -2,6 +2,7 @@ import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { createRecruitmentViaWizard } from "./_lib/recruitmentWizard.mjs";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { openRecruitmentDay } from "./_lib/recruitmentCalendar.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -100,6 +101,7 @@ try {
   // 業務内容(title), which is now tucked inside the ▼ detail.
   const recruitmentId = psql(`select id from "PublicRecruitment" where "companyId"='${companyId}' and title='${recruitmentTitle}';`);
   await staff.goto("http://localhost:3000/staff/recruitments");
+  await openRecruitmentDay(staff, recruitmentId);
   const recruitmentItem = staff.locator(`[data-testid="recruitment-${recruitmentId}"]`);
   let staffBody = await recruitmentItem.innerText();
   log("staff sees open recruitment", staffBody.includes("募集テスト株式会社"));

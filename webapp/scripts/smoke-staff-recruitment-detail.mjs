@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { openRecruitmentDay } from "./_lib/recruitmentCalendar.mjs";
 
 // スタッフの募集一覧の中身：
 // ・公開募集を所属していないスタッフが開くと、時間（未定）・給与・その他の項目・備考・追加のお知らせが出る
@@ -88,6 +89,9 @@ try {
 
   // 所属スタッフA：自社の公開募集は詳細を開けない、オーダーは給与・その他の項目なし
   await staffA.goto("http://localhost:3000/staff/recruitments");
+  const recDate = await openRecruitmentDay(staffA, pubId);
+  log("カレンダーの日付に募集の件数（2）が出る", (await staffA.locator(`[data-testid="rec-day-${recDate}"]`).getAttribute("data-count")) === "2");
+  log("ポップアップの見出しにその日の日付", (await staffA.getByTestId("recruitment-day-popup").innerText()).includes("の募集"));
   const pubA = staffA.locator(`[data-testid="recruitment-${pubId}"]`);
   log("所属スタッフには自社の公開募集の詳細が開けない", await pubA.locator("button").first().isDisabled());
   const pubAText = await pubA.innerText();
@@ -103,6 +107,17 @@ try {
   log("応募する前に確認が出る", (await confirm.innerText()).includes("この募集に応募しますか？"));
   await confirm.getByRole("button", { name: "やめる" }).click();
   log("「やめる」で応募しない", psql(`select count(*) from "RecruitmentEntry" where "publicRecruitmentId"='${orderId}';`) === "0");
+  // 応募するとその場でシフトになり、ポップアップを閉じるとカレンダーのその日が「シフトあり」（薄い緑）
+  await ordA.getByRole("button", { name: "応募する" }).click();
+  await confirm.getByRole("button", { name: "応募する" }).click();
+  await staffA.waitForTimeout(1500);
+  log("応募した募集は「応募済み」になるか一覧から消える", (await ordA.count()) === 0 || (await ordA.innerText()).includes("応募済み"));
+  await staffA.getByTestId("recruitment-day-popup").getByRole("button", { name: "閉じる" }).click();
+  log("応募した日は「シフトあり」", (await staffA.locator(`[data-testid="rec-day-${recDate}"]`).getAttribute("data-shift")) === "true");
+  await staffA.reload();
+  await staffA.locator('[data-testid="recruitment-month"]').waitFor();
+  log("読み直しても「シフトあり」", (await staffA.locator(`[data-testid="rec-day-${recDate}"]`).getAttribute("data-shift")) === "true");
+  await staffA.screenshot({ path: "/tmp/claude-0/-home-user-TeeRA/080a6f73-edd8-511c-aeae-9c93d46ffc7b/scratchpad/rec-calendar.png" });
 } catch (e) {
   console.error(e);
   process.exitCode = 1;

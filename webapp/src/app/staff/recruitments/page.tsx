@@ -1,14 +1,24 @@
 import { requireCompanyStaffRole } from "@/lib/auth/session";
+import { prisma } from "@/lib/prisma";
+import { todayJst } from "@/lib/date";
 import { listOpenRecruitmentsForStaff } from "@/lib/domain/recruitment";
 import { RecruitmentListView } from "@/components/staff/RecruitmentListView";
 
 export default async function StaffRecruitmentsPage() {
   const { userId, membership } = await requireCompanyStaffRole();
   const recruitments = await listOpenRecruitmentsForStaff({ companyId: membership.companyId, staffUserId: userId });
+  // カレンダーで「もうシフトが入っている日」を薄い緑にする（応募するとその場でシフトになるので、応募した日も緑）
+  const today = new Date(`${todayJst()}T00:00:00.000Z`);
+  const shifts = await prisma.shift.findMany({
+    where: { staffUserId: userId, date: { gte: today }, status: { notIn: ["SUPERSEDED", "CANCELLED"] } },
+    select: { date: true },
+  });
+  const shiftDates = [...new Set(shifts.map((sh) => sh.date.toISOString().slice(0, 10)))];
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-10">
+    <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 sm:py-10">
       <RecruitmentListView
+        shiftDates={shiftDates}
         recruitments={recruitments
           .map((r) => ({
             id: r.id,

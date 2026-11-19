@@ -2,6 +2,7 @@ import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { createRecruitmentViaWizard } from "./_lib/recruitmentWizard.mjs";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { openRecruitmentDay } from "./_lib/recruitmentCalendar.mjs";
 
 // 派遣会社が依頼主の代わりにオーダーを出す：
 // ・募集の作成で勤務先として依頼主を選べる（選ばなければ今まで通り自社の募集）
@@ -98,6 +99,7 @@ try {
   // --- スタッフ：一覧に「依頼主（派遣会社）」と出て、応募するとその依頼主の現場のシフトになる ---
   await staff.goto("http://localhost:3000/staff/recruitments");
   await staff.waitForTimeout(1200);
+  await openRecruitmentDay(staff, rec[0]);
   const listText = await staff.locator("main").innerText();
   log("スタッフの募集一覧に「依頼主（派遣会社）」と出る", listText.includes(`${clientName}（${agencyName}）`));
   await staff.locator(`[data-testid='recruitment-${rec[0]}'] button`).first().click();
@@ -125,6 +127,7 @@ try {
   await staff.goto("http://localhost:3000/staff/recruitments");
   await staff.waitForTimeout(1200);
   const ownRec = psql(`select id from "PublicRecruitment" where "companyId"='${clientId}' order by "createdAt" desc limit 1;`);
+  await openRecruitmentDay(staff, ownRec);
   await staff.locator(`[data-testid='recruitment-${ownRec}'] button`).first().click();
   await applyFromConfirm();
   log("依頼主のオーダーから決まったシフトは、依頼主が入れたシフトとして記録される", psql(`select "createdByCompanyId" from "Shift" where "staffUserId"='${staffId}' order by "createdAt" desc limit 1;`) === clientId);

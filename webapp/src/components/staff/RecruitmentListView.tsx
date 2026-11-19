@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { applyToRecruitmentAction } from "@/app/staff/actions";
+import { holidayName } from "@/lib/holidays";
+import { todayJst } from "@/lib/date";
+import { leadingBlankCount, orderedWeekdays, useMondayFirst } from "@/components/week/WeekStart";
 
 type Row = {
   id: string;
@@ -31,14 +35,174 @@ function formatDateJa(dateStr: string) {
   return `${m}月${d}日（${WEEKDAYS[dow]}）`;
 }
 
+function weekdayColor(dow: number, dateStr?: string) {
+  if (dow === 0 || (dateStr && holidayName(dateStr))) return "text-red-600";
+  if (dow === 6) return "text-blue-600";
+  return "text-foreground";
+}
+
+// 募集はカレンダーで見せる。募集のある日に件数を出し、タップするとその日の募集が
+// ポップアップで開く（中身は従来どおりのカード：▼で詳細→応募する）。
+// もうシフトが入っている日は薄い緑（応募するとその場でシフトになるので、応募した日も緑になる）。
+export function RecruitmentListView({
+  recruitments,
+  shiftDates = [],
+}: {
+  recruitments: Row[];
+  shiftDates?: string[];
+}) {
+  const mondayFirst = useMondayFirst();
+  const today = todayJst();
+  const byDate = useMemo(() => {
+    const m = new Map<string, Row[]>();
+    for (const r of recruitments) m.set(r.date, [...(m.get(r.date) ?? []), r]);
+    return m;
+  }, [recruitments]);
+  const sortedDates = useMemo(() => [...byDate.keys()].sort(), [byDate]);
+  const firstMonth = today.slice(0, 7);
+  const lastMonth = [sortedDates[sortedDates.length - 1]?.slice(0, 7) ?? firstMonth, firstMonth].sort()[1];
+  // 最初は、今日以降で一番近い募集のある月を出す
+  const initialMonth = [sortedDates.find((d) => d >= today)?.slice(0, 7) ?? firstMonth, firstMonth].sort()[1];
+  const [month, setMonth] = useState(initialMonth);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // この画面で応募した募集（ポップアップを閉じても「応募済み」のまま。その日はシフトありの緑にする）
+  const [appliedIds, setAppliedIds] = useState<Record<string, boolean>>({});
+  const shifts = new Set([...shiftDates, ...recruitments.filter((r) => appliedIds[r.id]).map((r) => r.date)]);
+
+  const [y, mo] = month.split("-").map(Number);
+  const daysInMonth = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  const cells: (string | null)[] = [
+    ...Array.from({ length: leadingBlankCount(y, mo, mondayFirst) }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`),
+  ];
+  function shiftMonth(delta: number) {
+    const d = new Date(Date.UTC(y, mo - 1 + delta, 1));
+    setMonth(d.toISOString().slice(0, 7));
+  }
+  const dayRows = selectedDate ? (byDate.get(selectedDate) ?? []) : [];
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-black/5">
+        <div className="mb-2 flex items-center justify-between">
+          <button
+            type="button"
+            aria-label="前の月"
+            disabled={month <= firstMonth}
+            onClick={() => shiftMonth(-1)}
+            className="rounded-lg px-3 py-1 text-lg text-primary disabled:opacity-30"
+          >
+            ‹
+          </button>
+          <span className="font-serif-jp text-base font-bold text-primary" data-testid="recruitment-month">
+            {y}年{mo}月
+          </span>
+          <button
+            type="button"
+            aria-label="次の月"
+            disabled={month >= lastMonth}
+            onClick={() => shiftMonth(1)}
+            className="rounded-lg px-3 py-1 text-lg text-primary disabled:opacity-30"
+          >
+            ›
+          </button>
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {orderedWeekdays(mondayFirst).map(({ dow, label }) => (
+            <div key={label} className={`py-0.5 text-center text-[11px] font-semibold ${weekdayColor(dow)}`}>
+              {label}
+            </div>
+          ))}
+          {cells.map((dateStr, i) => {
+            if (!dateStr) return <div key={i} />;
+            const dow = new Date(`${dateStr}T00:00:00Z`).getUTCDay();
+            const count = byDate.get(dateStr)?.length ?? 0;
+            const past = dateStr < today;
+            const hasShift = shifts.has(dateStr);
+            return (
+              <button
+                key={i}
+                type="button"
+                disabled={count === 0}
+                onClick={() => setSelectedDate(dateStr)}
+                data-testid={`rec-day-${dateStr}`}
+                data-count={count || undefined}
+                data-shift={hasShift ? "true" : undefined}
+                className={`flex h-14 flex-col items-center justify-start gap-0.5 rounded-lg pt-1.5 text-xs ${
+                  hasShift ? "bg-emerald-100" : count > 0 ? "bg-background" : ""
+                } ${dateStr === today ? "font-bold underline" : ""} ${
+                  past ? "opacity-40" : ""
+                }`}
+              >
+                <span className={weekdayColor(dow, dateStr)}>{Number(dateStr.slice(8))}</span>
+                {count > 0 ? (
+                  <span className="min-w-[1.25rem] rounded-full bg-primary px-1.5 text-[10px] font-semibold leading-4 text-primary-foreground">
+                    {count}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
+          <span className="flex items-center gap-1">
+            <span className="rounded-full bg-primary px-1.5 text-[10px] leading-4 text-primary-foreground">2</span>募集の件数
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="h-3 w-3 rounded bg-emerald-100" />シフトあり
+          </span>
+        </div>
+      </div>
+      {recruitments.length === 0 ? <p className="text-sm text-muted">現在募集中のシフトはありません。</p> : null}
+      {selectedDate ? (
+        <div
+          className="fixed inset-0 z-30 flex items-end justify-center bg-black/30 sm:items-center sm:p-4"
+          onClick={() => setSelectedDate(null)}
+          data-testid="recruitment-day-popup"
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-md flex-col rounded-t-2xl bg-background p-4 shadow-lg sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <p className="font-serif-jp text-base font-bold text-primary">{formatDateJa(selectedDate)}の募集</p>
+              <button type="button" onClick={() => setSelectedDate(null)} className="px-2 text-sm text-muted">
+                閉じる
+              </button>
+            </div>
+            {shifts.has(selectedDate) ? (
+              <p className="mb-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900">この日はもうシフトが入っています。</p>
+            ) : null}
+            <div className="overflow-y-auto">
+              {dayRows.length === 0 ? <p className="py-4 text-center text-sm text-muted">この日の募集はもうありません。</p> : null}
+              <RecruitmentCards
+                recruitments={dayRows}
+                applied={appliedIds}
+                onApplied={(id) => setAppliedIds((prev) => ({ ...prev, [id]: true }))}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 // 見出しは「日付」「募集企業名・残り人数」だけに絞り、業務内容・時間・
 // 給与などの詳細は▼で開くまで隠す。応募するかどうかは詳細を見てから
 // 判断するものなので、タップで展開→内容確認→応募する、という導線は
 // そのまま保つ（一発ボタンでの誤応募を防ぐ）。
-export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
+function RecruitmentCards({
+  recruitments,
+  applied,
+  onApplied,
+}: {
+  recruitments: Row[];
+  applied: Record<string, boolean>;
+  onApplied: (id: string) => void;
+}) {
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [applied, setApplied] = useState<Record<string, boolean>>({});
   const [openId, setOpenId] = useState<string | null>(null);
   // 応募する前に、内容を確かめてもらう
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -52,7 +216,7 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
           [id]: result.error === "recruitment_full" ? "満員になりました。" : "応募できませんでした。",
         }));
       } else {
-        setApplied((prev) => ({ ...prev, [id]: true }));
+        onApplied(id);
       }
     });
   }
@@ -85,7 +249,6 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
               onClick={() => setOpenId(open ? null : r.id)}
               className="flex w-full flex-col gap-1 px-4 py-3 text-left disabled:cursor-default"
             >
-              <span className="text-xs text-muted">{formatDateJa(r.date)}</span>
               <div className="flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold text-foreground">
                   {r.visibility === "PUBLIC" ? (
@@ -169,13 +332,10 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
           </li>
         );
       })}
-      {recruitments.length === 0 ? (
-        <p className="text-sm text-muted">現在募集中のシフトはありません。</p>
-      ) : null}
       {(() => {
         const target = recruitments.find((r) => r.id === confirmId);
         if (!target) return null;
-        return (
+        return createPortal(
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setConfirmId(null)}>
             <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
               <p className="mb-1 font-serif-jp text-base font-bold text-primary">この募集に応募しますか？</p>
@@ -205,7 +365,8 @@ export function RecruitmentListView({ recruitments }: { recruitments: Row[] }) {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body,
         );
       })()}
     </ul>

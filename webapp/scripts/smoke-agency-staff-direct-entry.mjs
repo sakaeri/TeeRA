@@ -2,6 +2,7 @@ import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 import { loginViaEmail } from "./_lib/login.mjs";
+import { openRecruitmentDay } from "./_lib/recruitmentCalendar.mjs";
 
 // 派遣会社から依頼主に配属されているスタッフが、依頼主のオーダーに自分でエントリーしたとき：
 // ・シフトは派遣会社名義（派遣会社がアサインしたときと同じ）で作られ、
@@ -82,6 +83,7 @@ try {
   // スタッフが自分でエントリーする
   await loginViaEmail(staffPage, staffEmail, "password123");
   await staffPage.goto("http://localhost:3000/staff/recruitments");
+  await openRecruitmentDay(staffPage, recruitmentId);
   const item = staffPage.locator(`[data-testid="recruitment-${recruitmentId}"]`);
   await item.locator("button").first().click();
   await item.getByRole("button", { name: "応募する" }).click();
