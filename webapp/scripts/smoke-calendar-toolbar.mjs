@@ -167,7 +167,13 @@ try {
   const staffCellText = await staffCell.innerText();
   const todayCellStaff = await page.locator(`button:has(> span:text-is("${Number(today.slice(8, 10))}"))`).first().innerText();
   log("そのスタッフのシフトだけが出る（他の人・募集は出ない）", !staffCellText.includes("太郎") && !todayCellStaff.includes("募集"));
-  log("札には名前ではなく勤務先と時間が出る", staffCellText.includes("自社") && staffCellText.includes("9:00〜") && !staffCellText.includes("絞込"));
+  // 前日のシフト（報告がまだ）は2行目が「未報告」、翌日なら時間
+  log(
+    "札には名前ではなく勤務先と、時間（過ぎて報告がまだなら「未報告」）が出る",
+    staffCellText.includes("自社") && !staffCellText.includes("絞込") && (staffDay < today ? staffCellText.includes("未報告") : staffCellText.includes("9:00〜")),
+  );
+  const legendBox = await page.getByTestId("staff-request-legend").boundingBox();
+  log("色の説明（出勤希望・休み希望・休み確定・未報告）が1行に収まる", legendBox.height < 20 && (await page.getByTestId("staff-request-legend").innerText()).includes("未報告"));
   const cellOf = (d) => page.locator(`button:has(> span:text-is("${Number(d.slice(8, 10))}"))`).first();
   log("出勤希望の日にシフトを作った日は枠を出さない（名前の札だけ）", (await staffCell.getAttribute("data-request-desire")) === null);
   log("まだシフトの無い出勤希望の日は青枠", (await cellOf(workOnlyDay).getAttribute("data-request-desire")) === "WORK");

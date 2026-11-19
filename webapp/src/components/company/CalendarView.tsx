@@ -152,7 +152,7 @@ function shiftTag(
   s: ShiftRow,
   todayStr: string,
   byWorkplace = false,
-): { label: string; mobileLabel: string; subLabel?: string; className: string } {
+): { label: string; mobileLabel: string; subLabel?: string; subLabelClassName?: string; className: string } {
   const tag = (suffix: string, className: string) =>
     byWorkplace
       ? { label: `${shiftWorkplaceLabel(s)}${suffix}`, mobileLabel: `${shiftWorkplaceLabel(s)}${suffix}`, subLabel: shiftTimeLabel(s), className }
@@ -165,8 +165,12 @@ function shiftTag(
   if (s.outcome === "ABSENT") return tag("（欠勤）", "bg-orange-100 text-orange-800");
   if (s.outcome === "CANCELLED_BY_EMPLOYER") return tag("（取消）", CANCELLED_TAG_CLASS);
   if (s.outcome === "WORKED") return tag("", "bg-emerald-100 text-emerald-900");
-  // 過去日なのに業務報告が出ていない（報告漏れ）
-  if (s.date < todayStr) return tag("", "bg-white text-emerald-900 ring-1 ring-inset ring-red-400");
+  // 過去日なのに業務報告が出ていない（報告漏れ）。スタッフで絞り込み中は、マスの赤枠（休み希望）と
+  // 見間違えないよう、2行目に赤い文字で「未報告」と出す
+  if (s.date < todayStr) {
+    const t = tag("", "bg-white text-emerald-900 ring-1 ring-inset ring-red-400");
+    return byWorkplace ? { ...t, subLabel: "未報告", subLabelClassName: "font-semibold text-red-600 opacity-100" } : t;
+  }
   // 出勤時間がまだ入っていない（終日で作った古いシフトも時間なしとして同じ扱い）
   if (s.isUndecided || s.isAllDay) return tag("", "bg-emerald-700 text-white");
   return tag("", "bg-white text-emerald-900 ring-1 ring-inset ring-emerald-500");
@@ -263,7 +267,15 @@ type DeletedOrderRow = {
 
 // mobileLabelはスマホ幅でだけ使う短い表示（スタッフ名を5文字で切ったもの）
 // subLabel：2行目（スタッフで絞り込み中の時間）
-type TagEntry = { kind: "solid"; id: string; label: string; mobileLabel?: string; subLabel?: string; className: string };
+type TagEntry = {
+  kind: "solid";
+  id: string;
+  label: string;
+  mobileLabel?: string;
+  subLabel?: string;
+  subLabelClassName?: string;
+  className: string;
+};
 
 // シフト作成モーダルの業務内容ステップで使う、依頼主ごとの業務名の登録
 // リスト。単価はここでは扱わない（単価は依頼主詳細で別途手動設定し、給与/
@@ -645,15 +657,23 @@ export function CalendarView({
       {filterLabel ? (
         <div className="order-2 mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 sm:order-1">
           {selectedStaffId ? (
-            <span className="order-last flex items-center gap-3 text-[11px] text-muted" data-testid="staff-request-legend">
+            // 色の説明は1行に収める（スマホ幅でも折り返さない大きさ）
+            <span
+              className="order-last flex w-full items-center gap-2.5 whitespace-nowrap text-[10px] leading-none text-muted sm:gap-3 sm:text-[11px]"
+              data-testid="staff-request-legend"
+            >
               <span className="flex items-center gap-1">
-                <span className="h-3 w-3 rounded ring-2 ring-inset ring-blue-400" />出勤希望
+                <span className="h-2.5 w-2.5 rounded-sm ring-2 ring-inset ring-blue-400" />出勤希望
               </span>
               <span className="flex items-center gap-1">
-                <span className="h-3 w-3 rounded ring-2 ring-inset ring-red-400" />休み希望
+                <span className="h-2.5 w-2.5 rounded-sm ring-2 ring-inset ring-red-400" />休み希望
               </span>
               <span className="flex items-center gap-1">
-                <span className="rounded bg-gray-200 px-1 text-[10px] text-gray-700">休み</span>休み確定
+                <span className="rounded-sm bg-gray-200 px-0.5 py-px text-[9px] text-gray-700">休み</span>休み確定
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="rounded-sm px-0.5 py-px text-[9px] font-semibold text-red-600 ring-1 ring-inset ring-red-400">未報告</span>
+                報告まだ
               </span>
             </span>
           ) : null}
@@ -820,7 +840,11 @@ export function CalendarView({
                     ) : (
                       tag.label
                     )}
-                    {tag.subLabel ? <span className="mt-0.5 block text-[8px] font-normal opacity-80 xl:text-[10px]">{tag.subLabel}</span> : null}
+                    {tag.subLabel ? (
+                      <span className={`mt-0.5 block text-[8px] xl:text-[10px] ${tag.subLabelClassName ?? "font-normal opacity-80"}`}>
+                        {tag.subLabel}
+                      </span>
+                    ) : null}
                   </span>
                 ))}
               </div>
