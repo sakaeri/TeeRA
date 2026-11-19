@@ -191,6 +191,8 @@ export default async function CompanyCalendarPage({
           desire: r.desire,
           dates: r.dates.map((d) => d.toISOString().slice(0, 10)),
           note: r.note,
+          // 休み希望を「休みで確定」した（スタッフで絞り込んだカレンダーでは「休み」の札で出す）
+          acknowledged: Boolean(r.acknowledgedAt),
         }))}
         // 絞り込み中は関係のある募集だけ：依頼主で絞っているときは、その依頼主の代わりに出したオーダーだけ
         // （自社の募集は依頼主に結びついていないため出さない）、チームで絞っているときはそのチームの募集だけ

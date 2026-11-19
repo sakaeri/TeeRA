@@ -166,6 +166,7 @@ type ShiftRequestRow = {
   desire: string;
   dates: string[];
   note: string | null;
+  acknowledged?: boolean;
 };
 
 type RecruitmentRow = {
@@ -392,15 +393,21 @@ export function CalendarView({
         ? `&staff=${selectedStaffId}`
         : "";
 
-  // スタッフで絞り込み中は、その人の出勤希望（青枠）・休み希望（赤枠）を日付に出す
+  // スタッフで絞り込み中は、その人の出勤希望（青枠）・休み希望（赤枠）を日付に出す。
+  // 休みで確定した日は枠ではなく「休み」の札（確定したものは札、まだ希望のものは枠）。
+  // 出勤希望の日にシフトを作った日は、希望はもう叶っているので枠を出さない（名前の札だけ）。
   const staffRequestDesireByDate = useMemo(() => {
-    const map = new Map<string, "WORK" | "OFF">();
+    const map = new Map<string, "WORK" | "OFF" | "OFF_CONFIRMED">();
     if (!selectedStaffId) return map;
+    const shiftDates = new Set(shifts.filter((s) => s.status !== "CANCELLED").map((s) => s.date));
     for (const r of shiftRequests) {
-      for (const d of r.dates) map.set(d, r.desire === "OFF" ? "OFF" : "WORK");
+      for (const d of r.dates) {
+        if (r.desire === "OFF") map.set(d, r.acknowledged ? "OFF_CONFIRMED" : "OFF");
+        else if (!shiftDates.has(d)) map.set(d, "WORK");
+      }
     }
     return map;
-  }, [selectedStaffId, shiftRequests]);
+  }, [selectedStaffId, shiftRequests, shifts]);
 
   // 日別詳細モーダルの＜＞やシフト希望一覧からの日付ジャンプ先が今表示中の
   // 月の外だった場合、selectedDateを変えるだけだと今の月分しか取得して
@@ -602,6 +609,9 @@ export function CalendarView({
               <span className="flex items-center gap-1">
                 <span className="h-3 w-3 rounded ring-2 ring-inset ring-red-400" />休み希望
               </span>
+              <span className="flex items-center gap-1">
+                <span className="rounded bg-gray-200 px-1 text-[10px] text-gray-700">休み</span>休み確定
+              </span>
             </span>
           ) : null}
           <span className="flex max-w-full items-center gap-1.5 rounded-full bg-primary/10 py-1 pl-3 pr-1 text-xs font-semibold text-primary">
@@ -701,6 +711,9 @@ export function CalendarView({
           const hasOverflow = staffTags.length > confirmedSlotBudget;
 
           const tagEntries: TagEntry[] = [
+            ...(staffRequestDesireByDate.get(c.dateStr) === "OFF_CONFIRMED"
+              ? [{ kind: "solid" as const, id: "off-confirmed", label: "休み", className: "bg-gray-200 text-gray-700" }]
+              : []),
             ...staffTags.slice(0, confirmedSlotBudget),
             ...(recruitTag ? [recruitTag] : []),
             ...(orderTag ? [orderTag] : []),

@@ -82,7 +82,12 @@ try {
   };
   const hanakoId = addStaff("絞込花子", "hanako");
   addStaff("関係ない太郎", "taro");
-  psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status) values (gen_random_uuid()::text, '${hanakoId}', '${companyId}', 'WORK', ARRAY['${staffDay}']::date[], 'PENDING');`);
+  // 出勤希望：シフトのある日（枠は出ない）と、まだシフトの無い日（青枠）。休みで確定した日（「休み」の札）
+  const freeDays = [2, 3, 4, 5, 6].map((d) => `${today.slice(0, 8)}${String(d).padStart(2, "0")}`).filter((d) => d !== today && d !== staffDay);
+  const workOnlyDay = freeDays[0];
+  const offDay = freeDays[1];
+  psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status) values (gen_random_uuid()::text, '${hanakoId}', '${companyId}', 'WORK', ARRAY['${staffDay}','${workOnlyDay}']::date[], 'PENDING');`);
+  psql(`insert into "ShiftRequest" (id, "staffUserId", "companyId", desire, dates, status, "acknowledgedAt") values (gen_random_uuid()::text, '${hanakoId}', '${companyId}', 'OFF', ARRAY['${offDay}']::date[], 'PENDING', now());`);
 
   await page.goto("http://localhost:3000/company/calendar");
   const [y, m] = today.split("-").map(Number);
@@ -143,7 +148,10 @@ try {
   const staffCellText = await staffCell.innerText();
   const todayCellStaff = await page.locator(`button:has(> span:text-is("${Number(today.slice(8, 10))}"))`).first().innerText();
   log("そのスタッフのシフトだけが出る（他の人・募集は出ない）", staffCellText.includes("絞込") && !staffCellText.includes("太郎") && !todayCellStaff.includes("募集"));
-  log("出勤希望の日は青枠", (await staffCell.getAttribute("data-request-desire")) === "WORK");
+  const cellOf = (d) => page.locator(`button:has(> span:text-is("${Number(d.slice(8, 10))}"))`).first();
+  log("出勤希望の日にシフトを作った日は枠を出さない（名前の札だけ）", (await staffCell.getAttribute("data-request-desire")) === null);
+  log("まだシフトの無い出勤希望の日は青枠", (await cellOf(workOnlyDay).getAttribute("data-request-desire")) === "WORK");
+  log("休みで確定した日は「休み」の札", (await cellOf(offDay).getAttribute("data-request-desire")) === "OFF_CONFIRMED" && (await cellOf(offDay).innerText()).includes("休み"));
   log("色の説明が出る", (await page.getByTestId("staff-request-legend").count()) === 1);
   await page.getByRole("button", { name: "絞り込み", exact: true }).click();
   const sheet4 = page.locator("div.fixed.inset-0.z-40").last();
