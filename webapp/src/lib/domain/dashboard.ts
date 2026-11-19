@@ -70,9 +70,11 @@ export async function loadDashboardData(companyId: string) {
       // 日付が過ぎた募集はもう応募のしようがないので、埋まらないまま残って
       // いても欠員件数・やることリストからは対象外にする（過去日は消えて
       // いい、というのが期待挙動）。
+      // 依頼主（仮アカウント）の代わりに出したオーダーは依頼主の人集めで、自社の欠員ではないので
+      // 欠員件数・欠員シフト・やることには出さない（カレンダーの募集一覧にだけ出る）。
       prisma.publicRecruitment.findMany({
-        where: { companyId, status: "PUBLISHED", date: { gte: today } },
-        include: { entries: true, companyRelationship: { select: { proxyName: true, clientCompany: { select: { name: true } } } } },
+        where: { companyId, status: "PUBLISHED", date: { gte: today }, companyRelationshipId: null },
+        include: { entries: true },
         orderBy: { date: "asc" },
       }),
       prisma.shiftRequest.findMany({
@@ -208,7 +210,6 @@ export function computeShortageEntries(data: DashboardData) {
       endTime: r.endTime,
       filled: r.entries.filter((e) => e.status !== "REJECTED").length,
       maxEntries: r.maxEntries,
-      clientName: r.companyRelationship?.clientCompany?.name ?? r.companyRelationship?.proxyName ?? null,
     }))
     .filter((r) => r.filled < r.maxEntries);
 }
@@ -364,12 +365,11 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
 
   // 欠員は、スタッフ側の募集に出ていてスタッフが自分で応募するので、出したばかりのうちは
   // 会社がやることは無い。勤務日の3日前になっても足りない時だけ「やること」に出す。
-  // 依頼主の代わりに出したオーダーは「やること」には出さない（欠員シフトの一覧には出る）。
   const shortageDeadline = addDaysToDateStr(todayJst(), SHORTAGE_TODO_DAYS_BEFORE);
   for (const r of shortageRecruitments) {
     const filled = r.entries.filter((e) => e.status !== "REJECTED").length;
     const dateStr = r.date.toISOString().slice(0, 10);
-    if (filled < r.maxEntries && !r.companyRelationshipId && dateStr <= shortageDeadline) {
+    if (filled < r.maxEntries && dateStr <= shortageDeadline) {
       items.push({
         id: `shortage-${r.id}`,
         kind: "欠員",

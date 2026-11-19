@@ -92,8 +92,6 @@ type ShortageEntry = {
   endTime: string | null;
   filled: number;
   maxEntries: number;
-  // 依頼主の代わりに出したオーダーなら、その依頼主の名前
-  clientName: string | null;
 };
 
 type UnconfirmedShiftEntry = {
@@ -999,8 +997,7 @@ function ShortagePopup({ entries, onClose }: { entries: ShortageEntry[]; onClose
           <div>
             <p className="font-medium">{formatDateJa(r.date)}</p>
             <p className="text-muted">
-              {r.title}
-              {r.clientName ? `（${r.clientName}）` : ""} {formatTimeRange(r.startTime, r.endTime)} 残り{r.maxEntries - r.filled}名（{r.filled}/
+              {r.title} {formatTimeRange(r.startTime, r.endTime)} 残り{r.maxEntries - r.filled}名（{r.filled}/
               {r.maxEntries}）
             </p>
           </div>

@@ -97,11 +97,11 @@ try {
   const todoRows = (await page.locator("li", { has: page.getByRole("link", { name: "カレンダーで確認" }) }).allInnerTexts()).join("\n");
   log("まだ先の募集はやることに出ない", !todoRows.includes("まだ先の募集"));
   log("代わりに出したオーダーはやることに出ない", !todoRows.includes("代わりに出したオーダー"));
-  // 欠員シフトの一覧には出る（代わりに出したオーダーは依頼主名つき）
+  // 欠員シフトの一覧には先の募集も出る。代わりに出したオーダーは自社の欠員ではないので出ない
   await page.getByText("欠員件数").click();
   const shortagePopup = await page.locator("div.fixed").filter({ hasText: "欠員シフト" }).last().innerText();
   log("欠員シフトの一覧には先の募集も出る", shortagePopup.includes("まだ先の募集"));
-  log("代わりに出したオーダーは依頼主名つきで出る", shortagePopup.includes("代わりに出したオーダー（代行ゴルフ倶楽部）"));
+  log("代わりに出したオーダーは欠員シフトにも出ない", !shortagePopup.includes("代わりに出したオーダー"));
   await page.goto("http://localhost:3000/company");
   log("業務報告はやることリストで1件ずつではなく「未承認の業務報告が◯件あります」にまとまる", body.includes("未承認の業務報告が1件あります") && !body.includes("業務報告が未承認です"));
 
