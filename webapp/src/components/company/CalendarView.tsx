@@ -185,6 +185,8 @@ type RecruitmentRow = {
   wageType: string | null;
   extraItems: { label: string; value: string }[];
   announcements: AnnouncementRow[];
+  // 依頼主の代わりに出したオーダーなら、その依頼主の名前
+  clientName?: string | null;
 };
 
 // 募集を作った後に書き足した「追加のお知らせ」
@@ -1857,6 +1859,11 @@ function OrderCard({
     <li className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
       <div className="flex items-start justify-between gap-2">
         <div>
+          {r.clientName ? (
+            <p className="text-xs font-medium text-primary" data-testid="recruitment-client-name">
+              {r.clientName}のオーダー
+            </p>
+          ) : null}
           <div className="flex items-center gap-1.5">
             <p className="font-semibold">{r.title}</p>
             {r.visibility === "PUBLIC" ? (

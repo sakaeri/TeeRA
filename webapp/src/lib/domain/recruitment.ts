@@ -326,7 +326,12 @@ export async function listPublicRecruitments(params: { companyId: string; teamId
       teamId: params.teamId,
       status: "PUBLISHED",
     },
-    include: { entries: true, announcements: { orderBy: { createdAt: "asc" } } },
+    include: {
+      entries: true,
+      announcements: { orderBy: { createdAt: "asc" } },
+      // 依頼主の代わりに出したオーダーは、どの依頼主の分かを出す
+      companyRelationship: { select: { proxyName: true, clientCompany: { select: { name: true } } } },
+    },
     orderBy: { date: "asc" },
   });
 }

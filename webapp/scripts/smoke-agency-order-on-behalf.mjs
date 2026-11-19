@@ -95,6 +95,15 @@ try {
   await agency.waitForTimeout(800);
   const rec = psql(`select id||'|'||coalesce("companyRelationshipId",'') from "PublicRecruitment" where "companyId"='${agencyId}' order by "createdAt" desc limit 1;`).split("|");
   log("オーダーに依頼主（現場）が記録される", rec[1] === relId);
+  // 派遣会社のカレンダー：募集一覧に「◯◯のオーダー」と出る。依頼主で絞り込んでも消えない
+  const recDate = psql(`select to_char(date, 'YYYY-MM-DD') from "PublicRecruitment" where id='${rec[0]}';`);
+  for (const url of [`/company/calendar?date=${recDate}`, `/company/calendar?date=${recDate}&rel=${relId}`]) {
+    await agency.goto(`http://localhost:3000${url}`);
+    await agency.getByText("募集一覧").first().click();
+    const name = agency.getByTestId("recruitment-client-name").first();
+    await name.waitFor({ timeout: 15000 }).catch(() => {});
+    log(`カレンダーの募集一覧に依頼主のオーダーと出る（${url.includes("rel=") ? "依頼主で絞り込み中" : "絞り込みなし"}）`, (await name.count()) > 0 && (await name.innerText()).includes(`${clientName}のオーダー`));
+  }
 
   // --- スタッフ：一覧に「依頼主（派遣会社）」と出て、応募するとその依頼主の現場のシフトになる ---
   await staff.goto("http://localhost:3000/staff/recruitments");

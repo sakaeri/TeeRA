@@ -22,6 +22,8 @@ try {
   await page.fill("#name", "ダッシュボードテスト株式会社");
   await page.click("button[type=submit]");
   await page.waitForURL("http://localhost:3000/company");
+  // 読み込み中の画面（loading）のうちに本文を読まないよう、KPIカードが出るまで待つ
+  await page.getByText("欠員件数").first().waitFor({ timeout: 30000 });
 
   let body = await page.textContent("body");
   log("KPI cards render with 0 counts initially", body.includes("欠員件数") && body.includes("未確定シフト"));

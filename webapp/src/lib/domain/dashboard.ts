@@ -70,8 +70,10 @@ export async function loadDashboardData(companyId: string) {
       // 日付が過ぎた募集はもう応募のしようがないので、埋まらないまま残って
       // いても欠員件数・やることリストからは対象外にする（過去日は消えて
       // いい、というのが期待挙動）。
+      // 依頼主（仮アカウント）の代わりに出したオーダーは依頼主の人集めで、自社の欠員ではないので
+      // 欠員件数・欠員シフト・やることには出さない（カレンダーの募集一覧にだけ出る）。
       prisma.publicRecruitment.findMany({
-        where: { companyId, status: "PUBLISHED", date: { gte: today } },
+        where: { companyId, status: "PUBLISHED", date: { gte: today }, companyRelationshipId: null },
         include: { entries: true },
         orderBy: { date: "asc" },
       }),
@@ -347,15 +349,27 @@ export type AutoTodoItem = {
 // own consent) is a different kind of to-do — waiting on the staff, not the
 // admin — and is intentionally not surfaced here; see the roster's 確認待ち
 // label (listStaffWithSummary) for that state instead.
+// 欠員を「やること」に出すのは、勤務日の何日前から
+const SHORTAGE_TODO_DAYS_BEFORE = 3;
+
+function addDaysToDateStr(dateStr: string, days: number) {
+  const d = new Date(`${dateStr}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 export function computeAutoTodoItems(data: DashboardData, pendingShipments: PendingShipment[]): AutoTodoItem[] {
   const { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff, duePaidLeaveGrants } =
     data;
   const items: AutoTodoItem[] = [];
 
+  // 欠員は、スタッフ側の募集に出ていてスタッフが自分で応募するので、出したばかりのうちは
+  // 会社がやることは無い。勤務日の3日前になっても足りない時だけ「やること」に出す。
+  const shortageDeadline = addDaysToDateStr(todayJst(), SHORTAGE_TODO_DAYS_BEFORE);
   for (const r of shortageRecruitments) {
     const filled = r.entries.filter((e) => e.status !== "REJECTED").length;
-    if (filled < r.maxEntries) {
-      const dateStr = r.date.toISOString().slice(0, 10);
+    const dateStr = r.date.toISOString().slice(0, 10);
+    if (filled < r.maxEntries && dateStr <= shortageDeadline) {
       items.push({
         id: `shortage-${r.id}`,
         kind: "欠員",
