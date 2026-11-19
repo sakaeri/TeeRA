@@ -422,6 +422,8 @@ model CompanyRelationship {
   reportApprovalTiming String             @default("EACH")
   // この依頼主への請求書の締め日（1〜28日。nullは末日締め）。例：20なら「11月分」は10/21〜11/20の勤務
   invoiceClosingDay    Int?
+  // 請求書の宛名（現場の名前と請求先の名前が違う時だけ。空なら依頼主名。翌月以降もそのまま使う）
+  invoiceRecipientName String?
   status               RelationshipStatus @default(ACTIVE)
   createdAt            DateTime           @default(now())
   // 配属先のルール連絡先。配属先自身の住所（Company.address）は「本社所在

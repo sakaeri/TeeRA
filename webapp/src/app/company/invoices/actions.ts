@@ -143,3 +143,14 @@ export async function reopenInvoiceForEditAction(invoiceId: string) {
   await reopenInvoiceForEdit(invoiceId);
   revalidatePath("/company/invoices");
 }
+
+// 請求書の宛名を直す（依頼主ごとに保存し、翌月以降の請求書にも使う）。空にすると依頼主名に戻る
+export async function setInvoiceRecipientNameAction(invoiceId: string, name: string) {
+  const { invoice } = await assertAccess(invoiceId);
+  const trimmed = name.trim().slice(0, 100);
+  await prisma.companyRelationship.update({
+    where: { id: invoice.companyRelationshipId },
+    data: { invoiceRecipientName: trimmed || null },
+  });
+  revalidatePath("/company/invoices");
+}

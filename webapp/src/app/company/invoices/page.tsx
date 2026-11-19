@@ -13,6 +13,7 @@ import { CreateRecordButton } from "@/components/company/CreateRecordButton";
 import { todayJstParts, earliestAllowedMonth, cutoffMonthString } from "@/lib/date";
 import Link from "next/link";
 import { PdfLink } from "@/components/PdfLink";
+import { invoiceRecipientName } from "@/lib/invoiceRecipient";
 
 function currentMonth() {
   const today = todayJstParts();
@@ -154,7 +155,9 @@ export default async function InvoicesPage({
   const clientsWithRecordIds = new Set(invoicesThisMonth.map((inv) => inv.companyRelationshipId));
   const clientsAvailableForNewInvoice = clients.filter((c) => !clientsWithRecordIds.has(c.id));
   const selectedClient = companyRelationshipId ? allClients.find((c) => c.id === companyRelationshipId) : undefined;
+  // 現場の名前（依頼主名）と、請求書の宛名（直していればその名前）
   const selectedClientName = selectedClient?.clientCompany?.name ?? selectedClient?.proxyName ?? "";
+  const selectedRecipientName = selectedClient ? invoiceRecipientName(selectedClient) : "";
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-8 sm:py-10">
@@ -184,6 +187,7 @@ export default async function InvoicesPage({
           <InvoiceEditor
             invoice={invoiceData}
             clientName={selectedClientName}
+            recipientName={selectedRecipientName}
             clientRelationshipId={companyRelationshipId}
             bankAccounts={bankAccounts.map((a) => ({
               id: a.id,

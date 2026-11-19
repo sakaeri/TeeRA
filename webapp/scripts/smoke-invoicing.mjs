@@ -171,6 +171,15 @@ try {
   );
   log("消費税区分「なし」の明細行はサマリーに「対象外」として表示される", body.includes("対象外"));
 
+  // 請求先（宛名）を直せる。現場の名前と違う時は「現場：◯◯」も出る
+  await admin.getByTestId("edit-invoice-recipient").click();
+  await admin.getByTestId("invoice-recipient-input").fill("請求用ホールディングス");
+  await admin.getByTestId("invoice-recipient").getByRole("button", { name: "保存する" }).click();
+  await admin.waitForTimeout(800);
+  const recipientText = await admin.getByTestId("invoice-recipient").innerText();
+  log("請求先の宛名を直せる（現場の名前も出る）", recipientText.includes("請求用ホールディングス") && recipientText.includes("現場："));
+  log("宛名は依頼主ごとに保存される（翌月以降にも使う）", psql(`select "invoiceRecipientName" from "CompanyRelationship" where id='${companyRelationshipId}';`) === "請求用ホールディングス");
+
   // set due date (auto-saves onBlur, no separate 保存 button anymore)
   await admin.fill('input[type="date"]', "2026-09-30");
   await admin.locator('input[type="date"]').blur();
@@ -194,6 +203,10 @@ try {
     `select "invoicedShiftIds" from "Invoice" where "companyRelationshipId"='${companyRelationshipId}' order by "createdAt" desc limit 1;`,
   );
   log("invoicedShiftIds locked at issuance", invoicedShiftIds.includes(shiftId));
+  log(
+    "発行時点の宛名が発行済みの請求書に残る",
+    psql(`select i.snapshot->>'clientName' from "InvoiceIssue" i join "Invoice" v on v.id=i."invoiceId" where v."companyRelationshipId"='${companyRelationshipId}' order by i."issuedAt" desc limit 1;`) === "請求用ホールディングス",
+  );
 
   // 依頼主詳細の「作成する」ボタンも、既に請求書があれば金額表示に変わる
   // （今までは常に「作成する」のままで金額が出なかった）
