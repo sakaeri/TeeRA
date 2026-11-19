@@ -492,7 +492,7 @@ function HowToSection() {
             alt="作成したシフトがカレンダーに表示された画面"
             className="w-full rounded-xl border border-border"
           />
-          <p className="mt-2 text-xs text-muted">作成するとカレンダーにスタッフ名が表示されます。</p>
+          <p className="mt-2 text-xs text-muted">作成するとカレンダーにスタッフ名が表示されます。上部の「絞り込み」で、チーム・スタッフ・依頼主・派遣会社ごとに表示できます（スタッフで絞ると、その人の出勤希望は青枠・休み希望は赤枠で出ます）。</p>
         </div>
       </SectionCard>
 

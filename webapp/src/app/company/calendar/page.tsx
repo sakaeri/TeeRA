@@ -43,6 +43,7 @@ export default async function CompanyCalendarPage({
     const params = new URLSearchParams({ y: String(historyCutoff!.year), m: String(historyCutoff!.month) });
     if (typeof sp.team === "string" && sp.team) params.set("team", sp.team);
     if (typeof sp.rel === "string" && sp.rel) params.set("rel", sp.rel);
+    if (typeof sp.staff === "string" && sp.staff) params.set("staff", sp.staff);
     redirect(`/company/calendar?${params.toString()}`);
   }
 
@@ -71,6 +72,13 @@ export default async function CompanyCalendarPage({
     listClientRecruitments(membership.companyId),
     listDeletedOrdersForMonth({ companyId: membership.companyId, year, month }),
   ]);
+
+  // スタッフで絞り込み（見られるスタッフの中から1人）：そのスタッフのシフトと出勤・休み希望だけを出し、
+  // 募集・オーダーは出さない（その人の予定に関係ないため）
+  const requestedStaffId = typeof sp.staff === "string" && sp.staff ? sp.staff : undefined;
+  const staffFilterId = requestedStaffId && staff.some((s) => s.userId === requestedStaffId) ? requestedStaffId : undefined;
+  const byStaff = <T extends { staffUserId: string | null }>(rows: T[]) =>
+    staffFilterId ? rows.filter((r) => r.staffUserId === staffFilterId) : rows;
 
   // 互いに関係ない読み込みは同時に行う（データベースへの往復を減らして表示を速くする）
   const [affordable, clients, agencies, assignableAgencyStaff, placementRates] = await Promise.all([
@@ -110,7 +118,7 @@ export default async function CompanyCalendarPage({
         year={year}
         month={month}
         selectedTeamId={teamId}
-        shifts={shifts.map((s) => ({
+        shifts={byStaff(shifts).map((s) => ({
           id: s.id,
           date: s.date.toISOString().slice(0, 10),
           staffUserId: s.staffUserId,
@@ -150,7 +158,7 @@ export default async function CompanyCalendarPage({
             Boolean(s.companyRelationship?.clientCompanyId) &&
             s.createdByCompanyId === s.companyRelationship?.clientCompanyId,
         }))}
-        shiftHistory={shiftHistory.map((s) => ({
+        shiftHistory={byStaff(shiftHistory).map((s) => ({
           id: s.id,
           date: s.date.toISOString().slice(0, 10),
           staffUserId: s.staffUserId,
@@ -176,7 +184,7 @@ export default async function CompanyCalendarPage({
             clientIds: t.clientLinks.map((l) => l.companyRelationshipId),
             staffIds: t.memberships.map((m) => m.userId),
           }))}
-        shiftRequests={shiftRequests.map((r) => ({
+        shiftRequests={byStaff(shiftRequests).map((r) => ({
           id: r.id,
           staffUserId: r.staffUserId,
           staffName: r.staff.name,
@@ -187,7 +195,7 @@ export default async function CompanyCalendarPage({
         // 絞り込み中は関係のある募集だけ：依頼主で絞っているときは、その依頼主の代わりに出したオーダーだけ
         // （自社の募集は依頼主に結びついていないため出さない）、チームで絞っているときはそのチームの募集だけ
         recruitments={recruitments
-          .filter((r) => (relationshipId ? r.companyRelationshipId === relationshipId : true) && (!teamId || r.teamId === teamId))
+          .filter((r) => !staffFilterId && (relationshipId ? r.companyRelationshipId === relationshipId : true) && (!teamId || r.teamId === teamId))
           .map((r) => ({
           id: r.id,
           title: r.title,
@@ -215,6 +223,7 @@ export default async function CompanyCalendarPage({
         // 依頼主のオーダーは、依頼主で絞っているときはその依頼主の分だけ
         clientRecruitments={clientRecruitments
           .filter((r) => {
+            if (staffFilterId) return false;
             if (!relationshipId) return true;
             const rel = clients.find((c) => c.id === relationshipId);
             return Boolean(rel?.clientCompanyId && r.companyId === rel.clientCompanyId);
@@ -240,6 +249,7 @@ export default async function CompanyCalendarPage({
         // 削除されたオーダー（日別詳細に履歴として出す）。依頼主で絞っているときはその依頼主の分だけ
         deletedOrders={deletedOrders
           .filter((r) => {
+            if (staffFilterId) return false;
             if (!relationshipId) return true;
             const rel = clients.find((c) => c.id === relationshipId);
             return Boolean(rel?.clientCompanyId && r.companyId === rel.clientCompanyId);
@@ -273,6 +283,7 @@ export default async function CompanyCalendarPage({
         agencyStaffOptions={assignableAgencyStaff}
         agencyTaskNamesByRelationship={agencyTaskNamesByRelationship}
         selectedRelationshipId={relationshipId}
+        selectedStaffId={staffFilterId}
         companyName={company.name}
         initialSelectedDate={dateParam}
         initialCreate={initialCreate}
