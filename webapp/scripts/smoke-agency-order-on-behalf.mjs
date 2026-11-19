@@ -91,18 +91,25 @@ try {
   log("募集の作成で勤務先（自社か依頼主）を選ぶ画面が出る", (await modal.innerText()).includes("勤務先を選択") && (await modal.innerText()).includes(clientName));
   await createRecruitmentViaWizard(agency, { taskName: "代理オーダー業務", workplace: clientName, confirm: false });
   log("確認画面に勤務先として依頼主の名前が出る", (await modal.innerText()).includes(clientName));
-  await modal.getByRole("button", { name: /件の募集を作成/ }).click();
+  log("依頼主を選ぶと「オーダーを作成」になる", (await modal.getByRole("button", { name: /件のオーダーを作成/ }).count()) === 1);
+  await modal.getByRole("button", { name: /件のオーダーを作成/ }).click();
   await agency.waitForTimeout(800);
   const rec = psql(`select id||'|'||coalesce("companyRelationshipId",'') from "PublicRecruitment" where "companyId"='${agencyId}' order by "createdAt" desc limit 1;`).split("|");
   log("オーダーに依頼主（現場）が記録される", rec[1] === relId);
-  // 派遣会社のカレンダー：募集一覧に「◯◯のオーダー」と出る。依頼主で絞り込んでも消えない
+  // 派遣会社のカレンダー：日付には「オーダー1」、開くと「オーダー」タブに「◯◯のオーダー」と出る（募集一覧には出ない）。依頼主で絞り込んでも消えない
   const recDate = psql(`select to_char(date, 'YYYY-MM-DD') from "PublicRecruitment" where id='${rec[0]}';`);
   for (const url of [`/company/calendar?date=${recDate}`, `/company/calendar?date=${recDate}&rel=${relId}`]) {
     await agency.goto(`http://localhost:3000${url}`);
-    await agency.getByText("募集一覧").first().click();
+    await agency.getByRole("button", { name: "スタッフシフト" }).first().waitFor({ timeout: 30000 });
+    if (!url.includes("rel=")) {
+      const cellText = await agency.locator("body").innerText();
+      log("カレンダーの日付は「募集」ではなく「オーダー1」", cellText.includes("オーダー1") && !cellText.includes("募集1件"));
+    }
+    log("日付を開いても「募集一覧」タブは出ない（自社の募集が無い日）", (await agency.getByRole("button", { name: /^募集一覧/ }).count()) === 0);
+    await agency.getByRole("button", { name: /^オーダー$/ }).first().click();
     const name = agency.getByTestId("recruitment-client-name").first();
     await name.waitFor({ timeout: 15000 }).catch(() => {});
-    log(`カレンダーの募集一覧に依頼主のオーダーと出る（${url.includes("rel=") ? "依頼主で絞り込み中" : "絞り込みなし"}）`, (await name.count()) > 0 && (await name.innerText()).includes(`${clientName}のオーダー`));
+    log(`カレンダーのオーダータブに依頼主のオーダーと出る（${url.includes("rel=") ? "依頼主で絞り込み中" : "絞り込みなし"}）`, (await name.count()) > 0 && (await name.innerText()).includes(`${clientName}のオーダー`));
   }
 
   // --- スタッフ：一覧に「依頼主（派遣会社）」と出て、応募するとその依頼主の現場のシフトになる ---

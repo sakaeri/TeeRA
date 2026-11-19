@@ -34,7 +34,7 @@ export async function createRecruitmentViaWizard(page, { taskName, workplace, te
   await modal.getByRole("button", { name: "次へ" }).click();
   await modal.getByText("内容を確認してください").waitFor();
   if (confirm) {
-    await modal.getByRole("button", { name: /件の募集を作成/ }).click();
+    await modal.getByRole("button", { name: /件の(募集|オーダー)を作成/ }).click();
     await page.waitForTimeout(800);
   }
   return modal;

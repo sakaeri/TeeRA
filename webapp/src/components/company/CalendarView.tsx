@@ -620,8 +620,10 @@ export function CalendarView({
             shiftHistory.filter((h) => h.date === c.dateStr),
             dayShifts,
           );
+          // 依頼主の代わりに出したオーダー（clientNameあり）は、自社の募集ではなく「オーダー」として数える
           const dayRecruitments = recruitments.filter((r) => r.date === c.dateStr && r.status === "PUBLISHED");
-          const recruitingCount = dayRecruitments.filter((r) => r.filled < r.maxEntries).length;
+          const recruitingCount = dayRecruitments.filter((r) => !r.clientName && r.filled < r.maxEntries).length;
+          const proxyOrderCount = dayRecruitments.filter((r) => r.clientName && r.filled < r.maxEntries).length;
           // オーダー＝依頼主が出した募集（本アカウントで繋がっている依頼主が
           // 出した求人）。こちらが作成したシフトはオーダーには含めない。
           const dayClientOrders = clientRecruitments.filter((r) => r.date === c.dateStr && r.filled < r.maxEntries);
@@ -632,9 +634,10 @@ export function CalendarView({
             recruitingCount > 0
               ? { kind: "solid", id: "recruit", label: `募集${recruitingCount}件`, className: "bg-amber-100 text-amber-900" }
               : null;
+          const orderCount = dayClientOrders.length + proxyOrderCount;
           const orderTag: TagEntry | null =
-            dayClientOrders.length > 0
-              ? { kind: "solid", id: "client-order", label: `オーダー${dayClientOrders.length}`, className: "bg-sky-100 text-sky-900" }
+            orderCount > 0
+              ? { kind: "solid", id: "client-order", label: `オーダー${orderCount}`, className: "bg-sky-100 text-sky-900" }
               : null;
 
           // Fixed row budget of 6 total: 募集中・オーダー (1 row each, only
@@ -980,8 +983,11 @@ function DayDetailModal({
   // （シフトの変更履歴とは混ぜない）。削除した分しか無い日も、そのタブは出しておく
   const deletedOwn = deletedOrders.filter((o) => !o.clientCompanyName);
   const deletedClient = deletedOrders.filter((o) => o.clientCompanyName);
-  const showRecruitTab = recruitments.length > 0 || deletedOwn.length > 0;
-  const showClientTab = clientOrders.length > 0 || deletedClient.length > 0;
+  // 依頼主の代わりに出したオーダーは「募集一覧」ではなく「オーダー」タブに出す（編集などは自社の募集と同じくできる）
+  const ownRecruitments = recruitments.filter((r) => !r.clientName);
+  const proxyOrders = recruitments.filter((r) => r.clientName);
+  const showRecruitTab = ownRecruitments.length > 0 || deletedOwn.length > 0;
+  const showClientTab = clientOrders.length > 0 || proxyOrders.length > 0 || deletedClient.length > 0;
   // 開いていたタブが出なくなったらスタッフシフトに戻す
   const tab =
     (selectedTab === "recruit" && !showRecruitTab) || (selectedTab === "client" && !showClientTab) ? "shifts" : selectedTab;
@@ -990,7 +996,7 @@ function DayDetailModal({
   const leftOffShifts = clientCancelledLeftOff(history, shifts);
   const [reportDetailShiftId, setReportDetailShiftId] = useState<string | null>(null);
   const [bulkTimeOpen, setBulkTimeOpen] = useState(false);
-  const remaining = recruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
+  const remaining = ownRecruitments.reduce((sum, r) => sum + Math.max(r.maxEntries - r.filled, 0), 0);
 
   const date = new Date(dateStr + "T00:00:00Z");
   const weekdayLabel = WEEKDAYS[date.getUTCDay()];
@@ -1280,10 +1286,22 @@ function DayDetailModal({
           </>
         ) : tab === "client" ? (
           <>
-          {clientOrders.length === 0 ? (
+          {clientOrders.length === 0 && proxyOrders.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted">この日のオーダーはありません。</p>
           ) : (
             <ul className="flex flex-col gap-2 text-sm">
+              {proxyOrders.map((r) => (
+                <OrderCard
+                  key={r.id}
+                  recruitment={r}
+                  assignedShifts={shifts.filter((s) => s.publicRecruitmentId === r.id)}
+                  history={history.filter((h) => h.publicRecruitmentId === r.id)}
+                  staffOptions={staffOptions}
+                  requestedStaffUserIds={requestedStaffUserIds}
+                  isPastDay={isPastDay}
+                  onEdit={() => setEditingRecruitmentId(r.id)}
+                />
+              ))}
               {clientOrders.map((o) => (
                 <ClientOrderRow
                   key={o.id}
@@ -1300,11 +1318,11 @@ function DayDetailModal({
           </>
         ) : (
           <>
-          {recruitments.length === 0 ? (
+          {ownRecruitments.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted">この日の募集はありません。</p>
           ) : (
           <ul className="flex flex-col gap-2 text-sm">
-            {recruitments.map((r) => (
+            {ownRecruitments.map((r) => (
               <OrderCard
                 key={r.id}
                 recruitment={r}
@@ -4441,6 +4459,8 @@ function RecruitmentFormModal({
 
   const teamName = teams.find((t) => t.id === teamId)?.name;
   const workplaceName = clients.find((c) => c.id === clientRelationshipId)?.name ?? "自社";
+  // 勤務先に依頼主を選んだら、依頼主の代わりに出す「オーダー」
+  const noun = clientRelationshipId ? "オーダー" : "募集";
   const dateLabel = (d: string) => {
     const dt = new Date(d + "T00:00:00Z");
     return `${dt.getUTCMonth() + 1}月${dt.getUTCDate()}日（${WEEKDAYS[dt.getUTCDay()]}）`;
@@ -4461,7 +4481,7 @@ function RecruitmentFormModal({
 
   if (step === "team") {
     return (
-      <Modal title="募集を作成" onClose={onClose}>
+      <Modal title={`${noun}を作成`} onClose={onClose}>
         <div className="flex flex-col gap-3">
           <h3 className="font-serif-jp text-lg font-semibold">どのチームの募集を作成しますか？</h3>
           <div className="flex flex-col gap-2">
@@ -4483,7 +4503,7 @@ function RecruitmentFormModal({
 
   if (step === "workplace") {
     return (
-      <Modal title="募集を作成" onClose={onClose}>
+      <Modal title={`${noun}を作成`} onClose={onClose}>
         <div className="flex flex-col gap-3">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">勤務先を選択</h3>
@@ -4526,7 +4546,7 @@ function RecruitmentFormModal({
 
   if (step === "task") {
     return (
-      <Modal title="募集を作成" onClose={onClose}>
+      <Modal title={`${noun}を作成`} onClose={onClose}>
         <div className="flex flex-col gap-3">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">{workplaceName}・業務内容を選択</h3>
@@ -4577,7 +4597,7 @@ function RecruitmentFormModal({
 
   if (step === "datetime") {
     return (
-      <Modal title="募集を作成" onClose={onClose}>
+      <Modal title={`${noun}を作成`} onClose={onClose}>
         <div className="flex flex-col gap-3">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">{heading}・日付と時間</h3>
@@ -4625,7 +4645,7 @@ function RecruitmentFormModal({
 
   if (step === "count") {
     return (
-      <Modal title="募集を作成" onClose={onClose}>
+      <Modal title={`${noun}を作成`} onClose={onClose}>
         <div className="flex flex-col gap-3" data-testid="recruit-count-step">
           {backButton}
           <h3 className="font-serif-jp text-lg font-semibold">{heading}・募集人数</h3>
@@ -4697,7 +4717,7 @@ function RecruitmentFormModal({
   }
 
   return (
-    <Modal title="募集を作成" onClose={onClose}>
+    <Modal title={`${noun}を作成`} onClose={onClose}>
       <div className="flex flex-col gap-3">
         {backButton}
         <h3 className="font-serif-jp text-lg font-semibold">内容を確認してください</h3>
@@ -4746,7 +4766,7 @@ function RecruitmentFormModal({
           onClick={() => submit()}
           className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
-          {pending ? "作成中…" : `${dates.length}件の募集を作成`}
+          {pending ? "作成中…" : `${dates.length}件の${noun}を作成`}
         </button>
       </div>
     </Modal>
