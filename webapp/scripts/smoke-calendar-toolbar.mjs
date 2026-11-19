@@ -1,6 +1,18 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+
+async function pdfText(buffer) {
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
+  let text = "";
+  for (let i = 1; i <= doc.numPages; i++) {
+    const page = await doc.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map((it) => it.str).join(" ") + "\n";
+  }
+  return text;
+}
 
 // カレンダー上部：‹ 年月 › と 絞り込み・PDF・画像のアイコンが1列。
 // 絞り込みは下から出る一覧（検索・最近使った・チーム・依頼主は今月の件数順）。
@@ -163,6 +175,10 @@ try {
   log("ゴルフ場の名前は頭の部分だけ（袖ケ浦）・時間未定は「未定」を書かない", golfText.includes("袖ケ浦") && !golfText.includes("カンツリー") && !golfText.includes("未定"));
   log("休みで確定した日は「休み」の札", (await cellOf(offDay).getAttribute("data-request-desire")) === "OFF_CONFIRMED" && (await cellOf(offDay).innerText()).includes("休み"));
   log("色の説明が出る", (await page.getByTestId("staff-request-legend").count()) === 1);
+  // PDF（シフト表）もそのスタッフだけ
+  const pdfRes = await page.request.get(`http://localhost:3000/api/calendar/pdf?y=${y}&m=${m}&staff=${hanakoId}`);
+  const pdf = await pdfText(await pdfRes.body());
+  log("PDFもそのスタッフだけ（タイトルに「スタッフ：絞込花子」）", pdf.includes("絞込花子") && !pdf.includes("関係ない太郎") && pdf.includes("スタッフ："));
   await page.getByRole("button", { name: "絞り込み", exact: true }).click();
   const sheet4 = page.locator("div.fixed.inset-0.z-40").last();
   log("最近使った絞り込みに種類（スタッフ）が出る", (await sheet4.innerText()).includes("スタッフ"));

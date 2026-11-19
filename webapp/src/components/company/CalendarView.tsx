@@ -613,7 +613,7 @@ export function CalendarView({
                 ).map(([kind, label, sub]) => (
                   <PdfLink
                     key={kind}
-                    href={`/api/calendar/pdf?y=${year}&m=${month}${selectedTeamId ? `&team=${selectedTeamId}` : ""}${selectedRelationshipId ? `&rel=${selectedRelationshipId}` : ""}${kind === "actual" ? "&kind=actual" : ""}`}
+                    href={`/api/calendar/pdf?y=${year}&m=${month}${selectedTeamId ? `&team=${selectedTeamId}` : ""}${selectedRelationshipId ? `&rel=${selectedRelationshipId}` : ""}${selectedStaffId ? `&staff=${selectedStaffId}` : ""}${kind === "actual" ? "&kind=actual" : ""}`}
                     className="block border-b border-border/60 px-4 py-3 last:border-b-0 hover:bg-background"
                   >
                     <span className="block font-semibold text-primary">{label}</span>

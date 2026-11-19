@@ -18,6 +18,15 @@ export async function GET(request: Request) {
   if (await isMonthHiddenByFreePlan(membership.companyId, `${year}-${String(month).padStart(2, "0")}`)) return freePlanHiddenResponse();
   const teamId = url.searchParams.get("team") || undefined;
   const companyRelationshipId = url.searchParams.get("rel") || undefined;
+  // スタッフで絞り込み中（その会社のスタッフだけ受け付ける）
+  const requestedStaffId = url.searchParams.get("staff") || undefined;
+  const staffMember = requestedStaffId
+    ? await prisma.companyMembership.findFirst({
+        where: { companyId: membership.companyId, userId: requestedStaffId },
+        include: { user: { select: { name: true } } },
+      })
+    : null;
+  const staffUserId = staffMember?.userId;
   // "actual" のときは実績表（請求の内容）、それ以外はシフト表
   const kind = url.searchParams.get("kind") === "actual" ? "actual" : "schedule";
 
@@ -44,7 +53,11 @@ export async function GET(request: Request) {
         : (relationship.agencyCompany?.name ?? relationship.proxyName ?? ""))
     : undefined;
   const filterLabel =
-    [team?.name, relationshipTypeLabel && relationshipName ? `${relationshipTypeLabel}：${relationshipName}` : null]
+    [
+      team?.name,
+      relationshipTypeLabel && relationshipName ? `${relationshipTypeLabel}：${relationshipName}` : null,
+      staffMember ? `スタッフ：${staffMember.user.name}` : null,
+    ]
       .filter(Boolean)
       .join("・") || undefined;
 
@@ -58,7 +71,7 @@ export async function GET(request: Request) {
     // その時だけ業務内容を代わりに出す（絞り込みなし/チーム絞り込みのみの
     // 時は、複数の勤務先が混在し得るので勤務先のまま）。
     thirdColumn: companyRelationshipId ? "task" : "workplace",
-    shifts: shifts.map((s) => ({
+    shifts: shifts.filter((s) => !staffUserId || s.staffUserId === staffUserId).map((s) => ({
       date: s.date.toISOString().slice(0, 10),
       staffName: s.staff.name,
       startTime: s.startTime,
@@ -89,6 +102,7 @@ export async function GET(request: Request) {
         status: { not: "SUPERSEDED" },
         ...(teamId ? { teamId } : {}),
         ...(companyRelationshipId ? { companyRelationshipId } : {}),
+        ...(staffUserId ? { staffUserId } : {}),
       },
       include: workRecordShiftInclude,
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
