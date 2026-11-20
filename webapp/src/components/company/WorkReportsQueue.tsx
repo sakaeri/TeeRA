@@ -150,6 +150,7 @@ export function WorkReportsQueue({
               initialClockIn={correctingReport.clockInTime}
               initialClockOut={correctingReport.clockOutTime}
               initialBreakMinutes={correctingReport.breakMinutes}
+              initialTaskName={correctingReport.taskName}
               onDone={() => setCorrectingId(null)}
               workplaceOptions={workplaceOptions}
               currentRelationshipId={correctingReport.companyRelationshipId ?? null}

@@ -5,6 +5,7 @@ import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 // 依頼主の詳細（稼働履歴）から業務報告を承認する
 // ・「締め日にまとめて承認」の依頼主でも、行をタップして開いた詳細から1件ずつ承認できる
 // ・「未承認数」をタップすると、その月の未承認を✅で選んでまとめて承認できる
+// ・「時間・勤務先を直す」で業務内容も直せる（候補は勤務先の単価の業務内容）
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -71,6 +72,7 @@ try {
   await admin.waitForTimeout(800);
   const relId = psql(`select id from "CompanyRelationship" where "proxyName"='${clientName}';`);
   psql(`update "CompanyRelationship" set "reportApprovalTiming"='MONTHLY' where id='${relId}';`);
+  for (const name of ["キャディ", "研修"]) psql(`insert into "CompanyPlacementRate" (id, "companyId", "companyRelationshipId", "taskName") values (gen_random_uuid()::text, '${companyId}', '${relId}', '${name}');`);
 
   // 今月の1〜3日に承認待ちの業務報告を3件
   const reportIds = [];
@@ -120,6 +122,25 @@ try {
   log("✅を付けた分だけ承認される", approvedCount() === 2);
   await admin.waitForTimeout(800);
   log("未承認数が1件に減る", (await bulkOpen.innerText()).includes("1"));
+
+  // ③残りの1件を「時間・勤務先を直す」で業務内容を直す
+  const remaining = reportIds.find((id) => psql(`select "approvalStatus" from "WorkReport" where id='${id}';`) !== "APPROVED");
+  const remainingDay = psql(`select to_char(s.date, 'MM-DD') from "WorkReport" w join "Shift" s on s.id=w."shiftId" where w.id='${remaining}';`);
+  await admin.locator("button", { hasText: remainingDay }).filter({ hasText: "詳細承認スタッフ" }).first().click();
+  await dialog.getByTestId("report-approve-actions").waitFor({ timeout: 15000 });
+  await dialog.getByRole("button", { name: "時間・勤務先を直す" }).click();
+  const taskSelect = dialog.getByTestId("correction-task-name");
+  await taskSelect.waitFor({ timeout: 15000 });
+  await admin.waitForTimeout(500);
+  const taskOptions = (await taskSelect.locator("option").allInnerTexts()).filter((t) => t !== "未選択" && !t.startsWith("＋"));
+  log(`業務内容の候補は勤務先の単価の業務内容：${taskOptions.join("/")}`, taskOptions.join("/") === "キャディ/研修");
+  log("直している間は経緯を隠す", !(await dialog.innerText()).includes("経緯"));
+  await admin.setViewportSize({ width: 390, height: 844 });
+  await admin.screenshot({ path: process.env.SHOT ?? "/tmp/correct-form.png" });
+  await taskSelect.selectOption("研修");
+  await dialog.getByRole("button", { name: "保存してスタッフに確認してもらう" }).click();
+  await dialog.getByTestId("report-action-done").waitFor({ timeout: 15000 });
+  log("業務内容を直すと保存され、スタッフの確認待ちになる", psql(`select "taskName"||'|'||"approvalStatus" from "WorkReport" where id='${remaining}';`) === "研修|NEEDS_CONFIRMATION");
 
   console.log(process.exitCode ? "CLIENT DETAIL APPROVE SMOKE TEST HAD FAILURES" : "CLIENT DETAIL APPROVE SMOKE TEST PASSED");
 } catch (err) {

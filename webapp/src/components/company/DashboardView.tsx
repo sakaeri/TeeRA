@@ -1332,6 +1332,7 @@ function WorkReportDetailModal({
               initialClockIn={entry.clockIn}
               initialClockOut={entry.clockOut}
               initialBreakMinutes={entry.breakMinutes}
+              initialTaskName={entry.taskName}
               onDone={onClose}
               workplaceOptions={workplaceOptions}
               currentRelationshipId={entry.companyRelationshipId}
