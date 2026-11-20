@@ -146,9 +146,9 @@ export async function reopenInvoiceForEditAction(invoiceId: string) {
 }
 
 // 前の月以前に請求していなかったシフトを、この請求書に入れる
-export async function includeEarlierShiftsAction(invoiceId: string) {
+export async function includeEarlierShiftsAction(invoiceId: string, shiftIds: string[]) {
   await assertAccess(invoiceId);
-  const count = await includeEarlierShifts(invoiceId);
+  const count = await includeEarlierShifts(invoiceId, shiftIds);
   revalidatePath("/company/invoices");
   return count;
 }
