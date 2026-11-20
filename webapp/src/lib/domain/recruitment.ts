@@ -382,6 +382,19 @@ export async function listClientRecruitments(companyId: string) {
 // 配属記録 — このスタッフが、この会社(clientCompanyId)への配属記録を
 // 持っている派遣関係のclientCompanyId一覧（companyIdはそのスタッフの
 // 所属会社＝派遣元）。
+// 自社（派遣会社）の依頼主のうち、このスタッフが配属されているもの（仮アカウントの依頼主も含む）
+async function placedRelationshipIds(companyId: string, staffUserId: string) {
+  const placements = await prisma.staffPlacement.findMany({
+    where: {
+      staffUserId,
+      active: true,
+      companyRelationship: { agencyCompanyId: companyId, status: "ACTIVE" },
+    },
+    select: { companyRelationshipId: true },
+  });
+  return new Set(placements.map((p) => p.companyRelationshipId));
+}
+
 async function placedClientCompanyIds(companyId: string, staffUserId: string) {
   const placements = await prisma.staffPlacement.findMany({
     where: {
@@ -401,7 +414,10 @@ async function placedClientCompanyIds(companyId: string, staffUserId: string) {
 // 所属していない相手向けの情報のため、既に所属関係のあるスタッフには
 // 呼び出し側（呼び出し元コンポーネント）で伏せて表示する。
 export async function listOpenRecruitmentsForStaff(params: { companyId: string; staffUserId: string }) {
-  const clientCompanyIds = await placedClientCompanyIds(params.companyId, params.staffUserId);
+  const [clientCompanyIds, placedRelIds] = await Promise.all([
+    placedClientCompanyIds(params.companyId, params.staffUserId),
+    placedRelationshipIds(params.companyId, params.staffUserId),
+  ]);
   const affiliatedCompanyIds = new Set([params.companyId, ...clientCompanyIds]);
 
   const recruitments = await prisma.publicRecruitment.findMany({
@@ -447,6 +463,9 @@ export async function listOpenRecruitmentsForStaff(params: { companyId: string; 
   }
 
   return recruitments
+    // 依頼主（仮アカウント）の代わりに会社が出したオーダーは、その依頼主に配属されているスタッフにだけ出す
+    // （自社の募集と同じ扱いにすると、配属されていない現場のオーダーまで全員に見えてしまう）
+    .filter((r) => !(r.companyId === params.companyId && r.companyRelationshipId && !placedRelIds.has(r.companyRelationshipId)))
     .map((r) => ({ ...r, isAffiliated: affiliatedCompanyIds.has(r.companyId) }))
     .filter((r) => {
       const sameDayShifts = shiftsByDate.get(r.date.toISOString().slice(0, 10)) ?? [];
@@ -761,6 +780,16 @@ export async function applyToRecruitment(params: { recruitmentId: string; staffU
     });
     if (!eligible) {
       throw new Error("not_eligible");
+    }
+    // 依頼主の代わりに出したオーダーは、その依頼主に配属されているスタッフだけが応募できる（一覧に出す条件と同じ）
+    if (recruitment.companyRelationshipId) {
+      const rel = await tx.companyRelationship.findUnique({ where: { id: recruitment.companyRelationshipId } });
+      if (rel?.agencyCompanyId === recruitment.companyId) {
+        const placement = await tx.staffPlacement.findFirst({
+          where: { staffUserId: params.staffUserId, companyRelationshipId: recruitment.companyRelationshipId, active: true },
+        });
+        if (!placement) throw new Error("not_eligible");
+      }
     }
     // 応募では新たに配属記録を作らないので、この時点で判定してよい。
     const alreadyKnown = await isStaffAlreadyKnownToCompany(recruitment.companyId, params.staffUserId);
