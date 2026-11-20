@@ -176,9 +176,11 @@ try {
   const panel2 = admin.locator("div.fixed.inset-0.z-30").last();
   await panel2.getByRole("button", { name: "業務内容単価" }).click();
   log("終了するボタンは廃止されている", (await panel2.getByRole("button", { name: "終了する" }).count()) === 0);
-  await panel2.getByRole("button", { name: "削除", exact: true }).click();
-  await admin.waitForTimeout(200);
+  // 削除は「単価を変更」の中（押すと確認が出る）
+  await panel2.getByRole("button", { name: "単価を変更" }).click();
   await admin.locator("div.fixed.inset-0.z-40").last().getByRole("button", { name: "削除する" }).click();
+  await admin.waitForTimeout(200);
+  await admin.locator("div.fixed.inset-0").last().getByRole("button", { name: "削除する" }).click();
   await admin.waitForTimeout(400);
   const panelTextAfterDeleteAttempt = await panel2.textContent();
   log(
@@ -200,9 +202,10 @@ try {
   await panel2.getByRole("button", { name: "追加", exact: true }).click();
   await admin.waitForTimeout(500);
   const unusedRateId = psql(`select id from "StaffTaskRate" where "taskName"='未使用業務' and "staffUserId"='${staffUserId}';`);
-  await panel2.locator("li", { hasText: "未使用業務" }).getByRole("button", { name: "削除" }).click();
-  await admin.waitForTimeout(200);
+  await panel2.locator("li", { hasText: "未使用業務" }).getByRole("button", { name: "単価を変更" }).click();
   await admin.locator("div.fixed.inset-0.z-40").last().getByRole("button", { name: "削除する" }).click();
+  await admin.waitForTimeout(200);
+  await admin.locator("div.fixed.inset-0").last().getByRole("button", { name: "削除する" }).click();
   await admin.waitForTimeout(400);
   const unusedStillExists = psql(`select count(*) from "StaffTaskRate" where id='${unusedRateId}';`);
   log("未使用の単価は削除できる", unusedStillExists === "0");

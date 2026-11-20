@@ -1252,7 +1252,6 @@ function PlacementRatesTab({
   onChanged: () => Promise<void>;
 }) {
   const [pending, startTransition] = useTransition();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [amendingId, setAmendingId] = useState<string | null>(null);
   const [amendWageType, setAmendWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
   const [amendAmount, setAmendAmount] = useState("");
@@ -1356,53 +1355,23 @@ function PlacementRatesTab({
       </div>
 
       <ul className="flex flex-col gap-2">
-        {rates.map((r) => {
-          return (
-            <li key={r.id} className="rounded-lg border border-border p-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{r.taskName}</span>
-                <span className={r.unpriced ? "font-semibold text-amber-700" : "text-foreground"}>{r.currentLabel}</span>
-              </div>
-
-              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
-                {r.versions.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
-                    className="text-muted hover:text-primary"
-                  >
-                    {expandedId === r.id ? "▲ 履歴を閉じる" : `▼ 履歴（${r.versions.length}件）`}
-                  </button>
-                ) : null}
-                <button type="button" onClick={() => startAmend(r)} className="rounded-md border border-primary/40 px-2.5 py-1 font-semibold text-primary hover:bg-primary/5">
-                  単価を変更
-                </button>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => submitDelete(r)}
-                  className="text-muted hover:text-red-600 disabled:opacity-60"
-                >
-                  削除
-                </button>
-              </div>
-
-              {deleteError?.id === r.id ? <p className="mt-1 text-xs text-red-600">{deleteError.message}</p> : null}
-
-              {expandedId === r.id ? (
-                <ul className="mt-2 flex flex-col text-xs text-muted">
-                  {r.versions.map((v) => (
-                    <li key={v.id} className="flex items-center justify-between border-t border-border/50 py-1">
-                      <span>{v.effectiveFrom} 〜</span>
-                      <span>{v.label}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-
-            </li>
-          );
-        })}
+        {rates.map((r) => (
+          // 業務内容と今の単価だけを出す。履歴・削除は「単価を変更」の中
+          <li key={r.id} className="rounded-lg border border-border p-3 text-sm" data-testid="client-rate-card">
+            <p className="font-medium">{r.taskName}</p>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className={r.unpriced ? "font-semibold text-amber-700" : "font-semibold"}>{r.currentLabel}</span>
+              <button
+                type="button"
+                onClick={() => startAmend(r)}
+                className="shrink-0 rounded-md border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/5"
+              >
+                単価を変更
+              </button>
+            </div>
+            {deleteError?.id === r.id ? <p className="mt-1 text-xs text-red-600">{deleteError.message}</p> : null}
+          </li>
+        ))}
         {rates.length === 0 ? <p className="py-6 text-center text-sm text-muted">業務内容が登録されていません。</p> : null}
       </ul>
 
@@ -1416,11 +1385,17 @@ function PlacementRatesTab({
         >
           <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
-              <h4 className="font-serif-jp text-base font-bold text-primary">単価を変更（{amendingRate.taskName}）</h4>
+              <h4 className="font-serif-jp text-base font-bold text-primary">単価を変更</h4>
               <button type="button" onClick={() => setAmendingId(null)} aria-label="閉じる" className="text-muted hover:text-primary">
                 ✕
               </button>
             </div>
+            <p className="mb-3 text-sm">
+              <span className="font-medium">{amendingRate.taskName}</span>
+              <span className="ml-2 text-xs text-muted">
+                今の単価：<span className="font-semibold text-foreground">{amendingRate.currentLabel}</span>
+              </span>
+            </p>
             <div className="flex flex-wrap items-end gap-2">
               <label className="flex w-full items-center gap-1.5 text-xs font-semibold" data-testid="amend-no-charge">
                 <input type="checkbox" checked={amendNoCharge} onChange={(e) => setAmendNoCharge(e.target.checked)} />
@@ -1477,6 +1452,33 @@ function PlacementRatesTab({
             >
               保存
             </button>
+            {amendingRate.versions.length > 0 ? (
+              <>
+                <p className="mt-4 text-xs font-semibold text-muted">履歴</p>
+                <ul className="mt-1 flex flex-col text-xs text-muted" data-testid="rate-history">
+                  {amendingRate.versions.map((v) => (
+                    <li key={v.id} className="flex items-center justify-between border-t border-border/50 py-1">
+                      <span>{v.effectiveFrom} 〜</span>
+                      <span>{v.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+            <div className="mt-4 flex justify-end border-t border-border pt-3 text-xs">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  const r = amendingRate;
+                  setAmendingId(null);
+                  submitDelete(r);
+                }}
+                className="text-muted hover:text-red-600 disabled:opacity-60"
+              >
+                削除する
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

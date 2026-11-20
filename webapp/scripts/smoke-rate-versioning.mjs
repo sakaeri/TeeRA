@@ -109,12 +109,16 @@ try {
   // 履歴には作成時点の初期値(1000円)は出さず、実際に改定した分(1500円)だけ
   // を表示する（作成時点の1件が常に「履歴」に混ざって「変わってたの？」と
   // 誤解させないための仕様 — 他セッションの変更）。
-  await panel.getByRole("button", { name: "▼ 履歴（1件）" }).click();
-  let panelText = await panel.textContent();
+  // 履歴は「単価を変更」の中に出る
+  await panel.getByRole("button", { name: "単価を変更" }).click();
+  const amendModal = admin.locator("div.fixed.inset-0.z-40").last();
+  await amendModal.getByTestId("rate-history").waitFor();
+  let panelText = await amendModal.getByTestId("rate-history").textContent();
   log(
     "history tab shows only the real amendment (1500円), not the creation baseline (1000円)",
     panelText.includes("時給1500円") && !panelText.includes("時給1000円"),
   );
+  await amendModal.getByRole("button", { name: "閉じる" }).click();
   await panel.click("text=閉じる");
   await admin.waitForTimeout(200);
 
@@ -165,7 +169,9 @@ try {
   panel = admin.locator("div.fixed.inset-0.z-30").last();
   await panel.getByRole("button", { name: "単価", exact: true }).click();
   log("終了するボタンは廃止されている", (await panel.getByRole("button", { name: "終了する" }).count()) === 0);
-  await panel.getByRole("button", { name: "削除", exact: true }).click();
+  // 削除は「単価を変更」の中
+  await panel.getByRole("button", { name: "単価を変更" }).click();
+  await admin.locator("div.fixed.inset-0.z-40").last().getByRole("button", { name: "削除する" }).click();
   await admin.waitForTimeout(800);
   const panelTextAfterDeleteAttempt = await panel.textContent();
   log(
@@ -187,7 +193,8 @@ try {
   await panel.getByRole("button", { name: "追加", exact: true }).click();
   await admin.waitForTimeout(500);
   const unusedRateId = psql(`select id from "CompanyPlacementRate" where "taskName"='未使用業務' and "companyRelationshipId"='${relId}';`);
-  await panel.locator("li", { hasText: "未使用業務" }).getByRole("button", { name: "削除" }).click();
+  await panel.locator("li", { hasText: "未使用業務" }).getByRole("button", { name: "単価を変更" }).click();
+  await admin.locator("div.fixed.inset-0.z-40").last().getByRole("button", { name: "削除する" }).click();
   await admin.waitForTimeout(400);
   const unusedStillExists = psql(`select count(*) from "CompanyPlacementRate" where id='${unusedRateId}';`);
   log("未使用の単価は削除できる", unusedStillExists === "0");
