@@ -413,7 +413,7 @@ function QuickActions({ onAddTodo, onAddPromo }: { onAddTodo: () => void; onAddP
           <div
             role="dialog"
             aria-label="よく使う操作の一覧"
-            className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-4 shadow-lg"
+            className="max-h-popup w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-4 shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-2 flex items-center justify-between">
@@ -710,7 +710,7 @@ function TodoModal({
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <div
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
+        className="max-h-popup w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-1 flex items-center justify-between">
@@ -813,7 +813,7 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <div
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
+        className="max-h-popup w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative mb-4" ref={infoRef}>
@@ -967,7 +967,7 @@ function PopupShell({
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <div
-        className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
+        className="max-h-popup w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-1 flex items-center justify-between">
@@ -1265,7 +1265,7 @@ function WorkReportDetailModal({
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <div
-        className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
+        className="max-h-popup w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-1 flex items-center justify-between">

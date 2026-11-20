@@ -1163,7 +1163,7 @@ function DayDetailModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-4 shadow-lg sm:p-6">
+      <div className="max-h-popup w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-4 shadow-lg sm:p-6">
         {/* 1行目は日付と✕（✕はいつも右上）。「＋シフト」は下のタブの行の右端に固定 */}
         <div className="mb-4 flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
@@ -3621,7 +3621,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       {/* スマホのホーム画面アプリでは画面の上端が時計・電池の表示に重なるため、
           上下は安全領域の分あけ、高さは画面内に収める。内容が長いときは
           見出し（✕）を残したまま本文だけスクロールする。 */}
-      <div className="flex max-h-full w-full max-w-2xl flex-col rounded-2xl bg-white shadow-lg">
+      <div className="flex max-h-popup w-full max-w-2xl flex-col rounded-2xl bg-white shadow-lg">
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2 sm:px-6">
           <h3 className="font-serif-jp text-lg font-bold text-primary">{title}</h3>
           <button type="button" onClick={onClose} className="-mr-2 px-3 py-2 text-muted">
@@ -5367,7 +5367,7 @@ function CalendarFilterSheet({
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 sm:items-center sm:p-4" onClick={onClose}>
       <div
-        className="flex max-h-[80vh] w-full max-w-md flex-col rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-lg sm:rounded-2xl"
+        className="flex max-h-popup w-full max-w-md flex-col rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-lg sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">

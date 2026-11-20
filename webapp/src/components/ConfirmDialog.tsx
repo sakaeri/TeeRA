@@ -17,7 +17,7 @@ export function ConfirmDialog({
 }) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={onCancel}>
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <p className="mb-5 text-sm leading-relaxed">{message}</p>
         <div className="flex gap-2">
           <button

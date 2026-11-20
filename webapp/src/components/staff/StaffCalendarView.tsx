@@ -432,7 +432,7 @@ function DayDetailPanel({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg">
+      <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-6 shadow-lg">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-1">
             <button
@@ -687,7 +687,7 @@ function RequestWizard({
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-popup w-full overflow-y-auto max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">シフト希望申請</h3>
           <button type="button" onClick={onClose} className="text-muted">
@@ -1002,7 +1002,7 @@ function PlusMenu({
 }) {
   return (
     <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/30 p-4 pb-28" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()} data-testid="plus-menu">
+      <div className="max-h-popup w-full overflow-y-auto max-w-md rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()} data-testid="plus-menu">
         <p className="mb-2 text-sm font-semibold text-primary">業務報告をする</p>
         {/* 前日以前の未提出が2件以上なら、まとめて報告へ */}
         {bulkReportCount >= 2 ? (

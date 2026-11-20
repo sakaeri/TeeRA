@@ -151,7 +151,7 @@ export function WorkReportDetailModal({
       <div
         role="dialog"
         aria-label="業務報告の詳細"
-        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-lg"
+        className="max-h-popup w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">

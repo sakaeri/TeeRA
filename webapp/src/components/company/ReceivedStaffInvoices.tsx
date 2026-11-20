@@ -87,7 +87,7 @@ export function ReceivedStaffInvoiceList({
           <div
             role="dialog"
             aria-label="業務委託のスタッフから届いた請求書について"
-            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg"
+            className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg"
             onClick={(e) => e.stopPropagation()}
             data-testid="received-staff-invoices-info"
           >

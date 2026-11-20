@@ -38,7 +38,7 @@ export function TodayShiftPopup({
       {/* 画面の上下に余白を残した高さまでにして、中身だけをスクロールさせる（見出しと✕は常に見える）。
           スマホのブラウザはvhだとツールバーの分はみ出すので、見えている高さ（dvh）で決める */}
       <div
-        className="flex max-h-[calc(100dvh-7rem)] w-full max-w-sm flex-col rounded-2xl bg-white shadow-lg"
+        className="flex max-h-popup w-full max-w-sm flex-col rounded-2xl bg-white shadow-lg"
         data-testid="today-report-popup"
       >
         <div className="flex shrink-0 items-center justify-between px-4 pb-2 pt-4 sm:px-6 sm:pt-6">

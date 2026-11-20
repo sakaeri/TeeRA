@@ -38,7 +38,7 @@ export function InfoPopupButton({
           <div
             role="dialog"
             aria-label={title ?? "説明"}
-            className="w-full max-w-sm rounded-2xl bg-white p-5 text-left shadow-lg"
+            className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 text-left shadow-lg"
             onClick={(e) => e.stopPropagation()}
             data-testid="info-popup"
           >

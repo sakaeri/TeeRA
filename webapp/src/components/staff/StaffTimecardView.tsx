@@ -774,7 +774,7 @@ function BulkReportModal({ shifts, onClose }: { shifts: ShiftRow[]; onClose: () 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-3" onClick={onClose}>
       <div
-        className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl bg-white p-4 shadow-lg"
+        className="flex max-h-popup w-full max-w-lg flex-col rounded-2xl bg-white p-4 shadow-lg"
         onClick={(e) => e.stopPropagation()}
         data-testid="bulk-report"
       >
