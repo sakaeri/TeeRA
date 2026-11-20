@@ -1755,7 +1755,7 @@ export function StaffDetailPanel({
         </div>
       ) : null}
       {reportDetailShiftId ? (
-        <WorkReportDetailModal shiftId={reportDetailShiftId} onClose={() => setReportDetailShiftId(null)} />
+        <WorkReportDetailModal shiftId={reportDetailShiftId} onClose={() => setReportDetailShiftId(null)} onChanged={() => void refresh()} />
       ) : null}
     </div>
   );

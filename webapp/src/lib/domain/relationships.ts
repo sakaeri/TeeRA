@@ -474,6 +474,18 @@ export async function getClientMonthDetail(params: {
     : [];
 
   const unapprovedCount = shifts.filter((s) => s.workReport && s.workReport.approvalStatus !== "APPROVED").length;
+  // 「未承認数」からまとめて承認する対象（提出済みで承認待ちのもの）
+  const pendingReports = shifts
+    .filter((s) => s.workReport && s.workReport.submittedAt && s.workReport.approvalStatus === "PENDING")
+    .map((s) => ({
+      workReportId: s.workReport!.id,
+      date: s.date.toISOString().slice(0, 10),
+      staffName: s.staff.name,
+      taskName: s.workReport!.taskName ?? s.taskName,
+      computedMinutes: s.workReport!.computedMinutes,
+      outcome: s.workReport!.outcome,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
   // 稼働時間は日給・時給を問わず実際の実働分（WorkReport.computedMinutes）の
   // 単純合計 — 請求金額のプレビューではなく「今月どれだけ稼働があったか」
   // という活動量の目安。日給契約の請求は日数固定で計算されるため
@@ -547,6 +559,7 @@ export async function getClientMonthDetail(params: {
     })),
     workedHours,
     unapprovedCount,
+    pendingReports,
     invoiceTotal,
     // 依頼主共通のキャンセル規定（未設定ならnull＝キャンセル自由として扱う）
     clientCancelRule: clientCancelRule ? serializeCancelRule(clientCancelRule) : null,
