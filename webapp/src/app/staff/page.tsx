@@ -39,7 +39,7 @@ export default async function StaffHomePage({
     listOwnPendingShiftRequests({ staffUserId: userId, companyIds }),
     listAllStaffNotices(userId, { unreadOnly: true }),
     listOwnShiftsNeedingReport(userId, companyIds),
-    listTaskNamesByWorkplace(companyIds),
+    listTaskNamesByWorkplace(companyIds, userId),
     listMyMissingDocuments(userId),
   ]);
 
