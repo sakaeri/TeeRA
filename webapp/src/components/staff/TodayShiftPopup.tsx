@@ -35,23 +35,30 @@ export function TodayShiftPopup({
         if (e.target === e.currentTarget) setOpen(false);
       }}
     >
-      <div className="max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-4 shadow-lg sm:p-6">
-        <div className="mb-3 flex items-center justify-between">
+      {/* 画面の上下に余白を残した高さまでにして、中身だけをスクロールさせる（見出しと✕は常に見える）。
+          スマホのブラウザはvhだとツールバーの分はみ出すので、見えている高さ（dvh）で決める */}
+      <div
+        className="flex max-h-[calc(100dvh-7rem)] w-full max-w-sm flex-col rounded-2xl bg-white shadow-lg"
+        data-testid="today-report-popup"
+      >
+        <div className="flex shrink-0 items-center justify-between px-4 pb-2 pt-4 sm:px-6 sm:pt-6">
           <h2 className="font-serif-jp text-base font-bold text-primary">業務報告</h2>
           <button type="button" onClick={() => setOpen(false)} className="text-muted">
             ✕
           </button>
         </div>
-        <ul className="flex flex-col gap-3">
-          {shifts.map((s) => (
-            <ShiftCard key={s.id} shift={s} taskNamesByWorkplace={taskNamesByWorkplace} workplaces={workplacesByCompany[s.companyId] ?? []} />
-          ))}
-        </ul>
-        {moreUnsubmittedCount > 0 ? (
-          <Link href="/staff/timecard" className="mt-3 block text-center text-sm font-semibold text-primary underline">
-            ほかに未提出が{moreUnsubmittedCount}件あります（業務報告へ）
-          </Link>
-        ) : null}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 sm:px-6 sm:pb-6">
+          <ul className="flex flex-col gap-3">
+            {shifts.map((s) => (
+              <ShiftCard key={s.id} shift={s} taskNamesByWorkplace={taskNamesByWorkplace} workplaces={workplacesByCompany[s.companyId] ?? []} />
+            ))}
+          </ul>
+          {moreUnsubmittedCount > 0 ? (
+            <Link href="/staff/timecard" className="mt-3 block text-center text-sm font-semibold text-primary underline">
+              ほかに未提出が{moreUnsubmittedCount}件あります（業務報告へ）
+            </Link>
+          ) : null}
+        </div>
       </div>
     </div>
   );
