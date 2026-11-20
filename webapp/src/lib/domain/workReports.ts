@@ -662,7 +662,8 @@ export async function confirmCorrectedWorkReport(params: { workReportId: string;
       where: { id: report.id, approvalStatus: "NEEDS_CONFIRMATION" },
       data: {
         approvalStatus: "APPROVED",
-        approverUserId: report.correctedByUserId,
+        // 会社が直した内容をスタッフが確認して確定するので、承認者はスタッフ（会社の修正は correctedByUserId に残る）
+        approverUserId: report.staffUserId,
         approvedAt: new Date(),
       },
     });
@@ -828,8 +829,10 @@ export async function getWorkReportDetail(shiftId: string) {
       });
     }
     if (r.approvalStatus === "APPROVED" && r.approvedAt) {
+      // スタッフが会社の修正を確認して確定したものは、その旨を出す
+      const confirmedByStaff = r.approverUserId === shift.staffUserId;
       timeline.push({
-        label: "承認",
+        label: confirmedByStaff ? "スタッフが確認（これで合っています）" : "承認",
         at: formatJstDateTime(r.approvedAt),
         // 承認者が記録されていないのは、ログインせずに通知メールのリンクから承認したもの
         by: r.approver?.name ?? "通知メールのリンクから承認",
