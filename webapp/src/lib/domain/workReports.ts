@@ -121,6 +121,93 @@ export async function clockOutAndSubmit(params: {
 // all route through this one flow into the same approval queue (chat24)。
 // breakMinutesはWORKEDの時だけ意味を持ち、ここで最終確定してcomputedMinutes
 // を打刻時刻から再計算する（退勤時点では休憩は未確定のまま0扱いだった）。
+// スタッフが業務報告で勤務先を変えた（当日に別の現場へ回った等）時の振替。
+// 元のシフトは「取消（振替）」として残し（元の依頼主のオーダーの枠は空く）、新しい勤務先にシフトを作り直して
+// 業務報告を移す。承認は新しい勤務先が行う。元の依頼主へのキャンセル料はスタッフには決めさせず、
+// 会社の「やること」に確認として出す（feeReviewPending）。
+// 選べる勤務先は、自社（null）と、本人が配属されている依頼主だけ。
+export async function moveShiftForStaffReport(params: {
+  shiftId: string;
+  staffUserId: string;
+  companyRelationshipId: string | null;
+  taskName?: string;
+}) {
+  const shift = await prisma.shift.findUniqueOrThrow({
+    where: { id: params.shiftId },
+    include: { companyRelationship: { include: { clientCompany: true } } },
+  });
+  if (shift.staffUserId !== params.staffUserId) throw new Error("forbidden");
+  const newRelId = params.companyRelationshipId || null;
+  if (newRelId === (shift.companyRelationshipId ?? null)) return { shiftId: shift.id, moved: false as const };
+  if (shift.status !== "CONFIRMED") throw new Error("shift_not_active");
+  if (newRelId) {
+    const placement = await prisma.staffPlacement.findFirst({
+      where: {
+        staffUserId: params.staffUserId,
+        companyRelationshipId: newRelId,
+        active: true,
+        companyRelationship: { agencyCompanyId: shift.companyId, status: "ACTIVE" },
+      },
+    });
+    if (!placement) throw new Error("invalid_workplace");
+  }
+  const fromName = shift.companyRelationship
+    ? (shift.companyRelationship.clientCompany?.name ?? shift.companyRelationship.proxyName ?? "依頼主")
+    : "社内";
+
+  const newShift = await prisma.$transaction(async (tx) => {
+    const created = await tx.shift.create({
+      data: {
+        companyId: shift.companyId,
+        teamId: shift.teamId,
+        staffUserId: shift.staffUserId,
+        source: newRelId ? "CLIENT" : "INHOUSE",
+        companyRelationshipId: newRelId,
+        taskName: params.taskName ?? shift.taskName,
+        date: shift.date,
+        startTime: shift.startTime,
+        endTime: shift.endTime,
+        isAllDay: shift.isAllDay,
+        isUndecided: shift.isUndecided,
+        status: "CONFIRMED",
+        createdVia: "STAFF_REPORT",
+        createdByCompanyId: shift.companyId,
+      },
+    });
+    // 元のシフトは取消（振替）。元が依頼主の現場なら、キャンセル料を会社が確認するまで「やること」に出す
+    await tx.shiftCancellation.upsert({
+      where: { shiftId: shift.id },
+      create: {
+        shiftId: shift.id,
+        cancelledByCompanyId: shift.companyId,
+        source: "STAFF_REPORTED",
+        feeAmount: 0,
+        transferredByStaff: true,
+        feeReviewPending: Boolean(shift.companyRelationshipId),
+      },
+      update: { source: "STAFF_REPORTED", transferredByStaff: true, feeReviewPending: Boolean(shift.companyRelationshipId) },
+    });
+    await tx.shift.update({ where: { id: shift.id }, data: { status: "CANCELLED" } });
+    // オーダーから入ったシフトなら、その枠を空ける
+    if (shift.publicRecruitmentId) {
+      await tx.recruitmentEntry.updateMany({ where: { resultingShiftId: shift.id }, data: { status: "REJECTED" } });
+    }
+    // 出勤希望から作ったシフトなら、その希望は新しいシフトにつけ替える
+    await tx.shiftRequest.updateMany({ where: { matchedShiftId: shift.id }, data: { matchedShiftId: created.id } });
+    // 打刻・下書きの業務報告は新しいシフトに移す
+    await tx.workReport.updateMany({ where: { shiftId: shift.id }, data: { shiftId: created.id } });
+    return created;
+  });
+
+  return {
+    shiftId: newShift.id,
+    moved: true as const,
+    fromName,
+    // 元が本アカウントの依頼主なら、その依頼主に知らせる
+    previousClientCompanyId: shift.companyRelationship?.clientCompanyId ?? null,
+  };
+}
+
 export async function submitWorkReport(params: {
   shiftId: string;
   staffUserId: string;
@@ -128,6 +215,8 @@ export async function submitWorkReport(params: {
   comment?: string;
   taskName?: string;
   breakMinutes?: number;
+  // スタッフが勤務先を変えた時（moveShiftForStaffReport の後に呼ぶ）の、変更前の勤務先名
+  workplaceChangedFrom?: string;
   // 提出時にスタッフ自身が打刻時刻を手修正できるようにする（HH:MM）。
   // 承認/差し戻しという既存のチェック機構が最終的な歯止めになるため、
   // ここでは特別な検証やフラグ付けはせず、素直に上書きする。
@@ -210,6 +299,7 @@ export async function submitWorkReport(params: {
         computedMinutes,
         approvalStatus: "PENDING",
         submittedAt: new Date(),
+        ...(params.workplaceChangedFrom ? { workplaceChangedFrom: params.workplaceChangedFrom, workplaceChangedByStaff: true } : {}),
       },
       update: {
         outcome: "WORKED",
@@ -221,6 +311,7 @@ export async function submitWorkReport(params: {
         computedMinutes,
         approvalStatus: "PENDING",
         submittedAt: new Date(),
+        ...(params.workplaceChangedFrom ? { workplaceChangedFrom: params.workplaceChangedFrom, workplaceChangedByStaff: true } : {}),
       },
     });
   }

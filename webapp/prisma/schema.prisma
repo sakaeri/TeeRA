@@ -600,6 +600,10 @@ model ShiftCancellation {
   // 派遣会社のキャンセル規定では「キャンセル不可」だったが、依頼主がオーダーを削除して取り消された
   // （請求のメモとして派遣会社側に出す）
   ruleBlocked          Boolean            @default(false)
+  // スタッフが業務報告で別の勤務先に振り替えたことで取り消しになった（元の勤務先のシフト）
+  transferredByStaff   Boolean            @default(false)
+  // 振替のキャンセル料を会社がまだ確認していない（やることに出す）
+  feeReviewPending     Boolean            @default(false)
   createdAt            DateTime           @default(now())
 
   shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
@@ -1068,6 +1072,8 @@ model WorkReport {
   correctedAt          DateTime?
   // 会社が「時間を直して確認してもらう」で勤務先も変えた時の、変更前の勤務先名（スタッフの確認画面に出す）
   workplaceChangedFrom String?
+  // スタッフが業務報告で勤務先を変えた（会社が直した時は false）
+  workplaceChangedByStaff Boolean @default(false)
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 

@@ -17,8 +17,10 @@ import {
   submitUnscheduledWorkReport,
   confirmCorrectedWorkReport,
   disputeCorrectedWorkReport,
+  moveShiftForStaffReport,
 } from "@/lib/domain/workReports";
 import {
+  notifyClientOfStaffTransfer,
   notifyCompanyOfWorkReportSubmission,
   notifyCompanyOfRecruitmentEntry,
   notifyCompanyOfStaffInvoiceSubmitted,
@@ -137,6 +139,8 @@ export async function submitWorkReportAction(input: {
   breakMinutes?: number;
   clockInTime?: string;
   clockOutTime?: string;
+  // 勤務先を変えた時（null＝社内）。undefinedなら変えない
+  companyRelationshipId?: string | null;
 }) {
   const { userId } = await requireCompanyStaffRole();
   await assertOwnShift(input.shiftId, userId);
@@ -145,8 +149,30 @@ export async function submitWorkReportAction(input: {
     (await prisma.workReport.findUnique({ where: { shiftId: input.shiftId }, select: { submittedAt: true } }))
       ?.submittedAt,
   );
+  // 勤務先を変えた（当日に別の現場へ回った等）：新しい勤務先にシフトを移してから報告する
+  let shiftId = input.shiftId;
+  let workplaceChangedFrom: string | undefined;
+  if (input.outcome === "WORKED" && input.companyRelationshipId !== undefined) {
+    const moved = await moveShiftForStaffReport({
+      shiftId: input.shiftId,
+      staffUserId: userId,
+      companyRelationshipId: input.companyRelationshipId,
+      taskName: input.taskName,
+    });
+    if (moved.moved) {
+      shiftId = moved.shiftId;
+      workplaceChangedFrom = moved.fromName;
+      const date = (await prisma.shift.findUniqueOrThrow({ where: { id: shiftId }, select: { date: true } })).date;
+      if (moved.previousClientCompanyId) {
+        await notifyClientOfStaffTransfer({ clientCompanyId: moved.previousClientCompanyId, staffUserId: userId, date }).catch((err) =>
+          console.error("[notify] staff transfer failed", err),
+        );
+      }
+    }
+  }
   const report = await submitWorkReport({
-    shiftId: input.shiftId,
+    shiftId,
+    workplaceChangedFrom,
     staffUserId: userId,
     outcome: input.outcome,
     comment: input.comment,
@@ -157,7 +183,8 @@ export async function submitWorkReportAction(input: {
   });
   // 通知メールの失敗で、提出済みの業務報告自体が失敗したかのように
   // 利用者に見えてしまわないよう、ここだけ独立してcatchする。
-  if (!alreadySubmitted) {
+  // 勤務先を変えた時は、新しい勤務先（承認する側）に知らせる
+  if (!alreadySubmitted || workplaceChangedFrom) {
     await notifyCompanyOfWorkReportSubmission(report.id).catch((err) =>
       console.error("[email] work report submitted notify failed", err),
     );

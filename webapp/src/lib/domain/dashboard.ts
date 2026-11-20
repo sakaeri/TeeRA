@@ -66,6 +66,7 @@ export async function loadDashboardData(companyId: string) {
     duePaidLeaveGrants,
     heldShifts,
     missingDocumentStaff,
+    transferFeeReviews,
   ] = await Promise.all([
       // 日付が過ぎた募集はもう応募のしようがないので、埋まらないまま残って
       // いても欠員件数・やることリストからは対象外にする（過去日は消えて
@@ -94,6 +95,12 @@ export async function loadDashboardData(companyId: string) {
       }),
       // 会社が必須にしている身分証・振込先をまだ出していないスタッフ
       listStaffMissingDocuments(companyId),
+      // スタッフが業務報告で別の勤務先に振り替えた（元の依頼主へのキャンセル料を確認する）
+      prisma.shiftCancellation.findMany({
+        where: { feeReviewPending: true, shift: { companyId } },
+        include: { shift: { include: { staff: true, companyRelationship: { include: { clientCompany: true } } } } },
+        orderBy: { createdAt: "asc" },
+      }),
     ]);
 
   // 希望日が複数（datesは配列）あり得るため、1件でも今日以降の希望日が
@@ -130,6 +137,7 @@ export async function loadDashboardData(companyId: string) {
     duePaidLeaveGrants,
     heldShifts,
     missingDocumentStaff,
+    transferFeeReviews,
   };
 }
 
@@ -156,6 +164,7 @@ export async function scopeDashboardDataToTeams(data: DashboardData, teamIds: st
     expiringContractStaff: data.expiringContractStaff.filter((s) => members.has(s.staffUserId)),
     duePaidLeaveGrants: data.duePaidLeaveGrants.filter((g) => members.has(g.staffUserId)),
     heldShifts: data.heldShifts.filter((s) => inTeam(s.teamId) || members.has(s.staffUserId)),
+    transferFeeReviews: data.transferFeeReviews.filter((c) => inTeam(c.shift.teamId) || members.has(c.shift.staffUserId)),
     missingDocumentStaff: data.missingDocumentStaff.filter((s) => members.has(s.userId)),
   };
 }
@@ -326,6 +335,8 @@ export function computePendingReportEntries(data: DashboardData, companyId?: str
       ? (r.shift.companyRelationship.clientCompany?.name ?? r.shift.companyRelationship.proxyName ?? "依頼主")
       : "社内",
     companyRelationshipId: r.shift.companyRelationshipId,
+    // スタッフが業務報告で勤務先を変えた（振替）時の、変更前の勤務先
+    workplaceChangedByStaffFrom: r.workplaceChangedByStaff ? r.workplaceChangedFrom : null,
     // 依頼主のオーダーから入ったシフトや、派遣会社と共有しているシフトは勤務先を変えられない
     workplaceLocked: Boolean(r.shift.publicRecruitmentId) || (companyId !== undefined && r.shift.companyId !== companyId),
   }));
@@ -333,7 +344,7 @@ export function computePendingReportEntries(data: DashboardData, companyId?: str
 
 export type AutoTodoItem = {
   id: string;
-  kind: "業務報告" | "欠員" | "シフト" | "調整中" | "契約書" | "契約満了" | "有給付与" | "販促品";
+  kind: "業務報告" | "欠員" | "シフト" | "調整中" | "振替" | "契約書" | "契約満了" | "有給付与" | "販促品";
   text: string;
   actionLabel: string;
   actionHref: string;
@@ -404,6 +415,18 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
       id: `held-${shift.id}`,
       kind: "調整中",
       text: `${shift.staff.name}さんの${dateStr}のシフトが${clientName}の取り消しで調整中です（振り替えるか休みにしてください）`,
+      actionLabel: "カレンダーで確認",
+      actionHref: `/company/calendar?date=${dateStr}`,
+    });
+  }
+
+  for (const c of data.transferFeeReviews) {
+    const dateStr = c.shift.date.toISOString().slice(0, 10);
+    const clientName = c.shift.companyRelationship?.clientCompany?.name ?? c.shift.companyRelationship?.proxyName ?? "依頼主";
+    items.push({
+      id: `transfer-fee-${c.id}`,
+      kind: "振替",
+      text: `${c.shift.staff.name}さんが${dateStr}に${clientName}から別の現場に振り替えました（${clientName}へのキャンセル料を確認してください）`,
       actionLabel: "カレンダーで確認",
       actionHref: `/company/calendar?date=${dateStr}`,
     });

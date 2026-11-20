@@ -156,6 +156,19 @@ export async function notifyCompanyOfWorkReportSubmission(workReportId: string) 
 
 // 会社が「休みで確定」した休み希望を、スタッフが取り消したらすぐプッシュで知らせる
 // （確定した休みを前提に組んだ予定が変わるため）。チームのマネージャー・リーダー（チームが無ければ本部）へ
+// スタッフが業務報告で別の勤務先に振り替えた時、元の勤務先（本アカウントの依頼主）に知らせる（プッシュのみ）
+export async function notifyClientOfStaffTransfer(params: { clientCompanyId: string; staffUserId: string; date: Date }) {
+  const staff = await prisma.user.findUnique({ where: { id: params.staffUserId }, select: { name: true } });
+  if (!staff) return;
+  const date = params.date.toISOString().slice(0, 10);
+  const [, m, d] = date.split("-").map(Number);
+  await sendPushToUsers(await companyAdminUserIds(params.clientCompanyId), {
+    title: "スタッフが別の現場に振り替わりました",
+    body: `${staff.name}さん・${m}/${d}（派遣会社に確認してください）`,
+    url: `/company/calendar?date=${date}`,
+  });
+}
+
 export async function notifyCompanyOfConfirmedOffCancelled(params: {
   companyId: string;
   teamId: string | null;
