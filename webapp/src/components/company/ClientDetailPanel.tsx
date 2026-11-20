@@ -105,6 +105,9 @@ type ClientMonthDetail = {
     taskName: string | null;
     computedMinutes: number;
     outcome: string;
+    clockIn: string | null;
+    clockOut: string | null;
+    comment: string | null;
   }[];
   invoiceTotal: number | null;
   clientCancelRule: CancelRule | null;
@@ -1874,6 +1877,8 @@ function BulkApproveModal({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const allChecked = selected.size === reports.length;
+  // 全文を開いているコメント
+  const [openComment, setOpenComment] = useState<string | null>(null);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -1909,22 +1914,49 @@ function BulkApproveModal({
         </label>
         <ul className="flex-1 divide-y divide-border overflow-y-auto rounded-xl border border-border" data-testid="bulk-approve-list">
           {reports.map((r) => (
-            <li key={r.workReportId}>
-              <label className="flex items-center gap-3 px-3 py-2.5 text-sm">
-                <input type="checkbox" checked={selected.has(r.workReportId)} onChange={() => toggle(r.workReportId)} />
-                <span className="w-12 shrink-0 text-xs text-muted">{r.date.slice(5).replace("-", "/")}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{r.staffName}</span>
-                  {r.taskName ? <span className="block truncate text-xs text-muted">{r.taskName}</span> : null}
-                </span>
-                <span className="shrink-0 text-xs text-muted">
-                  {r.outcome === "WORKED"
-                    ? `${Math.floor(r.computedMinutes / 60)}:${String(r.computedMinutes % 60).padStart(2, "0")}`
-                    : r.outcome === "ABSENT"
-                      ? "欠勤"
-                      : "キャンセル"}
-                </span>
-              </label>
+            <li key={r.workReportId} className="flex items-start gap-3 px-3 py-2.5 text-sm">
+              <input
+                type="checkbox"
+                checked={selected.has(r.workReportId)}
+                onChange={() => toggle(r.workReportId)}
+                aria-label={`${r.date} ${r.staffName}`}
+                className="mt-1"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="truncate">
+                    <span className="mr-2 text-xs text-muted">{r.date.slice(5).replace("-", "/")}</span>
+                    {r.staffName}
+                  </span>
+                  {/* 出勤〜退勤の時刻。実働はその下に（時刻だけだと実働なのか時刻なのか分からないため） */}
+                  <span className="shrink-0 text-xs">
+                    {r.outcome === "WORKED"
+                      ? `${r.clockIn ?? "--:--"}〜${r.clockOut ?? "--:--"}`
+                      : r.outcome === "ABSENT"
+                        ? "欠勤"
+                        : "勤務先キャンセル"}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-2 text-xs text-muted">
+                  <span className="truncate">{r.taskName ?? ""}</span>
+                  {r.outcome === "WORKED" ? (
+                    <span className="shrink-0">
+                      実働 {Math.floor(r.computedMinutes / 60)}時間{String(r.computedMinutes % 60).padStart(2, "0")}分
+                    </span>
+                  ) : null}
+                </div>
+                {/* スタッフのコメント（備考）。長い時は1行で切り、押すと全文 */}
+                {r.comment ? (
+                  <button
+                    type="button"
+                    onClick={() => setOpenComment(openComment === r.workReportId ? null : r.workReportId)}
+                    className={`mt-1 block w-full text-left text-xs text-amber-800 ${openComment === r.workReportId ? "whitespace-pre-wrap break-words" : "truncate"}`}
+                    data-testid="bulk-approve-comment"
+                  >
+                    💬 {r.comment}
+                  </button>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>

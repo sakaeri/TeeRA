@@ -249,6 +249,7 @@ export function ShiftCard({
     shift.outcome === "WORKED" &&
     Boolean(shift.submittedAt) &&
     (shift.approvalStatus === "PENDING" || shift.approvalStatus === "APPROVED");
+  const needsConfirmation = shift.approvalStatus === "NEEDS_CONFIRMATION";
 
   // 退勤済み（または過去日）なのにまだ提出していない — 退勤を押した時点で
   // 終わった気になって提出し忘れることが多かったため、目立たせる
@@ -427,13 +428,18 @@ export function ShiftCard({
           </span>
         ) : null}
       </div>
-      <p className="mb-1 text-sm text-muted">{shift.companyName}</p>
-      {submitted ? null : (
-        <p className="mb-2 text-sm text-muted">
-          {shift.startTime ? `${shift.startTime}〜${shift.endTime}` : "終日/未定"}
-        </p>
+      {/* 会社が直した報告の確認中は、会社・勤務先・時間などを下の確認欄にまとめて出す */}
+      {needsConfirmation ? null : (
+        <>
+          <p className="mb-1 text-sm text-muted">{shift.companyName}</p>
+          {submitted ? null : (
+            <p className="mb-2 text-sm text-muted">
+              {shift.startTime ? `${shift.startTime}〜${shift.endTime}` : "終日/未定"}
+            </p>
+          )}
+          {shift.workplaceName ? <p className="mb-2 text-sm text-muted">勤務先：{shift.workplaceName}</p> : null}
+        </>
       )}
-      {shift.workplaceName ? <p className="mb-2 text-sm text-muted">勤務先：{shift.workplaceName}</p> : null}
       {shift.approvalStatus === "REJECTED" && shift.rejectionReason ? (
         <p className="mb-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">
           差し戻し理由：{shift.rejectionReason}
@@ -442,18 +448,33 @@ export function ShiftCard({
 
       {shift.approvalStatus === "NEEDS_CONFIRMATION" ? (
         <div className="flex flex-col gap-2 rounded-lg border border-accent/40 bg-accent/10 p-3">
-          <p className="text-sm">
-            企業が打刻内容を修正しました。内容を確認してください。
-          </p>
-          {shift.workplaceChangedFrom ? (
-            <p className="text-sm font-semibold" data-testid="workplace-changed">
-              勤務先：{shift.workplaceChangedFrom} → {shift.workplaceName ?? "社内"}
-            </p>
-          ) : null}
-          <p className="text-sm text-muted">
-            {shift.clockInTime ?? "--:--"}〜{shift.clockOutTime ?? "--:--"}（休憩{shift.breakMinutes}分／実働{" "}
-            {(shift.computedMinutes / 60).toFixed(1)} 時間）
-          </p>
+          <p className="text-sm font-semibold">会社が業務報告を直しました。この内容で合っているか確認してください。</p>
+          {/* 直した後の内容をそのまま並べる（何が変わったかより、今の内容が正しいかを見てもらう） */}
+          <dl className="grid grid-cols-[4.5rem_1fr] gap-x-2 gap-y-1 rounded-lg bg-white px-3 py-2 text-sm" data-testid="corrected-report">
+            <dt className="text-muted">会社</dt>
+            <dd>{shift.companyName}</dd>
+            <dt className="text-muted">勤務先</dt>
+            <dd>{shift.workplaceName ?? "社内"}</dd>
+            <dt className="text-muted">業務内容</dt>
+            <dd>{shift.taskName ?? "—"}</dd>
+            <dt className="text-muted">勤務時間</dt>
+            <dd>
+              {shift.clockInTime ?? "--:--"}〜{shift.clockOutTime ?? "--:--"}
+            </dd>
+            <dt className="text-muted">休憩</dt>
+            <dd>{shift.breakMinutes}分</dd>
+            <dt className="text-muted">実働</dt>
+            <dd>
+              {Math.floor(shift.computedMinutes / 60)}時間{String(shift.computedMinutes % 60).padStart(2, "0")}分
+            </dd>
+            {shift.comment ? (
+              <>
+                <dt className="text-muted">コメント</dt>
+                <dd className="whitespace-pre-wrap break-words">{shift.comment}</dd>
+              </>
+            ) : null}
+          </dl>
+          <p className="text-xs text-muted">違う時は「内容が違う」を押して、自分で直して出し直してください。</p>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"

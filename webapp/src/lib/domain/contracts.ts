@@ -543,6 +543,32 @@ export async function listTaskNamesByWorkplace(companyIds: string[], staffUserId
   return Object.fromEntries(lists);
 }
 
+// スタッフが業務報告で選べる勤務先（本人が配属されている依頼主）を会社ごとに。社内はいつでも選べるので含めない
+export async function listStaffWorkplacesByCompany(
+  staffUserId: string,
+  companyIds: string[],
+): Promise<Record<string, { companyRelationshipId: string; name: string }[]>> {
+  if (companyIds.length === 0) return {};
+  const placements = await prisma.staffPlacement.findMany({
+    where: {
+      staffUserId,
+      active: true,
+      companyRelationship: { agencyCompanyId: { in: companyIds }, status: "ACTIVE" },
+    },
+    include: { companyRelationship: { include: { clientCompany: true } } },
+  });
+  const map: Record<string, { companyRelationshipId: string; name: string }[]> = {};
+  for (const p of placements) {
+    const companyId = p.companyRelationship.agencyCompanyId!;
+    map[companyId] = map[companyId] ?? [];
+    map[companyId].push({
+      companyRelationshipId: p.companyRelationshipId,
+      name: p.companyRelationship.clientCompany?.name ?? p.companyRelationship.proxyName ?? "依頼主",
+    });
+  }
+  return map;
+}
+
 // 依頼主が連携済み派遣会社の配属済みスタッフにシフトを作る際の業務内容
 // ピッカー用 — 作られるシフトはcompanyIdが派遣会社側になり単価表も
 // 派遣会社の非公開情報（オーナー限定）のため、依頼主側からは単価表を

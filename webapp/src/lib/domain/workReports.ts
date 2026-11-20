@@ -604,6 +604,24 @@ export async function correctAndReturnWorkReport(params: {
   const rawMinutes = Math.round((params.clockOut.getTime() - params.clockIn.getTime()) / 60000);
   const computedMinutes = Math.max(rawMinutes - params.breakMinutes, 0);
 
+  // 実際に変えた項目（経緯に「勤務先を修正」などと正しく出すため）
+  const before = await prisma.workReport.findUnique({
+    where: { id: params.workReportId },
+    select: { clockIn: true, clockOut: true, breakMinutes: true, taskName: true },
+  });
+  const changed: string[] = [];
+  if (before) {
+    if (
+      before.clockIn?.getTime() !== params.clockIn.getTime() ||
+      before.clockOut?.getTime() !== params.clockOut.getTime()
+    ) {
+      changed.push("時間");
+    }
+    if (before.breakMinutes !== params.breakMinutes) changed.push("休憩");
+    if (params.taskName !== undefined && (before.taskName ?? null) !== (params.taskName ?? null)) changed.push("業務内容");
+  }
+  if (params.workplaceChange) changed.push("勤務先");
+
   // 承認・差し戻しと同じく、提出済みで未承認のものだけを修正できる。
   const result = await prisma.workReport.updateMany({
     where: { id: params.workReportId, approvalStatus: "PENDING", submittedAt: { not: null } },
@@ -617,6 +635,7 @@ export async function correctAndReturnWorkReport(params: {
       correctedAt: new Date(),
       workplaceChangedFrom: params.workplaceChange ? params.workplaceChange.fromName : null,
       ...(params.taskName !== undefined ? { taskName: params.taskName } : {}),
+      correctionSummary: changed.length > 0 ? changed.join("・") : null,
     },
   });
   if (result.count === 0) throw new Error("not_pending");
@@ -785,14 +804,28 @@ export async function getWorkReportDetail(shiftId: string) {
     : null;
   const submitted = Boolean(r && (r.submittedAt || r.approvalStatus !== "PENDING"));
 
-  const timeline: { label: string; at: string | null; by: string | null; note?: string }[] = [];
+  // sortAt：起きた順に並べ直すための時刻（修正のあとに出し直した時など、提出が後に来るように）
+  const timeline: { label: string; at: string | null; by: string | null; note?: string; sortAt?: number }[] = [];
   if (r && submitted) {
-    if (r.submittedAt) timeline.push({ label: "提出", at: formatJstDateTime(r.submittedAt), by: shift.staff.name });
+    if (r.submittedAt) {
+      timeline.push({ label: "提出", at: formatJstDateTime(r.submittedAt), by: shift.staff.name, sortAt: r.submittedAt.getTime() });
+    }
     if (r.approvalRevokedAt) {
-      timeline.push({ label: "承認を取り消し", at: formatJstDateTime(r.approvalRevokedAt), by: revoker?.name ?? null });
+      timeline.push({
+        label: "承認を取り消し",
+        at: formatJstDateTime(r.approvalRevokedAt),
+        by: revoker?.name ?? null,
+        sortAt: r.approvalRevokedAt.getTime(),
+      });
     }
     if (r.correctedAt) {
-      timeline.push({ label: "時間を修正", at: formatJstDateTime(r.correctedAt), by: r.corrector?.name ?? null });
+      // 変えた項目が記録されていれば「勤務先を修正」など。記録の無い古いものは「会社が修正」
+      timeline.push({
+        label: r.correctionSummary ? `${r.correctionSummary}を修正` : "会社が修正",
+        at: formatJstDateTime(r.correctedAt),
+        by: r.corrector?.name ?? null,
+        sortAt: r.correctedAt.getTime(),
+      });
     }
     if (r.approvalStatus === "APPROVED" && r.approvedAt) {
       timeline.push({
@@ -800,6 +833,7 @@ export async function getWorkReportDetail(shiftId: string) {
         at: formatJstDateTime(r.approvedAt),
         // 承認者が記録されていないのは、ログインせずに通知メールのリンクから承認したもの
         by: r.approver?.name ?? "通知メールのリンクから承認",
+        sortAt: r.approvedAt.getTime(),
       });
     }
     if (r.approvalStatus === "REJECTED") {
@@ -811,15 +845,19 @@ export async function getWorkReportDetail(shiftId: string) {
               at: formatJstDateTime(r.updatedAt),
               by: shift.staff.name,
               note: "スタッフが修正内容に同意しませんでした（内容が違う）",
+              sortAt: r.updatedAt.getTime(),
             }
           : {
               label: "差戻し",
               at: r.approvedAt ? formatJstDateTime(r.approvedAt) : null,
               by: r.approver?.name ?? null,
               note: r.rejectionReason ?? undefined,
+              sortAt: r.approvedAt?.getTime(),
             },
       );
     }
+    // 起きた順に並べる（時刻の無いものは最後）
+    timeline.sort((a, b) => (a.sortAt ?? Infinity) - (b.sortAt ?? Infinity));
   }
 
   return {

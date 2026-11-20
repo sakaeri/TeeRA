@@ -98,7 +98,7 @@ try {
 
   await staff.goto("http://localhost:3000/staff/timecard");
   let staffBody = await staff.textContent("body");
-  log("スタッフに修正内容の確認依頼が表示される", staffBody.includes("企業が打刻内容を修正しました"));
+  log("スタッフに修正内容の確認依頼が表示される", staffBody.includes("会社が業務報告を直しました"));
   log("スタッフに休憩60分・実働7.0時間の表示が見える", staffBody.includes("休憩60分") && staffBody.includes("7.0"));
 
   await staff.getByRole("button", { name: "これで合っています" }).click();

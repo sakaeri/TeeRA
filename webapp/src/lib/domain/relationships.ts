@@ -398,6 +398,10 @@ const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日�
 // companyIdは「自社」であればよく、関係を作った側(ownerCompanyId)である
 // 必要はない — 本アカウント連携済みの相手側からも同じ関係が見える
 // （listClients/listAgenciesの双方向可視化と対になる仕様）。
+function jstClock(date: Date) {
+  return new Intl.DateTimeFormat("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Tokyo" }).format(date);
+}
+
 export async function getClientMonthDetail(params: {
   companyId: string;
   companyRelationshipId: string;
@@ -484,6 +488,9 @@ export async function getClientMonthDetail(params: {
       taskName: s.workReport!.taskName ?? s.taskName,
       computedMinutes: s.workReport!.computedMinutes,
       outcome: s.workReport!.outcome,
+      clockIn: s.workReport!.clockIn ? jstClock(s.workReport!.clockIn) : null,
+      clockOut: s.workReport!.clockOut ? jstClock(s.workReport!.clockOut) : null,
+      comment: s.workReport!.comment,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
   // 稼働時間は日給・時給を問わず実際の実働分（WorkReport.computedMinutes）の
