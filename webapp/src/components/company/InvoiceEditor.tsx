@@ -582,7 +582,7 @@ function AddInvoiceLineModal({
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">明細行を追加</h3>
           <button type="button" onClick={onClose} className="text-muted">
@@ -823,7 +823,7 @@ function BankAccountPicker({
           <div
             role="dialog"
             aria-label="登録した振込先"
-            className="w-full max-w-md rounded-t-2xl bg-white p-5 sm:rounded-2xl"
+            className="max-h-popup w-full overflow-y-auto max-w-md rounded-t-2xl bg-white p-5 sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">
@@ -904,7 +904,7 @@ function AddBankAccountModal({
       <div
         role="dialog"
         aria-label="振込先を追加"
-        className="w-full max-w-md rounded-t-2xl bg-white p-5 sm:rounded-2xl"
+        className="max-h-popup w-full overflow-y-auto max-w-md rounded-t-2xl bg-white p-5 sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">

@@ -1101,7 +1101,7 @@ export function ClientDetailPanel({
             setShowNoteForm(false);
           }}
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">メモを作成</h4>
               <button type="button" onClick={() => setShowNoteForm(false)} aria-label="閉じる" className="text-muted hover:text-primary">
@@ -1194,7 +1194,7 @@ function AgencyInviteModal({
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-popup w-full overflow-y-auto max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">派遣スタッフを招待する</h3>
           <button type="button" onClick={onClose} className="text-muted">
@@ -1414,7 +1414,7 @@ function PlacementRatesTab({
             setAmendingId(null);
           }}
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">単価を変更（{amendingRate.taskName}）</h4>
               <button type="button" onClick={() => setAmendingId(null)} aria-label="閉じる" className="text-muted hover:text-primary">
@@ -1489,7 +1489,7 @@ function PlacementRatesTab({
             setShowNewForm(false);
           }}
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">業務内容を追加</h4>
               <button
@@ -1778,7 +1778,7 @@ function CancelRuleModal({
         onClose();
       }}
     >
-      <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <h4 className="font-serif-jp text-base font-bold text-primary">{title}</h4>
           <button type="button" onClick={onClose} aria-label="閉じる" className="text-muted hover:text-primary">
@@ -1894,7 +1894,7 @@ function BulkApproveModal({
       <div
         role="dialog"
         aria-label="まとめて承認"
-        className="flex max-h-[85vh] w-full max-w-md flex-col rounded-2xl bg-white p-5 shadow-lg"
+        className="flex max-h-popup w-full max-w-md flex-col rounded-2xl bg-white p-5 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-1 flex items-center justify-between">

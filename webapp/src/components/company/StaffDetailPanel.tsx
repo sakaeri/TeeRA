@@ -1226,7 +1226,7 @@ export function StaffDetailPanel({
             setShowNoteForm(false);
           }}
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">メモを作成</h4>
               <button type="button" onClick={() => setShowNoteForm(false)} aria-label="閉じる" className="text-muted hover:text-primary">
@@ -1273,7 +1273,7 @@ export function StaffDetailPanel({
             setShowGrantForm(false);
           }}
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">有給休暇を付与</h4>
               <button type="button" onClick={() => setShowGrantForm(false)} aria-label="閉じる" className="text-muted hover:text-primary">
@@ -1320,7 +1320,7 @@ export function StaffDetailPanel({
             setShowAdjustForm(false);
           }}
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">有給休暇の残日数を訂正</h4>
               <button type="button" onClick={() => setShowAdjustForm(false)} aria-label="閉じる" className="text-muted hover:text-primary">
@@ -1376,7 +1376,7 @@ export function StaffDetailPanel({
                 setEditingContractId(null);
               }}
             >
-              <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+              <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
                 <div className="mb-3 flex items-center justify-between">
                   <h4 className="font-serif-jp text-base font-bold text-primary">基本給を改定（{editingContract.title}）</h4>
                   <button
@@ -1479,7 +1479,7 @@ export function StaffDetailPanel({
             setEndingContract(null);
           }}
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">契約を終了する</h4>
               <button
@@ -1581,7 +1581,7 @@ export function StaffDetailPanel({
           className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4"
           onClick={() => setShowUploadGuidance(false)}
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">契約書を保存しました</h4>
               <button
@@ -1643,7 +1643,7 @@ export function StaffDetailPanel({
             setEditingIdDocument(false);
           }}
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">本人確認書類をアップロード</h4>
               <button
@@ -1686,7 +1686,7 @@ export function StaffDetailPanel({
             setEditingBankInfo(false);
           }}
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">振込先情報を編集</h4>
               <button type="button" onClick={() => setEditingBankInfo(false)} aria-label="閉じる" className="text-muted hover:text-primary">
@@ -2022,7 +2022,7 @@ function StaffTaskRatesTab({
           <div
             role="dialog"
             aria-label="単価を終了"
-            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg"
+            className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">
@@ -2065,7 +2065,7 @@ function StaffTaskRatesTab({
             setAmendingId(null);
           }}
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">
                 単価を変更（{amendingRate.taskName} ／ {amendingRate.workplaceLabel}）
@@ -2134,7 +2134,7 @@ function StaffTaskRatesTab({
             setShowNewForm(false);
           }}
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">業務内容を追加</h4>
               <button

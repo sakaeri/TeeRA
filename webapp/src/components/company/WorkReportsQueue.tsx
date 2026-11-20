@@ -136,7 +136,7 @@ export function WorkReportsQueue({
 
       {correctingReport ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setCorrectingId(null)}>
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">
                 時間・勤務先を直す（{correctingReport.staffName} — {correctingReport.date}）
@@ -162,7 +162,7 @@ export function WorkReportsQueue({
 
       {rejectingReport ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setRejectingId(null)}>
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">
                 スタッフに直してもらう（{rejectingReport.staffName} — {rejectingReport.date}）

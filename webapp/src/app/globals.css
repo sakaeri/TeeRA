@@ -167,3 +167,9 @@ body {
     var(--brand-primary) calc(env(safe-area-inset-top, 0px) * 1.5)
   );
 }
+
+/* スマホのポップアップの高さを全画面でそろえる：見えている画面の高さ（dvh）から上下の余白を引いた分まで。
+   中身が長い時はポップアップの中だけスクロールする（vhだとスマホのツールバーの分はみ出すため dvh を使う） */
+@utility max-h-popup {
+  max-height: calc(100dvh - 7rem);
+}

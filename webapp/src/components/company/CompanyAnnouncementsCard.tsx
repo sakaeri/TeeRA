@@ -182,7 +182,7 @@ function FormModal({ title, onClose, children }: { title: string; onClose: () =>
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div role="dialog" aria-modal="true" aria-label={title} className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-lg">
+      <div role="dialog" aria-modal="true" aria-label={title} className="flex max-h-popup w-full max-w-lg flex-col rounded-2xl bg-white shadow-lg">
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <h3 className="font-serif-jp text-base font-bold text-primary">{title}</h3>
           <button type="button" onClick={onClose} aria-label="閉じる" className="text-muted hover:text-primary">

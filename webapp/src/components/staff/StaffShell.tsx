@@ -305,7 +305,7 @@ function PendingContractPopup({ companies }: { companies: { id: string; name: st
       aria-label="新しい契約書が届いています"
       className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
     >
-      <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg">
+      <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg">
         <p className="font-serif-jp text-lg font-bold text-primary">新しい契約書が届いています</p>
         <p className="mt-2 text-sm text-foreground/80">
           契約書の確認・同意が終わるまで、ほかの画面は使えません。内容を確認して同意してください。

@@ -393,7 +393,7 @@ export function RosterView({
             setProxyTeamId("");
           }}
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-serif-jp text-lg font-bold text-primary">
                 {PROXY_PROMPT_TITLE[proxyNamePromptFor]}
@@ -678,7 +678,7 @@ function InviteStaffModal({
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-popup w-full overflow-y-auto max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">スタッフを招待する</h3>
           <button type="button" onClick={onClose} className="text-muted">
@@ -829,7 +829,7 @@ function InviteRelationshipModal({
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-popup w-full overflow-y-auto max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">
             {kind === "client" ? "依頼主を招待する" : "派遣会社を招待する"}

@@ -161,7 +161,7 @@ export function RecruitmentListView({
           data-testid="recruitment-day-popup"
         >
           <div
-            className="flex max-h-[85vh] w-full max-w-md flex-col rounded-t-2xl bg-background p-4 shadow-lg sm:rounded-2xl"
+            className="flex max-h-popup w-full max-w-md flex-col rounded-t-2xl bg-background p-4 shadow-lg sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">
@@ -337,7 +337,7 @@ function RecruitmentCards({
         if (!target) return null;
         return createPortal(
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" onClick={() => setConfirmId(null)}>
-            <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
               <p className="mb-1 font-serif-jp text-base font-bold text-primary">この募集に応募しますか？</p>
               <p className="mb-4 text-sm text-muted">
                 {formatDateJa(target.date)} {target.companyName}

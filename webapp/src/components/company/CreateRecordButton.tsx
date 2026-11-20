@@ -52,7 +52,7 @@ export function CreateRecordButton({
       </button>
       {open ? (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={close}>
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-serif-jp text-lg font-bold text-primary">{label}を選択してください</h3>
               <button type="button" onClick={close} className="text-muted">

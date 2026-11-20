@@ -363,7 +363,7 @@ export function StaffInvoiceEditor({
       ) : null}
       {itemForm ? (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={() => setItemForm(null)}>
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()} data-testid="staff-invoice-item-form">
+          <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()} data-testid="staff-invoice-item-form">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-serif-jp text-lg font-bold text-primary">{itemForm.index === null ? "その他の項目を足す" : "その他の項目を直す"}</h3>
               <button type="button" onClick={() => setItemForm(null)} className="text-muted" aria-label="閉じる">

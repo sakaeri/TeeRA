@@ -313,7 +313,7 @@ export function GenerateOrUploadChoiceModal({
 }) {
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-popup w-full overflow-y-auto max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">契約書管理</h3>
           <button type="button" onClick={onClose} className="text-muted">
@@ -366,7 +366,7 @@ export function ChooseBaseTemplateModal({
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-popup w-full overflow-y-auto max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">契約書を生成</h3>
           <button type="button" onClick={onClose} className="text-muted">
@@ -452,7 +452,7 @@ export function AssignOrCustomizeModal({
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-popup w-full overflow-y-auto max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">{staffName}さんとの契約</h3>
           <button type="button" onClick={onClose} className="text-muted">
@@ -572,7 +572,7 @@ export function UploadContractModal({
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <div
-        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
+        className="max-h-popup w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-1 flex items-center justify-between">
@@ -764,7 +764,7 @@ export function UploadOnlyContractDetail({
 }) {
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-popup w-full overflow-y-auto max-w-md rounded-2xl bg-white p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <h3 className="font-serif-jp text-lg font-bold text-primary">アップロードされた契約書（{staffName}様）</h3>
           <button type="button" onClick={onClose} className="text-muted">
@@ -1001,7 +1001,7 @@ export function TemplateModal({
       onClick={embedded ? undefined : onClose}
     >
       <div
-        className={embedded ? "" : "max-h-[85vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"}
+        className={embedded ? "" : "max-h-popup w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"}
         onClick={(e) => e.stopPropagation()}
       >
         <div className={embedded ? "hidden" : "mb-4 flex items-center justify-between"}>
