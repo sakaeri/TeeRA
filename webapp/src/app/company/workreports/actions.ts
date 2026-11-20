@@ -4,7 +4,14 @@ import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManage } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
-import { approveWorkReport, rejectWorkReport, correctAndReturnWorkReport, resolveApproverCompanyId } from "@/lib/domain/workReports";
+import {
+  approveWorkReport,
+  rejectWorkReport,
+  correctAndReturnWorkReport,
+  resolveApproverCompanyId,
+  revokeWorkReportApproval,
+  issuedDocumentsForShift,
+} from "@/lib/domain/workReports";
 
 async function assertCanApprove(workReportId: string, companyId: string, teamId: string | null) {
   const report = await prisma.workReport.findUniqueOrThrow({
@@ -25,6 +32,7 @@ const WORKREPORT_ERROR_LABEL: Record<string, string> = {
   forbidden: "権限がありません",
   not_pending_confirmation: "この業務報告は確認待ちの状態ではありません",
   not_pending: "この業務報告は既に処理されています。画面を更新してください。",
+  not_approved: "この業務報告は承認済みではありません。画面を更新してください。",
   workplace_locked: "このシフトは勤務先を変えられません（依頼主のオーダーから入ったシフトなど）",
 };
 
@@ -37,6 +45,32 @@ export async function approveWorkReportAction(workReportId: string) {
     await approveWorkReport({ workReportId, approverUserId: userId });
     revalidatePath("/company/settings");
     revalidatePath("/company");
+    return { status: "ok" as const };
+  } catch (error) {
+    if (error instanceof Error) {
+      return { status: "error" as const, reason: WORKREPORT_ERROR_LABEL[error.message] ?? "処理に失敗しました" };
+    }
+    throw error;
+  }
+}
+
+// 承認を取り消す前の確認：その報告が入っている発行済み・提出済みの書類
+export async function issuedDocumentsForReportAction(workReportId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const report = await assertCanApprove(workReportId, membership.companyId, null);
+  if (!canManage(membership, report.shift.teamId)) throw new Error("forbidden");
+  return issuedDocumentsForShift(report.shiftId);
+}
+
+// 承認済みの業務報告を承認前に戻す（直して承認し直すため）
+export async function revokeWorkReportApprovalAction(workReportId: string) {
+  const { userId, membership } = await requireCompanyAdminOrEditor();
+  try {
+    const report = await assertCanApprove(workReportId, membership.companyId, null);
+    if (!canManage(membership, report.shift.teamId)) throw new Error("forbidden");
+    await revokeWorkReportApproval({ workReportId, userId });
+    revalidatePath("/company");
+    revalidatePath("/company/calendar");
     return { status: "ok" as const };
   } catch (error) {
     if (error instanceof Error) {
