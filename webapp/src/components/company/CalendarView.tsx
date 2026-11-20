@@ -11,6 +11,7 @@ import { todayJst } from "@/lib/date";
 import { holidayName } from "@/lib/holidays";
 import { shortCompanyName } from "@/lib/shortCompanyName";
 import { useMonthSwipe } from "@/lib/useMonthSwipe";
+import { useSwipeNavigate } from "@/lib/useSwipeNavigate";
 import { shiftListTimeLabel } from "@/lib/shiftListTimeLabel";
 import { useClickOutside } from "@/lib/useClickOutside";
 import {
@@ -1155,6 +1156,8 @@ function DayDetailModal({
     d.setUTCDate(d.getUTCDate() + days);
     onNavigate(d.toISOString().slice(0, 10));
   }
+  // 横スワイプでも前後の日に送る（左にスワイプで次の日）
+  const { containerRef: daySwipeRef, style: daySwipeStyle } = useSwipeNavigate((direction) => shift(direction));
 
   return (
     <div
@@ -1163,7 +1166,12 @@ function DayDetailModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="max-h-popup w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-4 shadow-lg sm:p-6">
+      <div
+        ref={daySwipeRef}
+        style={daySwipeStyle}
+        className="max-h-popup w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-4 shadow-lg sm:p-6"
+        data-testid="day-detail-popup"
+      >
         {/* 1行目は日付と✕（✕はいつも右上）。「＋シフト」は下のタブの行の右端に固定 */}
         <div className="mb-4 flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
@@ -1195,8 +1203,8 @@ function DayDetailModal({
         </div>
 
         <div className="mb-4 flex items-center gap-2 border-b border-border text-sm">
-          {/* タブが多い日は横にスクロール（「＋シフト」は右端に残す） */}
-          <div className="flex min-w-0 gap-4 overflow-x-auto whitespace-nowrap">
+          {/* タブが多い日は横にスクロール（「＋シフト」は右端に残す）。ここから始めた横の動きは日送りにしない */}
+          <div className="flex min-w-0 gap-4 overflow-x-auto whitespace-nowrap" data-no-swipe>
           <button
             type="button"
             onClick={() => setTab("shifts")}
