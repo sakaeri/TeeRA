@@ -128,7 +128,20 @@ try {
 
   await page.goto("http://localhost:3000/company");
   body = await page.textContent("body");
-  log("契約書未確認 KPI back to 0 after generating", /契約書未確認[\s\S]{0,20}0/.test(body));
+  // 送った後も、本人が署名するまでは「署名待ち」として残る
+  log("契約書を送った後も、署名するまでは契約書未確認に1件残る", /契約書未確認[\s\S]{0,20}1/.test(body));
+  await page.getByText("契約書未確認").click();
+  await page.getByTestId("awaiting-consent-row").first().waitFor({ timeout: 15000 });
+  const consentRow = await page.getByTestId("awaiting-consent-row").first().innerText();
+  log("契約書未確認の一覧に「署名待ち」として出る", consentRow.includes("未契約スタッフ") && consentRow.includes("署名待ち"));
+  log("やることにも「署名待ち」が出る", (await page.textContent("body")).includes("未契約スタッフさんの契約書が署名待ちです"));
+  await page.getByRole("button", { name: "✕" }).first().click().catch(() => {});
+
+  // 本人が署名（同意）すると一覧から消える
+  psql(`update "StaffContract" set status='ACTIVE', "consentedAt"=now() where "staffUserId"='${staffUserId}' and status='PENDING_CONSENT';`);
+  await page.goto("http://localhost:3000/company");
+  body = await page.textContent("body");
+  log("署名すると契約書未確認は0に戻る", /契約書未確認[\s\S]{0,20}0/.test(body));
 
   console.log(process.exitCode ? "DASHBOARD CONTRACTS SMOKE TEST HAD FAILURES" : "DASHBOARD CONTRACTS SMOKE TEST PASSED");
 } catch (err) {

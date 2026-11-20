@@ -17,6 +17,24 @@ export async function listPendingContractStaff(companyId: string) {
     .map((s) => ({ userId: s.userId, name: s.name }));
 }
 
+// 契約書を送ったが、本人がまだ署名（同意）していないスタッフ（署名待ち）。
+// 署名するまでスタッフはアプリを使えない（契約書の画面以外では閉じられない案内が出る）ので、ダッシュボードで気づけるようにする
+export async function listAwaitingConsentStaff(companyId: string) {
+  const contracts = await prisma.staffContract.findMany({
+    where: { status: "PENDING_CONSENT", template: { companyId }, staff: { isProxy: false } },
+    include: { staff: { select: { id: true, name: true } }, template: { select: { title: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  const seen = new Set<string>();
+  const rows: { userId: string; name: string; contractTitle: string }[] = [];
+  for (const c of contracts) {
+    if (seen.has(c.staffUserId)) continue;
+    seen.add(c.staffUserId);
+    rows.push({ userId: c.staffUserId, name: c.staff.name, contractTitle: c.template.title });
+  }
+  return rows;
+}
+
 // 契約満了間近: 終了していない契約のうち、契約終了日が「今日〜10日後」の
 // 範囲に入っているもの（=まだ間に合ううちに気づけるようにするアラート）。
 // 終了日を過ぎたものは対象から外れる（満了したらこの一覧からは消える —
@@ -67,6 +85,7 @@ export async function loadDashboardData(companyId: string) {
     heldShifts,
     missingDocumentStaff,
     transferFeeReviews,
+    awaitingConsentStaff,
   ] = await Promise.all([
       // 日付が過ぎた募集はもう応募のしようがないので、埋まらないまま残って
       // いても欠員件数・やることリストからは対象外にする（過去日は消えて
@@ -101,6 +120,8 @@ export async function loadDashboardData(companyId: string) {
         include: { shift: { include: { staff: true, companyRelationship: { include: { clientCompany: true } } } } },
         orderBy: { createdAt: "asc" },
       }),
+      // 契約書を送ったが、本人がまだ署名していないスタッフ
+      listAwaitingConsentStaff(companyId),
     ]);
 
   // 希望日が複数（datesは配列）あり得るため、1件でも今日以降の希望日が
@@ -138,6 +159,7 @@ export async function loadDashboardData(companyId: string) {
     heldShifts,
     missingDocumentStaff,
     transferFeeReviews,
+    awaitingConsentStaff,
   };
 }
 
@@ -166,6 +188,7 @@ export async function scopeDashboardDataToTeams(data: DashboardData, teamIds: st
     heldShifts: data.heldShifts.filter((s) => inTeam(s.teamId) || members.has(s.staffUserId)),
     transferFeeReviews: data.transferFeeReviews.filter((c) => inTeam(c.shift.teamId) || members.has(c.shift.staffUserId)),
     missingDocumentStaff: data.missingDocumentStaff.filter((s) => members.has(s.userId)),
+    awaitingConsentStaff: data.awaitingConsentStaff.filter((s) => members.has(s.userId)),
   };
 }
 
@@ -196,13 +219,16 @@ export function computeKpis(
     // 未確定シフトのカードの数（出勤希望はスタッフ×備考、休み希望はスタッフごと）
     unconfirmedShiftCount: new Set(data.shiftRequests.filter(isUnconfirmedRequest).map(requestGroupKey)).size,
     pendingReportCount: data.pendingReports.length,
-    pendingContractCount: data.pendingContractStaff.length,
+    // 未送付と署名待ち（どちらも「契約書未確認」のカードに出す）
+    pendingContractCount: data.pendingContractStaff.length + data.awaitingConsentStaff.length,
     expiringContractCount: data.expiringContractStaff.length,
     duePaidLeaveGrantCount: data.duePaidLeaveGrants.length,
     // 「契約書未確認」のカードに合算するため、契約書の同意待ちと重なるスタッフは数えない
     // （同じ人を2回数えないように）
     missingDocumentCount: data.missingDocumentStaff.filter(
-      (s) => !data.pendingContractStaff.some((p) => p.userId === s.userId),
+      (s) =>
+        !data.pendingContractStaff.some((p) => p.userId === s.userId) &&
+        !data.awaitingConsentStaff.some((p) => p.userId === s.userId),
     ).length,
     promoItemCount,
     pendingShipmentCount,
@@ -370,7 +396,7 @@ function addDaysToDateStr(dateStr: string, days: number) {
 }
 
 export function computeAutoTodoItems(data: DashboardData, pendingShipments: PendingShipment[]): AutoTodoItem[] {
-  const { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff, duePaidLeaveGrants } =
+  const { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, awaitingConsentStaff, expiringContractStaff, duePaidLeaveGrants } =
     data;
   const items: AutoTodoItem[] = [];
 
@@ -468,6 +494,16 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
       id: `contract-${staff.userId}`,
       kind: "契約書",
       text: `${staff.name}さんの契約書が未送付です`,
+      actionLabel: "確認する",
+      actionHref: "/company?open=contracts",
+    });
+  }
+
+  for (const staff of awaitingConsentStaff) {
+    items.push({
+      id: `consent-${staff.userId}`,
+      kind: "契約書",
+      text: `${staff.name}さんの契約書が署名待ちです`,
       actionLabel: "確認する",
       actionHref: "/company?open=contracts",
     });
