@@ -112,6 +112,13 @@ try {
     log(`カレンダーのオーダータブに依頼主のオーダーと出る（${url.includes("rel=") ? "依頼主で絞り込み中" : "絞り込みなし"}）`, (await name.count()) > 0 && (await name.innerText()).includes(`${clientName}のオーダー`));
   }
 
+  // --- 配属されていないスタッフには、代わりに出したオーダーは出ない ---
+  await staff.goto("http://localhost:3000/staff/recruitments");
+  await staff.waitForTimeout(1500);
+  log("その依頼主に配属されていないスタッフには、代わりに出したオーダーは出ない", (await staff.locator(`[data-testid="rec-day-${recDate}"]`).getAttribute("data-count")) === null);
+  // 配属されると出る
+  psql(`insert into "StaffPlacement" (id, "staffUserId", "companyRelationshipId", active, "createdAt") values (gen_random_uuid()::text, '${staffId}', '${relId}', true, now()) on conflict do nothing;`);
+
   // --- スタッフ：一覧に「依頼主（派遣会社）」と出て、応募するとその依頼主の現場のシフトになる ---
   await staff.goto("http://localhost:3000/staff/recruitments");
   await staff.waitForTimeout(1200);
