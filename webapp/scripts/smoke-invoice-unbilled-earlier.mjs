@@ -70,9 +70,15 @@ try {
   await banner.waitFor({ timeout: 30000 });
   const lineCount = () => psql(`select count(*) from "InvoiceLine" l join "Invoice" i on i.id=l."invoiceId" where i."companyRelationshipId"='${relId}' and i."periodLabel"='${thisMonth}' and l."shiftId" is not null;`);
   log("前の月に請求していない分の案内が出る（勝手には入らない）", (await banner.innerText()).includes("1件") && lineCount() === "1");
+  log("案内には日付を出さない（確認するで見られる）", !(await banner.innerText()).includes(`${Number(lastMonthDate.slice(5, 7))}/${Number(lastMonthDate.slice(8, 10))}`));
   // 「確認する」で一覧（全部✅）が出て、✅のものだけ入れる
   await banner.getByRole("button", { name: "確認する" }).click();
   log("「確認する」で一覧が出て、最初から✅が付いている", (await banner.getByTestId("unbilled-earlier-check").first().isChecked()));
+  // 行（名前のあたり）を押しても✅が付け外しできる
+  await banner.getByTestId("unbilled-earlier-row").first().click({ position: { x: 150, y: 10 } });
+  log("行を押すと✅が外れる", !(await banner.getByTestId("unbilled-earlier-check").first().isChecked()));
+  await banner.getByTestId("unbilled-earlier-row").first().click({ position: { x: 150, y: 10 } });
+  log("もう一度押すと✅が付く", await banner.getByTestId("unbilled-earlier-check").first().isChecked());
   await banner.getByRole("button", { name: /件をこの請求書に入れる/ }).click();
   await banner.waitFor({ state: "detached", timeout: 15000 });
   log("✅のものが明細に入る", lineCount() === "2" && (await page.locator("body").innerText()).includes(lastMonthDate));

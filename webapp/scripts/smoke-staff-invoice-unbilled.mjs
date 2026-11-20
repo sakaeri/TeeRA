@@ -113,7 +113,9 @@ try {
   // 前の月の分の✅を外して、この請求書には入れない（未請求のまま残る）
   const checks = editor.getByTestId("staff-invoice-line-check");
   log("勤務の行には最初から全部✅が付いている", (await checks.count()) === 3 && (await checks.first().isChecked()));
-  await checks.first().uncheck();
+  // 行（日付・業務のあたり）を押しても✅が外れる
+  await editor.getByTestId("staff-invoice-line-row").first().click({ position: { x: 120, y: 10 } });
+  log("勤務の行を押すと✅が外れる", !(await checks.first().isChecked()));
   staff.on("dialog", (d) => d.accept());
   await editor.getByRole("button", { name: /提出/ }).last().click();
   await staff.getByText("請求書を提出しました").waitFor();
