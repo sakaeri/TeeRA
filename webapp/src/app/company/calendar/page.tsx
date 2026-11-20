@@ -79,6 +79,14 @@ export default async function CompanyCalendarPage({
   const staffFilterId = requestedStaffId && staff.some((s) => s.userId === requestedStaffId) ? requestedStaffId : undefined;
   const byStaff = <T extends { staffUserId: string | null }>(rows: T[]) =>
     staffFilterId ? rows.filter((r) => r.staffUserId === staffFilterId) : rows;
+  // シフト希望（出勤・休み）はチームで絞り込んでいる時はそのチームのスタッフの分だけ。
+  // チームのマネージャー・リーダーには、もともと見られるスタッフ（自分のチームのスタッフ）の分だけを出す
+  const requestStaffIds: Set<string> | null = teamId
+    ? new Set(teams.find((t) => t.id === teamId)?.memberships.map((m) => m.userId) ?? [])
+    : restrictToTeamIds
+      ? new Set(staff.map((s) => s.userId))
+      : null;
+  const visibleShiftRequests = byStaff(shiftRequests).filter((r) => !requestStaffIds || requestStaffIds.has(r.staffUserId));
 
   // 互いに関係ない読み込みは同時に行う（データベースへの往復を減らして表示を速くする）
   const [affordable, clients, agencies, assignableAgencyStaff, placementRates] = await Promise.all([
@@ -186,7 +194,7 @@ export default async function CompanyCalendarPage({
             clientIds: t.clientLinks.map((l) => l.companyRelationshipId),
             staffIds: t.memberships.map((m) => m.userId),
           }))}
-        shiftRequests={byStaff(shiftRequests).map((r) => ({
+        shiftRequests={visibleShiftRequests.map((r) => ({
           id: r.id,
           staffUserId: r.staffUserId,
           staffName: r.staff.name,
