@@ -177,6 +177,34 @@ try {
   log("ポップアップの✕は見えている", await staff.getByTestId("today-report-popup").getByRole("button", { name: "✕" }).isVisible());
   log("ポップアップで「内容が違う」を押した後も勤務先を選び直せる", (await popupWorkplace.count()) > 0 && (await popupWorkplace.locator("option").allInnerTexts()).includes(clientName));
 
+  // スタッフが「これで合っています」で確定すると、承認者はスタッフになり、経緯にもそう出る
+  const adminId = psql(`select id from "User" where email='${adminEmail.toLowerCase()}';`);
+  const confirmShift = psql(
+    `insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", date, "startTime", "endTime", "taskName", status, "createdVia", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', '${staffId}', 'CLIENT', '${relId}', date_trunc('month', (now() at time zone 'Asia/Tokyo'))::date + 4, '08:00', '17:00', 'キャディ', 'CONFIRMED', 'ASSIGN', now()) returning id;`,
+  );
+  const confirmReport = psql(
+    `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "clockIn", "clockOut", "breakMinutes", "computedMinutes", "submittedAt", "approvalStatus", "correctedByUserId", "correctedAt", "correctionSummary", "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${confirmShift}', '${staffId}', 'WORKED', now() - interval '9 hours', now() - interval '1 hour', 60, 420, now() - interval '2 hours', 'NEEDS_CONFIRMATION', '${adminId}', now() - interval '1 hour', '時間', now(), now()) returning id;`,
+  );
+  await staff.setViewportSize({ width: 1280, height: 900 });
+  await staff.goto("http://localhost:3000/staff/timecard");
+  const confirmCard = staff.locator("li").filter({ has: staff.getByTestId("corrected-report") }).filter({ hasText: "キャディ" }).first();
+  await confirmCard.waitFor({ timeout: 20000 });
+  await confirmCard.getByRole("button", { name: "これで合っています" }).click();
+  await staff.waitForTimeout(1500);
+  log("スタッフが確認して確定すると、承認者はスタッフになる", psql(`select ("approverUserId"='${staffId}')::text||'|'||"approvalStatus" from "WorkReport" where id='${confirmReport}';`) === "true|APPROVED");
+  await admin.setViewportSize({ width: 1280, height: 900 });
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.click("text=依頼主一覧");
+  await admin.getByText(clientName).first().click();
+  const confirmDay = psql(`select to_char(date, 'MM-DD') from "Shift" where id='${confirmShift}';`);
+  await admin.locator("button", { hasText: confirmDay }).filter({ hasText: "詳細承認スタッフ" }).first().click();
+  await dialog.waitFor({ timeout: 15000 });
+  await admin.waitForTimeout(800);
+  const confirmText = await dialog.innerText();
+  log("経緯に「スタッフが確認（これで合っています）」とスタッフの名前が出る", /スタッフが確認（これで合っています）[^\n]*詳細承認スタッフ/.test(confirmText.replace(/\n/g, " ")) || (confirmText.includes("スタッフが確認（これで合っています）") && confirmText.includes("時間を修正")));
+
   console.log(process.exitCode ? "CLIENT DETAIL APPROVE SMOKE TEST HAD FAILURES" : "CLIENT DETAIL APPROVE SMOKE TEST PASSED");
 } catch (err) {
   console.error("CLIENT DETAIL APPROVE SMOKE TEST FAILED", err);
