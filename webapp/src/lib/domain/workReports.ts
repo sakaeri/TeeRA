@@ -598,6 +598,8 @@ export async function correctAndReturnWorkReport(params: {
   breakMinutes: number;
   // 勤務先も変える時（新しい勤務先＝nullなら社内、変更前の勤務先名）
   workplaceChange?: { shiftId: string; companyRelationshipId: string | null; fromName: string };
+  // 業務内容も直す時（省略すれば変えない）
+  taskName?: string | null;
 }) {
   const rawMinutes = Math.round((params.clockOut.getTime() - params.clockIn.getTime()) / 60000);
   const computedMinutes = Math.max(rawMinutes - params.breakMinutes, 0);
@@ -614,6 +616,7 @@ export async function correctAndReturnWorkReport(params: {
       correctedByUserId: params.correctedByUserId,
       correctedAt: new Date(),
       workplaceChangedFrom: params.workplaceChange ? params.workplaceChange.fromName : null,
+      ...(params.taskName !== undefined ? { taskName: params.taskName } : {}),
     },
   });
   if (result.count === 0) throw new Error("not_pending");

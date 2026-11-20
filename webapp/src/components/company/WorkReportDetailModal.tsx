@@ -192,7 +192,21 @@ export function WorkReportDetailModal({
               )}
             </div>
 
-            {detail.outcome === "ABSENT" || detail.outcome === "CANCELLED_BY_EMPLOYER" ? null : (
+            {/* 操作の結果は上に出す（下に出すと、直す欄の下に埋もれて見えない） */}
+            {doneMessage ? (
+              <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900" data-testid="report-action-done">
+                {doneMessage}
+              </p>
+            ) : null}
+
+            {revokeMessage ? (
+              <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900" data-testid="revoke-done">
+                {revokeMessage}
+              </p>
+            ) : null}
+
+            {/* 直している間は、入力欄と同じ内容の表示と経緯を隠して（直す理由になるスタッフのコメントは残す）縦に伸びすぎないようにする */}
+            {mode === "correct" || detail.outcome === "ABSENT" || detail.outcome === "CANCELLED_BY_EMPLOYER" ? null : (
               <dl className="grid grid-cols-[80px_1fr] gap-y-1.5 rounded-xl bg-background px-3 py-2.5 text-xs">
                 <dt className="text-muted">出勤〜退勤</dt>
                 <dd>{detail.clockIn || detail.clockOut ? `${detail.clockIn ?? "--:--"}〜${detail.clockOut ?? "--:--"}` : "打刻なし"}</dd>
@@ -218,7 +232,7 @@ export function WorkReportDetailModal({
               </div>
             ) : null}
 
-            {detail.timeline.length > 0 ? (
+            {detail.timeline.length > 0 && mode !== "correct" ? (
               <div>
                 <p className="mb-1 text-xs text-muted">経緯</p>
                 <ul className="flex flex-col gap-2">
@@ -240,12 +254,6 @@ export function WorkReportDetailModal({
               </div>
             ) : null}
 
-            {doneMessage ? (
-              <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900" data-testid="report-action-done">
-                {doneMessage}
-              </p>
-            ) : null}
-
             {/* 承認待ち：ここから承認・差し戻し・時間の修正ができる */}
             {detail.approvalStatus === "PENDING" && detail.workReportId ? (
               <div className="flex flex-col gap-2" data-testid="report-approve-actions">
@@ -257,6 +265,7 @@ export function WorkReportDetailModal({
                       initialClockIn={detail.clockIn}
                       initialClockOut={detail.clockOut}
                       initialBreakMinutes={detail.breakMinutes}
+                      initialTaskName={detail.taskName}
                       onDone={() => afterChange("直した内容をスタッフに確認してもらいます。")}
                       workplaceOptions={detail.workplaceOptions}
                       currentRelationshipId={detail.companyRelationshipId}
@@ -329,12 +338,6 @@ export function WorkReportDetailModal({
                   </>
                 )}
               </div>
-            ) : null}
-
-            {revokeMessage ? (
-              <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900" data-testid="revoke-done">
-                {revokeMessage}
-              </p>
             ) : null}
 
             {/* 承認した後に間違いに気づいた時：報告を消さずに承認前に戻して、直して承認し直す */}

@@ -108,6 +108,8 @@ export async function correctWorkReportAction(input: {
   breakMinutes: number;
   // 勤務先も変える時（""＝社内）。省略すれば変えない
   companyRelationshipId?: string;
+  // 業務内容も直す時。省略すれば変えない
+  taskName?: string;
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   try {
@@ -146,6 +148,7 @@ export async function correctWorkReportAction(input: {
       clockOut: new Date(`${day}T${input.clockOut}:00.000+09:00`),
       breakMinutes: input.breakMinutes,
       workplaceChange,
+      taskName: input.taskName === undefined ? undefined : input.taskName.trim() || null,
     });
     revalidatePath("/company/settings");
     revalidatePath("/company");
@@ -175,4 +178,23 @@ export async function approveWorkReportsAction(workReportIds: string[]) {
   revalidatePath("/company/settings");
   revalidatePath("/company");
   return { status: "ok" as const, approved };
+}
+
+// 「時間・勤務先を直す」で選べる業務内容：シフトの会社の単価に登録されている業務内容を勤務先ごとに
+// （キーはcompanyRelationshipId、社内は ""）。取引先の項目名に合わせるため単価の項目だけを出す。
+export async function listCorrectionTaskNamesAction(workReportId: string): Promise<Record<string, string[]>> {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const report = await assertCanApprove(workReportId, membership.companyId, null);
+  const rates = await prisma.companyPlacementRate.findMany({
+    where: { companyId: report.shift.companyId },
+    select: { companyRelationshipId: true, taskName: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const map: Record<string, string[]> = {};
+  for (const r of rates) {
+    const key = r.companyRelationshipId ?? "";
+    map[key] = map[key] ?? [];
+    if (!map[key].includes(r.taskName)) map[key].push(r.taskName);
+  }
+  return map;
 }
