@@ -72,6 +72,7 @@ try {
   await admin.waitForTimeout(800);
   const relId = psql(`select id from "CompanyRelationship" where "proxyName"='${clientName}';`);
   psql(`update "CompanyRelationship" set "reportApprovalTiming"='MONTHLY' where id='${relId}';`);
+  const commentAfter = () => psql(`update "WorkReport" set comment='ナイター延長で30分残業' where id='${reportIds[2]}';`);
   for (const name of ["キャディ", "研修"]) psql(`insert into "CompanyPlacementRate" (id, "companyId", "companyRelationshipId", "taskName") values (gen_random_uuid()::text, '${companyId}', '${relId}', '${name}');`);
 
   // 今月の1〜3日に承認待ちの業務報告を3件
@@ -84,11 +85,12 @@ try {
     reportIds.push(
       psql(
         `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "clockIn", "clockOut", "breakMinutes", "computedMinutes", "submittedAt", "approvalStatus", "createdAt", "updatedAt") ` +
-          `values (gen_random_uuid()::text, '${shiftId}', '${staffId}', 'WORKED', now() - interval '9 hours', now() - interval '1 hour', 60, 420, now(), 'PENDING', now(), now()) returning id;`,
+          `values (gen_random_uuid()::text, '${shiftId}', '${staffId}', 'WORKED', (date_trunc('month', (now() at time zone 'Asia/Tokyo'))::date + ${i} + time '08:30') at time zone 'Asia/Tokyo', (date_trunc('month', (now() at time zone 'Asia/Tokyo'))::date + ${i} + time '16:30') at time zone 'Asia/Tokyo', 60, 420, now(), 'PENDING', now(), now()) returning id;`,
       ),
     );
   }
 
+  commentAfter();
   await admin.goto("http://localhost:3000/company/roster");
   await admin.click("text=依頼主一覧");
   await admin.getByText(clientName).first().click();
@@ -115,6 +117,9 @@ try {
   await bulkOpen.click();
   const bulk = admin.getByRole("dialog", { name: "まとめて承認" });
   await bulk.waitFor();
+  const bulkText = await bulk.innerText();
+  log("まとめて承認の一覧は出勤〜退勤の時刻と実働を出す", bulkText.includes("08:30〜16:30") && bulkText.includes("実働 7時間00分"));
+  log("コメント（備考）がある報告はコメントが出る", (await bulk.getByTestId("bulk-approve-comment").innerText()).includes("ナイター延長"));
   log("まとめて承認の一覧に未承認の2件が✅付きで出る", (await bulk.getByTestId("bulk-approve-list").locator('input[type="checkbox"]:checked').count()) === 2);
   await bulk.getByTestId("bulk-approve-list").locator('input[type="checkbox"]').first().uncheck();
   await bulk.getByRole("button", { name: "まとめて承認（1件）" }).click();
@@ -141,6 +146,23 @@ try {
   await dialog.getByRole("button", { name: "保存してスタッフに確認してもらう" }).click();
   await dialog.getByTestId("report-action-done").waitFor({ timeout: 15000 });
   log("業務内容を直すと保存され、スタッフの確認待ちになる", psql(`select "taskName"||'|'||"approvalStatus" from "WorkReport" where id='${remaining}';`) === "研修|NEEDS_CONFIRMATION");
+
+  // スタッフ側：直した後の内容（会社・勤務先・業務内容・時間）がそのまま出る
+  await staff.goto("http://localhost:3000/staff/timecard");
+  const corrected = staff.getByTestId("corrected-report").first();
+  await corrected.waitFor({ timeout: 20000 });
+  const correctedText = await corrected.innerText();
+  log(`スタッフの確認欄に直した後の内容が出る（${correctedText.replace(/\n/g, " ")}）`, correctedText.includes(companyName) && correctedText.includes(clientName) && correctedText.includes("研修") && correctedText.includes("〜"));
+
+  // カレンダーのポップアップで「内容が違う」→ 自分で直す時に勤務先も選び直せる
+  await staff.goto("http://localhost:3000/staff");
+  const popupCard = staff.locator("li").filter({ has: staff.getByTestId("corrected-report") }).first();
+  await popupCard.waitFor({ timeout: 20000 });
+  await popupCard.getByRole("button", { name: "内容が違う" }).click();
+  await staff.waitForTimeout(1500);
+  const popupWorkplace = staff.getByTestId("report-workplace").first();
+  await popupWorkplace.waitFor({ timeout: 15000 }).catch(() => {});
+  log("ポップアップで「内容が違う」を押した後も勤務先を選び直せる", (await popupWorkplace.count()) > 0 && (await popupWorkplace.locator("option").allInnerTexts()).includes(clientName));
 
   console.log(process.exitCode ? "CLIENT DETAIL APPROVE SMOKE TEST HAD FAILURES" : "CLIENT DETAIL APPROVE SMOKE TEST PASSED");
 } catch (err) {

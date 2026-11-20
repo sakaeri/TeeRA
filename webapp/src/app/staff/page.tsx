@@ -1,7 +1,7 @@
 import { requireCompanyStaffRole, listMyMemberships } from "@/lib/auth/session";
 import { listStaffShiftsForMonth, listOwnPendingShiftRequests } from "@/lib/domain/shifts";
 import { listOwnShiftsNeedingReport } from "@/lib/domain/workReports";
-import { listTaskNamesByWorkplace } from "@/lib/domain/contracts";
+import { listTaskNamesByWorkplace, listStaffWorkplacesByCompany } from "@/lib/domain/contracts";
 import { listAllStaffNotices } from "@/lib/domain/notices";
 import { todayJst, todayJstParts } from "@/lib/date";
 import { StaffCalendarView } from "@/components/staff/StaffCalendarView";
@@ -10,6 +10,7 @@ import { RequiredDocumentsBanner } from "@/components/staff/RequiredDocumentsBan
 import { listMyMissingDocuments } from "@/lib/domain/requiredDocuments";
 import { TodayShiftPopup } from "@/components/staff/TodayShiftPopup";
 import { isDone } from "@/lib/staffShiftStatus";
+import { isMonthlyApproval } from "@/lib/reportApprovalTiming";
 import { reportDisplay } from "@/lib/workReportDisplay";
 
 function formatJstTime(date: Date) {
@@ -34,13 +35,15 @@ export default async function StaffHomePage({
   const myMemberships = await listMyMemberships(userId);
   const companyIds = myMemberships.map((m) => m.companyId);
 
-  const [shifts, pendingRequests, notices, shiftsNeedingReport, taskNamesByWorkplace, missingDocuments] = await Promise.all([
+  const [shifts, pendingRequests, notices, shiftsNeedingReport, taskNamesByWorkplace, missingDocuments, workplacesByCompany] = await Promise.all([
     listStaffShiftsForMonth({ staffUserId: userId, companyIds, year, month }),
     listOwnPendingShiftRequests({ staffUserId: userId, companyIds }),
     listAllStaffNotices(userId, { unreadOnly: true }),
     listOwnShiftsNeedingReport(userId, companyIds),
     listTaskNamesByWorkplace(companyIds, userId),
     listMyMissingDocuments(userId),
+    // 業務報告のポップアップでも勤務先を選び直せるように（「内容が違う」から直す時など）
+    listStaffWorkplacesByCompany(userId, companyIds),
   ]);
 
   // カレンダー画面の「本日の出退勤」カード用 — 今日の分でまだ対応が
@@ -58,6 +61,10 @@ export default async function StaffHomePage({
       companyId: s.companyId,
       companyName: s.company.name,
       workplaceName: s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? null,
+      // 業務報告のページと同じ項目をそろえる（無いと勤務先の選び直し・勤務先ごとの業務内容が出ない）
+      companyRelationshipId: s.companyRelationshipId,
+      workplaceChangedFrom: s.workReport?.workplaceChangedFrom ?? null,
+      monthlyApproval: isMonthlyApproval(s.companyRelationship),
       startTime: s.startTime,
       endTime: s.endTime,
       taskName: s.workReport?.taskName ?? s.taskName,
@@ -107,6 +114,7 @@ export default async function StaffHomePage({
         shifts={[...todayShifts, ...pastUnsubmitted.slice(0, PAST_IN_POPUP)]}
         moreUnsubmittedCount={Math.max(pastUnsubmitted.length - PAST_IN_POPUP, 0)}
         taskNamesByWorkplace={taskNamesByWorkplace}
+        workplacesByCompany={workplacesByCompany}
       />
       <StaffCalendarView
         year={year}

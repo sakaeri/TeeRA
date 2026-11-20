@@ -16,11 +16,14 @@ export function TodayShiftPopup({
   shifts,
   moreUnsubmittedCount = 0,
   taskNamesByWorkplace,
+  workplacesByCompany = {},
 }: {
   shifts: ShiftRow[];
   moreUnsubmittedCount?: number;
   // 勤務先ごとの業務内容（キーはworkplaceTaskKey）
   taskNamesByWorkplace: Record<string, string[]>;
+  // 勤務先として選べる依頼主（会社ごと）
+  workplacesByCompany?: Record<string, { companyRelationshipId: string; name: string }[]>;
 }) {
   const [open, setOpen] = useState(shifts.length > 0);
   if (!open || shifts.length === 0) return null;
@@ -41,7 +44,7 @@ export function TodayShiftPopup({
         </div>
         <ul className="flex flex-col gap-3">
           {shifts.map((s) => (
-            <ShiftCard key={s.id} shift={s} taskNamesByWorkplace={taskNamesByWorkplace} />
+            <ShiftCard key={s.id} shift={s} taskNamesByWorkplace={taskNamesByWorkplace} workplaces={workplacesByCompany[s.companyId] ?? []} />
           ))}
         </ul>
         {moreUnsubmittedCount > 0 ? (
