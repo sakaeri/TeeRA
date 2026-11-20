@@ -119,6 +119,29 @@ try {
   await page.waitForTimeout(1500);
   const lastMonthLines = psql(`select count(*) from "InvoiceLine" l join "Invoice" i on i.id=l."invoiceId" where i."companyRelationshipId"='${relId}' and i."periodLabel"='${lastMonth}' and l."shiftId"='${earlierShift}';`);
   log("前の月の請求書には、今月に入れたシフトは載らない", lastMonthLines === "0");
+
+  // 「請求済みにする」：紙で請求した等、この請求書に入れずに案内から消す
+  const billedDate = `${lastMonth}-20`;
+  const billedShift = addShift(billedDate);
+  await page.goto(`http://localhost:3000/company/invoices?month=${thisMonth}&client=${relId}`);
+  const banner2 = page.getByTestId("unbilled-earlier");
+  await banner2.waitFor({ timeout: 30000 });
+  await banner2.getByRole("button", { name: "確認する" }).click();
+  await banner2.getByTestId("mark-billed").click();
+  await page.getByRole("button", { name: "請求済みにする" }).last().click();
+  await page.getByTestId("manually-billed-toggle").waitFor({ timeout: 15000 });
+  log("請求済みにすると印が付き、この請求書には入らない", psql(`select ("clientBilledManuallyAt" is not null)::text from "Shift" where id='${billedShift}';`) === "true" && lineCount() === "2");
+  log("請求済みにすると、未請求の案内から消える", !(await page.getByTestId("unbilled-earlier").innerText()).includes("請求していない分が"));
+  // 前の月の請求書（下書き）を開いても載らない
+  await page.goto(`http://localhost:3000/company/invoices?month=${lastMonth}&client=${relId}`);
+  await page.waitForTimeout(1500);
+  log("請求済みにした分は、前の月の請求書にも載らない", psql(`select count(*) from "InvoiceLine" l join "Invoice" i on i.id=l."invoiceId" where l."shiftId"='${billedShift}';`) === "0");
+  // 間違えた時は「請求済みにした分」から未請求に戻せる
+  await page.goto(`http://localhost:3000/company/invoices?month=${thisMonth}&client=${relId}`);
+  await page.getByTestId("manually-billed-toggle").click();
+  await page.getByTestId("manually-billed-list").getByRole("button", { name: "未請求に戻す" }).click();
+  await page.getByText("前の月以前に請求していない分が1件あります").waitFor({ timeout: 15000 });
+  log("未請求に戻すと、また案内に出る", psql(`select ("clientBilledManuallyAt" is null)::text from "Shift" where id='${billedShift}';`) === "true");
 } catch (e) {
   console.error(e);
   process.exitCode = 1;

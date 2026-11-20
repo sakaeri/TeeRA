@@ -97,7 +97,7 @@ export async function unbilledEarlierShifts(invoiceId: string) {
   return shifts
     // 前の月以前の分として入れた後に×で消したもの（以前の作りでは「入れた」と「消した」の両方に残っていた）は、未請求に戻して出す
     .filter((s) => {
-      if (issued.has(s.id) || moved.has(s.id) || !isBillableShift(s)) return false;
+      if (issued.has(s.id) || moved.has(s.id) || s.clientBilledManuallyAt || !isBillableShift(s)) return false;
       if (included.has(s.id)) return manuallyExcluded.has(s.id);
       return !manuallyExcluded.has(s.id);
     })
@@ -130,6 +130,47 @@ export async function includeEarlierShifts(invoiceId: string, shiftIds?: string[
   return earlier.length;
 }
 
+// 前の月以前の未請求分を「請求済み」にする（紙で請求した等、TeeRAの請求書には入れない）
+export async function markEarlierShiftsBilled(invoiceId: string, shiftIds: string[]) {
+  const ids = new Set(shiftIds);
+  const targets = (await unbilledEarlierShifts(invoiceId)).filter((e) => ids.has(e.shiftId)).map((e) => e.shiftId);
+  if (targets.length === 0) return 0;
+  await prisma.shift.updateMany({ where: { id: { in: targets } }, data: { clientBilledManuallyAt: new Date() } });
+  return targets.length;
+}
+
+// 「請求済み」にした前の月以前の分（間違えた時に未請求に戻せるよう一覧に出す）
+export async function manuallyBilledEarlierShifts(invoiceId: string) {
+  const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
+  if (invoice.status !== "DRAFT") return [];
+  const { start } = await invoicePeriod(invoice.companyRelationshipId, invoice.periodLabel);
+  const shifts = await prisma.shift.findMany({
+    where: {
+      companyId: invoice.issuingCompanyId,
+      companyRelationshipId: invoice.companyRelationshipId,
+      clientBilledManuallyAt: { not: null },
+      date: { gte: new Date(start.getTime() - EARLIER_LOOKBACK_DAYS * 24 * 3600e3), lt: start },
+    },
+    include: { workReport: true, cancellation: true, staff: { select: { name: true } } },
+    orderBy: { date: "asc" },
+  });
+  return shifts.map((s) => ({
+    shiftId: s.id,
+    date: s.date.toISOString().slice(0, 10),
+    staffName: s.staff.name,
+    label: s.cancellation || s.status === "CANCELLED" || s.status === "ON_HOLD" ? "キャンセル料" : (s.workReport?.taskName ?? s.taskName ?? "勤務"),
+  }));
+}
+
+// 「請求済み」を取り消して未請求に戻す
+export async function unmarkShiftBilled(invoiceId: string, shiftId: string) {
+  const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
+  await prisma.shift.updateMany({
+    where: { id: shiftId, companyRelationshipId: invoice.companyRelationshipId, companyId: invoice.issuingCompanyId },
+    data: { clientBilledManuallyAt: null },
+  });
+}
+
 async function regenerateLines(invoiceId: string) {
   const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
   if (invoice.status !== "DRAFT") return { invoice, unresolved: [] as UnresolvedInvoiceShift[] };
@@ -139,6 +180,13 @@ async function regenerateLines(invoiceId: string) {
   // ほかの月の請求書に「前の月以前の分」として入れたシフトは、この請求書には載せない
   for (const id of await movedToOtherInvoiceShiftIds(invoice.companyRelationshipId, invoice.id)) excluded.add(id);
   const includedEarlier = (invoice.includedEarlierShiftIds as string[]) ?? [];
+  // TeeRAの請求書以外で請求済みにしたシフトは載せない
+  for (const r of await prisma.shift.findMany({
+    where: { companyRelationshipId: invoice.companyRelationshipId, clientBilledManuallyAt: { not: null } },
+    select: { id: true },
+  })) {
+    excluded.add(r.id);
+  }
 
   const [shifts, relationshipRates] = await Promise.all([
     prisma.shift.findMany({
