@@ -23,6 +23,7 @@ import {
   type AnnouncementAudience,
 } from "@/lib/domain/companyAnnouncements";
 import { getWorkReportDetail } from "@/lib/domain/workReports";
+import { listClients } from "@/lib/domain/relationships";
 import { prisma } from "@/lib/prisma";
 import {
   inviteStaff,
@@ -876,7 +877,14 @@ export async function getWorkReportDetailAction(shiftId: string) {
       ? canManageShifts(membership, shift.teamId)
       : isClientSiteShiftOf(shift, membership.companyId) && isCompanyScopeAdmin(membership);
   if (!allowed) throw new Error("forbidden");
-  return getWorkReportDetail(shiftId);
+  const detail = await getWorkReportDetail(shiftId);
+  // 未承認ならこの画面から承認・修正できるようにする（時間・勤務先を直すときの勤務先の選択肢も渡す）
+  const ownShift = detail.shiftCompanyId === membership.companyId;
+  const workplaceOptions =
+    detail.approvalStatus === "PENDING" && ownShift
+      ? (await listClients(membership.companyId)).map((c) => ({ id: c.id, name: c.clientCompany?.name ?? c.proxyName ?? "(名称未設定)" }))
+      : [];
+  return { ...detail, workplaceOptions, workplaceLocked: detail.fromOrder || !ownShift };
 }
 
 // 会社からスタッフへのお知らせ。本部はどの宛先にも出せる。チームのマネージャーは

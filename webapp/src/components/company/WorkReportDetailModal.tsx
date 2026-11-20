@@ -3,8 +3,15 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getWorkReportDetailAction } from "@/app/company/actions";
-import { issuedDocumentsForReportAction, revokeWorkReportApprovalAction } from "@/app/company/workreports/actions";
-import type { WorkReportDetail } from "@/lib/domain/workReports";
+import {
+  approveWorkReportAction,
+  issuedDocumentsForReportAction,
+  rejectWorkReportAction,
+  revokeWorkReportApprovalAction,
+} from "@/app/company/workreports/actions";
+import { WorkReportCorrectionForm } from "@/components/company/WorkReportCorrectionForm";
+
+type WorkReportDetail = Awaited<ReturnType<typeof getWorkReportDetailAction>>;
 
 const OUTCOME_LABEL: Record<string, string> = {
   WORKED: "出勤",
@@ -30,7 +37,17 @@ function minutesLabel(minutes: number) {
 
 // スタッフ詳細の稼働履歴・カレンダーの日別詳細から開く業務報告の詳細。
 // 差し戻した後も理由や経緯を確認できるようにする。
-export function WorkReportDetailModal({ shiftId, onClose }: { shiftId: string; onClose: () => void }) {
+// 未承認なら、ここから承認・差し戻し・時間の修正もできる（「締め日にまとめて承認」の依頼主の分も先に承認できる）。
+export function WorkReportDetailModal({
+  shiftId,
+  onClose,
+  onChanged,
+}: {
+  shiftId: string;
+  onClose: () => void;
+  // 承認などで内容が変わった時（親の一覧を読み直す）
+  onChanged?: () => void;
+}) {
   const router = useRouter();
   const [detail, setDetail] = useState<WorkReportDetail | null>(null);
   const [error, setError] = useState(false);
@@ -40,6 +57,46 @@ export function WorkReportDetailModal({ shiftId, onClose }: { shiftId: string; o
   const [revokeMessage, setRevokeMessage] = useState<string | null>(null);
   const [revokeError, setRevokeError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // 承認待ちの操作：choose＝ボタン3つ / reject＝差し戻しの理由 / correct＝時間・勤務先を直す
+  const [mode, setMode] = useState<"choose" | "reject" | "correct">("choose");
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [doneMessage, setDoneMessage] = useState<string | null>(null);
+
+  function afterChange(message: string) {
+    setDoneMessage(message);
+    setMode("choose");
+    setReloadKey((k) => k + 1);
+    onChanged?.();
+    router.refresh();
+  }
+  function approve() {
+    if (!detail?.workReportId) return;
+    const id = detail.workReportId;
+    setActionError(null);
+    startTransition(async () => {
+      const result = await approveWorkReportAction(id);
+      if (result.status === "error") {
+        setActionError(result.reason);
+        return;
+      }
+      afterChange("承認しました。");
+    });
+  }
+  function reject() {
+    if (!detail?.workReportId || !rejectionReason.trim()) return;
+    const id = detail.workReportId;
+    setActionError(null);
+    startTransition(async () => {
+      const result = await rejectWorkReportAction(id, rejectionReason.trim());
+      if (result.status === "error") {
+        setActionError(result.reason);
+        return;
+      }
+      setRejectionReason("");
+      afterChange("スタッフに戻しました。");
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -73,8 +130,10 @@ export function WorkReportDetailModal({ shiftId, onClose }: { shiftId: string; o
         return;
       }
       setRevokeDocs(null);
-      setRevokeMessage("承認前に戻しました。ホームの「業務報告未承認」から直して、承認し直してください。");
+      setRevokeMessage("承認前に戻しました。下のボタンから直して、承認し直してください。");
+      setDoneMessage(null);
       setReloadKey((k) => k + 1);
+      onChanged?.();
       router.refresh();
     });
   }
@@ -178,6 +237,97 @@ export function WorkReportDetailModal({ shiftId, onClose }: { shiftId: string; o
                     </li>
                   ))}
                 </ul>
+              </div>
+            ) : null}
+
+            {doneMessage ? (
+              <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900" data-testid="report-action-done">
+                {doneMessage}
+              </p>
+            ) : null}
+
+            {/* 承認待ち：ここから承認・差し戻し・時間の修正ができる */}
+            {detail.approvalStatus === "PENDING" && detail.workReportId ? (
+              <div className="flex flex-col gap-2" data-testid="report-approve-actions">
+                {actionError ? <p className="text-xs text-red-600">{actionError}</p> : null}
+                {mode === "correct" ? (
+                  <>
+                    <WorkReportCorrectionForm
+                      workReportId={detail.workReportId}
+                      initialClockIn={detail.clockIn}
+                      initialClockOut={detail.clockOut}
+                      initialBreakMinutes={detail.breakMinutes}
+                      onDone={() => afterChange("直した内容をスタッフに確認してもらいます。")}
+                      workplaceOptions={detail.workplaceOptions}
+                      currentRelationshipId={detail.companyRelationshipId}
+                      workplaceLocked={detail.workplaceLocked}
+                    />
+                    <button type="button" onClick={() => setMode("choose")} className="w-full py-1.5 text-xs text-muted underline">
+                      戻る
+                    </button>
+                  </>
+                ) : mode === "reject" ? (
+                  <>
+                    <label className="flex flex-col gap-0.5 text-xs">
+                      <span className="text-muted">直してほしい内容（スタッフに表示されます。スタッフが自分で直して再提出します）</span>
+                      <textarea
+                        value={rejectionReason}
+                        onChange={(e) => setRejectionReason(e.target.value)}
+                        placeholder="例：業務内容を具体的に記入してください"
+                        className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+                        rows={3}
+                      />
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setMode("choose")}
+                        className="flex-1 rounded-lg border border-border px-4 py-2 text-sm text-foreground/70"
+                      >
+                        戻る
+                      </button>
+                      <button
+                        type="button"
+                        disabled={pending || !rejectionReason.trim()}
+                        onClick={reject}
+                        className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                      >
+                        スタッフに戻す
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={approve}
+                      className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                    >
+                      承認する
+                    </button>
+                    <div className={`grid gap-2 ${detail.outcome === "WORKED" ? "grid-cols-2" : "grid-cols-1"}`}>
+                      {detail.outcome === "WORKED" ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => setMode("correct")}
+                          className="rounded-lg border border-primary px-2 py-2.5 text-xs font-semibold text-primary disabled:opacity-60"
+                        >
+                          時間・勤務先を直す
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => setMode("reject")}
+                        className="rounded-lg border border-border px-2 py-2.5 text-xs font-semibold text-foreground/70 disabled:opacity-60"
+                      >
+                        スタッフに直してもらう
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ) : null}
 

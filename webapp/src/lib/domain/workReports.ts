@@ -823,6 +823,10 @@ export async function getWorkReportDetail(shiftId: string) {
     workReportId: r?.id ?? null,
     date: shift.date.toISOString().slice(0, 10),
     staffName: shift.staff.name,
+    // 承認・修正をこの画面から行うときに使う
+    shiftCompanyId: shift.companyId,
+    companyRelationshipId: shift.companyRelationshipId,
+    fromOrder: Boolean(shift.publicRecruitmentId),
     workplaceLabel:
       shift.source === "INHOUSE"
         ? "自社"

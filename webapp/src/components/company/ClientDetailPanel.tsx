@@ -34,6 +34,7 @@ import {
   setClientCancelRuleAction,
   clearPlacementCancelRuleAction,
 } from "@/app/company/contracts/actions";
+import { approveWorkReportsAction } from "@/app/company/workreports/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
 import { CopyUrlField } from "@/components/CopyUrlField";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -97,6 +98,14 @@ type ClientMonthDetail = {
   relationshipNotes: RelationshipNote[];
   workedHours: number;
   unapprovedCount: number;
+  pendingReports: {
+    workReportId: string;
+    date: string;
+    staffName: string;
+    taskName: string | null;
+    computedMinutes: number;
+    outcome: string;
+  }[];
   invoiceTotal: number | null;
   clientCancelRule: CancelRule | null;
   placementRates: PlacementRate[];
@@ -312,6 +321,8 @@ export function ClientDetailPanel({
   const [approvalTiming, setApprovalTiming] = useState<"EACH" | "MONTHLY">("EACH");
   // タップした勤務の業務報告の詳細
   const [reportDetailShiftId, setReportDetailShiftId] = useState<string | null>(null);
+  // 「未承認数」から開く、その月の未承認をまとめて承認する画面
+  const [bulkApproveOpen, setBulkApproveOpen] = useState(false);
   // 請求書の締め日（""＝末日締め）
   const [closingDay, setClosingDay] = useState("");
 
@@ -669,10 +680,23 @@ export function ClientDetailPanel({
                     <p className="text-xs text-muted">稼働時間</p>
                     <StatNumber value={data.workedHours} unit="h" />
                   </div>
-                  <div className="rounded-lg border border-border px-2 py-3">
-                    <p className="text-xs text-muted">未承認数</p>
-                    <StatNumber value={data.unapprovedCount} unit="件" className="text-rose-600" />
-                  </div>
+                  {data.pendingReports.length > 0 ? (
+                    // 枠ごと押すと、その月の未承認をまとめて承認できる
+                    <button
+                      type="button"
+                      onClick={() => setBulkApproveOpen(true)}
+                      className="rounded-lg border border-border px-2 py-3 hover:border-primary"
+                      data-testid="bulk-approve-open"
+                    >
+                      <p className="text-xs font-semibold text-primary">未承認数 ›</p>
+                      <StatNumber value={data.unapprovedCount} unit="件" className="text-rose-600" />
+                    </button>
+                  ) : (
+                    <div className="rounded-lg border border-border px-2 py-3">
+                      <p className="text-xs text-muted">未承認数</p>
+                      <StatNumber value={data.unapprovedCount} unit="件" className="text-rose-600" />
+                    </div>
+                  )}
                   {kind === "client" ? (
                     // ほかの2つと同じ形（見出し＋数字）にそろえ、枠ごと押すと請求書を開く（見出しの「›」で押せることを示す）
                     <button
@@ -1137,7 +1161,17 @@ export function ClientDetailPanel({
         />
       ) : null}
       {reportDetailShiftId ? (
-        <WorkReportDetailModal shiftId={reportDetailShiftId} onClose={() => setReportDetailShiftId(null)} />
+        <WorkReportDetailModal shiftId={reportDetailShiftId} onClose={() => setReportDetailShiftId(null)} onChanged={() => void refresh()} />
+      ) : null}
+      {bulkApproveOpen && data ? (
+        <BulkApproveModal
+          reports={data.pendingReports}
+          onClose={() => setBulkApproveOpen(false)}
+          onDone={() => {
+            setBulkApproveOpen(false);
+            void refresh();
+          }}
+        />
       ) : null}
     </div>
   );
@@ -1819,6 +1853,99 @@ function CancelRuleModal({
           className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
           保存
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// 依頼主詳細の「未承認数」から開く：その月の承認待ちの業務報告を✅で選んでまとめて承認する
+// （「締め日にまとめて承認」の依頼主でも、締め日を待たずに承認できる）
+function BulkApproveModal({
+  reports,
+  onClose,
+  onDone,
+}: {
+  reports: ClientMonthDetail["pendingReports"];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(reports.map((r) => r.workReportId)));
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const allChecked = selected.size === reports.length;
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-label="まとめて承認"
+        className="flex max-h-[85vh] w-full max-w-md flex-col rounded-2xl bg-white p-5 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">まとめて承認</h3>
+          <button type="button" onClick={onClose} aria-label="閉じる" className="text-muted hover:text-primary">
+            ✕
+          </button>
+        </div>
+        <p className="mb-3 text-xs text-muted">承認待ちの業務報告です。外したいものは✅を外してください。</p>
+        <label className="mb-2 flex items-center gap-2 text-xs text-muted">
+          <input
+            type="checkbox"
+            checked={allChecked}
+            onChange={() => setSelected(allChecked ? new Set() : new Set(reports.map((r) => r.workReportId)))}
+          />
+          すべて選ぶ
+        </label>
+        <ul className="flex-1 divide-y divide-border overflow-y-auto rounded-xl border border-border" data-testid="bulk-approve-list">
+          {reports.map((r) => (
+            <li key={r.workReportId}>
+              <label className="flex items-center gap-3 px-3 py-2.5 text-sm">
+                <input type="checkbox" checked={selected.has(r.workReportId)} onChange={() => toggle(r.workReportId)} />
+                <span className="w-12 shrink-0 text-xs text-muted">{r.date.slice(5).replace("-", "/")}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{r.staffName}</span>
+                  {r.taskName ? <span className="block truncate text-xs text-muted">{r.taskName}</span> : null}
+                </span>
+                <span className="shrink-0 text-xs text-muted">
+                  {r.outcome === "WORKED"
+                    ? `${Math.floor(r.computedMinutes / 60)}:${String(r.computedMinutes % 60).padStart(2, "0")}`
+                    : r.outcome === "ABSENT"
+                      ? "欠勤"
+                      : "キャンセル"}
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+        {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
+        <button
+          type="button"
+          disabled={pending || selected.size === 0}
+          onClick={() =>
+            startTransition(async () => {
+              setError(null);
+              const result = await approveWorkReportsAction(Array.from(selected));
+              if (result.approved < selected.size) {
+                setError(`${selected.size - result.approved}件は承認できませんでした（既に処理済みなど）。閉じて画面を確認してください。`);
+                return;
+              }
+              onDone();
+            })
+          }
+          className="mt-3 w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        >
+          まとめて承認（{selected.size}件）
         </button>
       </div>
     </div>
