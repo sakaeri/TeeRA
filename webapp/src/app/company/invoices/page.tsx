@@ -3,7 +3,14 @@ import { closingDayLabel } from "@/lib/closingPeriod";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManageAny, isCompanyScopeAdmin, isLeaderOnly } from "@/lib/auth/permissions";
 import { listClients } from "@/lib/domain/relationships";
-import { invoicePeriod, getOrCreateInvoice, computeInvoiceTotals, listInvoicesForCompany, listBankAccounts } from "@/lib/domain/invoicing";
+import {
+  invoicePeriod,
+  getOrCreateInvoice,
+  computeInvoiceTotals,
+  listInvoicesForCompany,
+  listBankAccounts,
+  unbilledEarlierShifts,
+} from "@/lib/domain/invoicing";
 import { pdfQuotaRemaining } from "@/lib/domain/plans";
 import { prisma } from "@/lib/prisma";
 import { InvoiceEditor } from "@/components/company/InvoiceEditor";
@@ -85,6 +92,7 @@ export default async function InvoicesPage({
     unresolved: { shiftId: string; date: string; staffName: string; taskName: string | null }[];
     groupLinesByTask: boolean;
     attachWorkRecord: boolean;
+    unbilledEarlier: { shiftId: string; date: string }[];
   };
 
   let invoiceData: InvoiceData | null = null;
@@ -136,6 +144,8 @@ export default async function InvoicesPage({
       unresolved: invoice.unresolved,
       groupLinesByTask: invoice.groupLinesByTask,
       attachWorkRecord: invoice.attachWorkRecord,
+      // 前の月以前に請求していなかったシフト（「この請求書に入れる」で確認してから入れる）
+      unbilledEarlier: await unbilledEarlierShifts(invoice.id),
     };
   }
 

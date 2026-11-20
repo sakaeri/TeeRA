@@ -113,7 +113,7 @@ try {
   const editorText = await editor.innerText();
   log("承認済みの勤務2件が自動で入る（8時間・4.5時間）", editorText.includes("8時間 × 1,200円") && editorText.includes("4.5時間 × 1,200円"));
   log("未承認の業務報告があることを知らせる", editorText.includes("まだ会社が承認していない業務報告が1件"));
-  log("契約書の名前・住所と振込先が入っている", (await editor.locator("input").first().inputValue()) === "委託 太郎" && editorText.includes("テスト銀行"));
+  log("契約書の名前・住所と振込先が入っている", (await editor.locator("input:not([type=date]):not([type=checkbox])").first().inputValue()) === "委託 太郎" && editorText.includes("テスト銀行"));
   log("合計（9,600＋5,400＝15,000円）", (await staff.getByTestId("staff-invoice-total").innerText()) === "15,000円");
   await staff.getByRole("button", { name: "＋その他の項目を足す" }).click();
   const itemForm = staff.getByTestId("staff-invoice-item-form");

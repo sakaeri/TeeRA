@@ -47,12 +47,82 @@ export type UnresolvedInvoiceShift = { shiftId: string; date: string; staffName:
 // (source=CLIENT), with approved WORKED hours, not already locked into a
 // previously ISSUED invoice for the same 依頼主 (invoicedShiftIds only locks
 // at actual issuance, never at 確定 — chat29/30 bugfix).
+// ほかの請求書に「前の月以前の分」として入れたシフト（その月の請求書からは外す — 二重に載せないため）
+async function movedToOtherInvoiceShiftIds(companyRelationshipId: string, invoiceId: string) {
+  const rows = await prisma.invoice.findMany({
+    where: { companyRelationshipId, id: { not: invoiceId } },
+    select: { includedEarlierShiftIds: true },
+  });
+  const ids = new Set<string>();
+  for (const r of rows) for (const id of (r.includedEarlierShiftIds as string[]) ?? []) ids.add(id);
+  return ids;
+}
+
+const EARLIER_LOOKBACK_DAYS = 400;
+
+// 請求書に載る（＝承認済みの出勤、またはキャンセル料がかかった取り消し）シフトかどうか
+function isBillableShift(s: {
+  status: string;
+  cancellation: { feeAmount: number } | null;
+  workReport: { outcome: string | null; approvalStatus: string; computedMinutes: number } | null;
+}) {
+  if (s.cancellation || s.status === "CANCELLED" || s.status === "ON_HOLD") return (s.cancellation?.feeAmount ?? 0) > 0;
+  const r = s.workReport;
+  return Boolean(r && r.outcome === "WORKED" && r.approvalStatus === "APPROVED" && r.computedMinutes > 0);
+}
+
+// 前の月以前に請求していなかったシフト（発行済みの請求書にも、ほかの請求書の「前の月以前の分」にも入っていないもの）。
+// 勝手には入れず、請求書の画面で「この請求書に入れる」を押した時だけ入れる。
+export async function unbilledEarlierShifts(invoiceId: string) {
+  const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
+  if (invoice.status !== "DRAFT") return [];
+  const { start } = await invoicePeriod(invoice.companyRelationshipId, invoice.periodLabel);
+  const [issued, moved] = await Promise.all([
+    alreadyInvoicedShiftIds(invoice.companyRelationshipId, invoice.id),
+    movedToOtherInvoiceShiftIds(invoice.companyRelationshipId, invoice.id),
+  ]);
+  const included = new Set((invoice.includedEarlierShiftIds as string[]) ?? []);
+  const manuallyExcluded = new Set((invoice.excludedShiftIds as string[]) ?? []);
+  const shifts = await prisma.shift.findMany({
+    where: {
+      companyId: invoice.issuingCompanyId,
+      companyRelationshipId: invoice.companyRelationshipId,
+      source: "CLIENT",
+      date: { gte: new Date(start.getTime() - EARLIER_LOOKBACK_DAYS * 24 * 3600e3), lt: start },
+      status: { not: "SUPERSEDED" },
+    },
+    include: { workReport: true, cancellation: true },
+    orderBy: { date: "asc" },
+  });
+  return shifts
+    .filter((s) => !issued.has(s.id) && !moved.has(s.id) && !included.has(s.id) && !manuallyExcluded.has(s.id) && isBillableShift(s))
+    .map((s) => ({ shiftId: s.id, date: s.date.toISOString().slice(0, 10) }));
+}
+
+// 前の月以前に請求していなかったシフトを、この請求書に入れる
+export async function includeEarlierShifts(invoiceId: string) {
+  const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
+  if (invoice.status !== "DRAFT") throw new Error("not_draft");
+  const earlier = await unbilledEarlierShifts(invoiceId);
+  if (earlier.length === 0) return 0;
+  const current = (invoice.includedEarlierShiftIds as string[]) ?? [];
+  await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: { includedEarlierShiftIds: [...new Set([...current, ...earlier.map((e) => e.shiftId)])] },
+  });
+  await regenerateLines(invoiceId);
+  return earlier.length;
+}
+
 async function regenerateLines(invoiceId: string) {
   const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
   if (invoice.status !== "DRAFT") return { invoice, unresolved: [] as UnresolvedInvoiceShift[] };
 
   const { start, end } = await invoicePeriod(invoice.companyRelationshipId, invoice.periodLabel);
   const excluded = await alreadyInvoicedShiftIds(invoice.companyRelationshipId, invoice.id);
+  // ほかの月の請求書に「前の月以前の分」として入れたシフトは、この請求書には載せない
+  for (const id of await movedToOtherInvoiceShiftIds(invoice.companyRelationshipId, invoice.id)) excluded.add(id);
+  const includedEarlier = (invoice.includedEarlierShiftIds as string[]) ?? [];
 
   const [shifts, relationshipRates] = await Promise.all([
     prisma.shift.findMany({
@@ -60,7 +130,8 @@ async function regenerateLines(invoiceId: string) {
         companyId: invoice.issuingCompanyId,
         companyRelationshipId: invoice.companyRelationshipId,
         source: "CLIENT",
-        date: { gte: start, lt: end },
+        // 対象期間のシフトと、前の月以前の分として入れたシフト
+        OR: [{ date: { gte: start, lt: end } }, ...(includedEarlier.length > 0 ? [{ id: { in: includedEarlier } }] : [])],
         // 取り消されたシフトも、依頼主の取り消しでキャンセル料がかかった分は明細に載せる
         status: { not: "SUPERSEDED" },
       },
