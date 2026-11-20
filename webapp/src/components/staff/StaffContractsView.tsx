@@ -184,7 +184,9 @@ export function StaffContractsView({
   }
 
   const currentContracts = myContracts.filter((c) => c.status !== "ENDED");
-  const pastContracts = myContracts.filter((c) => c.status === "ENDED");
+  // 過去の契約は、署名（同意／署名済み書面のアップロード）まで済んだものだけ。
+  // 間違えて送って署名しないまま終わった契約書は出さない（残っていると揉めるため）
+  const pastContracts = myContracts.filter((c) => c.status === "ENDED" && (c.consentedAt || c.uploadedDocumentUrl));
 
   function uploadIdDocument(side: "front" | "back", url: string) {
     if (side === "front") setFrontUrl(url);

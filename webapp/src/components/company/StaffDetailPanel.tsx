@@ -807,7 +807,9 @@ export function StaffDetailPanel({
               <div className="flex flex-col gap-4">
                 {(() => {
                   const currentContracts = data.contracts.filter((c) => c.status !== "ENDED");
-                  const pastContracts = data.contracts.filter((c) => c.status === "ENDED");
+                  // 過去の契約は、署名（同意／署名済み書面のアップロード）まで済んだものだけ。
+                  // 間違えて送って署名しないまま終わった契約書は出さない（残っていると揉めるため）
+                  const pastContracts = data.contracts.filter((c) => c.status === "ENDED" && (c.consentedAt || c.uploadedDocumentUrl));
                   return (
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between">
