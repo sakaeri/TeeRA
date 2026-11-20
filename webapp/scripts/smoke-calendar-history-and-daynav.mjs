@@ -133,6 +133,28 @@ try {
   );
   log("URLの年月も翌月に更新される（該当月のデータを取得し直している）", page.url().includes(`m=${nextDay.m}`));
 
+  // --- ③日別詳細は横スワイプでも日送りできる（右にスワイプで前の日に戻る） ---
+  const swipe = async (fromX, toX) => {
+    await page.getByTestId("day-detail-popup").evaluate(async (el, [x0, x1]) => {
+      const r = el.getBoundingClientRect();
+      const y = r.top + 200;
+      const t = (x) => new Touch({ identifier: 1, target: el, clientX: x, clientY: y });
+      el.dispatchEvent(new TouchEvent("touchstart", { touches: [t(x0)], changedTouches: [t(x0)], bubbles: true, cancelable: true }));
+      for (let i = 1; i <= 5; i++) {
+        const x = x0 + ((x1 - x0) * i) / 5;
+        el.dispatchEvent(new TouchEvent("touchmove", { touches: [t(x)], changedTouches: [t(x)], bubbles: true, cancelable: true }));
+      }
+      el.dispatchEvent(new TouchEvent("touchend", { touches: [], changedTouches: [t(x1)], bubbles: true, cancelable: true }));
+    }, [fromX, toX]);
+    await page.waitForTimeout(1000);
+  };
+  await swipe(60, 300);
+  log(`右にスワイプすると前の日（${lastDay.m}月${lastDay.d}日）に戻る`, (await page.getByTestId("day-detail-popup").innerText()).includes(`${lastDay.m}月${lastDay.d}日`));
+  await swipe(300, 60);
+  log(`左にスワイプすると次の日（${nextDay.m}月${nextDay.d}日）に進む`, (await page.getByTestId("day-detail-popup").innerText()).includes(`${nextDay.m}月${nextDay.d}日`));
+  await swipe(300, 280);
+  log("少しだけ動かしたときは日送りしない", (await page.getByTestId("day-detail-popup").innerText()).includes(`${nextDay.m}月${nextDay.d}日`));
+
   console.log(process.exitCode ? "CALENDAR HISTORY/DAYNAV SMOKE TEST HAD FAILURES" : "CALENDAR HISTORY/DAYNAV SMOKE TEST PASSED");
 } catch (err) {
   console.error("CALENDAR HISTORY/DAYNAV SMOKE TEST FAILED", err);
