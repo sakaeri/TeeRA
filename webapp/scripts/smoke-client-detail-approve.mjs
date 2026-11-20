@@ -121,7 +121,12 @@ try {
   log("まとめて承認の一覧は出勤〜退勤の時刻と実働を出す", bulkText.includes("08:30〜16:30") && bulkText.includes("実働 7時間00分"));
   log("コメント（備考）がある報告はコメントが出る", (await bulk.getByTestId("bulk-approve-comment").innerText()).includes("ナイター延長"));
   log("まとめて承認の一覧に未承認の2件が✅付きで出る", (await bulk.getByTestId("bulk-approve-list").locator('input[type="checkbox"]:checked').count()) === 2);
-  await bulk.getByTestId("bulk-approve-list").locator('input[type="checkbox"]').first().uncheck();
+  // コメントを押しても✅は外れない
+  await bulk.getByTestId("bulk-approve-comment").click();
+  log("コメントを押しても✅は外れない", (await bulk.getByTestId("bulk-approve-list").locator('input[type="checkbox"]:checked').count()) === 2);
+  // 行のどこを押しても✅が外れる（日付・名前のあたりを押す）
+  await bulk.getByTestId("bulk-approve-row").first().click({ position: { x: 120, y: 15 } });
+  log("行を押すと✅が外れる", (await bulk.getByTestId("bulk-approve-list").locator('input[type="checkbox"]:checked').count()) === 1);
   await bulk.getByRole("button", { name: "まとめて承認（1件）" }).click();
   await bulk.waitFor({ state: "detached", timeout: 15000 });
   log("✅を付けた分だけ承認される", approvedCount() === 2);

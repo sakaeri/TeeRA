@@ -1914,13 +1914,32 @@ function BulkApproveModal({
         </label>
         <ul className="flex-1 divide-y divide-border overflow-y-auto rounded-xl border border-border" data-testid="bulk-approve-list">
           {reports.map((r) => (
-            <li key={r.workReportId} className="flex items-start gap-3 px-3 py-2.5 text-sm">
+            // 行のどこを押しても✅を付け外しできる（小さい四角を狙って押さなくていいように）
+            <li
+              key={r.workReportId}
+              role="checkbox"
+              aria-checked={selected.has(r.workReportId)}
+              aria-label={`${r.date} ${r.staffName}`}
+              tabIndex={0}
+              onClick={() => toggle(r.workReportId)}
+              onKeyDown={(e) => {
+                if (e.key === " " || e.key === "Enter") {
+                  e.preventDefault();
+                  toggle(r.workReportId);
+                }
+              }}
+              className={`flex cursor-pointer select-none items-start gap-3 px-3 py-2.5 text-sm ${
+                selected.has(r.workReportId) ? "bg-primary/5" : "opacity-60"
+              }`}
+              data-testid="bulk-approve-row"
+            >
               <input
                 type="checkbox"
                 checked={selected.has(r.workReportId)}
-                onChange={() => toggle(r.workReportId)}
-                aria-label={`${r.date} ${r.staffName}`}
-                className="mt-1"
+                readOnly
+                tabIndex={-1}
+                aria-hidden="true"
+                className="pointer-events-none mt-1 h-5 w-5 shrink-0"
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
@@ -1949,7 +1968,11 @@ function BulkApproveModal({
                 {r.comment ? (
                   <button
                     type="button"
-                    onClick={() => setOpenComment(openComment === r.workReportId ? null : r.workReportId)}
+                    onClick={(e) => {
+                      // コメントを開くだけで、✅は付け外ししない
+                      e.stopPropagation();
+                      setOpenComment(openComment === r.workReportId ? null : r.workReportId);
+                    }}
                     className={`mt-1 block w-full text-left text-xs text-amber-800 ${openComment === r.workReportId ? "whitespace-pre-wrap break-words" : "truncate"}`}
                     data-testid="bulk-approve-comment"
                   >
