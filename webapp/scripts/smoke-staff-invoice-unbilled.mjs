@@ -110,22 +110,26 @@ try {
   await editor.waitFor();
   const firstText = await editor.innerText();
   log("「この日までの分だけにする」で12日までの分だけになる（20日は入らない）", firstText.includes("12") && !firstText.includes(`${mm}/20`));
+  // 前の月の分の✅を外して、この請求書には入れない（未請求のまま残る）
+  const checks = editor.getByTestId("staff-invoice-line-check");
+  log("勤務の行には最初から全部✅が付いている", (await checks.count()) === 3 && (await checks.first().isChecked()));
+  await checks.first().uncheck();
   staff.on("dialog", (d) => d.accept());
   await editor.getByRole("button", { name: /提出/ }).last().click();
   await staff.getByText("請求書を提出しました").waitFor();
-  const first = psql(`select id||'|'||"periodRangeLabel"||'|'||jsonb_array_length("workLines") from "StaffInvoice" where "staffUserId"='${staffId}' and sequence=1;`).split("|");
-  log("1枚目は3件（前月分を含む）で提出され、対象期間に「前月以前の分を含む」と残る", first[2] === "3" && first[1].includes("前月以前の分を含む"));
+  const first = psql(`select "workLines"::text||'|'||jsonb_array_length("workLines") from "StaffInvoice" where "staffUserId"='${staffId}' and sequence=1;`).split("|");
+  log("✅を外した前の月の分は入らず、2件で提出される", first[1] === "2" && !first[0].includes(forgotten));
 
   // --- 2枚目：残りの勤務だけ ---
   await staff.goto(`http://localhost:3000/staff/invoices?month=${month}&company=${companyId}&seq=1`);
   await staff.getByTestId("staff-invoice-next").click();
   await editor.waitFor();
   const secondText = await editor.innerText();
-  log("「次の請求書を作る」で2枚目になり、残りの20日だけが入る", (await editor.locator("li").count()) >= 1 && secondText.includes(`${mm}/20`) && !secondText.includes(`${mm}/5 `));
+  log("「次の請求書を作る」で2枚目になり、残り（20日と、✅を外した前の月の分）だけが入る", secondText.includes(`${mm}/20`) && !secondText.includes(`${mm}/5 `) && (await editor.getByTestId("staff-invoice-line-check").count()) === 2);
   await editor.getByRole("button", { name: /提出/ }).last().click();
   await staff.getByText("請求書を提出しました").waitFor();
-  const second = psql(`select "workLines"::text from "StaffInvoice" where "staffUserId"='${staffId}' and sequence=2;`);
-  log("2枚目には1枚目の勤務が入らない", second.includes(late) && !second.includes(forgotten));
+  const second = psql(`select "workLines"::text||'|'||"periodRangeLabel" from "StaffInvoice" where "staffUserId"='${staffId}' and sequence=2;`);
+  log("2枚目には1枚目の勤務が入らず、前の月の分を含むと残る", second.includes(late) && second.includes(forgotten) && second.includes("前月以前の分を含む"));
 
   // --- 前の月の請求書を後から作っても、もう使った勤務は入らない ---
   await staff.goto(`http://localhost:3000/staff/invoices?month=${earlierMonth}&newFor=${companyId}`);

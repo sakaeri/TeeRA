@@ -138,6 +138,8 @@ async function computeStaffInvoiceWorkLines(params: {
   targetMonth: string;
   periodEnd: Date | null;
   excludeInvoiceId: string | null;
+  // ✅を外した勤務（この請求書には入れない）
+  uncheckedShiftIds?: Set<string>;
 }) {
   const period = await payrollPeriod(params.companyId, params.targetMonth);
   const lastDay = new Date(period.end.getTime() - DAY_MS);
@@ -145,14 +147,15 @@ async function computeStaffInvoiceWorkLines(params: {
   const end = until ? new Date(until.getTime() + DAY_MS) : period.end;
   const start = new Date(end.getTime() - UNBILLED_LOOKBACK_DAYS * DAY_MS);
   const used = await usedShiftIds(params.companyId, params.staffUserId, params.excludeInvoiceId);
-  const { lines } = await computeApprovedWorkLines({
+  const { lines: allLines } = await computeApprovedWorkLines({
     companyId: params.companyId,
     staffUserId: params.staffUserId,
     targetMonth: params.targetMonth,
     range: { start, end },
     excludedShiftIds: used,
   });
-  lines.sort((a, b) => a.description.localeCompare(b.description));
+  allLines.sort((a, b) => a.description.localeCompare(b.description));
+  const lines = allLines.filter((l) => !params.uncheckedShiftIds?.has(l.shiftId));
   const firstDate = lines.length > 0 ? new Date(`${lines[0].description.slice(0, 10)}T00:00:00.000Z`) : null;
   const includesEarlier = Boolean(firstDate && firstDate < period.start);
   // 対象期間の表示：前の月以前の分が入っている・「◯日まで」にした時は、実際の期間を出す
@@ -160,7 +163,14 @@ async function computeStaffInvoiceWorkLines(params: {
     includesEarlier || until
       ? `${mdLabel(includesEarlier ? firstDate! : period.start)}〜${mdLabel(until ?? lastDay)}${includesEarlier ? "（前月以前の分を含む）" : ""}`
       : period.rangeLabel;
-  return { lines, rangeLabel, includesEarlier, earlierCount: lines.filter((l) => new Date(`${l.description.slice(0, 10)}T00:00:00.000Z`) < period.start).length, until };
+  return {
+    lines,
+    allLines,
+    rangeLabel,
+    includesEarlier,
+    earlierCount: allLines.filter((l) => new Date(`${l.description.slice(0, 10)}T00:00:00.000Z`) < period.start).length,
+    until,
+  };
 }
 
 function parseUntil(value: string | null | undefined) {
@@ -199,10 +209,20 @@ export async function getStaffInvoiceForStaff(
   const editable = !existing || existing.status === "DRAFT" || existing.status === "RETURNED";
   // 「◯日まで」：画面で選び直した日 → 保存してある日 → なし（締め日まで）
   const periodEnd = untilParam !== null ? parseUntil(untilParam) : (existing?.periodEnd ?? null);
+  const unchecked = new Set((existing?.excludedShiftIds as string[] | undefined) ?? []);
   const computed = editable
-    ? await computeStaffInvoiceWorkLines({ companyId, staffUserId, targetMonth, periodEnd, excludeInvoiceId: existing?.id ?? null })
+    ? await computeStaffInvoiceWorkLines({
+        companyId,
+        staffUserId,
+        targetMonth,
+        periodEnd,
+        excludeInvoiceId: existing?.id ?? null,
+        uncheckedShiftIds: unchecked,
+      })
     : null;
-  const workLines: ComputedWorkLine[] = computed ? computed.lines : (existing!.workLines as ComputedWorkLine[]);
+  // 下書き・差し戻し中は、✅を外したものも含めて全部の候補を出す（外したものは画面で✅なし）
+  const workLines: ComputedWorkLine[] = computed ? computed.allLines : (existing!.workLines as ComputedWorkLine[]);
+  const uncheckedShiftIds = computed ? computed.allLines.filter((l) => unchecked.has(l.shiftId)).map((l) => l.shiftId) : [];
   // 提出した後に、まだ請求していない勤務が残っていれば「次の請求書を作る」を出す（週払いなど）
   const remainingAfterSubmit = !editable
     ? (await computeStaffInvoiceWorkLines({ companyId, staffUserId, targetMonth, periodEnd: null, excludeInvoiceId: null })).lines.length
@@ -211,7 +231,7 @@ export async function getStaffInvoiceForStaff(
   const withholding = editable ? membership.contractorWithholding : existing!.withholding;
   const taxExclusive = editable ? membership.contractorTaxExclusive : existing!.taxExclusive;
   const totals = editable
-    ? computeStaffInvoiceTotals({ workLines, expenses, withholding, taxExclusive })
+    ? computeStaffInvoiceTotals({ workLines: computed!.lines, expenses, withholding, taxExclusive })
     : {
         workSubtotal: existing!.workSubtotal,
         taxAmount: existing!.taxAmount,
@@ -254,6 +274,7 @@ export async function getStaffInvoiceForStaff(
     sequence,
     periodEnd: computed?.until ? computed.until.toISOString().slice(0, 10) : (existing?.periodEnd?.toISOString().slice(0, 10) ?? null),
     earlierCount: computed?.earlierCount ?? 0,
+    uncheckedShiftIds,
     remainingAfterSubmit,
     submittedAt: existing?.submittedAt?.toISOString() ?? null,
     reviewedAt: existing?.reviewedAt?.toISOString() ?? null,
@@ -263,6 +284,8 @@ export async function getStaffInvoiceForStaff(
 
 export type StaffInvoiceInput = {
   expenses: StaffInvoiceExpense[];
+  // ✅を外した勤務（この請求書には入れず、未請求のまま次の請求書へ）
+  uncheckedShiftIds?: string[];
   note: string;
   issuerName: string;
   issuerAddress: string;
@@ -311,8 +334,10 @@ export async function saveStaffInvoice(params: {
     targetMonth,
     periodEnd: parseUntil(params.periodEnd ?? null),
     excludeInvoiceId: existing?.id ?? null,
+    uncheckedShiftIds: new Set((params.input.uncheckedShiftIds ?? []).filter((id) => typeof id === "string").slice(0, 1000)),
   });
   const workLines = computed.lines;
+  const uncheckedShiftIds = computed.allLines.filter((l) => !workLines.includes(l)).map((l) => l.shiftId);
   if (params.submit) {
     if (!issuerName) throw new StaffInvoiceError("名前を入力してください。");
     if (!issuerAddress) throw new StaffInvoiceError("住所を入力してください。");
@@ -344,6 +369,7 @@ export async function saveStaffInvoice(params: {
     ...totals,
     periodRangeLabel: computed.rangeLabel,
     periodEnd: computed.until,
+    excludedShiftIds: uncheckedShiftIds,
     ...(params.submit ? { status: "SUBMITTED" as const, submittedAt: new Date(), returnReason: null } : {}),
   };
 

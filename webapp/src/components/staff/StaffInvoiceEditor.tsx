@@ -29,6 +29,8 @@ type Invoice = {
   sequence: number;
   periodEnd: string | null;
   earlierCount: number;
+  // ✅を外した勤務（下書き・差し戻し中だけ）
+  uncheckedShiftIds?: string[];
   submittedAt: string | null;
   reviewedAt: string | null;
   returnReason: string | null;
@@ -72,10 +74,13 @@ export function StaffInvoiceEditor({
   const [registrationNumber, setRegistrationNumber] = useState(invoice.registrationNumber);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const editable = invoice.editable;
+  // ✅を外した勤務は、この請求書には入れず、未請求のまま次の請求書に入る
+  const [unchecked, setUnchecked] = useState<Set<string>>(() => new Set(invoice.uncheckedShiftIds ?? []));
+  const includedWorkLines = editable ? invoice.workLines.filter((l) => !unchecked.has(l.shiftId)) : invoice.workLines;
 
   const cleanExpenses = sanitizeExpenses(expenses);
   const totals = editable
-    ? computeStaffInvoiceTotals({ workLines: invoice.workLines, expenses: cleanExpenses, withholding: invoice.withholding, taxExclusive: invoice.taxExclusive })
+    ? computeStaffInvoiceTotals({ workLines: includedWorkLines, expenses: cleanExpenses, withholding: invoice.withholding, taxExclusive: invoice.taxExclusive })
     : invoice;
   const bankFilled = Boolean(invoice.bank.bankName && invoice.bank.accountNumber);
 
@@ -89,7 +94,7 @@ export function StaffInvoiceEditor({
         sequence: invoice.sequence,
         periodEnd: invoice.periodEnd,
         submit,
-        input: { expenses: cleanExpenses, note, issuerName, issuerAddress, registrationNumber },
+        input: { expenses: cleanExpenses, note, issuerName, issuerAddress, registrationNumber, uncheckedShiftIds: [...unchecked] },
       });
       if (result.ok) {
         setMessage({ ok: true, text: submit ? "請求書を提出しました ✓ 会社が確認すると、お知らせが届きます。" : "下書きを保存しました ✓" });
@@ -164,21 +169,44 @@ export function StaffInvoiceEditor({
           <ul className="divide-y divide-border/60 text-sm">
             {invoice.workLines.map((l) => {
               const v = splitLine(l.description);
+              const off = editable && unchecked.has(l.shiftId);
               return (
-                <li key={l.shiftId} className="flex items-center justify-between gap-3 py-2">
-                  <span className="min-w-0">
+                <li key={l.shiftId} className={`flex items-center justify-between gap-3 py-2 ${off ? "opacity-50" : ""}`}>
+                  <span className="flex min-w-0 items-center">
+                    {editable ? (
+                      <input
+                        type="checkbox"
+                        checked={!off}
+                        onChange={() =>
+                          setUnchecked((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(l.shiftId)) next.delete(l.shiftId);
+                            else next.add(l.shiftId);
+                            return next;
+                          })
+                        }
+                        aria-label={`${v.date}の勤務をこの請求書に入れる`}
+                        className="mr-2 h-4 w-4 shrink-0 accent-primary"
+                        data-testid="staff-invoice-line-check"
+                      />
+                    ) : null}
+                    <span className="min-w-0">
                     <span className="mr-2 text-muted">{v.date}</span>
                     {v.label}
                     <span className="ml-2 text-xs text-muted">
                       {v.isDaily ? "1日" : `${l.hours}時間`} × {yen(l.rate)}
                     </span>
+                    </span>
                   </span>
-                  <span className="shrink-0 font-medium">{yen(l.amount)}</span>
+                  <span className={`shrink-0 font-medium ${off ? "line-through" : ""}`}>{yen(l.amount)}</span>
                 </li>
               );
             })}
           </ul>
         )}
+        {editable && invoice.workLines.length > 0 ? (
+          <p className="mt-2 text-xs text-muted">✅を外した勤務はこの請求書に入らず、まだ請求していない分として次の請求書に入れられます。</p>
+        ) : null}
         <p className="mt-2 text-xs text-muted">金額は会社が決めた単価で計算されます。違っている時は、会社に連絡してください。</p>
       </section>
 

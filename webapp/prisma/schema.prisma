@@ -1353,6 +1353,8 @@ model StaffInvoice {
   status             StaffInvoiceStatus @default(DRAFT)
   // 提出した時点の業務の行 [{shiftId, description, hours, rate, amount}]（下書き・差し戻し中は毎回作り直す）
   workLines          Json               @default("[]")
+  // ✅を外した勤務のshiftId（この請求書には入れず、未請求のまま次の請求書へ）
+  excludedShiftIds   Json               @default("[]")
   // スタッフが足した「その他の項目」（交通費など） [{label, amount}]（税込の金額として扱い、源泉徴収の対象にしない）
   expenses           Json               @default("[]")
   note               String?
