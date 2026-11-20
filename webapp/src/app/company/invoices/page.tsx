@@ -92,7 +92,7 @@ export default async function InvoicesPage({
     unresolved: { shiftId: string; date: string; staffName: string; taskName: string | null }[];
     groupLinesByTask: boolean;
     attachWorkRecord: boolean;
-    unbilledEarlier: { shiftId: string; date: string }[];
+    unbilledEarlier: { shiftId: string; date: string; staffName: string; label: string }[];
   };
 
   let invoiceData: InvoiceData | null = null;

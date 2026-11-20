@@ -94,7 +94,7 @@ export function InvoiceEditor({
     groupLinesByTask: boolean;
     attachWorkRecord: boolean;
     // 前の月以前に請求していなかったシフト
-    unbilledEarlier?: { shiftId: string; date: string }[];
+    unbilledEarlier?: { shiftId: string; date: string; staffName: string; label: string }[];
   };
   clientName: string;
   // 請求書の宛名（直していればその名前。無ければ clientName と同じ）
@@ -203,26 +203,9 @@ export function InvoiceEditor({
         )}
       </div>
 
-      {/* 前の月以前に請求していなかった分。依頼主へ出す書類なので、勝手には入れず確認してから入れる */}
+      {/* 前の月以前に請求していなかった分。依頼主へ出す書類なので、勝手には入れず「確認する」で中身を見て、✅を付けたものだけ入れる */}
       {invoice.status === "DRAFT" && (invoice.unbilledEarlier?.length ?? 0) > 0 ? (
-        <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900" data-testid="unbilled-earlier">
-          <p className="font-semibold">前の月以前に請求していない分が{invoice.unbilledEarlier!.length}件あります</p>
-          <p className="mt-1 text-xs">
-            {invoice
-              .unbilledEarlier!.slice(0, 5)
-              .map((e) => `${Number(e.date.slice(5, 7))}/${Number(e.date.slice(8, 10))}`)
-              .join("・")}
-            {invoice.unbilledEarlier!.length > 5 ? " ほか" : ""}
-          </p>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => startTransition(async () => void (await includeEarlierShiftsAction(invoice.id)))}
-            className="mt-2 rounded-lg bg-sky-700 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
-          >
-            この請求書に入れる
-          </button>
-        </section>
+        <UnbilledEarlierSection invoiceId={invoice.id} items={invoice.unbilledEarlier!} />
       ) : null}
 
       {invoice.unresolved.length > 0 ? (
@@ -948,5 +931,97 @@ function AddBankAccountModal({
         </button>
       </div>
     </div>
+  );
+}
+
+// 前の月以前に請求していない分：「確認する」で一覧（全部✅）を開き、外したいものの✅を外して入れる。
+// 入れた行を明細の×で消すと、未請求に戻ってまたここに出る。
+function UnbilledEarlierSection({
+  invoiceId,
+  items,
+}: {
+  invoiceId: string;
+  items: { shiftId: string; date: string; staffName: string; label: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [unchecked, setUnchecked] = useState<Set<string>>(new Set());
+  const [pending, startTransition] = useTransition();
+  const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+  const chosen = items.filter((i) => !unchecked.has(i.shiftId));
+  return (
+    <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900" data-testid="unbilled-earlier">
+      <p className="font-semibold">前の月以前に請求していない分が{items.length}件あります</p>
+      {!open ? (
+        <>
+          <p className="mt-1 text-xs">
+            {items
+              .slice(0, 5)
+              .map((e) => md(e.date))
+              .join("・")}
+            {items.length > 5 ? " ほか" : ""}
+          </p>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="mt-2 rounded-lg bg-sky-700 px-4 py-2 text-xs font-semibold text-white"
+          >
+            確認する
+          </button>
+        </>
+      ) : (
+        <>
+          <ul className="mt-2 flex flex-col divide-y divide-sky-100 rounded-lg bg-white px-3">
+            {items.map((i) => {
+              const off = unchecked.has(i.shiftId);
+              return (
+                <li key={i.shiftId} className={`flex items-center gap-2 py-2 text-xs text-foreground ${off ? "opacity-50" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={!off}
+                    onChange={() =>
+                      setUnchecked((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(i.shiftId)) next.delete(i.shiftId);
+                        else next.add(i.shiftId);
+                        return next;
+                      })
+                    }
+                    className="h-4 w-4 shrink-0 accent-primary"
+                    data-testid="unbilled-earlier-check"
+                  />
+                  <span className="w-10 shrink-0 text-muted">{md(i.date)}</span>
+                  <span className="min-w-0 truncate">
+                    {i.staffName}・{i.label}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="mt-2 flex gap-2">
+            <button type="button" onClick={() => setOpen(false)} className="flex-1 rounded-lg border border-sky-200 bg-white px-3 py-2 text-xs">
+              閉じる
+            </button>
+            <button
+              type="button"
+              disabled={pending || chosen.length === 0}
+              onClick={() =>
+                startTransition(async () => {
+                  await includeEarlierShiftsAction(
+                    invoiceId,
+                    chosen.map((c) => c.shiftId),
+                  );
+                  setOpen(false);
+                  setUnchecked(new Set());
+                })
+              }
+              className="flex-1 rounded-lg bg-sky-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+            >
+              ✅の{chosen.length}件をこの請求書に入れる
+            </button>
+          </div>
+          <p className="mt-1 text-[11px]">入れた行は、明細の×で消すと未請求に戻ります（またここに出ます）。</p>
+        </>
+      )}
+    </section>
   );
 }

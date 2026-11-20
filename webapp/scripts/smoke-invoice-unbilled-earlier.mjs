@@ -70,9 +70,30 @@ try {
   await banner.waitFor({ timeout: 30000 });
   const lineCount = () => psql(`select count(*) from "InvoiceLine" l join "Invoice" i on i.id=l."invoiceId" where i."companyRelationshipId"='${relId}' and i."periodLabel"='${thisMonth}' and l."shiftId" is not null;`);
   log("前の月に請求していない分の案内が出る（勝手には入らない）", (await banner.innerText()).includes("1件") && lineCount() === "1");
-  await banner.getByRole("button", { name: "この請求書に入れる" }).click();
+  // 「確認する」で一覧（全部✅）が出て、✅のものだけ入れる
+  await banner.getByRole("button", { name: "確認する" }).click();
+  log("「確認する」で一覧が出て、最初から✅が付いている", (await banner.getByTestId("unbilled-earlier-check").first().isChecked()));
+  await banner.getByRole("button", { name: /件をこの請求書に入れる/ }).click();
   await banner.waitFor({ state: "detached", timeout: 15000 });
-  log("「この請求書に入れる」で前の月の分が明細に入る", lineCount() === "2" && (await page.locator("body").innerText()).includes(lastMonthDate));
+  log("✅のものが明細に入る", lineCount() === "2" && (await page.locator("body").innerText()).includes(lastMonthDate));
+
+  // 入れた行を×で消すと、未請求に戻ってまた案内に出る
+  page.on("dialog", (d) => d.accept());
+  const earlierLineId = psql(`select l.id from "InvoiceLine" l join "Invoice" i on i.id=l."invoiceId" where i."companyRelationshipId"='${relId}' and i."periodLabel"='${thisMonth}' and l."shiftId"='${earlierShift}';`);
+  const delBtn = page.locator(`[data-line-id="${earlierLineId}"] button[aria-label*="削除"], [data-line-id="${earlierLineId}"] button:has-text("×")`).first();
+  if ((await delBtn.count()) > 0) {
+    await delBtn.click();
+  } else {
+    // 行の削除ボタンが見つからない時は、行の中の最後のボタン（×）を押す
+    await page.locator("tr, li", { hasText: lastMonthDate }).last().getByRole("button").last().click();
+  }
+  await page.getByTestId("unbilled-earlier").waitFor({ timeout: 15000 });
+  log("入れた行を×で消すと未請求に戻り、また案内に出る", lineCount() === "1" && (await page.getByTestId("unbilled-earlier").innerText()).includes("1件"));
+  // 入れ直してから、前の月の請求書を確かめる
+  await page.getByTestId("unbilled-earlier").getByRole("button", { name: "確認する" }).click();
+  await page.getByTestId("unbilled-earlier").getByRole("button", { name: /件をこの請求書に入れる/ }).click();
+  await page.getByTestId("unbilled-earlier").waitFor({ state: "detached", timeout: 15000 });
+  log("もう一度入れられる", lineCount() === "2");
 
   // 前の月の請求書を開いても、今月に入れたシフトは載らない（二重にならない）
   await page.goto(`http://localhost:3000/company/invoices?month=${lastMonth}&client=${relId}`);

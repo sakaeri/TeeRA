@@ -91,24 +91,40 @@ export async function unbilledEarlierShifts(invoiceId: string) {
       date: { gte: new Date(start.getTime() - EARLIER_LOOKBACK_DAYS * 24 * 3600e3), lt: start },
       status: { not: "SUPERSEDED" },
     },
-    include: { workReport: true, cancellation: true },
+    include: { workReport: true, cancellation: true, staff: { select: { name: true } } },
     orderBy: { date: "asc" },
   });
   return shifts
-    .filter((s) => !issued.has(s.id) && !moved.has(s.id) && !included.has(s.id) && !manuallyExcluded.has(s.id) && isBillableShift(s))
-    .map((s) => ({ shiftId: s.id, date: s.date.toISOString().slice(0, 10) }));
+    // 前の月以前の分として入れた後に×で消したもの（以前の作りでは「入れた」と「消した」の両方に残っていた）は、未請求に戻して出す
+    .filter((s) => {
+      if (issued.has(s.id) || moved.has(s.id) || !isBillableShift(s)) return false;
+      if (included.has(s.id)) return manuallyExcluded.has(s.id);
+      return !manuallyExcluded.has(s.id);
+    })
+    .map((s) => ({
+      shiftId: s.id,
+      date: s.date.toISOString().slice(0, 10),
+      staffName: s.staff.name,
+      label: s.cancellation || s.status === "CANCELLED" || s.status === "ON_HOLD" ? "キャンセル料" : (s.workReport?.taskName ?? s.taskName ?? "勤務"),
+    }));
 }
 
-// 前の月以前に請求していなかったシフトを、この請求書に入れる
-export async function includeEarlierShifts(invoiceId: string) {
+// 前の月以前に請求していなかったシフトを、この請求書に入れる（選んだものだけ。✅を外したものは未請求のまま）
+export async function includeEarlierShifts(invoiceId: string, shiftIds?: string[]) {
   const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
   if (invoice.status !== "DRAFT") throw new Error("not_draft");
-  const earlier = await unbilledEarlierShifts(invoiceId);
+  const chosen = shiftIds ? new Set(shiftIds) : null;
+  const earlier = (await unbilledEarlierShifts(invoiceId)).filter((e) => !chosen || chosen.has(e.shiftId));
   if (earlier.length === 0) return 0;
   const current = (invoice.includedEarlierShiftIds as string[]) ?? [];
+  const ids = new Set(earlier.map((e) => e.shiftId));
   await prisma.invoice.update({
     where: { id: invoiceId },
-    data: { includedEarlierShiftIds: [...new Set([...current, ...earlier.map((e) => e.shiftId)])] },
+    data: {
+      includedEarlierShiftIds: [...new Set([...current, ...ids])],
+      // 前に×で消していたものを入れ直す時は、「消した」の記録を外す
+      excludedShiftIds: ((invoice.excludedShiftIds as string[]) ?? []).filter((id) => !ids.has(id)),
+    },
   });
   await regenerateLines(invoiceId);
   return earlier.length;
@@ -424,12 +440,21 @@ export async function deleteLine(lineId: string) {
   await prisma.$transaction(async (tx) => {
     if (line.shiftId) {
       const invoice = await tx.invoice.findUniqueOrThrow({ where: { id: line.invoiceId } });
-      const excludedShiftIds = new Set((invoice.excludedShiftIds as string[]) ?? []);
-      excludedShiftIds.add(line.shiftId);
-      await tx.invoice.update({
-        where: { id: line.invoiceId },
-        data: { excludedShiftIds: Array.from(excludedShiftIds) },
-      });
+      const included = (invoice.includedEarlierShiftIds as string[]) ?? [];
+      if (included.includes(line.shiftId)) {
+        // 前の月以前の分として入れた行を消した時は、未請求に戻す（また「確認する」の一覧に出る）
+        await tx.invoice.update({
+          where: { id: line.invoiceId },
+          data: { includedEarlierShiftIds: included.filter((id) => id !== line.shiftId) },
+        });
+      } else {
+        const excludedShiftIds = new Set((invoice.excludedShiftIds as string[]) ?? []);
+        excludedShiftIds.add(line.shiftId);
+        await tx.invoice.update({
+          where: { id: line.invoiceId },
+          data: { excludedShiftIds: Array.from(excludedShiftIds) },
+        });
+      }
     }
     await tx.invoiceLine.delete({ where: { id: lineId } });
   });
