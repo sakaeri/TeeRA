@@ -1,4 +1,5 @@
 import { chromium } from "playwright-core";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
@@ -100,6 +101,18 @@ try {
   await page.getByTestId("unbilled-earlier").getByRole("button", { name: /件をこの請求書に入れる/ }).click();
   await page.getByTestId("unbilled-earlier").waitFor({ state: "detached", timeout: 15000 });
   log("もう一度入れられる", lineCount() === "2");
+
+  // 実績表を付けたPDFでも、前の月の分は前の月の日付で出る（対象月の日付にならない）
+  const invoiceId = psql(`select id from "Invoice" where "companyRelationshipId"='${relId}' and "periodLabel"='${thisMonth}';`);
+  psql(`update "Invoice" set "attachWorkRecord"=true where id='${invoiceId}';`);
+  const res = await page.request.get(`http://localhost:3000/api/invoices/${invoiceId}/pdf`);
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(await res.body()) }).promise;
+  let recordText = "";
+  for (let i = 2; i <= doc.numPages; i++) recordText += (await (await doc.getPage(i)).getTextContent()).items.map((it) => it.str).join("");
+  const lm = Number(lastMonthDate.slice(5, 7));
+  const tm = Number(thisMonth.slice(5, 7));
+  log(`実績表で前の月の分は「${lm}月25日」と出る`, recordText.includes(`${lm}月25日`) && !recordText.includes(`${tm}月25日`));
+  log("実績表の見出しに前の月以前の分を含むと出る", recordText.includes("前の月以前の未請求分を含む"));
 
   // 前の月の請求書を開いても、今月に入れたシフトは載らない（二重にならない）
   await page.goto(`http://localhost:3000/company/invoices?month=${lastMonth}&client=${relId}`);
