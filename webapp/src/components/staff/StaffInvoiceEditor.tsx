@@ -76,6 +76,14 @@ export function StaffInvoiceEditor({
   const editable = invoice.editable;
   // ✅を外した勤務は、この請求書には入れず、未請求のまま次の請求書に入る
   const [unchecked, setUnchecked] = useState<Set<string>>(() => new Set(invoice.uncheckedShiftIds ?? []));
+  function toggleLine(shiftId: string) {
+    setUnchecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(shiftId)) next.delete(shiftId);
+      else next.add(shiftId);
+      return next;
+    });
+  }
   const includedWorkLines = editable ? invoice.workLines.filter((l) => !unchecked.has(l.shiftId)) : invoice.workLines;
 
   const cleanExpenses = sanitizeExpenses(expenses);
@@ -171,20 +179,21 @@ export function StaffInvoiceEditor({
               const v = splitLine(l.description);
               const off = editable && unchecked.has(l.shiftId);
               return (
-                <li key={l.shiftId} className={`flex items-center justify-between gap-3 py-2 ${off ? "opacity-50" : ""}`}>
+                // 直せる間は、行のどこを押しても✅を付け外しできる（小さい四角を狙わなくていいように）
+                <li
+                  key={l.shiftId}
+                  onClick={editable ? () => toggleLine(l.shiftId) : undefined}
+                  className={`flex items-center justify-between gap-3 py-2 ${off ? "opacity-50" : ""} ${editable ? "cursor-pointer select-none" : ""}`}
+                  data-testid="staff-invoice-line-row"
+                >
                   <span className="flex min-w-0 items-center">
                     {editable ? (
                       <input
                         type="checkbox"
                         checked={!off}
-                        onChange={() =>
-                          setUnchecked((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(l.shiftId)) next.delete(l.shiftId);
-                            else next.add(l.shiftId);
-                            return next;
-                          })
-                        }
+                        onChange={() => toggleLine(l.shiftId)}
+                        // 行の押下と二重に切り替わらないように
+                        onClick={(e) => e.stopPropagation()}
                         aria-label={`${v.date}の勤務をこの請求書に入れる`}
                         className="mr-2 h-4 w-4 shrink-0 accent-primary"
                         data-testid="staff-invoice-line-check"

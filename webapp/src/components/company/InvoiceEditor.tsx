@@ -953,13 +953,7 @@ function UnbilledEarlierSection({
       <p className="font-semibold">前の月以前に請求していない分が{items.length}件あります</p>
       {!open ? (
         <>
-          <p className="mt-1 text-xs">
-            {items
-              .slice(0, 5)
-              .map((e) => md(e.date))
-              .join("・")}
-            {items.length > 5 ? " ほか" : ""}
-          </p>
+          {/* 日付は「確認する」で開く一覧で見られるので、ここには出さない */}
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -974,7 +968,12 @@ function UnbilledEarlierSection({
             {items.map((i) => {
               const off = unchecked.has(i.shiftId);
               return (
-                <li key={i.shiftId} className={`flex items-center gap-2 py-2 text-xs text-foreground ${off ? "opacity-50" : ""}`}>
+                // 行のどこを押しても✅を付け外しできる（小さい四角を狙わなくていいように）
+                <li key={i.shiftId}>
+                  <label
+                    className={`flex cursor-pointer select-none items-center gap-2 py-2 text-xs text-foreground ${off ? "opacity-50" : ""}`}
+                    data-testid="unbilled-earlier-row"
+                  >
                   <input
                     type="checkbox"
                     checked={!off}
@@ -993,6 +992,7 @@ function UnbilledEarlierSection({
                   <span className="min-w-0 truncate">
                     {i.staffName}・{i.label}
                   </span>
+                  </label>
                 </li>
               );
             })}
