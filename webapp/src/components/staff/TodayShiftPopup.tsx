@@ -15,11 +15,12 @@ import { ShiftCard, type ShiftRow } from "@/components/staff/StaffTimecardView";
 export function TodayShiftPopup({
   shifts,
   moreUnsubmittedCount = 0,
-  knownTaskNamesByCompany,
+  taskNamesByWorkplace,
 }: {
   shifts: ShiftRow[];
   moreUnsubmittedCount?: number;
-  knownTaskNamesByCompany: Record<string, string[]>;
+  // 勤務先ごとの業務内容（キーはworkplaceTaskKey）
+  taskNamesByWorkplace: Record<string, string[]>;
 }) {
   const [open, setOpen] = useState(shifts.length > 0);
   if (!open || shifts.length === 0) return null;
@@ -40,7 +41,7 @@ export function TodayShiftPopup({
         </div>
         <ul className="flex flex-col gap-3">
           {shifts.map((s) => (
-            <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} />
+            <ShiftCard key={s.id} shift={s} taskNamesByWorkplace={taskNamesByWorkplace} />
           ))}
         </ul>
         {moreUnsubmittedCount > 0 ? (
