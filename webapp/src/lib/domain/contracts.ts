@@ -517,34 +517,30 @@ export async function listKnownTaskNames(companyId: string): Promise<string[]> {
 }
 
 // スタッフの業務報告で出す業務内容の候補を勤務先ごとにまとめる（キーはworkplaceTaskKey）。
-// 勤務先の単価に登録されている業務内容・スタッフ単価の業務内容・その勤務先のシフトで使われた業務内容。
-export async function listTaskNamesByWorkplace(companyIds: string[]): Promise<Record<string, string[]>> {
+// 取引先の項目名に合わせるため、単価（CompanyPlacementRate）に登録されている業務内容だけを出す
+// （過去のシフトに入っていた別名などは出さない）。社内は社内の単価と、本人の社内の単価の業務内容。
+export async function listTaskNamesByWorkplace(companyIds: string[], staffUserId: string): Promise<Record<string, string[]>> {
   if (companyIds.length === 0) return {};
-  const [placementRates, staffRates, pastShiftTasks] = await Promise.all([
+  const [placementRates, ownInhouseRates] = await Promise.all([
     prisma.companyPlacementRate.findMany({
       where: { companyId: { in: companyIds } },
       select: { companyId: true, companyRelationshipId: true, taskName: true },
+      orderBy: { createdAt: "asc" },
     }),
     prisma.staffTaskRate.findMany({
-      where: { companyId: { in: companyIds } },
+      where: { companyId: { in: companyIds }, staffUserId, companyRelationshipId: null },
       select: { companyId: true, companyRelationshipId: true, taskName: true },
-      distinct: ["companyId", "companyRelationshipId", "taskName"],
-    }),
-    prisma.shift.findMany({
-      where: { companyId: { in: companyIds }, taskName: { not: null } },
-      select: { companyId: true, companyRelationshipId: true, taskName: true },
-      distinct: ["companyId", "companyRelationshipId", "taskName"],
+      orderBy: { createdAt: "asc" },
     }),
   ]);
-  const sets = new Map<string, Set<string>>();
-  for (const r of [...placementRates, ...staffRates, ...pastShiftTasks]) {
-    if (!r.taskName) continue;
+  const lists = new Map<string, string[]>();
+  for (const r of [...placementRates, ...ownInhouseRates]) {
     const key = workplaceTaskKey(r.companyId, r.companyRelationshipId);
-    const set = sets.get(key) ?? new Set<string>();
-    set.add(r.taskName);
-    sets.set(key, set);
+    const list = lists.get(key) ?? [];
+    if (!list.includes(r.taskName)) list.push(r.taskName);
+    lists.set(key, list);
   }
-  return Object.fromEntries([...sets].map(([key, set]) => [key, [...set].sort((a, b) => a.localeCompare(b, "ja"))]));
+  return Object.fromEntries(lists);
 }
 
 // 依頼主が連携済み派遣会社の配属済みスタッフにシフトを作る際の業務内容

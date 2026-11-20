@@ -3,6 +3,7 @@ import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
 
 // 業務報告の業務内容は、選んでいる勤務先に紐付いているものだけ候補に出す
+// ・候補は勤務先の単価に登録されている業務内容だけ（取引先の項目名に合わせる）
 // ・勤務先を変えると候補も切り替わる。社内は社内の業務内容
 // ・1つも無い勤務先は最初から「新しい業務内容」の入力欄が開く
 // ・シフト外の勤務の報告も、選んだ勤務先の業務内容が候補になる
@@ -77,6 +78,11 @@ try {
     `insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", date, "startTime", "endTime", "taskName", status, "createdVia", "updatedAt") ` +
       `values (gen_random_uuid()::text, '${companyId}', '${staffId}', 'CLIENT', '${relA}', '${pastDateStr}', '08:00', '17:00', 'A業務1', 'CONFIRMED', 'ASSIGN', now());`,
   );
+  // 過去のシフトに入っていた別名（単価に登録されていない）は候補に出さない
+  psql(
+    `insert into "Shift" (id, "companyId", "staffUserId", source, "companyRelationshipId", date, "startTime", "endTime", "taskName", status, "createdVia", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${companyId}', '${staffId}', 'CLIENT', '${relA}', '${pastDateStr}'::date - 30, '08:00', '17:00', 'A業務の別名', 'CANCELLED', 'ASSIGN', now());`,
+  );
 
   await staff.goto("http://localhost:3000/staff/timecard");
   const card = staff.locator("li", { hasText: pastDateStr }).first();
@@ -84,7 +90,7 @@ try {
   await taskSelect.waitFor({ timeout: 20000 });
   const optionsOf = async () => (await taskSelect.locator("option").allInnerTexts()).filter((t) => t !== "未選択" && !t.startsWith("＋"));
   const aOptions = await optionsOf();
-  log(`勤務先（A）の業務内容だけ出る：${aOptions.join("/")}`, aOptions.join("/") === "A業務1/A業務2");
+  log(`勤務先（A）の単価に登録された業務内容だけ出る（過去のシフトの別名は出ない）：${aOptions.join("/")}`, aOptions.join("/") === "A業務1/A業務2");
 
   await card.getByTestId("report-workplace").selectOption(relB);
   await staff.waitForTimeout(300);

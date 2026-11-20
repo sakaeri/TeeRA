@@ -47,7 +47,7 @@ export default async function StaffTimecardPage({ searchParams }: PageProps<"/st
       take: 100,
     }),
     // 業務内容の候補は勤務先ごとに出す
-    listTaskNamesByWorkplace(companyIds),
+    listTaskNamesByWorkplace(companyIds, userId),
   ]);
   const recentTaskNamesByCompany = new Map<string, string[]>();
   for (const r of recentReports) {
