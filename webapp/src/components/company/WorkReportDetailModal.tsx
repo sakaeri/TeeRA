@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { getWorkReportDetailAction } from "@/app/company/actions";
+import { issuedDocumentsForReportAction, revokeWorkReportApprovalAction } from "@/app/company/workreports/actions";
 import type { WorkReportDetail } from "@/lib/domain/workReports";
 
 const OUTCOME_LABEL: Record<string, string> = {
@@ -29,8 +31,15 @@ function minutesLabel(minutes: number) {
 // スタッフ詳細の稼働履歴・カレンダーの日別詳細から開く業務報告の詳細。
 // 差し戻した後も理由や経緯を確認できるようにする。
 export function WorkReportDetailModal({ shiftId, onClose }: { shiftId: string; onClose: () => void }) {
+  const router = useRouter();
   const [detail, setDetail] = useState<WorkReportDetail | null>(null);
   const [error, setError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  // 承認の取り消し：確認（その報告が入っている発行済みの書類）→ 取り消し
+  const [revokeDocs, setRevokeDocs] = useState<string[] | null>(null);
+  const [revokeMessage, setRevokeMessage] = useState<string | null>(null);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +53,31 @@ export function WorkReportDetailModal({ shiftId, onClose }: { shiftId: string; o
     return () => {
       cancelled = true;
     };
-  }, [shiftId]);
+  }, [shiftId, reloadKey]);
+
+  function openRevoke() {
+    if (!detail?.workReportId) return;
+    const id = detail.workReportId;
+    setRevokeError(null);
+    startTransition(async () => {
+      setRevokeDocs(await issuedDocumentsForReportAction(id));
+    });
+  }
+  function confirmRevoke() {
+    if (!detail?.workReportId) return;
+    const id = detail.workReportId;
+    startTransition(async () => {
+      const result = await revokeWorkReportApprovalAction(id);
+      if (result.status === "error") {
+        setRevokeError(result.reason);
+        return;
+      }
+      setRevokeDocs(null);
+      setRevokeMessage("承認前に戻しました。ホームの「業務報告未承認」から直して、承認し直してください。");
+      setReloadKey((k) => k + 1);
+      router.refresh();
+    });
+  }
 
   return (
     // 親（スタッフ詳細パネル・日別詳細）の「外側クリックで閉じる」まで
@@ -146,6 +179,60 @@ export function WorkReportDetailModal({ shiftId, onClose }: { shiftId: string; o
                   ))}
                 </ul>
               </div>
+            ) : null}
+
+            {revokeMessage ? (
+              <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900" data-testid="revoke-done">
+                {revokeMessage}
+              </p>
+            ) : null}
+
+            {/* 承認した後に間違いに気づいた時：報告を消さずに承認前に戻して、直して承認し直す */}
+            {detail.approvalStatus === "APPROVED" && detail.workReportId ? (
+              revokeDocs ? (
+                <div className="flex flex-col gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">
+                  <p className="font-semibold">承認を取り消しますか？</p>
+                  <p>承認前に戻るので、「時間・勤務先を直す」「スタッフに直してもらう」で直して承認し直せます。報告は消えません。</p>
+                  {revokeDocs.length > 0 ? (
+                    <div data-testid="revoke-issued-docs">
+                      <p className="font-semibold">この報告は次の書類に入っています。直して承認し直したあと、作り直してください。</p>
+                      <ul className="mt-1 list-disc pl-4">
+                        {revokeDocs.map((d) => (
+                          <li key={d}>{d}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {revokeError ? <p className="text-red-700">{revokeError}</p> : null}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRevokeDocs(null)}
+                      className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground"
+                    >
+                      やめる
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={confirmRevoke}
+                      className="flex-1 rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                    >
+                      承認を取り消す
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={openRevoke}
+                  className="self-start text-xs text-rose-700 underline disabled:opacity-60"
+                  data-testid="revoke-approval"
+                >
+                  承認を取り消して直す
+                </button>
+              )
             ) : null}
 
             {detail.previousRejectionReason ? (

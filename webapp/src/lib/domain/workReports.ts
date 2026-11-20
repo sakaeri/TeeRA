@@ -333,6 +333,11 @@ export async function countUnsubmittedReports(staffUserId: string, companyIds: s
 // is now finalized as APPROVED" events).
 async function awardApprovalPoints(tx: Tx, report: { id: string; staffUserId: string; outcome: string }) {
   if (report.outcome !== "WORKED") return;
+  // 承認を取り消して承認し直した時に、同じ報告でポイントを2回付けない
+  const alreadyEarned = await tx.staffPointsLedgerEntry.findFirst({
+    where: { relatedWorkReportId: report.id, type: "EARN_REPORT_APPROVAL" },
+  });
+  if (alreadyEarned) return;
 
   const priorApprovedCount = await tx.workReport.count({
     where: {
@@ -417,6 +422,64 @@ export async function approveWorkReport(params: { workReportId: string; approver
 
     return report;
   });
+}
+
+// 承認済みの業務報告を承認前（確認待ち）に戻す。戻した後は、今まで通り「時間・勤務先を直す」
+// 「スタッフに直してもらう」で直して承認し直す。直して承認し直すと、給料明細・請求書・スタッフの請求書が
+// 新しい内容になる（発行済み・提出済みの書類は、作り直すまで元のまま）。
+// 報告を消すのではなく戻すだけなので、その日の記録はなくならない。
+export async function revokeWorkReportApproval(params: { workReportId: string; userId: string }) {
+  return prisma.$transaction(async (tx) => {
+    const report = await tx.workReport.findUniqueOrThrow({ where: { id: params.workReportId } });
+    const result = await tx.workReport.updateMany({
+      where: { id: report.id, approvalStatus: "APPROVED" },
+      data: {
+        approvalStatus: "PENDING",
+        approverUserId: null,
+        approvedAt: null,
+        approvalRevokedAt: new Date(),
+        approvalRevokedByUserId: params.userId,
+      },
+    });
+    if (result.count === 0) throw new Error("not_approved");
+    // スタッフの「勤務先キャンセル」の報告を承認した時に作ったキャンセル記録は外す（承認し直すとまた作られる）
+    if (report.outcome === "CANCELLED_BY_EMPLOYER") {
+      await tx.shiftCancellation.deleteMany({ where: { shiftId: report.shiftId, source: "STAFF_REPORTED" } });
+    }
+    return report;
+  });
+}
+
+// その報告（シフト）が入っている、発行済み・提出済みの書類（承認を取り消す前の確認に出す）
+export async function issuedDocumentsForShift(shiftId: string) {
+  const shift = await prisma.shift.findUniqueOrThrow({ where: { id: shiftId } });
+  const [salarySlips, invoices, staffInvoices] = await Promise.all([
+    prisma.salarySlip.findMany({
+      where: { staffUserId: shift.staffUserId, status: { not: "DRAFT" }, lines: { some: { shiftId } } },
+      select: { targetMonth: true },
+    }),
+    prisma.invoice.findMany({
+      where: { status: "ISSUED", invoicedShiftIds: { array_contains: [shiftId] } },
+      select: { periodLabel: true, companyRelationship: { select: { proxyName: true, clientCompany: { select: { name: true } } } } },
+    }),
+    prisma.staffInvoice.findMany({
+      where: { staffUserId: shift.staffUserId, status: { in: ["SUBMITTED", "APPROVED"] } },
+      select: { targetMonth: true, status: true, workLines: true },
+    }),
+  ]);
+  const monthLabel = (m: string) => `${Number(m.slice(5, 7))}月分`;
+  const docs: string[] = [];
+  for (const s of salarySlips) docs.push(`${monthLabel(s.targetMonth)}の給料明細（発行済み）`);
+  for (const i of invoices) {
+    const name = i.companyRelationship.clientCompany?.name ?? i.companyRelationship.proxyName ?? "依頼主";
+    docs.push(`${name}への${monthLabel(i.periodLabel)}の請求書（発行済み）`);
+  }
+  for (const si of staffInvoices) {
+    const lines = Array.isArray(si.workLines) ? (si.workLines as { shiftId?: string }[]) : [];
+    if (!lines.some((l) => l?.shiftId === shiftId)) continue;
+    docs.push(`スタッフから届いた${monthLabel(si.targetMonth)}の請求書（${si.status === "APPROVED" ? "承認済み" : "提出済み"}）`);
+  }
+  return docs;
 }
 
 export async function rejectWorkReport(params: { workReportId: string; approverUserId: string; reason: string }) {
@@ -623,11 +686,17 @@ export async function getWorkReportDetail(shiftId: string) {
     },
   });
   const r = shift.workReport;
+  const revoker = r?.approvalRevokedByUserId
+    ? await prisma.user.findUnique({ where: { id: r.approvalRevokedByUserId }, select: { name: true } })
+    : null;
   const submitted = Boolean(r && (r.submittedAt || r.approvalStatus !== "PENDING"));
 
   const timeline: { label: string; at: string | null; by: string | null; note?: string }[] = [];
   if (r && submitted) {
     if (r.submittedAt) timeline.push({ label: "提出", at: formatJstDateTime(r.submittedAt), by: shift.staff.name });
+    if (r.approvalRevokedAt) {
+      timeline.push({ label: "承認を取り消し", at: formatJstDateTime(r.approvalRevokedAt), by: revoker?.name ?? null });
+    }
     if (r.correctedAt) {
       timeline.push({ label: "時間を修正", at: formatJstDateTime(r.correctedAt), by: r.corrector?.name ?? null });
     }
@@ -660,6 +729,7 @@ export async function getWorkReportDetail(shiftId: string) {
   }
 
   return {
+    workReportId: r?.id ?? null,
     date: shift.date.toISOString().slice(0, 10),
     staffName: shift.staff.name,
     workplaceLabel:

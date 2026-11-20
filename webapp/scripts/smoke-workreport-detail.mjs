@@ -105,6 +105,22 @@ try {
   await page.waitForTimeout(500);
   log("承認者が記録されていない承認は「通知メールのリンクから承認」と出る", (await dialog.innerText()).includes("通知メールのリンクから承認"));
 
+  // 承認を取り消して直す：報告は消えずに承認前に戻る。入っている提出済みの書類は確認に出る
+  psql(
+    `insert into "StaffInvoice" (id, "companyId", "staffUserId", "targetMonth", status, "workLines", "updatedAt") values (gen_random_uuid()::text, '${companyId}', '${staffId}', '${day.slice(0, 7)}', 'SUBMITTED', '[{"shiftId":"${shiftId}"}]'::jsonb, now());`,
+  );
+  await dialog.getByTestId("revoke-approval").click();
+  await dialog.getByText("承認を取り消しますか？").waitFor();
+  const docsText = await dialog.getByTestId("revoke-issued-docs").innerText();
+  log("取り消す前に、その報告が入っている書類（スタッフから届いた請求書）が出る", docsText.includes("スタッフから届いた") && docsText.includes("提出済み"));
+  await dialog.getByRole("button", { name: "承認を取り消す", exact: true }).click();
+  await dialog.getByTestId("revoke-done").waitFor({ timeout: 15000 });
+  const row = psql(`select "approvalStatus"||'|'||coalesce("approvalRevokedByUserId",'')||'|'||("submittedAt" is not null) from "WorkReport" where "shiftId"='${shiftId}';`).split("|");
+  log("承認前（未承認）に戻り、取り消した人が記録される（提出はそのまま）", row[0] === "PENDING" && row[1] === adminId && row[2] === "true");
+  await page.waitForTimeout(800);
+  const afterText = await dialog.innerText();
+  log("経緯に「承認を取り消し」と出て、取り消しボタンは消える", afterText.includes("承認を取り消し") && (await dialog.getByTestId("revoke-approval").count()) === 0);
+
   console.log(process.exitCode ? "WORKREPORT DETAIL SMOKE TEST HAD FAILURES" : "WORKREPORT DETAIL SMOKE TEST PASSED");
 } finally {
   await browser.close();
