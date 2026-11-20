@@ -1,7 +1,7 @@
 import { requireCompanyStaffRole, listMyMemberships } from "@/lib/auth/session";
 import { listStaffShiftsForMonth, listOwnPendingShiftRequests } from "@/lib/domain/shifts";
 import { listOwnShiftsNeedingReport } from "@/lib/domain/workReports";
-import { listKnownTaskNames } from "@/lib/domain/contracts";
+import { listTaskNamesByWorkplace } from "@/lib/domain/contracts";
 import { listAllStaffNotices } from "@/lib/domain/notices";
 import { todayJst, todayJstParts } from "@/lib/date";
 import { StaffCalendarView } from "@/components/staff/StaffCalendarView";
@@ -34,15 +34,14 @@ export default async function StaffHomePage({
   const myMemberships = await listMyMemberships(userId);
   const companyIds = myMemberships.map((m) => m.companyId);
 
-  const [shifts, pendingRequests, notices, shiftsNeedingReport, knownTaskNamesByCompany, missingDocuments] = await Promise.all([
+  const [shifts, pendingRequests, notices, shiftsNeedingReport, taskNamesByWorkplace, missingDocuments] = await Promise.all([
     listStaffShiftsForMonth({ staffUserId: userId, companyIds, year, month }),
     listOwnPendingShiftRequests({ staffUserId: userId, companyIds }),
     listAllStaffNotices(userId, { unreadOnly: true }),
     listOwnShiftsNeedingReport(userId, companyIds),
-    Promise.all(companyIds.map((id) => listKnownTaskNames(id))),
+    listTaskNamesByWorkplace(companyIds),
     listMyMissingDocuments(userId),
   ]);
-  const knownTaskNames = Object.fromEntries(companyIds.map((id, i) => [id, knownTaskNamesByCompany[i]]));
 
   // カレンダー画面の「本日の出退勤」カード用 — 今日の分でまだ対応が
   // 済んでいないシフトだけ（対応済みは今まで通りタイムカードのページの
@@ -107,7 +106,7 @@ export default async function StaffHomePage({
       <TodayShiftPopup
         shifts={[...todayShifts, ...pastUnsubmitted.slice(0, PAST_IN_POPUP)]}
         moreUnsubmittedCount={Math.max(pastUnsubmitted.length - PAST_IN_POPUP, 0)}
-        knownTaskNamesByCompany={knownTaskNames}
+        taskNamesByWorkplace={taskNamesByWorkplace}
       />
       <StaffCalendarView
         year={year}

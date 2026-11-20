@@ -3,6 +3,7 @@ import { missingRequiredDocuments } from "@/lib/requiredDocuments";
 import { prisma } from "@/lib/prisma";
 import { todayJst } from "@/lib/date";
 import { buildContractDocument, hashContractConsent } from "@/lib/contractDocument";
+import { workplaceTaskKey } from "@/lib/workplaceTaskNames";
 import type {
   EmploymentType,
   WorkplaceType,
@@ -513,6 +514,37 @@ export async function listKnownTaskNames(companyId: string): Promise<string[]> {
   for (const p of placementNames) names.add(p.taskName);
   for (const s of staffRateNames) names.add(s.taskName);
   return Array.from(names).sort((a, b) => a.localeCompare(b, "ja"));
+}
+
+// スタッフの業務報告で出す業務内容の候補を勤務先ごとにまとめる（キーはworkplaceTaskKey）。
+// 勤務先の単価に登録されている業務内容・スタッフ単価の業務内容・その勤務先のシフトで使われた業務内容。
+export async function listTaskNamesByWorkplace(companyIds: string[]): Promise<Record<string, string[]>> {
+  if (companyIds.length === 0) return {};
+  const [placementRates, staffRates, pastShiftTasks] = await Promise.all([
+    prisma.companyPlacementRate.findMany({
+      where: { companyId: { in: companyIds } },
+      select: { companyId: true, companyRelationshipId: true, taskName: true },
+    }),
+    prisma.staffTaskRate.findMany({
+      where: { companyId: { in: companyIds } },
+      select: { companyId: true, companyRelationshipId: true, taskName: true },
+      distinct: ["companyId", "companyRelationshipId", "taskName"],
+    }),
+    prisma.shift.findMany({
+      where: { companyId: { in: companyIds }, taskName: { not: null } },
+      select: { companyId: true, companyRelationshipId: true, taskName: true },
+      distinct: ["companyId", "companyRelationshipId", "taskName"],
+    }),
+  ]);
+  const sets = new Map<string, Set<string>>();
+  for (const r of [...placementRates, ...staffRates, ...pastShiftTasks]) {
+    if (!r.taskName) continue;
+    const key = workplaceTaskKey(r.companyId, r.companyRelationshipId);
+    const set = sets.get(key) ?? new Set<string>();
+    set.add(r.taskName);
+    sets.set(key, set);
+  }
+  return Object.fromEntries([...sets].map(([key, set]) => [key, [...set].sort((a, b) => a.localeCompare(b, "ja"))]));
 }
 
 // 依頼主が連携済み派遣会社の配属済みスタッフにシフトを作る際の業務内容

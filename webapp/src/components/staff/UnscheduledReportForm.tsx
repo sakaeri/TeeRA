@@ -3,12 +3,13 @@
 import { useState, useTransition } from "react";
 import { submitUnscheduledWorkReportAction } from "@/app/staff/actions";
 import { todayJst } from "@/lib/date";
+import { taskNamesForWorkplace } from "@/lib/workplaceTaskNames";
 
 export type UnscheduledCompanyOption = {
   companyId: string;
   companyName: string;
   // 自社以外に選べる勤務先（本人が配属されている依頼主）と、その勤務先に登録されている業務内容
-  workplaces: { companyRelationshipId: string; name: string; taskNames?: string[] }[];
+  workplaces: { companyRelationshipId: string; name: string }[];
   // 本人が最近使った業務内容（新しい順・入力候補に出す）
   recentTaskNames?: string[];
 };
@@ -18,10 +19,12 @@ export type UnscheduledCompanyOption = {
 export function UnscheduledReportButton({
   companies,
   knownTaskNamesByCompany,
+  taskNamesByWorkplace = {},
   initialOpen = false,
 }: {
   companies: UnscheduledCompanyOption[];
   knownTaskNamesByCompany: Record<string, string[]>;
+  taskNamesByWorkplace?: Record<string, string[]>;
   // カレンダーの「＋」から来た時は最初から開く
   initialOpen?: boolean;
 }) {
@@ -47,6 +50,7 @@ export function UnscheduledReportButton({
         <UnscheduledReportModal
           companies={companies}
           knownTaskNamesByCompany={knownTaskNamesByCompany}
+          taskNamesByWorkplace={taskNamesByWorkplace}
           onClose={() => setOpen(false)}
           onSubmitted={() => {
             setOpen(false);
@@ -61,11 +65,13 @@ export function UnscheduledReportButton({
 function UnscheduledReportModal({
   companies,
   knownTaskNamesByCompany,
+  taskNamesByWorkplace,
   onClose,
   onSubmitted,
 }: {
   companies: UnscheduledCompanyOption[];
   knownTaskNamesByCompany: Record<string, string[]>;
+  taskNamesByWorkplace: Record<string, string[]>;
   onClose: () => void;
   onSubmitted: () => void;
 }) {
@@ -82,10 +88,15 @@ function UnscheduledReportModal({
   const [error, setError] = useState<string | null>(null);
 
   const company = companies.find((c) => c.companyId === companyId) ?? companies[0];
-  const knownTaskNames = knownTaskNamesByCompany[companyId] ?? [];
-  // 入力候補（押すと入る）：最近使った業務内容 → 選んだ勤務先に登録されている業務内容
-  const workplaceTaskNames = relationshipId ? (company.workplaces.find((w) => w.companyRelationshipId === relationshipId)?.taskNames ?? []) : [];
-  const suggestions = [...new Set([...(company.recentTaskNames ?? []), ...workplaceTaskNames])].slice(0, 8);
+  // 業務内容の候補は選んだ勤務先に紐付いているもの（勤務先を選ぶまでは会社全体）
+  const knownTaskNames =
+    relationshipId === null
+      ? (knownTaskNamesByCompany[companyId] ?? [])
+      : taskNamesForWorkplace(taskNamesByWorkplace, companyId, relationshipId || null);
+  // 入力候補（押すと入る）：最近使った業務内容のうち、この勤務先のもの → 勤務先の業務内容
+  const recent = (company.recentTaskNames ?? []).filter((n) => relationshipId === null || knownTaskNames.includes(n));
+  const workplaceTaskNames = relationshipId === null ? [] : knownTaskNames;
+  const suggestions = [...new Set([...recent, ...workplaceTaskNames])].slice(0, 8);
 
   function submit() {
     setError(null);

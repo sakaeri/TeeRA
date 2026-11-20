@@ -190,8 +190,8 @@ try {
   await staff.goto("http://localhost:3000/staff/timecard");
   await staff.waitForTimeout(400);
   const taskNameLabel2 = staff.locator("label", { hasText: "業務内容" }).last();
-  const picker2 = taskNameLabel2.locator("select");
-  await picker2.selectOption({ label: "＋ 新しい業務内容を追加する" });
+  // 業務内容が1つも無い勤務先なので、最初から「新しい業務内容」の入力欄が開いている
+  log("業務内容が無い勤務先では最初から入力欄が開いている", (await taskNameLabel2.locator("select").count()) === 0);
   await taskNameLabel2.locator('input[placeholder*="業務内容"]').fill("受付業務");
   await staff.getByRole("button", { name: "業務報告を提出する" }).last().click();
   await staff.waitForTimeout(500);

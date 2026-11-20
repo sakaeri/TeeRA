@@ -14,6 +14,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { todayJst } from "@/lib/date";
 import { UnscheduledReportButton, type UnscheduledCompanyOption } from "@/components/staff/UnscheduledReportForm";
 import { showToast } from "@/components/Toast";
+import { taskNamesForWorkplace } from "@/lib/workplaceTaskNames";
 
 export type { ShiftRow };
 export { isDone };
@@ -44,12 +45,15 @@ const BREAK_MINUTE_PRESETS = [0, 30, 45, 60, 90];
 export function StaffTimecardView({
   shifts,
   knownTaskNamesByCompany,
+  taskNamesByWorkplace = {},
   unscheduledCompanies,
   openUnscheduled = false,
   openBulk = false,
 }: {
   shifts: ShiftRow[];
   knownTaskNamesByCompany: Record<string, string[]>;
+  // 勤務先ごとの業務内容（キーはworkplaceTaskKey）
+  taskNamesByWorkplace?: Record<string, string[]>;
   unscheduledCompanies: UnscheduledCompanyOption[];
   openUnscheduled?: boolean;
   openBulk?: boolean;
@@ -88,7 +92,7 @@ export function StaffTimecardView({
           <h2 className="mb-2 text-sm font-bold text-red-700">未提出の業務報告（{unsubmitted.length}件）</h2>
           <ul className="flex flex-col gap-4">
             {unsubmitted.map((s) => (
-              <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} workplaces={unscheduledCompanies.find((c) => c.companyId === s.companyId)?.workplaces ?? []} />
+              <ShiftCard key={s.id} shift={s} taskNamesByWorkplace={taskNamesByWorkplace} workplaces={unscheduledCompanies.find((c) => c.companyId === s.companyId)?.workplaces ?? []} />
             ))}
           </ul>
         </section>
@@ -99,7 +103,7 @@ export function StaffTimecardView({
           <h2 className="mb-2 text-sm font-bold text-muted">今日のシフト</h2>
           <ul className="flex flex-col gap-4">
             {upcomingToday.map((s) => (
-              <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} workplaces={unscheduledCompanies.find((c) => c.companyId === s.companyId)?.workplaces ?? []} />
+              <ShiftCard key={s.id} shift={s} taskNamesByWorkplace={taskNamesByWorkplace} workplaces={unscheduledCompanies.find((c) => c.companyId === s.companyId)?.workplaces ?? []} />
             ))}
           </ul>
         </section>
@@ -113,6 +117,7 @@ export function StaffTimecardView({
       <UnscheduledReportButton
         companies={unscheduledCompanies}
         knownTaskNamesByCompany={knownTaskNamesByCompany}
+        taskNamesByWorkplace={taskNamesByWorkplace}
         initialOpen={openUnscheduled}
       />
 
@@ -123,7 +128,7 @@ export function StaffTimecardView({
           </summary>
           <ul className="mt-3 flex flex-col gap-4">
             {pastDone.map((s) => (
-              <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} workplaces={unscheduledCompanies.find((c) => c.companyId === s.companyId)?.workplaces ?? []} />
+              <ShiftCard key={s.id} shift={s} taskNamesByWorkplace={taskNamesByWorkplace} workplaces={unscheduledCompanies.find((c) => c.companyId === s.companyId)?.workplaces ?? []} />
             ))}
           </ul>
         </details>
@@ -146,11 +151,11 @@ export function needsReportNow(shift: ShiftRow) {
 
 export function ShiftCard({
   shift,
-  knownTaskNames,
+  taskNamesByWorkplace = {},
   workplaces = [],
 }: {
   shift: ShiftRow;
-  knownTaskNames: string[];
+  taskNamesByWorkplace?: Record<string, string[]>;
   // 勤務先として選べる依頼主（本人が配属されている依頼主）。社内はいつでも選べる
   workplaces?: { companyRelationshipId: string; name: string }[];
 }) {
@@ -160,8 +165,13 @@ export function ShiftCard({
   const workplaceChanged = workplaceId !== (shift.companyRelationshipId ?? "");
   const [comment, setComment] = useState(shift.comment ?? "");
   const [taskName, setTaskName] = useState(shift.taskName ?? "");
+  // 業務内容の候補は、選んでいる勤務先に紐付いているものだけ（今入っている業務内容は残す）。
+  // 1つも無い勤務先は最初から「新しい業務内容」の入力欄を開く
+  const workplaceTaskNames = (id: string) => taskNamesForWorkplace(taskNamesByWorkplace, shift.companyId, id || null);
+  const ownTaskNames = workplaceTaskNames(workplaceId);
+  const knownTaskNames = shift.taskName && !ownTaskNames.includes(shift.taskName) && ownTaskNames.length > 0 ? [shift.taskName, ...ownTaskNames] : ownTaskNames;
   const [taskNameMode, setTaskNameMode] = useState<"pick" | "custom">(
-    knownTaskNames.length > 0 ? "pick" : "custom",
+    ownTaskNames.length > 0 ? "pick" : "custom",
   );
   const [error, setError] = useState<string | null>(null);
   const [breakMinutes, setBreakMinutes] = useState(String(shift.breakMinutes ?? 0));
@@ -311,6 +321,7 @@ export function ShiftCard({
             }
           }}
           className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+          data-testid="report-task-name"
         >
           <option value="">未選択</option>
           {knownTaskNames.map((name) => (
@@ -354,7 +365,10 @@ export function ShiftCard({
         <span className="text-muted">勤務先</span>
         <select
           value={workplaceId}
-          onChange={(e) => setWorkplaceId(e.target.value)}
+          onChange={(e) => {
+            setWorkplaceId(e.target.value);
+            setTaskNameMode(workplaceTaskNames(e.target.value).length > 0 ? "pick" : "custom");
+          }}
           className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
           data-testid="report-workplace"
         >
