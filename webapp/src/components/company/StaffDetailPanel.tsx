@@ -807,7 +807,9 @@ export function StaffDetailPanel({
               <div className="flex flex-col gap-4">
                 {(() => {
                   const currentContracts = data.contracts.filter((c) => c.status !== "ENDED");
-                  const pastContracts = data.contracts.filter((c) => c.status === "ENDED");
+                  // 過去の契約は、署名（同意／署名済み書面のアップロード）まで済んだものだけ。
+                  // 間違えて送って署名しないまま終わった契約書は出さない（残っていると揉めるため）
+                  const pastContracts = data.contracts.filter((c) => c.status === "ENDED" && (c.consentedAt || c.uploadedDocumentUrl));
                   return (
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between">
@@ -1790,7 +1792,6 @@ function StaffTaskRatesTab({
   onEditBaseWage: (c: StaffMonthDetail["contracts"][number]) => void;
 }) {
   const [pending, startTransition] = useTransition();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [baseHistoryOpen, setBaseHistoryOpen] = useState(false);
   const [amendingId, setAmendingId] = useState<string | null>(null);
   const [amendWageType, setAmendWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
@@ -1939,60 +1940,21 @@ function StaffTaskRatesTab({
           </li>
         ) : null}
         {rates.map((r) => (
-          <li key={r.id} className="rounded-lg border border-border p-3 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="font-medium">
-                {r.workplaceLabel} <span className="text-xs font-normal text-muted">（{r.taskName}）</span>
-              </span>
-              <span className="text-muted">{r.currentLabel}</span>
-            </div>
-
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+          // 依頼主・業務内容・今の単価だけを出す。履歴・終了・削除は「単価を変更」の中
+          <li key={r.id} className="rounded-lg border border-border p-3 text-sm" data-testid="staff-rate-card">
+            <p className="font-medium">{r.workplaceLabel}</p>
+            <p className="text-xs text-muted">{r.taskName}</p>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="font-semibold">{r.currentLabel}</span>
               <button
                 type="button"
-                onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
-                className="text-muted hover:text-primary"
+                onClick={() => startAmend(r)}
+                className="shrink-0 rounded-md border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/5"
               >
-                {expandedId === r.id ? "▲ 履歴を閉じる" : `▼ 履歴（${r.versions.length}件）`}
-              </button>
-              <button type="button" onClick={() => startAmend(r)} className="rounded-md border border-primary/40 px-2.5 py-1 font-semibold text-primary hover:bg-primary/5">
                 単価を変更
               </button>
-              {!r.ended ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => {
-                    setEndDate(todayJst());
-                    setEndingRate(r);
-                  }}
-                  className="text-muted hover:text-primary disabled:opacity-60"
-                >
-                  終了
-                </button>
-              ) : null}
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => setDeleteConfirmTarget(r)}
-                className="text-muted hover:text-red-600 disabled:opacity-60"
-              >
-                削除
-              </button>
             </div>
-
             {deleteError?.id === r.id ? <p className="mt-1 text-xs text-red-600">{deleteError.message}</p> : null}
-
-            {expandedId === r.id ? (
-              <ul className="mt-2 flex flex-col text-xs text-muted">
-                {r.versions.map((v) => (
-                  <li key={v.id} className="flex items-center justify-between border-t border-border/50 py-1">
-                    <span>{v.effectiveFrom} 〜</span>
-                    <span>{v.label}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
           </li>
         ))}
         {rates.length === 0 ? <p className="py-6 text-center text-sm text-muted">個別の単価は登録されていません。</p> : null}
@@ -2068,12 +2030,16 @@ function StaffTaskRatesTab({
           <div className="max-h-popup w-full overflow-y-auto max-w-sm rounded-2xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h4 className="font-serif-jp text-base font-bold text-primary">
-                単価を変更（{amendingRate.taskName} ／ {amendingRate.workplaceLabel}）
+                単価を変更
               </h4>
               <button type="button" onClick={() => setAmendingId(null)} aria-label="閉じる" className="text-muted hover:text-primary">
                 ✕
               </button>
             </div>
+            <p className="text-sm font-medium">{amendingRate.workplaceLabel}</p>
+            <p className="mb-3 text-xs text-muted">
+              {amendingRate.taskName}・今の単価：<span className="font-semibold text-foreground">{amendingRate.currentLabel}</span>
+            </p>
             <div className="flex flex-wrap items-end gap-2">
               <select
                 value={amendWageType}
@@ -2122,6 +2088,45 @@ function StaffTaskRatesTab({
             >
               保存
             </button>
+            {/* これまでの単価 */}
+            <p className="mt-4 text-xs font-semibold text-muted">履歴</p>
+            <ul className="mt-1 flex flex-col text-xs text-muted" data-testid="rate-history">
+              {amendingRate.versions.map((v) => (
+                <li key={v.id} className="flex items-center justify-between border-t border-border/50 py-1">
+                  <span>{v.effectiveFrom} 〜</span>
+                  <span>{v.label}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 flex justify-end gap-4 border-t border-border pt-3 text-xs">
+              {!amendingRate.ended ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    const r = amendingRate;
+                    setAmendingId(null);
+                    setEndDate(todayJst());
+                    setEndingRate(r);
+                  }}
+                  className="text-muted hover:text-primary disabled:opacity-60"
+                >
+                  この単価を終了する
+                </button>
+              ) : null}
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  const r = amendingRate;
+                  setAmendingId(null);
+                  setDeleteConfirmTarget(r);
+                }}
+                className="text-muted hover:text-red-600 disabled:opacity-60"
+              >
+                削除する
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

@@ -81,7 +81,9 @@ try {
   await panel.getByRole("button", { name: "業務内容単価" }).click();
   const row = panel.locator("li", { hasText: "キャディ" }).first();
   await row.getByText("日給15000円").waitFor({ timeout: 15000 });
-  await row.getByRole("button", { name: "終了", exact: true }).click();
+  // 終了は「単価を変更」の中
+  await row.getByRole("button", { name: "単価を変更" }).click();
+  await admin.locator("div.fixed.inset-0.z-40").last().getByRole("button", { name: "この単価を終了する" }).click();
   const dialog = admin.getByRole("dialog", { name: "単価を終了" });
   await dialog.locator('input[type="date"]').fill("2026-10-15");
   await dialog.getByRole("button", { name: "終了する" }).click();
@@ -93,7 +95,11 @@ try {
       psql(`select count(*) from "StaffTaskRateVersion" where "staffTaskRateId"='${rateId}' and amount=15000;`) === "1",
   );
   await row.getByText("終了（基本給で計算）").waitFor({ timeout: 15000 }).catch(() => {});
-  log("一覧に「終了（基本給で計算）」と出て、終了ボタンは消える", (await row.innerText()).includes("終了（基本給で計算）") && (await row.getByRole("button", { name: "終了", exact: true }).count()) === 0);
+  await row.getByRole("button", { name: "単価を変更" }).click();
+  const amendAfterEnd = admin.locator("div.fixed.inset-0.z-40").last();
+  await amendAfterEnd.getByTestId("rate-history").waitFor();
+  log("一覧に「終了（基本給で計算）」と出て、終了ボタンは消える", (await row.innerText()).includes("終了（基本給で計算）") && (await amendAfterEnd.getByRole("button", { name: "この単価を終了する" }).count()) === 0);
+  await amendAfterEnd.getByRole("button", { name: "閉じる" }).click();
   log(
     "スタッフにお知らせが届く",
     psql(`select count(*) from "StaffNotice" where "staffUserId"='${staffId}' and message like '%2026-10-15で終了%';`) === "1",

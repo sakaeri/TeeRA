@@ -149,6 +149,17 @@ try {
 
   panelText = await panel.textContent();
   log("終了後は「終了する」ボタンが無くなる（現在の契約から消える）", (await panel.getByRole("button", { name: "終了する" }).count()) === 0);
+  // 署名しないまま終了した契約（間違えて送った等）は、過去の契約に出さない
+  log("署名していない契約は終了しても過去の契約に出ない", !panelText.includes("過去の契約（"));
+
+  // 署名済みの契約は過去の契約に出る（ここでは署名済みとして記録してから確かめる）
+  psql(`update "StaffContract" set "consentedAt"=now() where id='${firstContractId}';`);
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.locator("tbody tr", { hasText: "契約管理花子" }).click();
+  await admin.waitForTimeout(300);
+  await panel.getByRole("button", { name: "契約書管理" }).click();
+  await admin.waitForTimeout(800);
+  panelText = await panel.textContent();
   log("過去の契約の履歴トグルが表示される", panelText.includes("過去の契約（1件）"));
 
   await panel.getByRole("button", { name: /過去の契約/ }).click();
@@ -192,6 +203,16 @@ try {
     `select count(*) from "StaffContract" where "staffUserId"='${staffUserId}' and status='ACTIVE';`,
   );
   log("本人が同意すると新しい契約だけがACTIVEになる", activeCount === "1");
+
+  // スタッフ側も、過去の契約は署名済みのものだけ（署名しないまま終わった契約書は出さない）
+  const unsignedTemplateId = psql(`select "templateId" from "StaffContract" where id='${firstContractId}';`);
+  psql(
+    `insert into "StaffContract" (id, "templateId", "staffUserId", "wageAmountSnapshot", "contractStartDate", status, "createdAt", "updatedAt") ` +
+      `values (gen_random_uuid()::text, '${unsignedTemplateId}', '${staffUserId}', 1, current_date, 'ENDED', now(), now());`,
+  );
+  await staff.goto(`http://localhost:3000/staff/contracts/${companyId}`);
+  await staff.waitForTimeout(800);
+  log("スタッフ側の過去の契約は署名済みの1件だけ（署名していない契約書は出ない）", (await staff.locator("body").innerText()).includes("過去の契約（1件）"));
 
   // --- ③ payroll date resolution across a real contract-ended gap
   // seed an OLD (ENDED) contract covering a past period, and a NEW (ACTIVE)
