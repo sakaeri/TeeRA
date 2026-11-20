@@ -847,6 +847,9 @@ model Shift {
   // 派遣会社が入れたことを、依頼主のカレンダーに「派遣会社が入力」と出すために使う。昔のシフトは空
   createdByCompanyId    String?
   createdVia            ShiftCreatedVia
+  // 依頼主への請求を、TeeRAの請求書を使わずに済ませた時（紙で請求した等）に付ける印。
+  // 付いていると「前の月以前に請求していない分」の案内にも、請求書の明細にも出さない
+  clientBilledManuallyAt DateTime?
   publicRecruitmentId   String?
   // 勤務開始1時間前リマインドメールを送信済みかどうかの目印（二重送信防止）。
   reminderSentAt        DateTime?

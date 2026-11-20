@@ -2,6 +2,7 @@
 
 import { formatQuantity, isQuantityUnit, QUANTITY_UNIT_LABEL } from "@/lib/quantityUnit";
 import { PdfLink } from "@/components/PdfLink";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useState, useTransition } from "react";
 import {
   addCustomLineAction,
@@ -18,6 +19,8 @@ import {
   reopenInvoiceForEditAction,
   setInvoiceRecipientNameAction,
   includeEarlierShiftsAction,
+  markEarlierShiftsBilledAction,
+  unmarkShiftBilledAction,
 } from "@/app/company/invoices/actions";
 
 type Line = {
@@ -95,6 +98,8 @@ export function InvoiceEditor({
     attachWorkRecord: boolean;
     // 前の月以前に請求していなかったシフト
     unbilledEarlier?: { shiftId: string; date: string; staffName: string; label: string }[];
+    // 「請求済み」にした前の月以前の分（未請求に戻せる）
+    manuallyBilledEarlier?: { shiftId: string; date: string; staffName: string; label: string }[];
   };
   clientName: string;
   // 請求書の宛名（直していればその名前。無ければ clientName と同じ）
@@ -204,8 +209,12 @@ export function InvoiceEditor({
       </div>
 
       {/* 前の月以前に請求していなかった分。依頼主へ出す書類なので、勝手には入れず「確認する」で中身を見て、✅を付けたものだけ入れる */}
-      {invoice.status === "DRAFT" && (invoice.unbilledEarlier?.length ?? 0) > 0 ? (
-        <UnbilledEarlierSection invoiceId={invoice.id} items={invoice.unbilledEarlier!} />
+      {invoice.status === "DRAFT" && ((invoice.unbilledEarlier?.length ?? 0) > 0 || (invoice.manuallyBilledEarlier?.length ?? 0) > 0) ? (
+        <UnbilledEarlierSection
+          invoiceId={invoice.id}
+          items={invoice.unbilledEarlier ?? []}
+          manuallyBilled={invoice.manuallyBilledEarlier ?? []}
+        />
       ) : null}
 
       {invoice.unresolved.length > 0 ? (
@@ -939,19 +948,24 @@ function AddBankAccountModal({
 function UnbilledEarlierSection({
   invoiceId,
   items,
+  manuallyBilled,
 }: {
   invoiceId: string;
   items: { shiftId: string; date: string; staffName: string; label: string }[];
+  manuallyBilled: { shiftId: string; date: string; staffName: string; label: string }[];
 }) {
   const [open, setOpen] = useState(false);
+  // 「請求済みにする」の確認と、請求済みにした分の一覧
+  const [confirmBilled, setConfirmBilled] = useState(false);
+  const [showBilled, setShowBilled] = useState(false);
   const [unchecked, setUnchecked] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
   const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
   const chosen = items.filter((i) => !unchecked.has(i.shiftId));
   return (
     <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900" data-testid="unbilled-earlier">
-      <p className="font-semibold">前の月以前に請求していない分が{items.length}件あります</p>
-      {!open ? (
+      {items.length > 0 ? <p className="font-semibold">前の月以前に請求していない分が{items.length}件あります</p> : null}
+      {items.length === 0 ? null : !open ? (
         <>
           {/* 日付は「確認する」で開く一覧で見られるので、ここには出さない */}
           <button
@@ -1019,9 +1033,72 @@ function UnbilledEarlierSection({
               ✅の{chosen.length}件をこの請求書に入れる
             </button>
           </div>
+          {/* 紙で請求した等、TeeRAの請求書には入れずに済ませた分 */}
+          <button
+            type="button"
+            disabled={pending || chosen.length === 0}
+            onClick={() => setConfirmBilled(true)}
+            className="mt-2 w-full rounded-lg border border-sky-300 bg-white px-3 py-2 text-xs font-semibold text-sky-800 disabled:opacity-50"
+            data-testid="mark-billed"
+          >
+            ✅の{chosen.length}件を請求済みにする
+          </button>
           <p className="mt-1 text-[11px]">入れた行は、明細の×で消すと未請求に戻ります（またここに出ます）。</p>
         </>
       )}
+      {confirmBilled ? (
+        <ConfirmDialog
+          message={`✅の${chosen.length}件を、この請求書には入れずに「請求済み」にします。この案内にも、これからの請求書にも出なくなります（「請求済みにした分」から未請求に戻せます）。`}
+          confirmLabel="請求済みにする"
+          danger={false}
+          pending={pending}
+          onCancel={() => setConfirmBilled(false)}
+          onConfirm={() =>
+            startTransition(async () => {
+              await markEarlierShiftsBilledAction(
+                invoiceId,
+                chosen.map((c) => c.shiftId),
+              );
+              setConfirmBilled(false);
+              setOpen(false);
+              setUnchecked(new Set());
+            })
+          }
+        />
+      ) : null}
+      {/* 請求済みにした分（間違えた時に未請求に戻す） */}
+      {manuallyBilled.length > 0 ? (
+        <div className={items.length > 0 ? "mt-3 border-t border-sky-200 pt-2" : ""}>
+          <button
+            type="button"
+            onClick={() => setShowBilled((v) => !v)}
+            className="text-xs text-sky-800 underline"
+            data-testid="manually-billed-toggle"
+          >
+            請求済みにした分（{manuallyBilled.length}件）{showBilled ? "を閉じる" : "を見る"}
+          </button>
+          {showBilled ? (
+            <ul className="mt-2 flex flex-col divide-y divide-sky-100 rounded-lg bg-white px-3" data-testid="manually-billed-list">
+              {manuallyBilled.map((i) => (
+                <li key={i.shiftId} className="flex items-center gap-2 py-2 text-xs text-foreground">
+                  <span className="w-10 shrink-0 text-muted">{md(i.date)}</span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {i.staffName}・{i.label}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => startTransition(() => unmarkShiftBilledAction(invoiceId, i.shiftId))}
+                    className="shrink-0 rounded-md border border-sky-200 px-2 py-1 text-[11px] text-sky-800 disabled:opacity-50"
+                  >
+                    未請求に戻す
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }

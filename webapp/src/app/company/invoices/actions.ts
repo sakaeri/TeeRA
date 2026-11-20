@@ -22,6 +22,8 @@ import {
   issueInvoice,
   reopenInvoiceForEdit,
   includeEarlierShifts,
+  markEarlierShiftsBilled,
+  unmarkShiftBilled,
 } from "@/lib/domain/invoicing";
 
 async function assertAccess(invoiceId: string) {
@@ -151,6 +153,22 @@ export async function includeEarlierShiftsAction(invoiceId: string, shiftIds: st
   const count = await includeEarlierShifts(invoiceId, shiftIds);
   revalidatePath("/company/invoices");
   return count;
+}
+
+// 前の月以前に請求していなかったシフトを「請求済み」にする（この請求書には入れない）
+export async function markEarlierShiftsBilledAction(invoiceId: string, shiftIds: string[]) {
+  const { invoice } = await assertAccess(invoiceId);
+  if (invoice.status !== "DRAFT") throw new Error("not_draft");
+  const count = await markEarlierShiftsBilled(invoiceId, shiftIds);
+  revalidatePath("/company/invoices");
+  return count;
+}
+
+// 「請求済み」にしたシフトを未請求に戻す
+export async function unmarkShiftBilledAction(invoiceId: string, shiftId: string) {
+  await assertAccess(invoiceId);
+  await unmarkShiftBilled(invoiceId, shiftId);
+  revalidatePath("/company/invoices");
 }
 
 // 請求書の宛名を直す（依頼主ごとに保存し、翌月以降の請求書にも使う）。空にすると依頼主名に戻る
