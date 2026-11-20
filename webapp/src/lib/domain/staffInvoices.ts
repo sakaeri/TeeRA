@@ -102,13 +102,88 @@ async function countPendingReports(companyId: string, staffUserId: string, targe
   });
 }
 
+// 一度請求に使った勤務は、二度と請求書に入れない（週払いで何枚出しても、前の月の分を後から付けても二重にならない）。
+// 「使った」は、提出済み・承認済みの請求書に入っていること（差し戻されたら外れて、出し直しに使える）。
+async function usedShiftIds(companyId: string, staffUserId: string, excludeInvoiceId: string | null) {
+  const rows = await prisma.staffInvoice.findMany({
+    where: {
+      companyId,
+      staffUserId,
+      status: { in: ["SUBMITTED", "APPROVED"] },
+      ...(excludeInvoiceId ? { id: { not: excludeInvoiceId } } : {}),
+    },
+    select: { workLines: true },
+  });
+  const ids = new Set<string>();
+  for (const r of rows) {
+    for (const l of (Array.isArray(r.workLines) ? r.workLines : []) as { shiftId?: string }[]) {
+      if (l?.shiftId) ids.add(l.shiftId);
+    }
+  }
+  return ids;
+}
+
+// 前の月以前の未請求の分は、どこまでさかのぼって入れるか
+const UNBILLED_LOOKBACK_DAYS = 400;
+const DAY_MS = 24 * 3600e3;
+function mdLabel(d: Date) {
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+}
+
+// 請求書の勤務の行：対象月の締め日（「◯日まで」にしていればその日）までの承認済みの勤務のうち、まだ請求していないもの。
+// 前の月以前に請求し忘れた分も入る（明細には日付が出る）。
+async function computeStaffInvoiceWorkLines(params: {
+  companyId: string;
+  staffUserId: string;
+  targetMonth: string;
+  periodEnd: Date | null;
+  excludeInvoiceId: string | null;
+}) {
+  const period = await payrollPeriod(params.companyId, params.targetMonth);
+  const lastDay = new Date(period.end.getTime() - DAY_MS);
+  const until = params.periodEnd && params.periodEnd < lastDay ? params.periodEnd : null;
+  const end = until ? new Date(until.getTime() + DAY_MS) : period.end;
+  const start = new Date(end.getTime() - UNBILLED_LOOKBACK_DAYS * DAY_MS);
+  const used = await usedShiftIds(params.companyId, params.staffUserId, params.excludeInvoiceId);
+  const { lines } = await computeApprovedWorkLines({
+    companyId: params.companyId,
+    staffUserId: params.staffUserId,
+    targetMonth: params.targetMonth,
+    range: { start, end },
+    excludedShiftIds: used,
+  });
+  lines.sort((a, b) => a.description.localeCompare(b.description));
+  const firstDate = lines.length > 0 ? new Date(`${lines[0].description.slice(0, 10)}T00:00:00.000Z`) : null;
+  const includesEarlier = Boolean(firstDate && firstDate < period.start);
+  // 対象期間の表示：前の月以前の分が入っている・「◯日まで」にした時は、実際の期間を出す
+  const rangeLabel =
+    includesEarlier || until
+      ? `${mdLabel(includesEarlier ? firstDate! : period.start)}〜${mdLabel(until ?? lastDay)}${includesEarlier ? "（前月以前の分を含む）" : ""}`
+      : period.rangeLabel;
+  return { lines, rangeLabel, includesEarlier, earlierCount: lines.filter((l) => new Date(`${l.description.slice(0, 10)}T00:00:00.000Z`) < period.start).length, until };
+}
+
+function parseUntil(value: string | null | undefined) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const d = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 // スタッフの画面に出す請求書（まだ作っていなければ、保存せずに下書きの中身だけを返す）。
 // 下書き・差し戻し中は業務の行を毎回作り直し、提出後・承認後は提出した時点の行のまま。
-export async function getStaffInvoiceForStaff(staffUserId: string, companyId: string, targetMonth: string) {
+export async function getStaffInvoiceForStaff(
+  staffUserId: string,
+  companyId: string,
+  targetMonth: string,
+  sequence = 1,
+  untilParam: string | null = null,
+) {
   const [membership, user, existing, latestContract, previous] = await Promise.all([
     prisma.companyMembership.findUniqueOrThrow({ where: { userId_companyId: { userId: staffUserId, companyId } } }),
     prisma.user.findUniqueOrThrow({ where: { id: staffUserId } }),
-    prisma.staffInvoice.findUnique({ where: { companyId_staffUserId_targetMonth: { companyId, staffUserId, targetMonth } } }),
+    prisma.staffInvoice.findUnique({
+      where: { companyId_staffUserId_targetMonth_sequence: { companyId, staffUserId, targetMonth, sequence } },
+    }),
     prisma.staffContract.findFirst({
       where: { staffUserId, status: { not: "PENDING_CONSENT" }, template: { companyId } },
       orderBy: { createdAt: "desc" },
@@ -122,11 +197,16 @@ export async function getStaffInvoiceForStaff(staffUserId: string, companyId: st
   ]);
 
   const editable = !existing || existing.status === "DRAFT" || existing.status === "RETURNED";
-  const workLines: ComputedWorkLine[] = editable
-    ? (await computeApprovedWorkLines({ companyId, staffUserId, targetMonth })).lines.sort((a, b) =>
-        a.description.localeCompare(b.description),
-      )
-    : (existing!.workLines as ComputedWorkLine[]);
+  // 「◯日まで」：画面で選び直した日 → 保存してある日 → なし（締め日まで）
+  const periodEnd = untilParam !== null ? parseUntil(untilParam) : (existing?.periodEnd ?? null);
+  const computed = editable
+    ? await computeStaffInvoiceWorkLines({ companyId, staffUserId, targetMonth, periodEnd, excludeInvoiceId: existing?.id ?? null })
+    : null;
+  const workLines: ComputedWorkLine[] = computed ? computed.lines : (existing!.workLines as ComputedWorkLine[]);
+  // 提出した後に、まだ請求していない勤務が残っていれば「次の請求書を作る」を出す（週払いなど）
+  const remainingAfterSubmit = !editable
+    ? (await computeStaffInvoiceWorkLines({ companyId, staffUserId, targetMonth, periodEnd: null, excludeInvoiceId: null })).lines.length
+    : 0;
   const expenses = sanitizeExpenses(existing?.expenses ?? []);
   const withholding = editable ? membership.contractorWithholding : existing!.withholding;
   const taxExclusive = editable ? membership.contractorTaxExclusive : existing!.taxExclusive;
@@ -169,8 +249,12 @@ export async function getStaffInvoiceForStaff(staffUserId: string, companyId: st
     taxExclusive,
     ...totals,
     pendingReportCount: editable ? await countPendingReports(companyId, staffUserId, targetMonth) : 0,
-    // 締め日が末日でない会社の対象期間（例："10/21〜11/20"）。提出後は提出した時点のまま
-    periodRangeLabel: editable ? (await payrollPeriod(companyId, targetMonth)).rangeLabel : existing!.periodRangeLabel,
+    // 対象期間（締め日が末日でない会社・前月以前の分を含む・◯日まで の時）。提出後は提出した時点のまま
+    periodRangeLabel: editable ? computed!.rangeLabel : existing!.periodRangeLabel,
+    sequence,
+    periodEnd: computed?.until ? computed.until.toISOString().slice(0, 10) : (existing?.periodEnd?.toISOString().slice(0, 10) ?? null),
+    earlierCount: computed?.earlierCount ?? 0,
+    remainingAfterSubmit,
     submittedAt: existing?.submittedAt?.toISOString() ?? null,
     reviewedAt: existing?.reviewedAt?.toISOString() ?? null,
     returnReason: existing?.returnReason ?? null,
@@ -192,15 +276,18 @@ export async function saveStaffInvoice(params: {
   staffUserId: string;
   companyId: string;
   targetMonth: string;
+  sequence?: number;
+  periodEnd?: string | null;
   input: StaffInvoiceInput;
   submit: boolean;
 }) {
   const { staffUserId, companyId, targetMonth } = params;
+  const sequence = Number.isInteger(params.sequence) && params.sequence! >= 1 && params.sequence! <= 99 ? params.sequence! : 1;
   if (!isValidTargetMonth(targetMonth)) throw new StaffInvoiceError("対象月が正しくありません。");
   if (!(await isContractorOf(staffUserId, companyId))) throw new StaffInvoiceError("業務委託の契約がある会社にだけ請求書を出せます。");
 
   const existing = await prisma.staffInvoice.findUnique({
-    where: { companyId_staffUserId_targetMonth: { companyId, staffUserId, targetMonth } },
+    where: { companyId_staffUserId_targetMonth_sequence: { companyId, staffUserId, targetMonth, sequence } },
   });
   if (existing && existing.status !== "DRAFT" && existing.status !== "RETURNED") {
     throw new StaffInvoiceError("提出済みの請求書は直せません。会社から差し戻されると直せるようになります。");
@@ -218,13 +305,19 @@ export async function saveStaffInvoice(params: {
   }
   const note = params.input.note.trim().slice(0, 500);
 
-  const { lines } = await computeApprovedWorkLines({ companyId, staffUserId, targetMonth });
-  const workLines = lines.sort((a, b) => a.description.localeCompare(b.description));
+  const computed = await computeStaffInvoiceWorkLines({
+    companyId,
+    staffUserId,
+    targetMonth,
+    periodEnd: parseUntil(params.periodEnd ?? null),
+    excludeInvoiceId: existing?.id ?? null,
+  });
+  const workLines = computed.lines;
   if (params.submit) {
     if (!issuerName) throw new StaffInvoiceError("名前を入力してください。");
     if (!issuerAddress) throw new StaffInvoiceError("住所を入力してください。");
     if (workLines.length === 0 && expenses.length === 0) {
-      throw new StaffInvoiceError("この月の承認済みの勤務がありません。会社が業務報告を承認すると請求書に入ります。");
+      throw new StaffInvoiceError("まだ請求していない承認済みの勤務がありません。会社が業務報告を承認すると請求書に入ります。");
     }
   }
   const totals = computeStaffInvoiceTotals({
@@ -249,7 +342,8 @@ export async function saveStaffInvoice(params: {
     withholding: membership.contractorWithholding,
     taxExclusive: membership.contractorTaxExclusive,
     ...totals,
-    periodRangeLabel: (await payrollPeriod(companyId, targetMonth)).rangeLabel,
+    periodRangeLabel: computed.rangeLabel,
+    periodEnd: computed.until,
     ...(params.submit ? { status: "SUBMITTED" as const, submittedAt: new Date(), returnReason: null } : {}),
   };
 
@@ -258,7 +352,7 @@ export async function saveStaffInvoice(params: {
     await tx.user.update({ where: { id: staffUserId }, data: { invoiceRegistrationNumber: registrationNumber || null } });
     return existing
       ? tx.staffInvoice.update({ where: { id: existing.id }, data })
-      : tx.staffInvoice.create({ data: { companyId, staffUserId, targetMonth, ...data } });
+      : tx.staffInvoice.create({ data: { companyId, staffUserId, targetMonth, sequence, ...data } });
   });
   return { invoice: saved, wasResubmission: Boolean(params.submit && existing?.submittedAt) };
 }
@@ -276,6 +370,11 @@ export async function listReceivedStaffInvoices(companyId: string, targetMonth: 
 // 開く時に1件分使うかどうか（画面の確認メッセージ用）。すでにこの月の分を精算済み・支払明細を発行済みなら無料
 export async function staffInvoiceOpenCost(invoice: { companyId: string; staffUserId: string; targetMonth: string; chargeSettledAt: Date | null }) {
   if (invoice.chargeSettledAt) return "free" as const;
+  // 同じ人・同じ月の請求書は、何枚届いても1回分（週払いなど）
+  const settledSameMonth = await prisma.staffInvoice.count({
+    where: { companyId: invoice.companyId, staffUserId: invoice.staffUserId, targetMonth: invoice.targetMonth, chargeSettledAt: { not: null } },
+  });
+  if (settledSameMonth > 0) return "free" as const;
   const issued = await prisma.salarySlipIssue.count({
     where: { salarySlip: { companyId: invoice.companyId, staffUserId: invoice.staffUserId, targetMonth: invoice.targetMonth } },
   });
@@ -296,9 +395,19 @@ export async function openStaffInvoice(params: { invoiceId: string; companyId: s
     const issued = await tx.salarySlipIssue.count({
       where: { salarySlip: { companyId: invoice.companyId, staffUserId: invoice.staffUserId, targetMonth: invoice.targetMonth } },
     });
+    // 同じ人・同じ月の請求書は、何枚届いても1回分（週払いなど）
+    const settledSameMonth = await tx.staffInvoice.count({
+      where: {
+        companyId: invoice.companyId,
+        staffUserId: invoice.staffUserId,
+        targetMonth: invoice.targetMonth,
+        chargeSettledAt: { not: null },
+        id: { not: invoice.id },
+      },
+    });
     let countsAgainstQuota = false;
     let chargedTee = false;
-    if (issued === 0) {
+    if (issued === 0 && settledSameMonth === 0) {
       const company = await tx.company.findUniqueOrThrow({ where: { id: invoice.companyId }, select: { planTier: true } });
       countsAgainstQuota = await hasRemainingPdfQuota(tx, invoice.companyId, company.planTier, invoice.targetMonth);
       if (!countsAgainstQuota) {

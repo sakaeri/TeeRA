@@ -367,6 +367,8 @@ export async function consentToElectronicPayslipAction(companyId: string) {
 export async function saveStaffInvoiceAction(params: {
   companyId: string;
   targetMonth: string;
+  sequence?: number;
+  periodEnd?: string | null;
   input: StaffInvoiceInput;
   submit: boolean;
 }): Promise<{ ok: true } | { ok: false; message: string }> {

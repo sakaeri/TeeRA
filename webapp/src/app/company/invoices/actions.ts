@@ -21,6 +21,7 @@ import {
   setInvoiceRegistrationNumber,
   issueInvoice,
   reopenInvoiceForEdit,
+  includeEarlierShifts,
 } from "@/lib/domain/invoicing";
 
 async function assertAccess(invoiceId: string) {
@@ -142,6 +143,14 @@ export async function reopenInvoiceForEditAction(invoiceId: string) {
   await assertAccess(invoiceId);
   await reopenInvoiceForEdit(invoiceId);
   revalidatePath("/company/invoices");
+}
+
+// 前の月以前に請求していなかったシフトを、この請求書に入れる
+export async function includeEarlierShiftsAction(invoiceId: string) {
+  await assertAccess(invoiceId);
+  const count = await includeEarlierShifts(invoiceId);
+  revalidatePath("/company/invoices");
+  return count;
 }
 
 // 請求書の宛名を直す（依頼主ごとに保存し、翌月以降の請求書にも使う）。空にすると依頼主名に戻る

@@ -1344,6 +1344,10 @@ model StaffInvoice {
   companyId          String
   staffUserId        String
   targetMonth        String // "YYYY-MM"
+  // 同じ月の何枚目か（週払いなど、同じ月に何枚も出せる）
+  sequence           Int                @default(1)
+  // 「◯日まで」の分だけにした時のその日（null は対象月の締め日まで）
+  periodEnd          DateTime?          @db.Date
   // 提出した時点の対象期間（締め日が末日でない時だけ。例："10/21〜11/20"）
   periodRangeLabel   String?
   status             StaffInvoiceStatus @default(DRAFT)
@@ -1382,7 +1386,7 @@ model StaffInvoice {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   staff   User    @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
 
-  @@unique([companyId, staffUserId, targetMonth])
+  @@unique([companyId, staffUserId, targetMonth, sequence])
   @@index([companyId, targetMonth])
 }
 
@@ -1415,6 +1419,8 @@ model Invoice {
   // regenerateLinesでその月の承認済み実績としてまた自動生成されてしまう
   // （SalarySlip.excludedShiftIdsと同じ理由）。
   excludedShiftIds                  Json          @default("[]")
+  // 前の月以前に請求していなかったシフトを、この請求書に入れた分（「この請求書に入れる」で確認してから入れる）
+  includedEarlierShiftIds           Json          @default("[]")
   // PDFの明細の載せ方：trueは「業務×単価」ごと、falseは「スタッフ×業務×単価」ごと
   groupLinesByTask                  Boolean       @default(true)
   // PDFの2ページ目以降に、この請求書に載ったシフトの実績表を付ける

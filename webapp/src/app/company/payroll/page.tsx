@@ -162,6 +162,8 @@ export default async function PayrollPage({
       status: inv.status,
       opened: inv.chargeSettledAt != null,
       freeToOpen: (await staffInvoiceOpenCost(inv)) === "free",
+      sequence: inv.sequence,
+      periodRangeLabel: inv.periodRangeLabel,
     })),
   );
   const invoicedStaffIds = await approvedStaffInvoiceStaffIds(membership.companyId, targetMonth);

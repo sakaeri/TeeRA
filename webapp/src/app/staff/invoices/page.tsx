@@ -34,10 +34,26 @@ export default async function StaffInvoicesPage({ searchParams }: PageProps<"/st
   const lastMonthDate = new Date(Date.UTC(today.year, today.month - 2, 1));
   const lastMonth = `${lastMonthDate.getUTCFullYear()}-${String(lastMonthDate.getUTCMonth() + 1).padStart(2, "0")}`;
   const targetMonth = typeof sp.month === "string" && isValidTargetMonth(sp.month) ? sp.month : lastMonth;
-  const companyId = typeof sp.company === "string" && companies.some((c) => c.id === sp.company) ? sp.company : null;
+  // 「＋新しく作成」からは newFor（その会社の新しい1枚）、一覧からは company（＋何枚目か）で開く
+  const newFor = typeof sp.newFor === "string" && companies.some((c) => c.id === sp.newFor) ? sp.newFor : null;
+  const companyId = newFor ?? (typeof sp.company === "string" && companies.some((c) => c.id === sp.company) ? sp.company : null);
 
   if (companyId) {
-    const invoice = await getStaffInvoiceForStaff(userId, companyId, targetMonth);
+    // 同じ月に何枚でも出せる（週払いなど）。何枚目かの指定が無ければ、下書き中のもの → 無ければ最後の1枚
+    // （「＋新しく作成」から来た時は、下書き中のもの → 無ければ新しい1枚）
+    const monthInvoices = await prisma.staffInvoice.findMany({
+      where: { staffUserId: userId, companyId, targetMonth },
+      select: { sequence: true, status: true },
+      orderBy: { sequence: "asc" },
+    });
+    const seqParam = typeof sp.seq === "string" ? Number(sp.seq) : NaN;
+    const draftSeq = monthInvoices.find((i) => i.status === "DRAFT" || i.status === "RETURNED")?.sequence;
+    const nextSeq = (monthInvoices[monthInvoices.length - 1]?.sequence ?? 0) + 1;
+    const latestSeq = monthInvoices[monthInvoices.length - 1]?.sequence;
+    const sequence =
+      Number.isInteger(seqParam) && seqParam >= 1 ? seqParam : (draftSeq ?? (newFor ? nextSeq : (latestSeq ?? 1)));
+    const until = typeof sp.until === "string" ? sp.until : null;
+    const invoice = await getStaffInvoiceForStaff(userId, companyId, targetMonth, sequence, until);
     const companyName = companies.find((c) => c.id === companyId)!.name;
     const [y, m] = targetMonth.split("-").map(Number);
     return (
@@ -48,11 +64,22 @@ export default async function StaffInvoicesPage({ searchParams }: PageProps<"/st
         <div className="mb-4">
           <h1 className="font-serif-jp text-xl font-bold text-primary">{companyName}</h1>
           <p className="text-sm text-muted">
-            {y}年{m}月分の請求書
+            {y}年{m}月分の請求書{sequence > 1 ? `（${sequence}枚目）` : ""}
             {invoice.periodRangeLabel ? `（対象期間：${invoice.periodRangeLabel}）` : ""}
           </p>
         </div>
-        <StaffInvoiceEditor key={`${companyId}-${targetMonth}`} companyId={companyId} companyName={companyName} targetMonth={targetMonth} invoice={invoice} />
+        <StaffInvoiceEditor
+          key={`${companyId}-${targetMonth}-${sequence}-${until ?? ""}`}
+          companyId={companyId}
+          companyName={companyName}
+          targetMonth={targetMonth}
+          invoice={invoice}
+          nextHref={
+            invoice.remainingAfterSubmit > 0 && !draftSeq
+              ? `/staff/invoices?month=${targetMonth}&company=${companyId}&seq=${nextSeq}`
+              : null
+          }
+        />
       </main>
     );
   }
@@ -60,12 +87,14 @@ export default async function StaffInvoicesPage({ searchParams }: PageProps<"/st
   const invoices = await prisma.staffInvoice.findMany({
     where: { staffUserId: userId, targetMonth, companyId: { in: companies.map((c) => c.id) } },
     include: { company: { select: { name: true } } },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { sequence: "asc" }],
   });
   const drafts = invoices.filter((i) => i.status === "DRAFT" || i.status === "RETURNED");
   const submitted = invoices.filter((i) => i.status === "SUBMITTED" || i.status === "APPROVED");
-  const companiesWithInvoice = new Set(invoices.map((i) => i.companyId));
-  const availableCompanies = companies.filter((c) => !companiesWithInvoice.has(c.id));
+  // 「＋新しく作成」は、この月に下書き中の請求書が無い会社（提出済みの後に2枚目を出す時も含む）
+  const companiesWithDraft = new Set(drafts.map((i) => i.companyId));
+  const availableCompanies = companies.filter((c) => !companiesWithDraft.has(c.id));
+  const seqLabel = (i: { sequence: number }) => (i.sequence > 1 ? `（${i.sequence}枚目）` : "");
   const row = "flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm";
 
   return (
@@ -80,7 +109,7 @@ export default async function StaffInvoicesPage({ searchParams }: PageProps<"/st
             <CreateRecordButton
               basePath="/staff/invoices"
               targetMonth={targetMonth}
-              paramName="company"
+              paramName="newFor"
               label="請求先の会社"
               options={availableCompanies.map((c) => ({ id: c.id, name: c.name }))}
             />
@@ -92,9 +121,12 @@ export default async function StaffInvoicesPage({ searchParams }: PageProps<"/st
           <ul className="flex flex-col gap-1">
             {drafts.map((i) => (
               <li key={i.id}>
-                <Link href={`/staff/invoices?month=${targetMonth}&company=${i.companyId}`} className={`${row} hover:bg-background`}>
+                <Link href={`/staff/invoices?month=${targetMonth}&company=${i.companyId}&seq=${i.sequence}`} className={`${row} hover:bg-background`}>
                   <span className="flex items-center gap-2">
-                    <span className="font-medium">{i.company.name}</span>
+                    <span className="font-medium">
+                      {i.company.name}
+                      {seqLabel(i)}
+                    </span>
                     {STATUS_CHIP[i.status] ? (
                       <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_CHIP[i.status].className}`}>{STATUS_CHIP[i.status].text}</span>
                     ) : null}
@@ -114,8 +146,9 @@ export default async function StaffInvoicesPage({ searchParams }: PageProps<"/st
           <ul className="flex flex-col gap-1">
             {submitted.map((i) => (
               <li key={i.id} className={row}>
-                <Link href={`/staff/invoices?month=${targetMonth}&company=${i.companyId}`} className="flex items-center gap-2 font-medium text-primary underline">
+                <Link href={`/staff/invoices?month=${targetMonth}&company=${i.companyId}&seq=${i.sequence}`} className="flex items-center gap-2 font-medium text-primary underline">
                   {i.company.name}
+                  {seqLabel(i)}
                   <span className={`rounded-full px-2 py-0.5 text-xs no-underline ${STATUS_CHIP[i.status].className}`}>{STATUS_CHIP[i.status].text}</span>
                 </Link>
                 <span className="text-muted">{i.total.toLocaleString()}円</span>

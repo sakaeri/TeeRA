@@ -196,8 +196,10 @@ export async function computeApprovedWorkLines(params: {
   staffUserId: string;
   targetMonth: string;
   excludedShiftIds?: Set<string>;
+  // 対象月の期間の代わりに使う期間（スタッフの請求書：前月以前の未請求分も入れる・◯日まで）
+  range?: { start: Date; end: Date };
 }): Promise<{ lines: ComputedWorkLine[]; unresolved: UnresolvedSalaryShift[]; hasContract: boolean }> {
-  const { start, end } = await payrollPeriod(params.companyId, params.targetMonth);
+  const { start, end } = params.range ?? (await payrollPeriod(params.companyId, params.targetMonth));
   const reports = await prisma.workReport.findMany({
     where: {
       staffUserId: params.staffUserId,

@@ -26,6 +26,9 @@ type Invoice = {
   expensesTotal: number;
   total: number;
   pendingReportCount: number;
+  sequence: number;
+  periodEnd: string | null;
+  earlierCount: number;
   submittedAt: string | null;
   reviewedAt: string | null;
   returnReason: string | null;
@@ -49,11 +52,14 @@ export function StaffInvoiceEditor({
   companyName,
   targetMonth,
   invoice,
+  nextHref = null,
 }: {
   companyId: string;
   companyName: string;
   targetMonth: string;
   invoice: Invoice;
+  // 提出した後、まだ請求していない勤務が残っている時の「次の請求書を作る」
+  nextHref?: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -80,6 +86,8 @@ export function StaffInvoiceEditor({
       const result = await saveStaffInvoiceAction({
         companyId,
         targetMonth,
+        sequence: invoice.sequence,
+        periodEnd: invoice.periodEnd,
         submit,
         input: { expenses: cleanExpenses, note, issuerName, issuerAddress, registrationNumber },
       });
@@ -108,6 +116,40 @@ export function StaffInvoiceEditor({
         </div>
       ) : null}
 
+      {nextHref ? (
+        <a
+          href={nextHref}
+          className="rounded-2xl border border-primary bg-white px-4 py-3 text-center text-sm font-semibold text-primary"
+          data-testid="staff-invoice-next"
+        >
+          まだ請求していない勤務があります → 次の請求書を作る
+        </a>
+      ) : null}
+
+      {editable && invoice.earlierCount > 0 ? (
+        <p className="rounded-2xl bg-sky-50 px-4 py-3 text-xs text-sky-900" data-testid="staff-invoice-earlier">
+          前の月以前に請求していなかった勤務が{invoice.earlierCount}件あるので、この請求書に入れています（明細の日付で分かります）。
+        </p>
+      ) : null}
+
+      {editable ? (
+        // 週払いなど、途中の日までの分だけで出す時
+        <label className="flex flex-wrap items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm shadow-sm ring-1 ring-black/5">
+          <span className="text-muted">この日までの分だけにする（任意）</span>
+          <input
+            type="date"
+            value={invoice.periodEnd ?? ""}
+            onChange={(e) => {
+              const params = new URLSearchParams({ month: targetMonth, company: companyId, seq: String(invoice.sequence), until: e.target.value });
+              router.push(`/staff/invoices?${params.toString()}`);
+            }}
+            className="rounded-lg border border-border px-2 py-1 text-sm"
+            data-testid="staff-invoice-until"
+          />
+          {invoice.periodEnd ? <span className="text-xs text-muted">（残りは次の請求書に入れられます）</span> : null}
+        </label>
+      ) : null}
+
       {editable && invoice.pendingReportCount > 0 ? (
         <p className="rounded-2xl bg-background px-4 py-3 text-xs text-muted">
           この月に、まだ会社が承認していない業務報告が{invoice.pendingReportCount}件あります。承認されるまで請求書には入りません。
@@ -115,9 +157,9 @@ export function StaffInvoiceEditor({
       ) : null}
 
       <section className={card}>
-        <h2 className="mb-2 text-sm font-semibold text-primary">勤務（承認済みの業務報告から自動で入ります）</h2>
+        <h2 className="mb-2 text-sm font-semibold text-primary">勤務（承認済みで、まだ請求していない業務報告から自動で入ります）</h2>
         {invoice.workLines.length === 0 ? (
-          <p className="text-sm text-muted">この月の承認済みの勤務はまだありません。</p>
+          <p className="text-sm text-muted">まだ請求していない承認済みの勤務はありません。</p>
         ) : (
           <ul className="divide-y divide-border/60 text-sm">
             {invoice.workLines.map((l) => {

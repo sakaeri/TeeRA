@@ -17,6 +17,7 @@ import {
   issueInvoiceAction,
   reopenInvoiceForEditAction,
   setInvoiceRecipientNameAction,
+  includeEarlierShiftsAction,
 } from "@/app/company/invoices/actions";
 
 type Line = {
@@ -92,6 +93,8 @@ export function InvoiceEditor({
     issues: { id: string }[];
     groupLinesByTask: boolean;
     attachWorkRecord: boolean;
+    // 前の月以前に請求していなかったシフト
+    unbilledEarlier?: { shiftId: string; date: string }[];
   };
   clientName: string;
   // 請求書の宛名（直していればその名前。無ければ clientName と同じ）
@@ -199,6 +202,28 @@ export function InvoiceEditor({
           </p>
         )}
       </div>
+
+      {/* 前の月以前に請求していなかった分。依頼主へ出す書類なので、勝手には入れず確認してから入れる */}
+      {invoice.status === "DRAFT" && (invoice.unbilledEarlier?.length ?? 0) > 0 ? (
+        <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900" data-testid="unbilled-earlier">
+          <p className="font-semibold">前の月以前に請求していない分が{invoice.unbilledEarlier!.length}件あります</p>
+          <p className="mt-1 text-xs">
+            {invoice
+              .unbilledEarlier!.slice(0, 5)
+              .map((e) => `${Number(e.date.slice(5, 7))}/${Number(e.date.slice(8, 10))}`)
+              .join("・")}
+            {invoice.unbilledEarlier!.length > 5 ? " ほか" : ""}
+          </p>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => startTransition(async () => void (await includeEarlierShiftsAction(invoice.id)))}
+            className="mt-2 rounded-lg bg-sky-700 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            この請求書に入れる
+          </button>
+        </section>
+      ) : null}
 
       {invoice.unresolved.length > 0 ? (
         <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">

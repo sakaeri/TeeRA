@@ -18,6 +18,9 @@ export type ReceivedInvoiceRow = {
   status: string;
   opened: boolean;
   freeToOpen: boolean;
+  // 同じ月の何枚目か（週払いなど）と、対象期間（前月以前の分を含む・◯日まで の時）
+  sequence?: number;
+  periodRangeLabel?: string | null;
 };
 
 // 一覧：中身（金額）は開くまで出さない。開く時に「1件分使います」と確かめる
@@ -130,7 +133,11 @@ export function ReceivedStaffInvoiceList({
                 className="flex w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-left text-sm hover:bg-background disabled:opacity-60"
               >
                 <span className="flex items-center gap-2">
-                  <span className="font-medium">{r.staffName}</span>
+                  <span className="font-medium">
+                    {r.staffName}
+                    {r.sequence && r.sequence > 1 ? `（${r.sequence}枚目）` : ""}
+                  </span>
+                  {r.periodRangeLabel ? <span className="text-xs text-muted">{r.periodRangeLabel}</span> : null}
                   {st ? <span className={`rounded-full px-2 py-0.5 text-xs ${st.className}`}>{st.text}</span> : null}
                   {!r.opened ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">未開封</span> : null}
                 </span>
