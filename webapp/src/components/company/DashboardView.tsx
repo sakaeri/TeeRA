@@ -128,6 +128,7 @@ type PendingReportEntry = {
   taskName: string | null;
   isUnscheduled: boolean;
   workplaceName: string;
+  workplaceChangedByStaffFrom?: string | null;
   companyRelationshipId: string | null;
   workplaceLocked: boolean;
 };
@@ -193,6 +194,7 @@ const TAG_STYLE: Record<string, string> = {
   欠員: "bg-rose-100 text-rose-800",
   シフト: "bg-pink-100 text-pink-800",
   調整中: "bg-red-100 text-red-800",
+  振替: "bg-amber-100 text-amber-800",
   契約書: "bg-gray-200 text-gray-700",
   契約満了: "bg-orange-100 text-orange-800",
   有給付与: "bg-sky-100 text-sky-800",
@@ -1278,7 +1280,16 @@ function WorkReportDetailModal({
             {entry.staffName}・{entry.teamName ?? "自社"}・{formatDateJa(entry.date)}
             {entry.taskName ? `・${entry.taskName}` : ""}
           </p>
-          <p data-testid="report-workplace">勤務先：{entry.workplaceName}</p>
+          <p data-testid="report-workplace">
+            勤務先：
+            {entry.workplaceChangedByStaffFrom ? (
+              <span className="font-semibold text-amber-700">
+                {entry.workplaceChangedByStaffFrom} → {entry.workplaceName}（スタッフが変更）
+              </span>
+            ) : (
+              entry.workplaceName
+            )}
+          </p>
         </div>
 
         {entry.outcome === "出勤した" ? (

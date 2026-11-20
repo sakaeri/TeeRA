@@ -28,6 +28,8 @@ export type ShiftRow = {
   monthlyApproval?: boolean;
   // 会社が直した時に勤務先も変えていたら、変更前の勤務先名
   workplaceChangedFrom?: string | null;
+  // 今の勤務先（null は社内）。業務報告で勤務先を変える時の初期値
+  companyRelationshipId?: string | null;
 };
 
 // 「済み」＝欠勤/キャンセルとして報告済み、または業務報告を提出して

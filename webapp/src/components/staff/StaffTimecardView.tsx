@@ -88,7 +88,7 @@ export function StaffTimecardView({
           <h2 className="mb-2 text-sm font-bold text-red-700">未提出の業務報告（{unsubmitted.length}件）</h2>
           <ul className="flex flex-col gap-4">
             {unsubmitted.map((s) => (
-              <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} />
+              <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} workplaces={unscheduledCompanies.find((c) => c.companyId === s.companyId)?.workplaces ?? []} />
             ))}
           </ul>
         </section>
@@ -99,7 +99,7 @@ export function StaffTimecardView({
           <h2 className="mb-2 text-sm font-bold text-muted">今日のシフト</h2>
           <ul className="flex flex-col gap-4">
             {upcomingToday.map((s) => (
-              <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} />
+              <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} workplaces={unscheduledCompanies.find((c) => c.companyId === s.companyId)?.workplaces ?? []} />
             ))}
           </ul>
         </section>
@@ -123,7 +123,7 @@ export function StaffTimecardView({
           </summary>
           <ul className="mt-3 flex flex-col gap-4">
             {pastDone.map((s) => (
-              <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} />
+              <ShiftCard key={s.id} shift={s} knownTaskNames={knownTaskNamesByCompany[s.companyId] ?? []} workplaces={unscheduledCompanies.find((c) => c.companyId === s.companyId)?.workplaces ?? []} />
             ))}
           </ul>
         </details>
@@ -144,8 +144,20 @@ export function needsReportNow(shift: ShiftRow) {
   );
 }
 
-export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTaskNames: string[] }) {
+export function ShiftCard({
+  shift,
+  knownTaskNames,
+  workplaces = [],
+}: {
+  shift: ShiftRow;
+  knownTaskNames: string[];
+  // 勤務先として選べる依頼主（本人が配属されている依頼主）。社内はいつでも選べる
+  workplaces?: { companyRelationshipId: string; name: string }[];
+}) {
   const [pending, startTransition] = useTransition();
+  // 勤務先（当日に別の現場へ回った時に変える）。"" は社内
+  const [workplaceId, setWorkplaceId] = useState(shift.companyRelationshipId ?? "");
+  const workplaceChanged = workplaceId !== (shift.companyRelationshipId ?? "");
   const [comment, setComment] = useState(shift.comment ?? "");
   const [taskName, setTaskName] = useState(shift.taskName ?? "");
   const [taskNameMode, setTaskNameMode] = useState<"pick" | "custom">(
@@ -334,6 +346,33 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
       )}
     </label>
   );
+
+  // 勤務先の選択（配属先が無い人には出さない）。変えると、提出した時に新しい勤務先へ振り替わり、承認は新しい勤務先がする
+  const workplaceInput =
+    workplaces.length > 0 || shift.companyRelationshipId ? (
+      <label className="flex flex-col gap-0.5 text-xs">
+        <span className="text-muted">勤務先</span>
+        <select
+          value={workplaceId}
+          onChange={(e) => setWorkplaceId(e.target.value)}
+          className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+          data-testid="report-workplace"
+        >
+          <option value="">社内</option>
+          {shift.companyRelationshipId && !workplaces.some((w) => w.companyRelationshipId === shift.companyRelationshipId) ? (
+            <option value={shift.companyRelationshipId}>{shift.workplaceName ?? "依頼主"}</option>
+          ) : null}
+          {workplaces.map((w) => (
+            <option key={w.companyRelationshipId} value={w.companyRelationshipId}>
+              {w.name}
+            </option>
+          ))}
+        </select>
+        {workplaceChanged ? (
+          <span className="text-amber-700">提出すると、この勤務先に振り替わります（元の勤務先は取り消しになり、承認は新しい勤務先がします）。</span>
+        ) : null}
+      </label>
+    ) : null;
 
   const commentInput = (
     <textarea
@@ -543,6 +582,7 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
               {hasInvalidTimeRange ? (
                 <p className="text-xs text-red-600">退勤時刻が出勤時刻より前になっています。時刻を見直してください。</p>
               ) : null}
+              {workplaceInput}
               {taskNameInput}
               {commentInput}
               {error ? <p className="text-xs text-red-600">{error}</p> : null}
@@ -560,6 +600,7 @@ export function ShiftCard({ shift, knownTaskNames }: { shift: ShiftRow; knownTas
                         breakMinutes: Number(breakMinutes) || 0,
                         clockInTime: clockInEdit,
                         clockOutTime: clockOutEdit,
+                        ...(workplaceChanged ? { companyRelationshipId: workplaceId || null } : {}),
                       });
                       showToast(editing ? "業務報告を修正しました ✓" : "業務報告を提出しました ✓");
                       setEditing(false);

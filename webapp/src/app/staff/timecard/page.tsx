@@ -38,6 +38,30 @@ export default async function StaffTimecardPage({ searchParams }: PageProps<"/st
     }),
   ]);
   const knownTaskNames = Object.fromEntries(companyIds.map((id, i) => [id, knownTaskNamesByCompany[i]]));
+  // シフト外の勤務の業務内容の入力候補：本人が最近使った業務内容（会社ごとに新しい順）と、勤務先に登録されている業務内容
+  const [recentReports, placementRates] = await Promise.all([
+    prisma.workReport.findMany({
+      where: { staffUserId: userId, taskName: { not: null }, submittedAt: { not: null }, shift: { companyId: { in: companyIds } } },
+      select: { taskName: true, shift: { select: { companyId: true } } },
+      orderBy: { submittedAt: "desc" },
+      take: 100,
+    }),
+    prisma.companyPlacementRate.findMany({
+      where: { companyRelationshipId: { in: placements.map((p) => p.companyRelationshipId) } },
+      select: { companyRelationshipId: true, taskName: true },
+    }),
+  ]);
+  const recentTaskNamesByCompany = new Map<string, string[]>();
+  for (const r of recentReports) {
+    const list = recentTaskNamesByCompany.get(r.shift.companyId) ?? [];
+    if (r.taskName && !list.includes(r.taskName) && list.length < 5) list.push(r.taskName);
+    recentTaskNamesByCompany.set(r.shift.companyId, list);
+  }
+  const taskNamesByWorkplace = new Map<string, string[]>();
+  for (const r of placementRates) {
+    if (!r.companyRelationshipId) continue;
+    taskNamesByWorkplace.set(r.companyRelationshipId, [...(taskNamesByWorkplace.get(r.companyRelationshipId) ?? []), r.taskName]);
+  }
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-10">
@@ -48,11 +72,13 @@ export default async function StaffTimecardPage({ searchParams }: PageProps<"/st
         unscheduledCompanies={myMemberships.map((m) => ({
           companyId: m.companyId,
           companyName: m.companyName,
+          recentTaskNames: recentTaskNamesByCompany.get(m.companyId) ?? [],
           workplaces: placements
             .filter((p) => p.companyRelationship.agencyCompanyId === m.companyId)
             .map((p) => ({
               companyRelationshipId: p.companyRelationshipId,
               name: p.companyRelationship.clientCompany?.name ?? p.companyRelationship.proxyName ?? "依頼主",
+              taskNames: taskNamesByWorkplace.get(p.companyRelationshipId) ?? [],
             })),
         }))}
         shifts={shifts.map((s) => ({
@@ -63,6 +89,7 @@ export default async function StaffTimecardPage({ searchParams }: PageProps<"/st
           companyName: s.company.name,
           workplaceName: s.companyRelationship?.clientCompany?.name ?? s.companyRelationship?.proxyName ?? null,
           workplaceChangedFrom: s.workReport?.workplaceChangedFrom ?? null,
+          companyRelationshipId: s.companyRelationshipId,
           startTime: s.startTime,
           endTime: s.endTime,
           taskName: s.workReport?.taskName ?? s.taskName,

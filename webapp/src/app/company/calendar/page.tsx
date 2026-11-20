@@ -174,6 +174,8 @@ export default async function CompanyCalendarPage({
           timeLabel:
             s.status === "SUPERSEDED" ? (s.isUndecided ? "未定" : s.isAllDay ? "終日" : `${s.startTime}〜${s.endTime}`) : null,
           reasonLabel: historyReasonLabel(s.cancellation),
+          // スタッフの振替で取り消しになった元のシフト：キャンセル料をまだ確認していない
+          transferFeeReview: Boolean(s.cancellation?.feeReviewPending),
         }))}
         staffOptions={staff.map((s) => ({ id: s.userId, name: s.name, viaAgencyRelationshipName: s.viaAgencyRelationshipName }))}
         teams={teams
@@ -318,10 +320,11 @@ function historyWorkplaceLabel(
 }
 
 // 取り消しの理由とキャンセル料。記録の無い（この機能より前の）取り消しは空。
-function historyReasonLabel(c: { source: string; feeAmount: number; ruleBlocked: boolean } | null) {
+function historyReasonLabel(c: { source: string; feeAmount: number; ruleBlocked: boolean; transferredByStaff?: boolean } | null) {
   if (!c) return null;
-  const reason =
-    c.source === "CLIENT_APP"
+  const reason = c.transferredByStaff
+    ? "振替（スタッフが別の現場に変更）"
+    : c.source === "CLIENT_APP"
       ? "依頼主取消（アプリ）"
       : c.source === "CLIENT_REPORTED"
         ? "依頼主取消（電話等）"

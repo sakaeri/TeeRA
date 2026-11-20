@@ -25,6 +25,7 @@ import {
   cancelShiftAction,
   listTransferTargetsAction,
   transferShiftAction,
+  setTransferCancellationFeeAction,
   previewShiftCancellationAction,
   updateShiftTimeAction,
   bulkUpdateShiftTimesAction,
@@ -74,6 +75,7 @@ type ShiftHistoryRow = {
   publicRecruitmentId: string | null;
   status: string; // "SUPERSEDED" | "CANCELLED" | "ON_HOLD"
   clientCancelled: boolean; // 依頼主の取り消し（アプリ・電話等）によるもの
+  transferFeeReview?: boolean; // スタッフの振替で取り消し：キャンセル料をまだ確認していない
   workplaceLabel: string; // 依頼主名 or 自社
   taskName: string | null;
   timeLabel: string | null; // 「別の枠に変更」の時だけ（何が変わったか分かるように）
@@ -2187,8 +2189,43 @@ function DeletedOrdersSection({ orders }: { orders: DeletedOrderRow[] }) {
   );
 }
 
+// スタッフの振替で取り消しになった元のシフトの、キャンセル料の確認（入れる／なし）
+function TransferFeeReview({ shiftId }: { shiftId: string }) {
+  const [fee, setFee] = useState("");
+  const [pending, startTransition] = useTransition();
+  const save = (amount: number) =>
+    startTransition(async () => {
+      await setTransferCancellationFeeAction(shiftId, amount);
+    });
+  return (
+    <span className="mt-1 flex flex-wrap items-center justify-end gap-1.5 rounded-lg bg-amber-50 px-2 py-1.5 text-amber-900" data-testid="transfer-fee-review">
+      <span>キャンセル料</span>
+      <input
+        inputMode="numeric"
+        value={fee}
+        onChange={(e) => setFee(e.target.value.replace(/[^\d]/g, ""))}
+        placeholder="0"
+        className="w-20 rounded border border-border bg-white px-1.5 py-0.5 text-right text-foreground"
+      />
+      <span>円</span>
+      <button
+        type="button"
+        disabled={pending || !fee}
+        onClick={() => save(Number(fee))}
+        className="rounded bg-primary px-2 py-0.5 font-semibold text-primary-foreground disabled:opacity-50"
+      >
+        記録する
+      </button>
+      <button type="button" disabled={pending} onClick={() => save(0)} className="rounded border border-border bg-white px-2 py-0.5">
+        なし
+      </button>
+    </span>
+  );
+}
+
 function ShiftHistorySection({ history }: { history: ShiftHistoryRow[] }) {
-  const [expanded, setExpanded] = useState(false);
+  // キャンセル料の確認が残っている振替は、最初から開いておく
+  const [expanded, setExpanded] = useState(() => history.some((h) => h.transferFeeReview));
   if (history.length === 0) return null;
 
   return (
@@ -2219,6 +2256,7 @@ function ShiftHistorySection({ history }: { history: ShiftHistoryRow[] }) {
                   </span>
                 </span>
                 {h.reasonLabel ? <span>{h.reasonLabel}</span> : null}
+                {h.transferFeeReview ? <TransferFeeReview shiftId={h.id} /> : null}
               </span>
             </li>
           ))}

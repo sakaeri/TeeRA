@@ -549,6 +549,22 @@ export async function transferShiftAction(
   return { status: "ok" as const };
 }
 
+// スタッフの振替で取り消しになった元のシフトの、元の依頼主へのキャンセル料を記録する（0なら「なし」）。
+// キャンセル料を入れると、その依頼主への請求書に載る。
+export async function setTransferCancellationFeeAction(shiftId: string, feeAmount: number) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const shift = await prisma.shift.findUniqueOrThrow({ where: { id: shiftId }, include: { cancellation: true } });
+  if (shift.companyId !== membership.companyId || !canManageShifts(membership, shift.teamId)) throw new Error("forbidden");
+  if (!shift.cancellation?.transferredByStaff) throw new Error("not_transfer");
+  const fee = Math.max(0, Math.min(10_000_000, Math.round(Number(feeAmount) || 0)));
+  await prisma.shiftCancellation.update({
+    where: { shiftId },
+    data: { feeAmount: fee, feeReviewPending: false },
+  });
+  revalidatePath("/company/calendar");
+  revalidatePath("/company");
+}
+
 const UPDATE_SHIFT_TIME_ERROR_LABEL: Record<string, string> = {
   forbidden: "権限がありません。",
   invalid_time: "開始時刻と終了時刻を入力してください。",

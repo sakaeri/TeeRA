@@ -7,8 +7,10 @@ import { todayJst } from "@/lib/date";
 export type UnscheduledCompanyOption = {
   companyId: string;
   companyName: string;
-  // 自社以外に選べる勤務先（本人が配属されている依頼主）
-  workplaces: { companyRelationshipId: string; name: string }[];
+  // 自社以外に選べる勤務先（本人が配属されている依頼主）と、その勤務先に登録されている業務内容
+  workplaces: { companyRelationshipId: string; name: string; taskNames?: string[] }[];
+  // 本人が最近使った業務内容（新しい順・入力候補に出す）
+  recentTaskNames?: string[];
 };
 
 // シフトが作られていないまま働いた日（緊急の出勤など）の業務報告。
@@ -81,6 +83,9 @@ function UnscheduledReportModal({
 
   const company = companies.find((c) => c.companyId === companyId) ?? companies[0];
   const knownTaskNames = knownTaskNamesByCompany[companyId] ?? [];
+  // 入力候補（押すと入る）：最近使った業務内容 → 選んだ勤務先に登録されている業務内容
+  const workplaceTaskNames = relationshipId ? (company.workplaces.find((w) => w.companyRelationshipId === relationshipId)?.taskNames ?? []) : [];
+  const suggestions = [...new Set([...(company.recentTaskNames ?? []), ...workplaceTaskNames])].slice(0, 8);
 
   function submit() {
     setError(null);
@@ -185,6 +190,22 @@ function UnscheduledReportModal({
                 <option key={name} value={name} />
               ))}
             </datalist>
+            {suggestions.length > 0 ? (
+              <span className="flex flex-wrap gap-1.5" data-testid="task-suggestions">
+                {suggestions.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => setTaskName(name)}
+                    className={`rounded-full border px-2.5 py-1 text-xs ${
+                      taskName === name ? "border-primary bg-primary/10 font-semibold text-primary" : "border-border text-foreground"
+                    }`}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </span>
+            ) : null}
           </label>
 
           <div className="grid grid-cols-2 gap-2">
