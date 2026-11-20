@@ -163,6 +163,13 @@ try {
   await staff.waitForTimeout(1500);
   const popupWorkplace = staff.getByTestId("report-workplace").first();
   await popupWorkplace.waitFor({ timeout: 15000 }).catch(() => {});
+  // 長くなっても画面の上下に余白を残し、中身だけスクロールする（見出しと✕は見えたまま）
+  await staff.setViewportSize({ width: 390, height: 664 });
+  await staff.waitForTimeout(300);
+  const popupBox = await staff.getByTestId("today-report-popup").boundingBox();
+  if (process.env.SHOT) await staff.screenshot({ path: process.env.SHOT });
+  log(`業務報告のポップアップは画面に収まる（上${Math.round(popupBox?.y ?? -1)}px・高さ${Math.round(popupBox?.height ?? -1)}px）`, Boolean(popupBox && popupBox.y >= 40 && popupBox.y + popupBox.height <= 664 - 40));
+  log("ポップアップの✕は見えている", await staff.getByTestId("today-report-popup").getByRole("button", { name: "✕" }).isVisible());
   log("ポップアップで「内容が違う」を押した後も勤務先を選び直せる", (await popupWorkplace.count()) > 0 && (await popupWorkplace.locator("option").allInnerTexts()).includes(clientName));
 
   console.log(process.exitCode ? "CLIENT DETAIL APPROVE SMOKE TEST HAD FAILURES" : "CLIENT DETAIL APPROVE SMOKE TEST PASSED");
