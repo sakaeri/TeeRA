@@ -72,7 +72,7 @@ try {
 
   // --- スタッフが「内容が違う」を押した差戻し ---
   psql(
-    `update "WorkReport" set "rejectionReason"='会社の修正内容に同意できないとして差し戻されています。正しい時間に直して再提出してください。', "correctedByUserId"='${adminId}', "correctedAt"=now() where "shiftId"='${shiftId}';`,
+    `update "WorkReport" set "rejectionReason"='会社の修正内容に同意できないとして差し戻されています。正しい時間に直して再提出してください。', "correctedByUserId"='${adminId}', "correctedAt"=now(), "correctionSummary"='時間・休憩' where "shiftId"='${shiftId}';`,
   );
 
   // --- カレンダーの日別詳細から開く ---
@@ -87,7 +87,7 @@ try {
   const calText = await dialog.innerText();
   log("カレンダーの日別詳細からも開ける", calText.includes("詳細確認スタッフ"));
   log("「内容が違う」による差戻しはその旨が出る", calText.includes("スタッフが修正内容に同意しませんでした"));
-  log("時間を修正した経緯も出る", calText.includes("時間を修正"));
+  log("会社が直した経緯は、直した項目つきで出る", calText.includes("時間・休憩を修正"));
 
   await dialog.getByRole("button", { name: "閉じる" }).click();
   await page.waitForTimeout(300);

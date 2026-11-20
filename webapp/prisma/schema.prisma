@@ -1074,6 +1074,8 @@ model WorkReport {
   workplaceChangedFrom String?
   // スタッフが業務報告で勤務先を変えた（会社が直した時は false）
   workplaceChangedByStaff Boolean @default(false)
+  // 会社が直した時に、実際に変えた項目（例：「勤務先・業務内容」）。経緯の表示に使う
+  correctionSummary       String?
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 

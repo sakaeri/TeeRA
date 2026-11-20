@@ -145,6 +145,7 @@ try {
   await taskSelect.selectOption("研修");
   await dialog.getByRole("button", { name: "保存してスタッフに確認してもらう" }).click();
   await dialog.getByTestId("report-action-done").waitFor({ timeout: 15000 });
+  log("経緯には実際に直した項目（業務内容）だけが出る", psql(`select "correctionSummary" from "WorkReport" where id='${remaining}';`) === "業務内容");
   log("業務内容を直すと保存され、スタッフの確認待ちになる", psql(`select "taskName"||'|'||"approvalStatus" from "WorkReport" where id='${remaining}';`) === "研修|NEEDS_CONFIRMATION");
 
   // スタッフ側：直した後の内容（会社・勤務先・業務内容・時間）がそのまま出る
