@@ -456,6 +456,7 @@ export function DashboardView({
   expiringContractStaff,
   duePaidLeaveGrants,
   missingDocumentStaff,
+  awaitingConsentStaff = [],
   contractTemplates,
   uploadOnlyTemplates,
   companyName,
@@ -485,6 +486,8 @@ export function DashboardView({
   expiringContractStaff: ExpiringContractStaff[];
   duePaidLeaveGrants: DuePaidLeaveGrant[];
   missingDocumentStaff: MissingDocumentStaff[];
+  // 契約書を送ったが、本人がまだ署名していないスタッフ
+  awaitingConsentStaff?: AwaitingConsentStaff[];
   contractTemplates: ContractTemplate[];
   uploadOnlyTemplates: UploadOnlyTemplate[];
   companyName: string;
@@ -634,6 +637,7 @@ export function DashboardView({
           staff={pendingContractStaff}
           expiringEntries={expiringContractStaff}
           missingDocumentEntries={missingDocumentStaff}
+          awaitingConsentEntries={awaitingConsentStaff}
           onSelect={(staff) => {
             setOpenPopup(null);
             setGenerateTarget(staff);
@@ -1437,18 +1441,23 @@ function WorkReportDetailModal({
 function PendingContractPopup({
   staff,
   expiringEntries,
-  missingDocumentEntries,
+  missingDocumentEntries: allMissingDocumentEntries,
+  awaitingConsentEntries = [],
   onSelect,
   onClose,
 }: {
   staff: PendingContractStaff[];
   expiringEntries: ExpiringContractStaff[];
   missingDocumentEntries: MissingDocumentStaff[];
+  awaitingConsentEntries?: AwaitingConsentStaff[];
   onSelect: (staff: PendingContractStaff) => void;
   onClose: () => void;
 }) {
+  // 署名待ちの人の書類の未提出は、署名待ちの行に一緒に出す（同じ人を2行に分けない）
+  const missingByUser = new Map(allMissingDocumentEntries.map((e) => [e.userId, e.missing]));
+  const missingDocumentEntries = allMissingDocumentEntries.filter((e) => !awaitingConsentEntries.some((a) => a.userId === e.userId));
   return (
-    <PopupShell title="契約書未確認" subtitle="未締結・まもなく満了する契約と、身分証・振込先が未提出のスタッフです" onClose={onClose}>
+    <PopupShell title="契約書未確認" subtitle="未締結・署名待ち・まもなく満了する契約と、身分証・振込先が未提出のスタッフです" onClose={onClose}>
       {staff.map((s) => (
         <div key={s.userId} className="flex items-center justify-between gap-2 rounded-xl border border-border/60 p-4 text-sm">
           <div className="min-w-0">
@@ -1464,6 +1473,28 @@ function PendingContractPopup({
           >
             契約書管理
           </button>
+        </div>
+      ))}
+      {/* 契約書を送ったが、本人がまだ署名していない（署名するまで本人はアプリを使えない） */}
+      {awaitingConsentEntries.map((e) => (
+        <div key={`consent-${e.userId}`} className="flex items-center justify-between gap-2 rounded-xl border border-border/60 p-4 text-sm" data-testid="awaiting-consent-row">
+          <div className="min-w-0">
+            <p className="font-medium">{e.name}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span className="whitespace-nowrap rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800">署名待ち</span>
+              {(missingByUser.get(e.userId) ?? []).map((m) => (
+                <span key={m} className="whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                  {REQUIRED_DOCUMENT_LABEL[m]}未提出
+                </span>
+              ))}
+            </div>
+          </div>
+          <Link
+            href={`/company/roster?staff=${e.userId}&tab=contracts`}
+            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+          >
+            確認する
+          </Link>
         </div>
       ))}
       {expiringEntries.map((e) => (
@@ -1508,7 +1539,7 @@ function PendingContractPopup({
           </Link>
         </div>
       ))}
-      {staff.length === 0 && expiringEntries.length === 0 && missingDocumentEntries.length === 0 ? (
+      {staff.length === 0 && awaitingConsentEntries.length === 0 && expiringEntries.length === 0 && missingDocumentEntries.length === 0 ? (
         <p className="text-center text-muted">対応が必要な契約・書類はありません。</p>
       ) : null}
     </PopupShell>
@@ -1563,6 +1594,7 @@ function DuePaidLeaveGrantsPopup({ entries, onClose }: { entries: DuePaidLeaveGr
 }
 
 type MissingDocumentStaff = { userId: string; name: string; missing: RequiredDocument[] };
+type AwaitingConsentStaff = { userId: string; name: string; contractTitle: string };
 
 function TodoSection({
   tab,

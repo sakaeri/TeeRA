@@ -167,6 +167,7 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
         expiringContractStaff={expiringContractStaff}
         duePaidLeaveGrants={duePaidLeaveGrants}
         missingDocumentStaff={dashboardData.missingDocumentStaff}
+        awaitingConsentStaff={dashboardData.awaitingConsentStaff}
         companyName={company.name}
         contractClients={clients.map((c) => ({
           id: c.id,
