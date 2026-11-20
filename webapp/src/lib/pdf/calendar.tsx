@@ -106,6 +106,9 @@ export function CalendarPdfDocument({ data }: { data: CalendarPdfData }) {
     byDate.get(s.date)!.push(s);
   }
   const dates = Array.from(byDate.keys()).sort();
+  // 対象月より前の日付が入っているか（請求書に前の月の未請求分を入れた時）
+  const monthPrefix = `${data.year}-${String(data.month).padStart(2, "0")}`;
+  const hasEarlierMonths = dates.some((d) => d.slice(0, 7) < monthPrefix);
 
   return (
     <Document>
@@ -121,7 +124,8 @@ export function CalendarPdfDocument({ data }: { data: CalendarPdfData }) {
         ) : null}
         <Text style={styles.title}>{data.title ?? "シフト表"}</Text>
         <Text style={styles.subtitle}>
-          {data.companyName} ／ 対象月: {data.year}年{data.month}月 ／ 発行日: {data.issuedAt}
+          {data.companyName} ／ 対象月: {data.year}年{data.month}月
+          {hasEarlierMonths ? "（前の月以前の未請求分を含む）" : ""} ／ 発行日: {data.issuedAt}
           {data.filterLabel ? ` ／ 絞り込み: ${data.filterLabel}` : ""}
         </Text>
         {data.shifts.length > 0 ? <Text style={styles.summary}>{summaryLabel(data)}</Text> : null}
@@ -132,12 +136,14 @@ export function CalendarPdfDocument({ data }: { data: CalendarPdfData }) {
 
         {dates.map((date) => {
           const dow = new Date(date + "T00:00:00Z").getUTCDay();
+          // 月は日付そのものから出す（請求書の実績表には前の月の未請求分も入るため、対象月で書くと日付がずれる）
+          const monthOfDate = Number(date.slice(5, 7));
           const day = Number(date.slice(8, 10));
           return (
             <View key={date} style={styles.dayGroup} wrap={false}>
               <View style={styles.dayHeader}>
                 <Text>
-                  {data.month}月{day}日（{WEEKDAYS[dow]}）
+                  {monthOfDate}月{day}日（{WEEKDAYS[dow]}）
                 </Text>
                 <Text>{byDate.get(date)!.length}件</Text>
               </View>
