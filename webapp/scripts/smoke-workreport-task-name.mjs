@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { addStaffRateViaForm } from "./_lib/staffRateForm.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -92,13 +93,7 @@ try {
   await admin.waitForTimeout(300);
   const panel = admin.locator("div.fixed.inset-0.z-30").last();
   await panel.getByRole("button", { name: "業務内容単価" }).click();
-  await panel.getByRole("button", { name: "＋業務内容を追加" }).click();
-  await admin.waitForTimeout(150);
-  await panel.locator('input[placeholder*="業務内容"]').fill("キャディ業務");
-  await panel.locator("select").last().selectOption("DAILY");
-  await panel.locator('input[placeholder="金額"]').fill("9000");
-  await panel.getByRole("button", { name: "追加", exact: true }).click();
-  await admin.waitForTimeout(500);
+  await addStaffRateViaForm(admin, panel, psql, { companyId, task: "キャディ業務", wageType: "DAILY", amount: 9000 });
   await panel.click("text=閉じる");
   await admin.waitForTimeout(200);
 
