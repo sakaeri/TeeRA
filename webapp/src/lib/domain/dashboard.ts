@@ -396,7 +396,7 @@ function addDaysToDateStr(dateStr: string, days: number) {
 }
 
 export function computeAutoTodoItems(data: DashboardData, pendingShipments: PendingShipment[]): AutoTodoItem[] {
-  const { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, awaitingConsentStaff, expiringContractStaff, duePaidLeaveGrants } =
+  const { shortageRecruitments, shiftRequests, pendingReports, pendingContractStaff, expiringContractStaff, duePaidLeaveGrants } =
     data;
   const items: AutoTodoItem[] = [];
 
@@ -499,15 +499,8 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
     });
   }
 
-  for (const staff of awaitingConsentStaff) {
-    items.push({
-      id: `consent-${staff.userId}`,
-      kind: "契約書",
-      text: `${staff.name}さんの契約書が署名待ちです`,
-      actionLabel: "確認する",
-      actionHref: "/company?open=contracts",
-    });
-  }
+  // 署名待ち（送ったがまだ署名していない）は、スタッフ本人の対応待ちなので やること には出さない
+  // （「契約書未確認」のカードと一覧にだけ出す）
 
   for (const c of expiringContractStaff) {
     items.push({

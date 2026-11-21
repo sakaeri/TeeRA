@@ -134,7 +134,7 @@ try {
   await page.getByTestId("awaiting-consent-row").first().waitFor({ timeout: 15000 });
   const consentRow = await page.getByTestId("awaiting-consent-row").first().innerText();
   log("契約書未確認の一覧に「署名待ち」として出る", consentRow.includes("未契約スタッフ") && consentRow.includes("署名待ち"));
-  log("やることにも「署名待ち」が出る", (await page.textContent("body")).includes("未契約スタッフさんの契約書が署名待ちです"));
+  log("やることには「署名待ち」は出さない", !(await page.textContent("body")).includes("署名待ちです"));
   await page.getByRole("button", { name: "✕" }).first().click().catch(() => {});
 
   // 本人が署名（同意）すると一覧から消える
