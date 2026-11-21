@@ -6,7 +6,12 @@ import { PdfLink } from "@/components/PdfLink";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { buildWorkRequestColors, type NoteColor } from "@/lib/requestNoteColors";
-import { acknowledgeOffRequestAction, dismissOffRequestAction } from "@/app/company/calendar/actions";
+import {
+  acknowledgeOffRequestAction,
+  dismissOffRequestAction,
+  getTransferFeeReviewAction,
+  setTransferCancellationFeeAction,
+} from "@/app/company/calendar/actions";
 import { REQUIRED_DOCUMENT_LABEL, type RequiredDocument } from "@/lib/requiredDocuments";
 import {
   createManualTodoAction,
@@ -62,7 +67,7 @@ type Kpis = {
   pendingShipmentCount: number;
 };
 
-type AutoTodo = { id: string; kind: string; text: string; actionLabel: string; actionHref: string };
+type AutoTodo = { id: string; kind: string; text: string; actionLabel: string; actionHref: string; transferShiftId?: string };
 
 type TodoCommentItem = { id: string; authorUserId: string; authorName: string; body: string };
 
@@ -1623,6 +1628,8 @@ function TodoSection({
 }) {
   const [pending, startTransition] = useTransition();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // 振替の「キャンセル料を決める」を開いているシフト
+  const [transferShiftId, setTransferShiftId] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [orderFilter, setOrderFilter] = useState<"all" | "pending">("all");
   const [pageSize, setPageSize] = useState(10);
@@ -1656,10 +1663,28 @@ function TodoSection({
         ))}
       </div>
 
+      {transferShiftId ? <TransferFeeModal shiftId={transferShiftId} onClose={() => setTransferShiftId(null)} /> : null}
       {tab === "active" ? (
         <ul className="flex flex-col gap-2">
           {autoTodos.map((item) => (
             <li key={item.id}>
+              {item.transferShiftId ? (
+                // 振替はカレンダーに飛ばさず、その場で「キャンセル料の確認」を開く
+                <button
+                  type="button"
+                  onClick={() => setTransferShiftId(item.transferShiftId!)}
+                  className="flex w-full flex-col items-start gap-2 rounded-lg border border-border/60 p-3 text-left text-sm hover:border-primary/60 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                  data-testid="transfer-fee-todo"
+                >
+                  <div className="flex items-center gap-2">
+                    <Tag kind={item.kind} />
+                    <span>{item.text}</span>
+                  </div>
+                  <span className="hidden shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs sm:inline-block">
+                    {item.actionLabel}
+                  </span>
+                </button>
+              ) : (
               <Link
                 href={item.actionHref}
                 className="flex flex-col items-start gap-2 rounded-lg border border-border/60 p-3 text-sm hover:border-primary/60 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
@@ -1672,6 +1697,7 @@ function TodoSection({
                   {item.actionLabel}
                 </span>
               </Link>
+              )}
             </li>
           ))}
           {openTodos.map((t) => (
@@ -1955,5 +1981,114 @@ function TodoSection({
         />
       ) : null}
     </section>
+  );
+}
+
+// 振替（スタッフが業務報告で別の現場に変えた）時の、元の依頼主へのキャンセル料を決める。
+// 何が起きたか・何をすればいいか・依頼主のキャンセル規定（あれば規定から出る金額を入れておく）をまとめて出す
+function TransferFeeModal({ shiftId, onClose }: { shiftId: string; onClose: () => void }) {
+  const router = useRouter();
+  const [detail, setDetail] = useState<Awaited<ReturnType<typeof getTransferFeeReviewAction>> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [fee, setFee] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    let cancelled = false;
+    getTransferFeeReviewAction(shiftId)
+      .then((d) => {
+        if (cancelled) return;
+        setDetail(d);
+        if (d.suggestedFee) setFee(String(d.suggestedFee));
+      })
+      .catch(() => {
+        if (!cancelled) setError("読み込めませんでした。");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [shiftId]);
+
+  function save(amount: number) {
+    startTransition(async () => {
+      await setTransferCancellationFeeAction(shiftId, amount);
+      onClose();
+      router.refresh();
+    });
+  }
+
+  const dateLabel = detail ? formatDateJa(detail.date) : "";
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-label="キャンセル料の確認"
+        className="max-h-popup w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-serif-jp text-lg font-bold text-primary">キャンセル料の確認</h3>
+          <button type="button" onClick={onClose} aria-label="閉じる" className="text-muted hover:text-primary">
+            ✕
+          </button>
+        </div>
+        {error ? (
+          <p className="py-6 text-center text-sm text-red-600">{error}</p>
+        ) : !detail ? (
+          <p className="py-6 text-center text-sm text-muted">読み込み中…</p>
+        ) : (
+          <div className="flex flex-col gap-3 text-sm" data-testid="transfer-fee-modal">
+            <p>
+              <span className="font-semibold">{detail.staffName}</span>さんが、{dateLabel}の
+              <span className="font-semibold">{detail.clientName}</span>
+              {detail.taskName ? `（${detail.taskName}）` : ""}を、
+              {detail.movedTo ? <span className="font-semibold">{detail.movedTo}</span> : "別の現場"}
+              に振り替えました。
+            </p>
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-900">
+              {detail.clientName}へのキャンセル料を決めてください。決めた金額は{detail.clientName}への請求書に載ります。
+            </p>
+            <div className="rounded-lg bg-background px-3 py-2 text-xs">
+              <p className="text-muted">{detail.clientName}のキャンセル規定</p>
+              <p className="mt-0.5">{detail.ruleLabel ?? "登録されていません"}</p>
+              {detail.suggestedFee ? (
+                <p className="mt-1 text-muted">規定から出るキャンセル料：{detail.suggestedFee.toLocaleString()}円（下に入れてあります）</p>
+              ) : null}
+            </div>
+            <label className="flex items-center gap-2">
+              <span className="shrink-0 text-xs text-muted">キャンセル料</span>
+              <input
+                inputMode="numeric"
+                value={fee}
+                onChange={(e) => setFee(e.target.value.replace(/[^\d]/g, ""))}
+                placeholder="0"
+                className="w-32 rounded-lg border border-border px-2 py-2 text-right"
+                data-testid="transfer-fee-input"
+              />
+              <span>円</span>
+            </label>
+            <button
+              type="button"
+              disabled={pending || !fee || Number(fee) <= 0}
+              onClick={() => save(Number(fee))}
+              className="w-full rounded-lg bg-primary px-4 py-2.5 font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              この金額で記録する
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => save(0)}
+              className="w-full rounded-lg border border-border px-4 py-2 text-foreground/80 disabled:opacity-50"
+            >
+              キャンセル料なし
+            </button>
+            <Link href={`/company/calendar?date=${detail.date}`} className="text-center text-xs text-muted underline">
+              カレンダーでこの日を見る
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
