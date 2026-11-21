@@ -119,6 +119,27 @@ try {
   await admin.getByTestId("report-workplace").waitFor();
   log("承認画面に「元ゴルフ倶楽部 → 先ゴルフ倶楽部（スタッフが変更）」と出る", (await admin.getByTestId("report-workplace").innerText()).includes("元ゴルフ倶楽部 → 先ゴルフ倶楽部（スタッフが変更）"));
 
+  // やることから、カレンダーに飛ばずにその場で「キャンセル料の確認」を開いて決める
+  await admin.goto("http://localhost:3000/company");
+  await admin.getByTestId("transfer-fee-todo").first().click();
+  const feeModal = admin.getByTestId("transfer-fee-modal");
+  await feeModal.waitFor({ timeout: 15000 });
+  const feeText = await feeModal.innerText();
+  log(
+    "ポップアップに何が起きたか（スタッフ・元の依頼主・振替先）と、何をすればいいかが出る",
+    feeText.includes("勤務先変更確認スタッフ") && feeText.includes("元ゴルフ倶楽部") && feeText.includes("先ゴルフ倶楽部") && feeText.includes("請求書に載ります"),
+  );
+  log("キャンセル規定の欄がある", feeText.includes("キャンセル規定"));
+  log("カレンダーへのリンクがある", (await feeModal.getByRole("link", { name: "カレンダーでこの日を見る" }).getAttribute("href")) === `/company/calendar?date=${pastDateStr}`);
+  await admin.getByTestId("transfer-fee-input").fill("2500");
+  await feeModal.getByRole("button", { name: "この金額で記録する" }).click();
+  await feeModal.waitFor({ state: "detached", timeout: 10000 });
+  await admin.waitForTimeout(1500);
+  log("ポップアップから記録すると、確認待ちが外れる", psql(`select "feeAmount"||'|'||"feeReviewPending" from "ShiftCancellation" where "shiftId"='${shiftId}';`) === "2500|false");
+  log("記録するとやることから消える", (await admin.getByTestId("transfer-fee-todo").count()) === 0);
+
+  // カレンダーの変更履歴からも決められる（確認待ちに戻して確かめる）
+  psql(`update "ShiftCancellation" set "feeReviewPending"=true, "feeAmount"=0 where "shiftId"='${shiftId}';`);
   await admin.goto(`http://localhost:3000/company/calendar?date=${pastDateStr}`);
   const review = admin.getByTestId("transfer-fee-review");
   await review.waitFor({ timeout: 20000 });

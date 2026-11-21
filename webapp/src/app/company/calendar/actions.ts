@@ -24,7 +24,7 @@ import {
   addRecruitmentAnnouncement,
   deleteRecruitmentAnnouncement,
 } from "@/lib/domain/recruitment";
-import { listRecruitmentCancelImpacts, previewShiftCancellation } from "@/lib/domain/cancellation";
+import { listRecruitmentCancelImpacts, previewShiftCancellation, findCancelRule, evaluateCancellation, describeCancelRule } from "@/lib/domain/cancellation";
 import {
   notifyAgencyOfClientCancellation,
   notifyStaffShiftReleased,
@@ -563,6 +563,53 @@ export async function setTransferCancellationFeeAction(shiftId: string, feeAmoun
   });
   revalidatePath("/company/calendar");
   revalidatePath("/company");
+}
+
+// やることの「振替」から開く「キャンセル料の確認」に出す内容：何が起きたか・元の依頼主のキャンセル規定・規定から出るキャンセル料
+export async function getTransferFeeReviewAction(shiftId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const shift = await prisma.shift.findUniqueOrThrow({
+    where: { id: shiftId },
+    include: { cancellation: true, staff: { select: { name: true } }, companyRelationship: { include: { clientCompany: true } } },
+  });
+  if (shift.companyId !== membership.companyId || !canManageShifts(membership, shift.teamId)) throw new Error("forbidden");
+  if (!shift.cancellation?.transferredByStaff) throw new Error("not_transfer");
+  const clientName = shift.companyRelationship?.clientCompany?.name ?? shift.companyRelationship?.proxyName ?? "依頼主";
+  // 振り替えた先（同じ日にスタッフの業務報告から作られたシフト）
+  const moved = await prisma.shift.findFirst({
+    where: {
+      companyId: shift.companyId,
+      staffUserId: shift.staffUserId,
+      date: shift.date,
+      id: { not: shift.id },
+      status: { notIn: ["CANCELLED", "SUPERSEDED"] },
+    },
+    include: { companyRelationship: { include: { clientCompany: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  const movedTo = moved
+    ? moved.companyRelationship
+      ? (moved.companyRelationship.clientCompany?.name ?? moved.companyRelationship.proxyName ?? "依頼主")
+      : "社内"
+    : null;
+  // 規定は、振り替えた（取り消しになった）時点で判定する
+  const rule = await findCancelRule(prisma, {
+    companyId: shift.companyId,
+    companyRelationshipId: shift.companyRelationshipId,
+    taskName: shift.taskName,
+  });
+  const evaluation = evaluateCancellation(shift.date, rule, shift.cancellation.createdAt);
+  return {
+    shiftId: shift.id,
+    staffName: shift.staff.name,
+    date: shift.date.toISOString().slice(0, 10),
+    clientName,
+    taskName: shift.taskName,
+    movedTo,
+    ruleLabel: rule ? describeCancelRule(rule) : null,
+    suggestedFee: evaluation.kind === "fee" ? evaluation.amount : null,
+    feeReviewPending: shift.cancellation.feeReviewPending,
+  };
 }
 
 const UPDATE_SHIFT_TIME_ERROR_LABEL: Record<string, string> = {

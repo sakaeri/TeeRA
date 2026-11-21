@@ -374,6 +374,8 @@ export type AutoTodoItem = {
   text: string;
   actionLabel: string;
   actionHref: string;
+  // 振替：その場で「キャンセル料の確認」を開くための、取り消しになったシフト
+  transferShiftId?: string;
 };
 
 // Auto-generated to-do rows are derived live from the same queues shown
@@ -453,8 +455,9 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
       id: `transfer-fee-${c.id}`,
       kind: "振替",
       text: `${c.shift.staff.name}さんが${dateStr}に${clientName}から別の現場に振り替えました（${clientName}へのキャンセル料を確認してください）`,
-      actionLabel: "カレンダーで確認",
+      actionLabel: "キャンセル料を決める",
       actionHref: `/company/calendar?date=${dateStr}`,
+      transferShiftId: c.shiftId,
     });
   }
 
