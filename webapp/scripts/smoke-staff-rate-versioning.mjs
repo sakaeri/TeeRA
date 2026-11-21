@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { addStaffRateViaForm } from "./_lib/staffRateForm.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -108,13 +109,7 @@ try {
   await admin.waitForTimeout(300);
   const panel = admin.locator("div.fixed.inset-0.z-30").last();
   await panel.getByRole("button", { name: "業務内容単価" }).click();
-  await panel.getByRole("button", { name: "＋業務内容を追加" }).click();
-  await panel.locator('input[placeholder*="業務内容"]').fill("特殊作業");
-  await panel.locator("select").nth(1).selectOption("DAILY");
-  await panel.locator('input[placeholder="金額"]').fill("6000");
-  await panel.locator('input[type=date]').fill(addDays(today, -30));
-  await panel.getByRole("button", { name: "追加", exact: true }).click();
-  await admin.waitForTimeout(500);
+  await addStaffRateViaForm(admin, panel, psql, { companyId, task: "特殊作業", wageType: "DAILY", amount: 6000, effectiveFrom: addDays(today, -30) });
 
   const staffTaskRateId = psql(`select id from "StaffTaskRate" where "taskName"='特殊作業' and "staffUserId"='${staffUserId}';`);
   log("staff task rate registered", Boolean(staffTaskRateId));
@@ -191,16 +186,7 @@ try {
   log("使用済みの単価は削除されず残っている", stillExistsCount === "1");
 
   // a never-used task rate CAN be deleted outright.
-  await panel2.getByRole("button", { name: "＋業務内容を追加" }).click();
-  await admin.waitForTimeout(150);
-  if ((await panel2.locator('input[placeholder*="業務内容"]').count()) === 0) {
-    await panel2.locator("select").first().selectOption({ label: "＋ 新しい業務内容を追加する" });
-  }
-  await panel2.locator('input[placeholder*="業務内容"]').fill("未使用業務");
-  await panel2.locator("select").last().selectOption("HOURLY");
-  await panel2.locator('input[placeholder="金額"]').fill("1200");
-  await panel2.getByRole("button", { name: "追加", exact: true }).click();
-  await admin.waitForTimeout(500);
+  await addStaffRateViaForm(admin, panel2, psql, { companyId, task: "未使用業務", wageType: "HOURLY", amount: 1200 });
   const unusedRateId = psql(`select id from "StaffTaskRate" where "taskName"='未使用業務' and "staffUserId"='${staffUserId}';`);
   await panel2.locator("li", { hasText: "未使用業務" }).getByRole("button", { name: "単価を変更" }).click();
   await admin.locator("div.fixed.inset-0.z-40").last().getByRole("button", { name: "削除する" }).click();

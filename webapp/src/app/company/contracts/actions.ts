@@ -239,12 +239,34 @@ export async function addStaffTaskRateVersionAction(input: {
   if (!staffMembership) throw new Error("forbidden");
   await assertRelationshipOwned(membership.companyId, input.companyRelationshipId);
 
+  // 新しく勤務先つきの単価を登録した時は、その勤務先に配属する（配属解除していた勤務先なら配属し直す）。
+  // 既にある単価の改定（単価を変更）では配属を変えない
+  const isNewRate = !(await prisma.staffTaskRate.findFirst({
+    where: {
+      companyId: membership.companyId,
+      staffUserId: input.staffUserId,
+      taskName: input.taskName,
+      companyRelationshipId: input.companyRelationshipId ?? null,
+    },
+    select: { id: true },
+  }));
+
   const version = await addStaffTaskRateVersion({
     ...input,
     companyId: membership.companyId,
     effectiveFrom: new Date(`${input.effectiveFrom}T00:00:00.000Z`),
     createdByUserId: userId,
   });
+
+  if (isNewRate && input.companyRelationshipId) {
+    await prisma.staffPlacement.upsert({
+      where: {
+        staffUserId_companyRelationshipId: { staffUserId: input.staffUserId, companyRelationshipId: input.companyRelationshipId },
+      },
+      create: { staffUserId: input.staffUserId, companyRelationshipId: input.companyRelationshipId },
+      update: { active: true, endedAt: null },
+    });
+  }
 
   const workplaceLabel = input.companyRelationshipId
     ? await relationshipLabel(input.companyRelationshipId)
@@ -483,4 +505,22 @@ export async function endStaffContractAction(staffContractId: string, noticeGive
   await endStaffContract({ staffContractId, noticeGivenAt: noticeGivenAt ? new Date(noticeGivenAt) : null });
   revalidatePath("/company/roster");
   revalidatePath("/company");
+}
+
+// スタッフ詳細の「業務内容を追加」で選べる業務内容：勤務先の単価に登録されている業務内容を勤務先ごとに
+// （キーは companyRelationshipId、勤務先問わず（社内）は ""）
+export async function listPlacementTaskNamesByWorkplaceAction(): Promise<Record<string, string[]>> {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const rates = await prisma.companyPlacementRate.findMany({
+    where: { companyId: membership.companyId },
+    select: { companyRelationshipId: true, taskName: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const map: Record<string, string[]> = {};
+  for (const r of rates) {
+    const key = r.companyRelationshipId ?? "";
+    map[key] = map[key] ?? [];
+    if (!map[key].includes(r.taskName)) map[key].push(r.taskName);
+  }
+  return map;
 }

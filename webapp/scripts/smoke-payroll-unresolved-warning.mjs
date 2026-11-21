@@ -132,16 +132,13 @@ try {
   await admin.waitForTimeout(300);
   const staffPanel = admin.locator("div.fixed.inset-0.z-30").last();
   await staffPanel.getByRole("button", { name: "業務内容単価", exact: true }).click();
-  await staffPanel.getByRole("button", { name: "＋業務内容を追加" }).click();
-  const newTaskFormSelect = staffPanel.locator('select').first();
-  if (await newTaskFormSelect.locator('option[value="警告確認業務"]').count()) {
-    await newTaskFormSelect.selectOption("警告確認業務");
-  } else {
-    await staffPanel.locator('input[placeholder*="業務内容"]').fill("警告確認業務");
-  }
-  await staffPanel.locator('input[type=number]').fill("1500");
-  await staffPanel.getByRole("button", { name: "追加", exact: true }).click();
-  await admin.waitForTimeout(500);
+  // 単価未設定のまま自動で登録された行があるので、その行の「単価を変更」から単価を入れる
+  // （「＋業務内容を追加」には、このスタッフに既にある業務内容は出さない）
+  await staffPanel.locator("li", { hasText: "警告確認業務" }).getByRole("button", { name: "単価を変更" }).click();
+  const amendModal = admin.locator("div.fixed.inset-0.z-40").last();
+  await amendModal.locator('input[placeholder="金額"]').fill("1500");
+  await amendModal.getByRole("button", { name: "保存" }).click();
+  await admin.waitForTimeout(800);
 
   taskRateVersionCount = psql(
     `select count(*) from "StaffTaskRateVersion" v join "StaffTaskRate" r on r.id=v."staffTaskRateId" ` +

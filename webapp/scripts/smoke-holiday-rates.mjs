@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { addStaffRateViaForm } from "./_lib/staffRateForm.mjs";
 
 // 祝日の表示と、土日祝の単価（請求・給与）を検証する：
 // ・カレンダーで祝日（2026-11-03 文化の日）が赤く、日別詳細に祝日名が出る
@@ -97,17 +98,7 @@ try {
   await page.waitForTimeout(800);
   const staffPanel = page.locator("div.fixed.inset-0.z-30").last();
   await staffPanel.getByRole("button", { name: "業務内容単価" }).click();
-  await staffPanel.getByRole("button", { name: "＋業務内容を追加" }).click();
-  await page.waitForTimeout(300);
-  const staffRateModal = page.locator("div.fixed.inset-0").last();
-  const taskInput = staffRateModal.locator('input[placeholder*="業務内容"]');
-  if (await taskInput.count()) await taskInput.fill("キャディ");
-  else await staffRateModal.locator("select").first().selectOption("キャディ");
-  await staffRateModal.locator('input[placeholder="金額"]').fill("1200");
-  await staffRateModal.locator('input[placeholder="土日祝（任意）"]').fill("1500");
-  await staffRateModal.locator('input[type="date"]').first().fill("2026-11-01");
-  await staffRateModal.getByRole("button", { name: "追加", exact: true }).click();
-  await page.waitForTimeout(800);
+  await addStaffRateViaForm(page, staffPanel, psql, { companyId, task: "キャディ", amount: 1200, holidayAmount: 1500, effectiveFrom: "2026-11-01" });
   log("業務内容単価タブに平日・土日祝の単価が出る", (await staffPanel.innerText()).includes("時給1200円／土日祝1500円"));
 
   // --- 祝日(11/3 火)・平日(11/4 水)・土曜(11/7) に各4時間の承認済み勤務 ---

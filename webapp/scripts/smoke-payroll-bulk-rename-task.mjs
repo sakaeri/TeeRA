@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { addStaffRateViaForm } from "./_lib/staffRateForm.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -78,11 +79,7 @@ try {
   await admin.waitForTimeout(300);
   const staffPanel1 = admin.locator("div.fixed.inset-0.z-30").last();
   await staffPanel1.getByRole("button", { name: "業務内容単価", exact: true }).click();
-  await staffPanel1.getByRole("button", { name: "＋業務内容を追加" }).click();
-  await staffPanel1.locator('input[placeholder*="業務内容"]').fill("キャディ業務");
-  await staffPanel1.locator('input[placeholder="金額"]').fill("1500");
-  await staffPanel1.getByRole("button", { name: "追加", exact: true }).click();
-  await admin.waitForTimeout(500);
+  await addStaffRateViaForm(admin, staffPanel1, psql, { companyId, task: "キャディ業務", amount: 1500 });
 
   // シフト作成時は表記ゆれの「キャディ」で入れてしまう
   await admin.goto("http://localhost:3000/company/calendar");

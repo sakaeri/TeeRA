@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { execSync } from "node:child_process";
 import { extractMagicLinkFromLog } from "./_lib/magicLinkAuth.mjs";
+import { addStaffRateViaForm } from "./_lib/staffRateForm.mjs";
 
 function log(label, ok) {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}`);
@@ -128,21 +129,31 @@ try {
   }
 
   async function addRate(taskName, workplace, amount) {
-    await panel.getByRole("button", { name: "＋業務内容を追加" }).click();
-    await admin.waitForTimeout(150);
-    await fillTaskName(taskName);
-    if (workplace) {
-      await panel.getByLabel("勤務先").selectOption({ label: workplace });
-    }
-    await panel.locator("select").last().selectOption("DAILY");
-    await panel.locator('input[placeholder="金額"]').fill(String(amount));
-    await panel.getByRole("button", { name: "追加", exact: true }).click();
-    await admin.waitForTimeout(400);
+    await addStaffRateViaForm(admin, panel, psql, { companyId, workplace, task: taskName, wageType: "DAILY", amount });
   }
 
   await addRate("キャディ業務", "A社", 11000);
   await addRate("キャディ業務", "B社", 12000);
   await addRate("作業", null, 8000);
+
+  // 勤務先つきの単価を登録すると、その勤務先に自動で配属される（勤務先問わずは配属しない）
+  const placed = (relId) => psql(`select count(*) from "StaffPlacement" where "staffUserId"='${staffUserId}' and "companyRelationshipId"='${relId}' and active;`);
+  log("単価にA社を入れるとA社に配属される", placed(relAId) === "1");
+  log("単価にB社を入れるとB社に配属される", placed(relBId) === "1");
+
+  // 「業務内容を追加」は 勤務先 → その勤務先に登録されている業務内容だけ
+  psql(`insert into "CompanyPlacementRate" (id, "companyId", "companyRelationshipId", "taskName") values (gen_random_uuid()::text, '${companyId}', '${relAId}', 'A社だけの業務');`);
+  await panel.getByRole("button", { name: "＋業務内容を追加" }).click();
+  const newModal = admin.locator("div.fixed.inset-0.z-40").last();
+  log("最初は勤務先を選ぶところから（業務内容の欄はまだ出ない）", (await newModal.getByTestId("new-rate-task").count()) === 0);
+  await newModal.getByTestId("new-rate-workplace").selectOption(relAId);
+  await newModal.getByTestId("new-rate-task").waitFor();
+  const aOptions = (await newModal.getByTestId("new-rate-task").locator("option").allInnerTexts()).filter((t) => t !== "業務内容を選択");
+  log(`A社を選ぶと、A社に登録されていて まだ単価の無い業務内容だけ出る（${aOptions.join("/")}）`, aOptions.join("/") === "A社だけの業務");
+  await newModal.getByTestId("new-rate-workplace").selectOption(relBId);
+  await newModal.getByTestId("new-rate-no-tasks").waitFor();
+  log("登録済みの業務内容に全部単価がある勤務先では、その旨が出て追加できない", (await newModal.getByTestId("new-rate-no-tasks").innerText()).includes("すべて単価を登録済み") && (await newModal.getByRole("button", { name: "追加", exact: true }).isDisabled()));
+  await newModal.getByRole("button", { name: "閉じる" }).click();
 
   const rateCount = psql(`select count(*) from "StaffTaskRate" where "staffUserId"='${staffUserId}';`);
   log("3件の業務内容単価が登録された（キャディ業務×2 + 作業×1）", rateCount === "3");

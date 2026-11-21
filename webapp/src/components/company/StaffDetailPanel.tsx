@@ -29,6 +29,7 @@ import {
   endStaffTaskRateAction,
   updateStaffContractWageAction,
   endStaffContractAction,
+  listPlacementTaskNamesByWorkplaceAction,
 } from "@/app/company/contracts/actions";
 import { todayJstParts, todayJst } from "@/lib/date";
 import { ALLOWED_REQUEST_DESIRE_OPTIONS, normalizeAllowedRequestDesire } from "@/lib/requestDesire";
@@ -60,6 +61,9 @@ type StaffTaskRate = {
 };
 
 type ClientOption = { id: string; name: string };
+
+// 業務内容を追加の画面で、勤務先をまだ選んでいない状態
+const UNSELECTED_WORKPLACE = "__unselected__";
 
 type StaffNote = {
   id: string;
@@ -198,7 +202,6 @@ export function StaffDetailPanel({
   clients,
   contractTemplates,
   uploadOnlyTemplates,
-  knownTaskNames,
   allTeams,
   initialTab,
   onClose,
@@ -208,7 +211,8 @@ export function StaffDetailPanel({
   clients: ClientOption[];
   contractTemplates: Template[];
   uploadOnlyTemplates: UploadOnlyTemplate[];
-  knownTaskNames: string[];
+  // 業務内容の候補は、単価を追加する画面で勤務先ごとに読み込むようにしたので使わない（呼び出し側との互換のため残す）
+  knownTaskNames?: string[];
   allTeams: { id: string; name: string }[];
   initialTab?: "contracts";
   onClose: () => void;
@@ -1089,7 +1093,6 @@ export function StaffDetailPanel({
                 userId={userId}
                 rates={data.taskRates}
                 clients={sortClientsByWorkedFirst(clients, data.workedClientIds)}
-                knownTaskNames={knownTaskNames}
                 onChanged={refresh}
                 baseContract={data.contracts.find((c) => c.status === "ACTIVE") ?? null}
                 onEditBaseWage={startEditWage}
@@ -1769,8 +1772,6 @@ const WAGE_TYPE_OPTIONS: { value: "HOURLY" | "DAILY" | "MONTHLY"; label: string 
   { value: "MONTHLY", label: "月給" },
 ];
 
-const NEW_TASK_NAME_SENTINEL = "__new__";
-
 // 単価は上書きしない — 編集は新しいバージョンを開始日付きで積む。削除は
 // 承認済みの実績シフトで一度も参照されていないものだけ可能（間違い登録の
 // 取消し用）。既に使われた単価は削除できず、そのまま残しておく。
@@ -1778,7 +1779,6 @@ function StaffTaskRatesTab({
   userId,
   rates,
   clients,
-  knownTaskNames,
   onChanged,
   baseContract,
   onEditBaseWage,
@@ -1786,7 +1786,6 @@ function StaffTaskRatesTab({
   userId: string;
   rates: StaffTaskRate[];
   clients: ClientOption[];
-  knownTaskNames: string[];
   onChanged: () => Promise<void>;
   baseContract: StaffMonthDetail["contracts"][number] | null;
   onEditBaseWage: (c: StaffMonthDetail["contracts"][number]) => void;
@@ -1804,7 +1803,6 @@ function StaffTaskRatesTab({
   const [endingRate, setEndingRate] = useState<StaffTaskRate | null>(null);
   const [endDate, setEndDate] = useState(todayJst());
   const [showNewForm, setShowNewForm] = useState(false);
-  const [newTaskNameMode, setNewTaskNameMode] = useState<"pick" | "custom">("custom");
   const [newTaskName, setNewTaskName] = useState("");
   const [newCompanyRelationshipId, setNewCompanyRelationshipId] = useState("");
   const [newWageType, setNewWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
@@ -1812,11 +1810,17 @@ function StaffTaskRatesTab({
   const [newHolidayAmount, setNewHolidayAmount] = useState("");
   const [newEffectiveFrom, setNewEffectiveFrom] = useState(todayJst());
 
+  // 勤務先ごとに単価へ登録されている業務内容（キーは勤務先のID、勤務先問わずは ""）。追加の画面を開いた時に読み込む
+  const [placementTaskNames, setPlacementTaskNames] = useState<Record<string, string[]> | null>(null);
   function openNewForm() {
     setShowNewForm(true);
     setNewTaskName("");
-    setNewTaskNameMode(knownTaskNames.length > 0 ? "pick" : "custom");
-    setNewCompanyRelationshipId("");
+    // 勤務先は最初は未選択（勤務先 → 業務内容 → 単価 の順に選んでもらう）
+    setNewCompanyRelationshipId(UNSELECTED_WORKPLACE);
+    setPlacementTaskNames(null);
+    listPlacementTaskNamesByWorkplaceAction()
+      .then(setPlacementTaskNames)
+      .catch(() => setPlacementTaskNames({}));
     setNewWageType("HOURLY");
     setNewAmount("");
     setNewHolidayAmount("");
@@ -1824,6 +1828,15 @@ function StaffTaskRatesTab({
   }
 
   const amendingRate = rates.find((r) => r.id === amendingId) ?? null;
+  // 選んだ勤務先の単価に登録されている業務内容のうち、このスタッフにまだ単価が無いもの
+  const registeredForWorkplace =
+    placementTaskNames && newCompanyRelationshipId !== UNSELECTED_WORKPLACE ? (placementTaskNames[newCompanyRelationshipId] ?? []) : [];
+  const newTaskOptions =
+    placementTaskNames === null
+      ? null
+      : registeredForWorkplace.filter(
+          (name) => !rates.some((r) => r.taskName === name && (r.companyRelationshipId ?? "") === newCompanyRelationshipId),
+        );
 
   function startAmend(r: StaffTaskRate) {
     setAmendingId(r.id);
@@ -1876,7 +1889,7 @@ function StaffTaskRatesTab({
       await addStaffTaskRateVersionAction({
         staffUserId: userId,
         taskName: newTaskName.trim(),
-        companyRelationshipId: newCompanyRelationshipId || undefined,
+        companyRelationshipId: newCompanyRelationshipId && newCompanyRelationshipId !== UNSELECTED_WORKPLACE ? newCompanyRelationshipId : undefined,
         wageType: newWageType,
         amount: Number(newAmount),
         holidayAmount: Number(newHolidayAmount) > 0 ? Number(newHolidayAmount) : null,
@@ -2152,57 +2165,19 @@ function StaffTaskRatesTab({
               </button>
             </div>
             <div className="flex flex-col gap-2">
-              {newTaskNameMode === "pick" ? (
-                <select
-                  value={newTaskName}
-                  onChange={(e) => {
-                    if (e.target.value === NEW_TASK_NAME_SENTINEL) {
-                      setNewTaskNameMode("custom");
-                      setNewTaskName("");
-                    } else {
-                      setNewTaskName(e.target.value);
-                    }
-                  }}
-                  className="rounded-lg border border-border px-3 py-2 text-sm"
-                >
-                  <option value="">業務内容を選択</option>
-                  {knownTaskNames.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                  <option value={NEW_TASK_NAME_SENTINEL}>＋ 新しい業務内容を追加する</option>
-                </select>
-              ) : (
-                <div className="flex flex-col gap-1">
-                  <input
-                    type="text"
-                    value={newTaskName}
-                    onChange={(e) => setNewTaskName(e.target.value)}
-                    placeholder="業務内容（例：キャディ業務）"
-                    className="rounded-lg border border-border px-3 py-2 text-sm"
-                  />
-                  {knownTaskNames.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewTaskNameMode("pick");
-                        setNewTaskName("");
-                      }}
-                      className="self-start text-xs text-muted hover:text-primary"
-                    >
-                      ← 既存の業務内容から選ぶ
-                    </button>
-                  ) : null}
-                </div>
-              )}
+              {/* ①勤務先 → ②その勤務先の単価に登録されている業務内容 → ③単価 の順 */}
               <label className="flex flex-col gap-0.5 text-xs">
                 <span className="text-muted">勤務先</span>
                 <select
                   value={newCompanyRelationshipId}
-                  onChange={(e) => setNewCompanyRelationshipId(e.target.value)}
+                  onChange={(e) => {
+                    setNewCompanyRelationshipId(e.target.value);
+                    setNewTaskName("");
+                  }}
                   className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
+                  data-testid="new-rate-workplace"
                 >
+                  {newCompanyRelationshipId === UNSELECTED_WORKPLACE ? <option value={UNSELECTED_WORKPLACE}>勤務先を選んでください</option> : null}
                   <option value="">勤務先を問わない</option>
                   {clients.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -2211,6 +2186,36 @@ function StaffTaskRatesTab({
                   ))}
                 </select>
               </label>
+              {newCompanyRelationshipId !== UNSELECTED_WORKPLACE ? (
+                newTaskOptions === null ? (
+                  <p className="text-xs text-muted">読み込み中…</p>
+                ) : newTaskOptions.length === 0 ? (
+                  <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="new-rate-no-tasks">
+                    {registeredForWorkplace.length === 0
+                      ? newCompanyRelationshipId
+                        ? "この勤務先には業務内容が登録されていません。依頼主の詳細の「単価」で追加してください。"
+                        : "社内の業務内容が登録されていません。"
+                      : "この勤務先の業務内容は、すべて単価を登録済みです。"}
+                  </p>
+                ) : (
+                  <label className="flex flex-col gap-0.5 text-xs">
+                    <span className="text-muted">業務内容</span>
+                    <select
+                      value={newTaskName}
+                      onChange={(e) => setNewTaskName(e.target.value)}
+                      className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+                      data-testid="new-rate-task"
+                    >
+                      <option value="">業務内容を選択</option>
+                      {newTaskOptions.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )
+              ) : null}
               <div className="flex flex-wrap items-end gap-2">
                 <select
                   value={newWageType}
