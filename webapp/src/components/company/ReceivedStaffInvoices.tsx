@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PdfLink } from "@/components/PdfLink";
-import { openStaffInvoiceAction, reviewStaffInvoiceAction, updateContractorSettingsAction } from "@/app/company/payroll/actions";
+import { openStaffInvoiceAction, reviewStaffInvoiceAction, updateContractorSettingsAction, updateContractorShowWorkplaceAction } from "@/app/company/payroll/actions";
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
   SUBMITTED: { text: "確認待ち", className: "bg-amber-100 text-amber-800" },
@@ -158,7 +158,8 @@ export type ReceivedInvoiceDetail = {
   status: string;
   submittedAt: string;
   periodRangeLabel: string | null;
-  lines: { shiftId: string; description: string; hours: number; rate: number; amount: number }[];
+  lines: { shiftId: string; label: string; isDaily: boolean; hours: number; rate: number; amount: number }[];
+  showWorkplace: boolean;
   expenses: { label: string; quantity: number; unitPrice: number; amount: number }[];
   note: string | null;
   issuerName: string | null;
@@ -228,11 +229,11 @@ export function ReceivedStaffInvoiceView({ invoice }: { invoice: ReceivedInvoice
       <section className="rounded-2xl border border-border bg-white/60 p-4">
         <ul className="divide-y divide-border/60 text-sm">
           {invoice.lines.map((l) => (
-            <li key={l.shiftId} className="flex justify-between gap-3 py-1.5">
+            <li key={l.shiftId} className="flex justify-between gap-3 py-1.5" data-testid="received-invoice-line">
               <span>
-                {l.description.replace(/（日給）$/, "")}
+                {l.label}
                 <span className="ml-2 text-xs text-muted">
-                  {l.description.endsWith("（日給）") ? "1日" : `${l.hours}時間`} × {yen(l.rate)}
+                  {l.isDaily ? "1日" : `${l.hours}時間`} × {yen(l.rate)}
                 </span>
               </span>
               <span className="shrink-0">{yen(l.amount)}</span>
@@ -322,6 +323,35 @@ export function ReceivedStaffInvoiceView({ invoice }: { invoice: ReceivedInvoice
           />
           報酬に消費税（10%）を上乗せする（外すと、報酬は税込とみなします）
         </label>
+        <p className="mb-1 mt-3 text-xs text-muted">明細の書き方（画面とPDF）</p>
+        <div role="radiogroup" aria-label="明細の書き方" className="flex gap-2">
+          {[
+            { value: true, label: "勤務先と業務内容" },
+            { value: false, label: "業務内容だけ" },
+          ].map((o) => {
+            const selected = invoice.showWorkplace === o.value;
+            return (
+              <button
+                key={o.label}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                disabled={pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    await updateContractorShowWorkplaceAction(invoice.id, o.value);
+                    router.refresh();
+                  })
+                }
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-60 ${
+                  selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-white text-foreground"
+                }`}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
         <p className="mt-2 text-xs text-muted">
           変えると、確認待ちの請求書の金額も計算し直し、次からの請求書にも使います。「その他の項目」（交通費など）は実費の精算として、消費税・源泉徴収をかけずに計算しています。どの報酬が源泉徴収の対象になるかは、税理士などに確認してください。
         </p>

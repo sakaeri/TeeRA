@@ -90,11 +90,11 @@ try {
   const wageAmount = psql(`select "wageAmount" from "ContractTemplate" where id='${templateId}';`);
   const staffContractId = psql(
     `with ins as (insert into "StaffContract" (id, "templateId", "staffUserId", "wageAmountSnapshot", "contractStartDate", status, "consentedAt", "createdAt", "updatedAt") ` +
-      `values (gen_random_uuid()::text, '${templateId}', '${payrollStaffUserId}', ${wageAmount}, current_date - interval '10 day', 'ACTIVE', now(), now(), now()) returning id) select id from ins;`,
+      `values (gen_random_uuid()::text, '${templateId}', '${payrollStaffUserId}', ${wageAmount}, least(current_date, '${thisMonth}-01'::date) - interval '10 day', 'ACTIVE', now(), now(), now()) returning id) select id from ins;`,
   );
   psql(
     `insert into "StaffContractWageVersion" (id, "staffContractId", "wageAmount", "effectiveFrom", "createdAt") ` +
-      `values (gen_random_uuid()::text, '${staffContractId}', ${wageAmount}, current_date - interval '10 day', now());`,
+      `values (gen_random_uuid()::text, '${staffContractId}', ${wageAmount}, least(current_date, '${thisMonth}-01'::date) - interval '10 day', now());`,
   );
   psql(`update "ContractTemplate" set status='LOCKED' where id='${templateId}';`);
 
@@ -221,6 +221,17 @@ try {
     text.includes(`${thisMonth}-01 社内（レジ業務）`) && text.includes(`${thisMonth}-01 A社（品出し）`),
   );
 
+  // 明細の書き方：業務内容だけ
+  log("最初は「勤務先と業務内容」が選ばれている", (await admin.getByRole("radio", { name: "勤務先と業務内容" }).getAttribute("aria-checked")) === "true");
+  await admin.getByRole("radio", { name: "業務内容だけ" }).click();
+  await admin.waitForTimeout(800);
+  log("「業務内容だけ」が保存される", psql(`select "showWorkplace" from "SalarySlip" where id='${slipId}';`) === "f");
+  text = await pdfText(slipPdfUrl);
+  log(
+    "業務内容だけのときは勤務先を載せない（日付＋業務内容）",
+    text.includes(`${thisMonth}-01 レジ業務`) && text.includes(`${thisMonth}-01 品出し`) && !text.includes("A社（") && !text.includes("社内（"),
+  );
+
   // 翌月の明細は、選んだ載せ方で始まる
   const [ty, tm] = thisMonth.split("-").map(Number);
   const nextMonth = `${tm === 12 ? ty + 1 : ty}-${String(tm === 12 ? 1 : tm + 1).padStart(2, "0")}`;
@@ -229,6 +240,10 @@ try {
   log(
     "翌月の明細は前の月の載せ方（1件ずつ）で始まる",
     psql(`select "groupShiftLines" from "SalarySlip" where "staffUserId"='${payrollStaffUserId}' and "targetMonth"='${nextMonth}';`) === "f",
+  );
+  log(
+    "翌月の明細は前の月の書き方（業務内容だけ）で始まる",
+    psql(`select "showWorkplace" from "SalarySlip" where "staffUserId"='${payrollStaffUserId}' and "targetMonth"='${nextMonth}';`) === "f",
   );
   log(
     "翌月の明細の支払日は1か月後の同じ日で始まる",

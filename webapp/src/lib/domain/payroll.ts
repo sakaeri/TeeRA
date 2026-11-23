@@ -111,11 +111,12 @@ export type SalarySlipPdfLine = { description: string; hours: number; rate: numb
 export function buildSalarySlipPdfLines(
   lines: { kind?: string; shiftId?: string | null; description: string; hours: number; rate: number; amount: number }[],
   workplaceByShiftId: Map<string, string | null>,
-  options: { groupShiftLines?: boolean } = {},
+  options: { groupShiftLines?: boolean; showWorkplace?: boolean } = {},
 ): SalarySlipPdfLine[] {
   const grouped = new Map<string, SalarySlipPdfLine>();
   const result: SalarySlipPdfLine[] = [];
   const groupShiftLines = options.groupShiftLines ?? true;
+  const showWorkplace = options.showWorkplace ?? true;
 
   // シフトの行は日付順にする（作られた順だと日付がばらばらに並ぶため）
   const dateOf = (d: string) => d.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? "";
@@ -128,19 +129,17 @@ export function buildSalarySlipPdfLines(
       result.push({ description: line.description, hours: line.hours, rate: line.rate, amount: line.amount });
       continue;
     }
-    const { taskName, isDaily } = parseAutoShiftDescription(line.description);
+    const { isDaily } = parseAutoShiftDescription(line.description);
     if (!groupShiftLines) {
       const date = line.description.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
-      const workplace = workplaceByShiftId.get(line.shiftId) ?? "社内";
       const description = date
-        ? `${date} ${workplace}${taskName ? `（${taskName}）` : ""}${isDaily ? DAILY_WAGE_SUFFIX : ""}`
+        ? `${date} ${workLineLabel(line.description, workplaceByShiftId.get(line.shiftId) ?? null, showWorkplace)}${isDaily ? DAILY_WAGE_SUFFIX : ""}`
         : line.description;
       result.push({ description, hours: line.hours, rate: line.rate, amount: line.amount, unit: isDaily ? "DAY" : "HOUR" });
       continue;
     }
-    // 日給も「勤務先（業務内容）（日給）」×単価でまとめる（数量＝日数）
-    const workplace = workplaceByShiftId.get(line.shiftId) ?? "社内";
-    const label = `${taskName ? `${workplace}（${taskName}）` : workplace}${isDaily ? DAILY_WAGE_SUFFIX : ""}`;
+    // 日給も「勤務先（業務内容）（日給）」×単価でまとめる（数量＝日数）。業務内容だけの時は勤務先が違ってもまとめる
+    const label = `${workLineLabel(line.description, workplaceByShiftId.get(line.shiftId) ?? null, showWorkplace)}${isDaily ? DAILY_WAGE_SUFFIX : ""}`;
     const key = `${label}__${line.rate}`;
     const existing = grouped.get(key);
     if (existing) {
@@ -153,6 +152,15 @@ export function buildSalarySlipPdfLines(
     }
   }
   return result;
+}
+
+// 勤務の行の「何をしたか」の部分（日付・（日給）は含まない）。
+// 勤務先を載せる時は「勤務先（業務内容）」、業務内容だけの時は「業務内容」（業務内容が無ければ「勤務」）
+export function workLineLabel(description: string, workplace: string | null, showWorkplace: boolean) {
+  const { taskName } = parseAutoShiftDescription(description);
+  if (!showWorkplace) return taskName ?? "勤務";
+  const place = workplace ?? "社内";
+  return taskName ? `${place}（${taskName}）` : place;
 }
 
 // 複数の契約の中から指定日時点で有効だったものを1つ選ぶ（契約期間の
@@ -482,6 +490,7 @@ export async function getOrCreateSalarySlip(params: {
         note: prevSlip?.note ?? null,
         // PDFの載せ方も前の月の明細から引き継ぐ
         groupShiftLines: prevSlip?.groupShiftLines ?? true,
+        showWorkplace: prevSlip?.showWorkplace ?? true,
       },
     });
     await carryOverCustomLines(slip.id, prevSlip);
@@ -549,6 +558,10 @@ export async function updateDeductions(salarySlipId: string, deductions: Deducti
 
 export async function setSalarySlipGroupShiftLines(salarySlipId: string, groupShiftLines: boolean) {
   return prisma.salarySlip.update({ where: { id: salarySlipId }, data: { groupShiftLines } });
+}
+
+export async function setSalarySlipShowWorkplace(salarySlipId: string, showWorkplace: boolean) {
+  return prisma.salarySlip.update({ where: { id: salarySlipId }, data: { showWorkplace } });
 }
 
 export async function setSalarySlipPaymentDay(salarySlipId: string, paymentDay: string) {
@@ -658,6 +671,7 @@ export async function issueSalarySlip(params: { salarySlipId: string; issuedByUs
           paymentDay: slip.paymentDay,
           note: slip.note,
           groupShiftLines: slip.groupShiftLines,
+          showWorkplace: slip.showWorkplace,
           lines: slip.lines,
           deductions: slip.deductions,
           paidLeaveDaysUsed: slip.paidLeaveDaysUsed,
