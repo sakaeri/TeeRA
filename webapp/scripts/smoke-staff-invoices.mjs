@@ -149,6 +149,15 @@ try {
   await staff.getByText("提出済みです。会社が確認するまでお待ちください。").waitFor();
   log("提出後は直せない（入力欄が無効）", await editor.locator('input[placeholder="無ければ空欄のまま"]').isDisabled());
 
+  // --- 会社：アプリを開いただけでも届いたことがわかる（やること・メニューの数字） ---
+  const monthLabel = `${Number(month.slice(0, 4))}年${Number(month.slice(5))}月分`;
+  await admin.goto("http://localhost:3000/company");
+  const todoInvoice = admin.locator("li", { hasText: `請求書（${monthLabel}）が届いています` });
+  await todoInvoice.first().waitFor({ timeout: 15000 }).catch(() => {});
+  log("やることに「◯◯さんの請求書（◯月分）が届いています」が出る", (await todoInvoice.count()) === 1 && (await todoInvoice.innerText()).includes("委託"));
+  log("メニューの「給与/請求」に1が出る", (await admin.getByTestId("nav-badge").first().innerText()) === "1");
+  log("やることを押すとその月の給与/請求を開く", (await todoInvoice.locator("a").getAttribute("href")) === `/company/payroll?month=${month}`);
+
   // --- 会社：開く前は金額もPDFも見えない ---
   await admin.goto(`http://localhost:3000/company/payroll?month=${month}`);
   const list = admin.getByTestId("received-staff-invoices");
@@ -208,6 +217,9 @@ try {
   await staff.getByText("請求書を提出しました").waitFor();
   log("再提出すると確認待ちに戻る", psql(`select status from "StaffInvoice" where id='${invoiceId}';`) === "SUBMITTED");
 
+  await admin.goto("http://localhost:3000/company");
+  log("出し直すと、やることに「直した請求書」と出る", (await admin.locator("li", { hasText: `直した請求書（${monthLabel}）が届いています` }).count()) === 1);
+
   // もう一度開いても追加はかからない → 承認
   await admin.goto(`http://localhost:3000/company/payroll?month=${month}`);
   await admin.getByTestId("received-staff-invoices").getByRole("button", { name: /委託太郎/ }).click();
@@ -220,7 +232,11 @@ try {
   log("スタッフに承認のお知らせが届く", psql(`select count(*) from "StaffNotice" where "staffUserId"='${staffId}' and message like '%請求書が承認されました%';`) === "1");
   await admin.goto(`http://localhost:3000/company/payroll?month=${month}`);
   const receivedAfter = await admin.getByTestId("received-staff-invoices").innerText();
+  log("承認するとメニューの数字が消える", (await admin.getByTestId("nav-badge").count()) === 0);
   log("承認した請求書は「届いた請求書」の欄から消え、業務委託のスタッフがいるので欄は「まだ届いていません」で残る", !receivedAfter.includes("委託太郎") && receivedAfter.includes("まだ届いていません"));
+  await admin.goto("http://localhost:3000/company");
+  log("承認するとやることから消える", (await admin.locator("li", { hasText: `請求書（${monthLabel}）が届いています` }).count()) === 0);
+  await admin.goto(`http://localhost:3000/company/payroll?month=${month}`);
   const historyText = await admin.locator("section", { hasText: "発行履歴" }).last().innerText();
   log("承認した請求書は「発行履歴」に移る", historyText.includes("委託太郎") && historyText.includes("受け取った請求書"));
   await admin.goto(`http://localhost:3000/company/payroll?month=${month}&staff=${staffId}`);

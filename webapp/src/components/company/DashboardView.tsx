@@ -204,6 +204,7 @@ const TAG_STYLE: Record<string, string> = {
   契約満了: "bg-orange-100 text-orange-800",
   有給付与: "bg-sky-100 text-sky-800",
   販促品: "bg-amber-100 text-amber-800",
+  請求書: "bg-teal-100 text-teal-800",
 };
 
 function Tag({ kind }: { kind: string }) {

@@ -45,6 +45,7 @@ export function CompanyShell({
   hasMultipleCompanies,
   showStaffScreenLink,
   leaderOnly,
+  navBadges = {},
   children,
 }: {
   companyName: string;
@@ -55,6 +56,8 @@ export function CompanyShell({
   hasMultipleCompanies: boolean;
   showStaffScreenLink: boolean;
   leaderOnly: boolean;
+  // メニューの右上に出す数字（例：給与/請求に、届いて確認待ちの請求書の数）
+  navBadges?: Record<string, number>;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -174,6 +177,7 @@ export function CompanyShell({
               >
                 {active ? <span className="h-1.5 w-1.5 rounded-full bg-accent" /> : <span className="w-1.5" />}
                 {item.label}
+                <NavBadge count={navBadges[item.href] ?? 0} />
               </Link>
             );
           })}
@@ -192,11 +196,30 @@ export function CompanyShell({
                 active ? "border-b-2 border-accent bg-white/10" : "opacity-75"
               }`}
             >
-              {item.mobileLabel}
+              <span className="relative inline-block">
+                {item.mobileLabel}
+                <NavBadge count={navBadges[item.href] ?? 0} floating />
+              </span>
             </Link>
           );
         })}
       </nav>
     </div>
+  );
+}
+
+// メニューの赤い丸の数字。0件の時は出さない
+function NavBadge({ count, floating = false }: { count: number; floating?: boolean }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      data-testid="nav-badge"
+      aria-label={`${count}件`}
+      className={`${
+        floating ? "absolute -right-3 -top-2" : "ml-auto"
+      } flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }
