@@ -86,6 +86,7 @@ export async function loadDashboardData(companyId: string) {
     missingDocumentStaff,
     transferFeeReviews,
     awaitingConsentStaff,
+    submittedStaffInvoices,
   ] = await Promise.all([
       // 日付が過ぎた募集はもう応募のしようがないので、埋まらないまま残って
       // いても欠員件数・やることリストからは対象外にする（過去日は消えて
@@ -122,6 +123,8 @@ export async function loadDashboardData(companyId: string) {
       }),
       // 契約書を送ったが、本人がまだ署名していないスタッフ
       listAwaitingConsentStaff(companyId),
+      // 業務委託のスタッフから届いて、まだ承認・差し戻ししていない請求書
+      listSubmittedStaffInvoices(companyId),
     ]);
 
   // 希望日が複数（datesは配列）あり得るため、1件でも今日以降の希望日が
@@ -160,6 +163,7 @@ export async function loadDashboardData(companyId: string) {
     missingDocumentStaff,
     transferFeeReviews,
     awaitingConsentStaff,
+    submittedStaffInvoices,
   };
 }
 
@@ -189,6 +193,7 @@ export async function scopeDashboardDataToTeams(data: DashboardData, teamIds: st
     transferFeeReviews: data.transferFeeReviews.filter((c) => inTeam(c.shift.teamId) || members.has(c.shift.staffUserId)),
     missingDocumentStaff: data.missingDocumentStaff.filter((s) => members.has(s.userId)),
     awaitingConsentStaff: data.awaitingConsentStaff.filter((s) => members.has(s.userId)),
+    submittedStaffInvoices: data.submittedStaffInvoices.filter((inv) => members.has(inv.staffUserId)),
   };
 }
 
@@ -370,7 +375,7 @@ export function computePendingReportEntries(data: DashboardData, companyId?: str
 
 export type AutoTodoItem = {
   id: string;
-  kind: "業務報告" | "欠員" | "シフト" | "調整中" | "振替" | "契約書" | "契約満了" | "有給付与" | "販促品";
+  kind: "業務報告" | "欠員" | "シフト" | "調整中" | "振替" | "契約書" | "契約満了" | "有給付与" | "販促品" | "請求書";
   text: string;
   actionLabel: string;
   actionHref: string;
@@ -489,6 +494,20 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
       text: `未承認の業務報告が${group.count}件あります${group.label}`,
       actionLabel: "一覧を見る",
       actionHref: `/company?open=reports&team=${group.key}`,
+    });
+  }
+
+  // 業務委託のスタッフから届いた請求書（承認か差し戻しをすると消える）
+  for (const inv of data.submittedStaffInvoices) {
+    const [y, m] = inv.targetMonth.split("-").map(Number);
+    // 差し戻した後に出し直したものは、通知と同じく「直した請求書」
+    const resubmitted = inv.reviewedAt !== null;
+    items.push({
+      id: `staff-invoice-${inv.id}`,
+      kind: "請求書",
+      text: `${inv.staff.name}さんの${resubmitted ? "直した" : ""}請求書（${y}年${m}月分）が届いています`,
+      actionLabel: "確認する",
+      actionHref: `/company/payroll?month=${inv.targetMonth}`,
     });
   }
 
@@ -626,4 +645,23 @@ function groupByTeam(rows: { teamId: string | null; teamName: string | null }[])
   return [...groups.values()]
     .sort((a, b) => b.count - a.count)
     .map((g) => ({ key: g.key, count: g.count, label: anyTeam ? `（${g.name ?? "チームなし"}）` : "" }));
+}
+
+// 業務委託のスタッフから届いて、まだ承認・差し戻ししていない請求書（やること・メニューの数字）
+async function listSubmittedStaffInvoices(companyId: string) {
+  return prisma.staffInvoice.findMany({
+    where: { companyId, status: "SUBMITTED" },
+    select: { id: true, staffUserId: true, targetMonth: true, reviewedAt: true, staff: { select: { name: true } } },
+    orderBy: { submittedAt: "asc" },
+  });
+}
+
+// メニューの「給与/請求」に出す数字。やることと同じ数え方（チームのマネージャーは自分のチームのスタッフの分だけ）
+export async function countSubmittedStaffInvoices(companyId: string, teamIds: string[] | null) {
+  const rows = await listSubmittedStaffInvoices(companyId);
+  if (teamIds === null) return rows.length;
+  const members = new Set(
+    (await prisma.teamMembership.findMany({ where: { teamId: { in: teamIds } }, select: { userId: true } })).map((m) => m.userId),
+  );
+  return rows.filter((r) => members.has(r.staffUserId)).length;
 }

@@ -1,5 +1,6 @@
 import { requireCompanyAdminOrEditor, listMyMemberships } from "@/lib/auth/session";
-import { hasAnyTeamManagementRole, isLeaderOnly } from "@/lib/auth/permissions";
+import { hasAnyTeamManagementRole, isCompanyScopeAdmin, isLeaderOnly, myManagedOrLedTeamIds } from "@/lib/auth/permissions";
+import { countSubmittedStaffInvoices } from "@/lib/domain/dashboard";
 import { prisma } from "@/lib/prisma";
 import { WeekStartProvider } from "@/components/week/WeekStart";
 import { CompanyShell } from "@/components/company/CompanyShell";
@@ -30,10 +31,18 @@ export default async function CompanyLayout({
   children: React.ReactNode;
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
-  const [company, user, myMemberships] = await Promise.all([
+  const leaderOnly = isLeaderOnly(membership);
+  const [company, user, myMemberships, pendingStaffInvoiceCount] = await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
     prisma.user.findUniqueOrThrow({ where: { id: userId } }),
     listMyMemberships(userId),
+    // 給与/請求のメニューに出す、届いて確認待ちの請求書の数（リーダーは給与/請求を開けないので数えない）
+    leaderOnly
+      ? 0
+      : countSubmittedStaffInvoices(
+          membership.companyId,
+          isCompanyScopeAdmin(membership) ? null : myManagedOrLedTeamIds(membership),
+        ),
   ]);
 
   return (
@@ -45,7 +54,8 @@ export default async function CompanyLayout({
       teeBalance={company.teeBalance}
       hasMultipleCompanies={myMemberships.length > 1}
       showStaffScreenLink={membership.canWorkShifts || hasAnyTeamManagementRole(membership)}
-      leaderOnly={isLeaderOnly(membership)}
+      leaderOnly={leaderOnly}
+      navBadges={{ "/company/payroll": pendingStaffInvoiceCount }}
     >
       <WeekStartProvider mondayFirst={user.weekStartsMonday}>{children}</WeekStartProvider>
     </CompanyShell>
