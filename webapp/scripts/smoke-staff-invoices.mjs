@@ -189,6 +189,29 @@ try {
   const pdfAfter = await admin.request.get(`http://localhost:3000/api/staff-invoices/${invoiceId}/pdf`);
   log("開いた後はPDFを見られる", pdfAfter.status() === 200 && (pdfAfter.headers()["content-type"] ?? "").includes("pdf"));
 
+  // 明細に「どこで」も出す（社内の勤務は「社内」）。業務内容だけにも変えられる（会社が決める）
+  const firstLine = admin.getByTestId("received-invoice-line").first();
+  log("明細に勤務先と業務内容が出る（例：2026-xx-xx 社内（キャディ））", /\d{4}-\d{2}-\d{2} 社内（キャディ）/.test(await firstLine.innerText()));
+  await admin.getByRole("radio", { name: "業務内容だけ" }).click();
+  await admin.getByRole("radio", { name: "業務内容だけ", checked: true }).waitFor();
+  await admin.waitForTimeout(500);
+  const plainLine = await admin.getByTestId("received-invoice-line").first().innerText();
+  log("業務内容だけにすると勤務先が消える", /\d{4}-\d{2}-\d{2} キャディ/.test(plainLine) && !plainLine.includes("社内"));
+  log(
+    "請求書とスタッフの設定（次から）の両方に残る",
+    psql(`select "showWorkplace" from "StaffInvoice" where id='${invoiceId}';`) === "f" &&
+      psql(`select "contractorInvoiceShowWorkplace" from "CompanyMembership" where "userId"='${staffId}';`) === "f",
+  );
+  {
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const res = await admin.request.get(`http://localhost:3000/api/staff-invoices/${invoiceId}/pdf`);
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(await res.body()) }).promise;
+    const pdfText = (await (await doc.getPage(1)).getTextContent()).items.map((it) => it.str).join("");
+    log("PDFも業務内容だけ（「キャディ」でまとめ、勤務先を載せない）", pdfText.includes("キャディ") && !pdfText.includes("社内"));
+  }
+  await admin.getByRole("radio", { name: "勤務先と業務内容" }).click();
+  await admin.getByRole("radio", { name: "勤務先と業務内容", checked: true }).waitFor();
+
   // 源泉徴収を「する」にすると計算し直す（15,000×10.21%＝1,531円）
   await admin.getByLabel(/源泉徴収する/).click();
   await admin.getByText("源泉徴収税").first().waitFor();

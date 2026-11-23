@@ -52,7 +52,10 @@ export async function GET(request: Request) {
       paymentDay: (snap.paymentDay as string | null) ?? null,
       note: (snap.note as string | null) ?? null,
       isContractor: employmentType === "CONTRACTOR",
-      lines: buildSalarySlipPdfLines(snapLines, snapWorkplaceMap, { groupShiftLines: (snap.groupShiftLines as boolean | undefined) ?? true }),
+      lines: buildSalarySlipPdfLines(snapLines, snapWorkplaceMap, {
+        groupShiftLines: (snap.groupShiftLines as boolean | undefined) ?? true,
+        showWorkplace: (snap.showWorkplace as boolean | undefined) ?? true,
+      }),
       deductions: snap.deductions as SalarySlipPdfData["deductions"],
       paidLeaveDaysUsed: snap.paidLeaveDaysUsed as number,
       paidLeaveDailyRate: snap.paidLeaveDailyRate as number,

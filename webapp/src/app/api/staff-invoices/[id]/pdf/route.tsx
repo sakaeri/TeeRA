@@ -32,7 +32,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/api/staf
   const grouped = buildSalarySlipPdfLines(
     workLines.map((l) => ({ ...l, kind: "SHIFT" })),
     workplaceMap,
-    { groupShiftLines: true },
+    { groupShiftLines: true, showWorkplace: invoice.showWorkplace },
   );
   const buffer = await renderToBuffer(
     <StaffInvoiceDocument

@@ -252,6 +252,8 @@ model CompanyMembership {
   // 源泉徴収するのは支払う会社の側なので会社が決める。消費税は、報酬額を税込とみなすか、10%を上乗せするか
   contractorWithholding  Boolean @default(false)
   contractorTaxExclusive Boolean @default(false)
+  // 業務委託のスタッフの請求書の明細に勤務先を載せる（falseなら業務内容だけ）
+  contractorInvoiceShowWorkplace Boolean @default(true)
 
   // 本人確認書類（両面）。スタッフ本人・会社どちらからもアップロード可能。
   // 契約ごとではなく所属（会社との関係）単位で1組だけ持つ — 契約を結び直す
@@ -1289,6 +1291,8 @@ model SalarySlip {
   excludedShiftIds     Json             @default("[]")
   // PDFの勤務内訳を「勤務先（業務）×単価」ごとに1行にまとめる（falseならシフト1件ずつ）
   groupShiftLines      Boolean          @default(true)
+  // PDFの勤務内訳に勤務先を載せる（falseなら業務内容だけ。同じ業務内容・単価なら勤務先が違ってもまとめる）
+  showWorkplace        Boolean          @default(true)
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
@@ -1393,6 +1397,8 @@ model StaffInvoice {
   reviewedAt         DateTime?
   reviewedByUserId   String?
   returnReason       String?
+  // 明細に勤務先を載せる（falseなら業務内容だけ）。会社が決める（CompanyMembership.contractorInvoiceShowWorkplace から入る）
+  showWorkplace      Boolean            @default(true)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 

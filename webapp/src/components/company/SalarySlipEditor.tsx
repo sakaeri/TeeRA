@@ -11,6 +11,7 @@ import {
   setSalarySlipPaymentDayAction,
   setSalarySlipNoteAction,
   setSalarySlipGroupShiftLinesAction,
+  setSalarySlipShowWorkplaceAction,
   issueSalarySlipAction,
   reopenSalarySlipAction,
   renameUnresolvedTaskNamesAction,
@@ -42,6 +43,7 @@ export function SalarySlipEditor({
     paymentDay: string | null;
     note: string | null;
     groupShiftLines: boolean;
+    showWorkplace: boolean;
     paidLeaveDaysUsed: number;
     paidLeaveDailyRate: number;
     paidLeaveBalance: number;
@@ -61,6 +63,7 @@ export function SalarySlipEditor({
   const isEditable = slip.status === "DRAFT";
   // 押したらすぐ切り替わって見えるように、画面側でも持っておく
   const [groupShiftLines, setGroupShiftLines] = useState(slip.groupShiftLines);
+  const [showWorkplace, setShowWorkplace] = useState(slip.showWorkplace);
 
   // 同月内の再発行、および無料枠内の発行は確認を挟まずそのまま発行する。
   // Teeを実際に課金する時だけ確認ダイアログを出す（無料なのに確認を
@@ -210,9 +213,39 @@ export function SalarySlipEditor({
         </div>
         <p className="text-xs text-muted">
           {groupShiftLines
-            ? "勤務先・業務内容・単価が同じ勤務を1行にまとめ、時間を合計して載せます（日給は1日ずつ）。"
-            : "勤務1件ずつを、日付・勤務先・業務内容つきで載せます。"}
-          翌月の明細も、ここで選んだ載せ方で始まります。
+            ? `${showWorkplace ? "勤務先・業務内容" : "業務内容"}・単価が同じ勤務を1行にまとめ、時間を合計して載せます（日給は日数を合計）。`
+            : `勤務1件ずつを、日付・${showWorkplace ? "勤務先・業務内容" : "業務内容"}つきで載せます。`}
+        </p>
+        <p className="mb-1 mt-3 text-xs text-muted">明細の書き方</p>
+        <div role="radiogroup" aria-label="明細の書き方" className="mb-1 flex gap-2">
+          {[
+            { value: true, label: "勤務先と業務内容" },
+            { value: false, label: "業務内容だけ" },
+          ].map((o) => {
+            const selected = showWorkplace === o.value;
+            return (
+              <button
+                key={o.label}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                disabled={!isEditable}
+                onClick={() => {
+                  setShowWorkplace(o.value);
+                  startTransition(() => setSalarySlipShowWorkplaceAction(slip.id, o.value));
+                }}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-60 ${
+                  selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-white text-foreground"
+                }`}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted">
+          {showWorkplace ? "例：袖ヶ浦カンツリー倶楽部（キャディ）" : "例：キャディ（勤務先が違っても、同じ業務内容・単価ならまとめます）"}
+          。翌月の明細も、ここで選んだ載せ方で始まります。
         </p>
         {isEditable ? (
           <PdfLink sample href={`/api/salary-slips/${slip.id}/pdf`} className="mt-3 inline-block text-sm font-semibold text-primary underline">

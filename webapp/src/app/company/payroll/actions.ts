@@ -1,7 +1,7 @@
 "use server";
 
 import { notifyStaffPayslipIssued, notifyStaffInvoiceReviewed } from "@/lib/domain/emailNotifications";
-import { openStaffInvoice, reviewStaffInvoice, updateContractorSettings, StaffInvoiceError } from "@/lib/domain/staffInvoices";
+import { openStaffInvoice, reviewStaffInvoice, updateContractorSettings, updateContractorShowWorkplace, StaffInvoiceError } from "@/lib/domain/staffInvoices";
 import { revalidatePath } from "next/cache";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManageAny } from "@/lib/auth/permissions";
@@ -20,6 +20,7 @@ import {
   renameUnresolvedTaskNames,
   type DeductionItem,
   setSalarySlipGroupShiftLines,
+  setSalarySlipShowWorkplace,
 } from "@/lib/domain/payroll";
 
 async function assertAccess(salarySlipId: string) {
@@ -61,6 +62,12 @@ export async function updateDeductionsAction(salarySlipId: string, deductions: D
 export async function setSalarySlipPaymentDayAction(salarySlipId: string, paymentDay: string) {
   await assertAccess(salarySlipId);
   await setSalarySlipPaymentDay(salarySlipId, paymentDay);
+  revalidatePath("/company/payroll");
+}
+
+export async function setSalarySlipShowWorkplaceAction(salarySlipId: string, showWorkplace: boolean) {
+  await assertAccess(salarySlipId);
+  await setSalarySlipShowWorkplace(salarySlipId, showWorkplace === true);
   revalidatePath("/company/payroll");
 }
 
@@ -173,6 +180,18 @@ export async function updateContractorSettingsAction(invoiceId: string, withhold
     staffUserId: invoice.staffUserId,
     withholding: withholding === true,
     taxExclusive: taxExclusive === true,
+  });
+  revalidatePath("/company/payroll");
+}
+
+// 請求書の明細に勤務先を載せるか（会社が決める）
+export async function updateContractorShowWorkplaceAction(invoiceId: string, showWorkplace: boolean) {
+  const { membership, invoice } = await assertStaffInvoiceAccess(invoiceId);
+  await updateContractorShowWorkplace({
+    companyId: membership.companyId,
+    staffUserId: invoice.staffUserId,
+    invoiceId,
+    showWorkplace: showWorkplace === true,
   });
   revalidatePath("/company/payroll");
 }

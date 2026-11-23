@@ -2,7 +2,7 @@ import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { closingDayLabel } from "@/lib/closingPeriod";
 import { canManageAny, isCompanyScopeAdmin, isLeaderOnly } from "@/lib/auth/permissions";
 import { listStaff } from "@/lib/domain/roster";
-import { payrollPeriod, getOrCreateSalarySlip, getTotals, listSalarySlipsForCompany } from "@/lib/domain/payroll";
+import { payrollPeriod, getOrCreateSalarySlip, getTotals, listSalarySlipsForCompany, resolveWorkplaceNamesByShiftId, workLineLabel } from "@/lib/domain/payroll";
 import { pdfQuotaRemaining } from "@/lib/domain/plans";
 import { prisma } from "@/lib/prisma";
 import { SalarySlipEditor } from "@/components/company/SalarySlipEditor";
@@ -76,6 +76,7 @@ export default async function PayrollPage({
     deductions: { id: string; label: string; amount: number }[];
     paymentDay: string | null;
     groupShiftLines: boolean;
+    showWorkplace: boolean;
     note: string | null;
     paidLeaveDaysUsed: number;
     paidLeaveDailyRate: number;
@@ -122,6 +123,7 @@ export default async function PayrollPage({
       deductions: slip.deductions as { id: string; label: string; amount: number }[],
       paymentDay: slip.paymentDay,
       groupShiftLines: slip.groupShiftLines,
+      showWorkplace: slip.showWorkplace,
       note: slip.note,
       paidLeaveDaysUsed: slip.paidLeaveDaysUsed,
       paidLeaveDailyRate: slip.paidLeaveDailyRate,
@@ -171,6 +173,8 @@ export default async function PayrollPage({
   const showReceivedSection = receivedRows.length > 0 || (await hasContractorStaff(membership.companyId, [...accessibleStaffIds]));
   // 開いた（1件分を精算した）請求書だけ中身を見られる
   const openedInvoice = staffInvoiceId ? receivedInvoices.find((i) => i.id === staffInvoiceId && i.chargeSettledAt) : undefined;
+  const openedWorkLines = openedInvoice ? (openedInvoice.workLines as ComputedWorkLine[]) : [];
+  const openedWorkplaces = await resolveWorkplaceNamesByShiftId(openedWorkLines.map((l) => l.shiftId));
   const invoiceDetail: ReceivedInvoiceDetail | null = openedInvoice
     ? {
         id: openedInvoice.id,
@@ -179,7 +183,13 @@ export default async function PayrollPage({
         status: openedInvoice.status,
         submittedAt: new Date(openedInvoice.submittedAt!.getTime() + 9 * 3600e3).toISOString().slice(0, 10),
         periodRangeLabel: openedInvoice.periodRangeLabel,
-        lines: openedInvoice.workLines as ComputedWorkLine[],
+        // 「2026-11-18 袖ヶ浦カンツリー倶楽部（キャディ）」／業務内容だけなら「2026-11-18 キャディ」（PDFと同じ書き方）
+        lines: openedWorkLines.map((l) => ({
+          ...l,
+          label: `${l.description.slice(0, 10)} ${workLineLabel(l.description, openedWorkplaces.get(l.shiftId) ?? null, openedInvoice.showWorkplace)}`,
+          isDaily: l.description.endsWith("（日給）"),
+        })),
+        showWorkplace: openedInvoice.showWorkplace,
         expenses: sanitizeExpenses(openedInvoice.expenses),
         note: openedInvoice.note,
         issuerName: openedInvoice.issuerName,

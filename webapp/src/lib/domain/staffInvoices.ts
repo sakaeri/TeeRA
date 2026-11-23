@@ -366,6 +366,7 @@ export async function saveStaffInvoice(params: {
     accountHolderName: membership.accountHolderName,
     withholding: membership.contractorWithholding,
     taxExclusive: membership.contractorTaxExclusive,
+    showWorkplace: membership.contractorInvoiceShowWorkplace,
     ...totals,
     periodRangeLabel: computed.rangeLabel,
     periodEnd: computed.until,
@@ -511,6 +512,29 @@ export async function updateContractorSettings(params: {
       data: { withholding: params.withholding, taxExclusive: params.taxExclusive, ...totals },
     });
   }
+}
+
+// 明細に勤務先を載せるか（会社がスタッフごとに決める）。この請求書と、まだ承認していない請求書・次からの請求書に使う
+export async function updateContractorShowWorkplace(params: {
+  companyId: string;
+  staffUserId: string;
+  invoiceId: string;
+  showWorkplace: boolean;
+}) {
+  await prisma.$transaction([
+    prisma.companyMembership.update({
+      where: { userId_companyId: { userId: params.staffUserId, companyId: params.companyId } },
+      data: { contractorInvoiceShowWorkplace: params.showWorkplace },
+    }),
+    prisma.staffInvoice.updateMany({
+      where: {
+        companyId: params.companyId,
+        staffUserId: params.staffUserId,
+        OR: [{ id: params.invoiceId }, { status: { not: "APPROVED" } }],
+      },
+      data: { showWorkplace: params.showWorkplace },
+    }),
+  ]);
 }
 
 // 給料明細の画面で「この月は請求書を受け取り済み（支払明細は要りません）」と出すため
