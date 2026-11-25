@@ -118,6 +118,19 @@ try {
   const rateInputValue = await admin.locator("table input[type=number]").nth(1).inputValue();
   log("shift line still auto-generated at base wage (1000)", rateInputValue === "1000");
 
+  // 「基本給のままでいい（次から聞かない）」を押すと、この業務内容の案内は出なくなる
+  await admin.getByTestId("acknowledge-base-wage").click();
+  await admin.waitForTimeout(800);
+  await admin.reload();
+  await admin.waitForTimeout(500);
+  log("「基本給のままでいい」で、この業務内容の案内が出なくなる", !(await admin.textContent("body")).includes("業務内容専用の単価が未設定"));
+  log(
+    "スタッフごとに業務内容を覚える",
+    psql(`select "baseWageTaskNames"::text from "CompanyMembership" where "userId"='${staffUserId}';`).includes("警告確認業務"),
+  );
+  // 以降の確認（単価を登録すると案内が消える）のため、覚えたものを戻す
+  psql(`update "CompanyMembership" set "baseWageTaskNames"='[]' where "userId"='${staffUserId}';`);
+
   // シフト作成時に業務内容名だけのスタブ行(StaffTaskRate)は自動生成されるが
   // （依頼主の単価タブと同じ設計）、単価バージョンはまだ0件のはず
   let taskRateVersionCount = psql(

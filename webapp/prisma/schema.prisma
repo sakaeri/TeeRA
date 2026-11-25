@@ -254,6 +254,8 @@ model CompanyMembership {
   contractorTaxExclusive Boolean @default(false)
   // 業務委託のスタッフの請求書の明細に勤務先を載せる（falseなら業務内容だけ）
   contractorInvoiceShowWorkplace Boolean @default(true)
+  // 給料明細の「業務内容専用の単価が未設定」の案内で「基本給のままでいい」にした業務内容（次から聞かない）
+  baseWageTaskNames Json @default("[]")
 
   // 本人確認書類（両面）。スタッフ本人・会社どちらからもアップロード可能。
   // 契約ごとではなく所属（会社との関係）単位で1組だけ持つ — 契約を結び直す

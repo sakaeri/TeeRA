@@ -12,6 +12,7 @@ import {
   setSalarySlipNoteAction,
   setSalarySlipGroupShiftLinesAction,
   setSalarySlipShowWorkplaceAction,
+  acknowledgeBaseWageTaskNamesAction,
   issueSalarySlipAction,
   reopenSalarySlipAction,
   renameUnresolvedTaskNamesAction,
@@ -86,7 +87,9 @@ export function SalarySlipEditor({
 
       {slip.invoicedShiftCount ? (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900" data-testid="invoiced-shift-note">
-          {slip.invoicedShiftCount}件の勤務は、スタッフの請求書で受け取り済みのため載せていません。
+          {slip.lines.some((l) => l.kind === "SHIFT")
+            ? `${slip.invoicedShiftCount}件の勤務は、スタッフの請求書で受け取り済みのため載せていません。`
+            : "この月の勤務は、すべてスタッフの請求書で受け取り済みです。"}
         </p>
       ) : null}
       {slip.unresolved.length > 0 ? <UnresolvedWarning salarySlipId={slip.id} unresolved={slip.unresolved} /> : null}
@@ -460,6 +463,20 @@ function UnresolvedWarning({ salarySlipId, unresolved }: { salarySlipId: string;
           </li>
         ))}
       </ul>
+      {/* 基本給で正しい場合は、次から聞かないようにできる（業務内容ごと） */}
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() =>
+          startTransition(async () => {
+            await acknowledgeBaseWageTaskNamesAction(salarySlipId, [...new Set(unresolved.map((u) => u.taskName))]);
+          })
+        }
+        className="mt-3 rounded-lg border border-amber-500 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 disabled:opacity-60"
+        data-testid="acknowledge-base-wage"
+      >
+        基本給のままでいい（{[...new Set(unresolved.map((u) => u.taskName))].join("・")}は次から聞かない）
+      </button>
       <p className="mt-2 text-xs">
         スタッフ詳細の「業務内容単価」で該当の業務内容に単価を設定するか、表記ゆれ（例：「キャディ」と「キャディ業務」）が原因の場合は下でまとめて業務内容名を直せます。次回の編集画面表示時に自動で反映されます。
       </p>

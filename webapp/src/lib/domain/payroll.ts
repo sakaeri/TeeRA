@@ -391,7 +391,24 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     });
   });
 
-  return { slip, unresolved, invoicedCount };
+  // 「基本給のままでいい」にした業務内容は、単価未設定の案内に出さない
+  const membership = await prisma.companyMembership.findFirst({
+    where: { companyId: params.companyId, userId: params.staffUserId },
+    select: { baseWageTaskNames: true },
+  });
+  const baseWageTaskNames = new Set(Array.isArray(membership?.baseWageTaskNames) ? (membership.baseWageTaskNames as string[]) : []);
+  return { slip, unresolved: unresolved.filter((u) => !baseWageTaskNames.has(u.taskName)), invoicedCount };
+}
+
+// 単価未設定の案内の「基本給のままでいい（次から聞かない）」：このスタッフのこの業務内容は基本給で計算すると覚える
+export async function acknowledgeBaseWageTaskNames(companyId: string, staffUserId: string, taskNames: string[]) {
+  const membership = await prisma.companyMembership.findFirstOrThrow({
+    where: { companyId, userId: staffUserId },
+    select: { id: true, baseWageTaskNames: true },
+  });
+  const current = Array.isArray(membership.baseWageTaskNames) ? (membership.baseWageTaskNames as string[]) : [];
+  const next = [...new Set([...current, ...taskNames.map((t) => t.trim()).filter(Boolean)])];
+  await prisma.companyMembership.update({ where: { id: membership.id }, data: { baseWageTaskNames: next } });
 }
 
 // 業務委託のスタッフが請求書に入れた勤務（提出済み・承認済み。差し戻されたら外れる）。
