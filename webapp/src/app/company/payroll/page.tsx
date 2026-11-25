@@ -301,19 +301,18 @@ export default async function PayrollPage({
                   <li key={slip.id}>
                     <Link
                       href={`/company/payroll?month=${targetMonth}&staff=${slip.staffUserId}`}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm hover:bg-background"
+                      className="flex items-center gap-2 rounded-lg border border-border bg-white/60 px-4 py-2.5 text-sm hover:bg-background"
                     >
-                      <span className="flex items-center gap-2">
-                        <span className="font-medium">{slip.staff.name}</span>
-                        {slip.issues.length > 0 ? (
-                          <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">
-                            発行済み（修正中）
-                          </span>
-                        ) : null}
-                        {invoicedStaffIds.has(slip.staffUserId) ? (
-                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">請求書を受け取り済み</span>
-                        ) : null}
-                      </span>
+                      {/* 名前と札を1行にそろえる（長い名前は…で切る） */}
+                      <span className="min-w-0 flex-1 truncate font-medium">{slip.staff.name}</span>
+                      {slip.issues.length > 0 ? (
+                        <span className="shrink-0 whitespace-nowrap rounded-full bg-accent/20 px-2 py-0.5 text-[11px] text-accent">修正中</span>
+                      ) : null}
+                      {invoicedStaffIds.has(slip.staffUserId) ? (
+                        <span className="shrink-0 whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-800">
+                          請求書受取済み
+                        </span>
+                      ) : null}
                     </Link>
                   </li>
                 ))}

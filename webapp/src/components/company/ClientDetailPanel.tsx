@@ -1,6 +1,6 @@
 "use client";
 
-import { TaskNameMergeModal, TaskNameSplitNotice } from "@/components/company/TaskNameMerge";
+import { StaffRateAlignNotice, TaskNameMergeModal, TaskNameSplitNotice } from "@/components/company/TaskNameMerge";
 import { WorkReportDetailModal } from "@/components/company/WorkReportDetailModal";
 import { StatNumber } from "@/components/company/StatNumber";
 import { CLOSING_DAY_OPTIONS, closingDayLabel } from "@/lib/closingPeriod";
@@ -1354,6 +1354,7 @@ function PlacementRatesTab({
       />
 
       <TaskNameSplitNotice key={rates.map((r) => r.taskName).join("/")} relationshipId={relationshipId} onMerged={onChanged} />
+      <StaffRateAlignNotice key={`align-${rates.map((r) => r.taskName).join("/")}`} relationshipId={relationshipId} onAligned={onChanged} />
       <div className="mb-1 mt-2 flex items-center justify-end gap-2">
         {rates.length > 0 ? (
           <button

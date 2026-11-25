@@ -26,6 +26,7 @@ import {
 import {
   addStaffTaskRateVersionAction,
   deleteStaffTaskRateAction,
+  alignStaffRateNameAction,
   endStaffTaskRateAction,
   updateStaffContractWageAction,
   endStaffContractAction,
@@ -57,6 +58,10 @@ type StaffTaskRate = {
   workplaceLabel: string;
   currentLabel: string;
   ended?: boolean;
+  // 単価が一度も入っていない行（シフトから自動で作られた名前だけの行）
+  unpriced?: boolean;
+  // 取引先の業務内容に無い名前の時の、そろえる先
+  alignTo?: string | null;
   versions: { id: string; label: string; effectiveFrom: string }[];
 };
 
@@ -1797,6 +1802,7 @@ function StaffTaskRatesTab({
 }) {
   const [pending, startTransition] = useTransition();
   const [baseHistoryOpen, setBaseHistoryOpen] = useState(false);
+  const [unpricedOpen, setUnpricedOpen] = useState(false);
   const [amendingId, setAmendingId] = useState<string | null>(null);
   const [amendWageType, setAmendWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
   const [amendAmount, setAmendAmount] = useState("");
@@ -1957,11 +1963,30 @@ function StaffTaskRatesTab({
             ) : null}
           </li>
         ) : null}
-        {rates.map((r) => (
+        {rates.filter((r) => !r.unpriced).map((r) => (
           // 依頼主・業務内容・今の単価だけを出す。履歴・終了・削除は「単価を変更」の中
           <li key={r.id} className="rounded-lg border border-border p-3 text-sm" data-testid="staff-rate-card">
             <p className="font-medium">{r.workplaceLabel}</p>
             <p className="text-xs text-muted">{r.taskName}</p>
+            {r.alignTo ? (
+              // 取引先の業務内容と名前がずれていると、この単価は使われない（シフトは取引先の名前で入るため）
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900" data-testid="staff-rate-align">
+                <span>{r.workplaceLabel}の業務内容にない名前です</span>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      await alignStaffRateNameAction(r.id, r.alignTo!);
+                      await onChanged();
+                    })
+                  }
+                  className="rounded-md border border-amber-700/40 bg-white px-2 py-0.5 font-semibold disabled:opacity-60"
+                >
+                  →「{r.alignTo}」にそろえる
+                </button>
+              </div>
+            ) : null}
             <div className="mt-2 flex items-center justify-between gap-2">
               <span className="font-semibold">{r.currentLabel}</span>
               <button
@@ -1975,6 +2000,51 @@ function StaffTaskRatesTab({
             {deleteError?.id === r.id ? <p className="mt-1 text-xs text-red-600">{deleteError.message}</p> : null}
           </li>
         ))}
+        {/* 単価が一度も入っていない行（以前シフトから自動で作られた名前だけの行）はたたんでおき、片付けられるようにする */}
+        {rates.some((r) => r.unpriced) ? (
+          <li className="text-xs" data-testid="unpriced-rates">
+            <button type="button" onClick={() => setUnpricedOpen((v) => !v)} className="text-muted underline">
+              {unpricedOpen ? "▲ 単価が入っていない業務内容を閉じる" : `▼ 単価が入っていない業務内容（${rates.filter((r) => r.unpriced).length}件）`}
+            </button>
+            {unpricedOpen ? (
+              <div className="mt-1.5 flex flex-col gap-1">
+                <p className="text-muted">計算には使われていません（基本給で計算しています）。消しても金額は変わりません。</p>
+                {rates
+                  .filter((r) => r.unpriced)
+                  .map((r) => (
+                    <div key={r.id} className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-1.5">
+                      <span className="min-w-0 truncate">
+                        {r.workplaceLabel}・{r.taskName}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-3">
+                        <button type="button" onClick={() => startAmend(r)} className="text-primary underline">
+                          単価を入れる
+                        </button>
+                        <button type="button" disabled={pending} onClick={() => submitDelete(r)} className="text-muted hover:text-red-600">
+                          削除
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    if (!confirm("単価が入っていない業務内容をすべて削除します。よろしいですか？")) return;
+                    startTransition(async () => {
+                      for (const r of rates.filter((x) => x.unpriced)) await deleteStaffTaskRateAction(r.id);
+                      await onChanged();
+                    });
+                  }}
+                  className="self-start text-muted underline hover:text-red-600"
+                  data-testid="delete-all-unpriced"
+                >
+                  まとめて削除
+                </button>
+              </div>
+            ) : null}
+          </li>
+        ) : null}
         {rates.length === 0 ? <p className="py-6 text-center text-sm text-muted">個別の単価は登録されていません。</p> : null}
       </ul>
 

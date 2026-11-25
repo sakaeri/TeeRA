@@ -26,7 +26,15 @@ import {
   type UploadOnlyTemplateInput,
 } from "@/lib/domain/contracts";
 import { createStaffNotice } from "@/lib/domain/notices";
-import { findSimilarTaskNames, listClientTaskNames, mergeClientTaskNames, taskNameMergePreview } from "@/lib/domain/taskNameMerge";
+import {
+  alignStaffRateName,
+  alignStaffRateNames,
+  findSimilarTaskNames,
+  listClientTaskNames,
+  listStaffRateNameMismatches,
+  mergeClientTaskNames,
+  taskNameMergePreview,
+} from "@/lib/domain/taskNameMerge";
 
 const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
 
@@ -604,4 +612,27 @@ export async function moveStaffTaskRateStartAction(staffTaskRateId: string, newF
   );
   revalidatePath("/company/payroll");
   revalidatePath("/company/roster");
+}
+
+// --- スタッフの単価の名前を、取引先の業務内容の名前にそろえる ---
+export async function listStaffRateNameMismatchesAction(companyRelationshipId: string) {
+  const membership = await assertClientAccess(companyRelationshipId);
+  return listStaffRateNameMismatches(membership.companyId, companyRelationshipId);
+}
+
+export async function alignStaffRateNamesAction(companyRelationshipId: string) {
+  const membership = await assertClientAccess(companyRelationshipId);
+  const count = await alignStaffRateNames(membership.companyId, companyRelationshipId);
+  revalidatePath("/company/roster");
+  revalidatePath("/company/payroll");
+  return count;
+}
+
+export async function alignStaffRateNameAction(staffTaskRateId: string, to: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const rate = await prisma.staffTaskRate.findFirstOrThrow({ where: { id: staffTaskRateId, companyId: membership.companyId } });
+  if (!canManageAny(membership, await getStaffTeamIds(rate.staffUserId))) throw new Error("forbidden");
+  await alignStaffRateName(membership.companyId, staffTaskRateId, String(to));
+  revalidatePath("/company/roster");
+  revalidatePath("/company/payroll");
 }

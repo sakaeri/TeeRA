@@ -103,16 +103,9 @@ export async function mergeClientTaskNames(params: { companyId: string; companyR
       else await tx.companyPlacementRate.update({ where: { id: fromRate.id }, data: { taskName: to } });
     }
 
-    // スタッフの、この依頼主での単価も同じようにまとめる
+    // スタッフの、この依頼主での単価も同じようにまとめる（単価の入っている方を残す）
     const fromStaffRates = await tx.staffTaskRate.findMany({ where: { companyId, companyRelationshipId, taskName: from } });
-    for (const r of fromStaffRates) {
-      const exists = await tx.staffTaskRate.findFirst({
-        where: { companyId, companyRelationshipId, staffUserId: r.staffUserId, taskName: to },
-        select: { id: true },
-      });
-      if (exists) await tx.staffTaskRate.delete({ where: { id: r.id } });
-      else await tx.staffTaskRate.update({ where: { id: r.id }, data: { taskName: to } });
-    }
+    for (const r of fromStaffRates) await mergeStaffRateInto(tx, r.id, to);
 
     // まだ発行していない請求書の明細の文言（手で直した行は作り直されないため、ここで直す）
     const lines = await tx.invoiceLine.findMany({
@@ -123,4 +116,89 @@ export async function mergeClientTaskNames(params: { companyId: string; companyR
       await tx.invoiceLine.update({ where: { id: l.id }, data: { description: l.description.split(`（${from}）`).join(`（${to}）`) } });
     }
   });
+}
+
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+function hasPricedVersion(versions: { wageType: string | null; amount: number | null }[]) {
+  return versions.some((v) => v.wageType !== null && v.amount !== null);
+}
+
+// スタッフの単価の行の名前を to に変える。同じスタッフ・勤務先に to の行が既にあれば、単価の入っている方を残す
+// （両方に単価が入っている時は、to の方を残して元の行を消す）。単価の入っていない行は計算に使われないので消しても金額は変わらない
+async function mergeStaffRateInto(tx: Tx, staffTaskRateId: string, to: string) {
+  const source = await tx.staffTaskRate.findUniqueOrThrow({ where: { id: staffTaskRateId }, include: { versions: true } });
+  const target = await tx.staffTaskRate.findFirst({
+    where: {
+      companyId: source.companyId,
+      staffUserId: source.staffUserId,
+      companyRelationshipId: source.companyRelationshipId,
+      taskName: to,
+      id: { not: source.id },
+    },
+    include: { versions: true },
+  });
+  if (!target) {
+    await tx.staffTaskRate.update({ where: { id: source.id }, data: { taskName: to } });
+    return;
+  }
+  if (hasPricedVersion(source.versions) && !hasPricedVersion(target.versions)) {
+    await tx.staffTaskRate.delete({ where: { id: target.id } });
+    await tx.staffTaskRate.update({ where: { id: source.id }, data: { taskName: to } });
+  } else {
+    await tx.staffTaskRate.delete({ where: { id: source.id } });
+  }
+}
+
+// スタッフの単価のうち、取引先の業務内容に無い名前の行（以前シフトから自動で作られた名前など）と、
+// 取引先の業務内容のうち似た名前（そろえる先の候補）
+export async function listStaffRateNameMismatches(companyId: string, companyRelationshipId: string) {
+  const [clientRates, staffRates] = await Promise.all([
+    prisma.companyPlacementRate.findMany({ where: { companyId, companyRelationshipId }, select: { taskName: true } }),
+    prisma.staffTaskRate.findMany({
+      where: { companyId, companyRelationshipId },
+      include: { versions: true, staff: { select: { name: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+  const clientNames = clientRates.map((r) => r.taskName);
+  return staffRates
+    .filter((r) => !clientNames.includes(r.taskName))
+    .map((r) => ({
+      staffTaskRateId: r.id,
+      staffName: r.staff.name,
+      from: r.taskName,
+      to: suggestClientTaskName(r.taskName, clientNames),
+      priced: hasPricedVersion(r.versions),
+    }))
+    .filter((m): m is typeof m & { to: string } => m.to !== null);
+}
+
+// 取引先の業務内容のうち、似た名前（同じ仲間）が1つだけならそれ
+export function suggestClientTaskName(name: string, clientNames: string[]) {
+  const key = normalizeTaskName(name);
+  const matches = clientNames.filter((n) => normalizeTaskName(n) === key);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+// 取引先の単価タブの「スタッフの単価の名前を取引先の名前にそろえる」（全員分まとめて）
+export async function alignStaffRateNames(companyId: string, companyRelationshipId: string) {
+  const mismatches = await listStaffRateNameMismatches(companyId, companyRelationshipId);
+  await prisma.$transaction(async (tx) => {
+    for (const m of mismatches) await mergeStaffRateInto(tx, m.staffTaskRateId, m.to);
+  });
+  return mismatches.length;
+}
+
+// スタッフ詳細の単価から1件ずつそろえる
+export async function alignStaffRateName(companyId: string, staffTaskRateId: string, to: string) {
+  const rate = await prisma.staffTaskRate.findFirstOrThrow({ where: { id: staffTaskRateId, companyId } });
+  if (!rate.companyRelationshipId) throw new Error("no_workplace");
+  const exists = await prisma.companyPlacementRate.findFirst({
+    where: { companyId, companyRelationshipId: rate.companyRelationshipId, taskName: to },
+    select: { id: true },
+  });
+  if (!exists) throw new Error("unknown_task_name");
+  await prisma.$transaction(async (tx) => mergeStaffRateInto(tx, staffTaskRateId, to));
+  return rate.staffUserId;
 }
