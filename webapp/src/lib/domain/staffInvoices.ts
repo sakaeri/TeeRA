@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { computeApprovedWorkLines, payrollPeriod, type ComputedWorkLine } from "@/lib/domain/payroll";
+import { computeApprovedWorkLines, payrollPeriod, staffInvoicedShiftIds, type ComputedWorkLine } from "@/lib/domain/payroll";
 import { hasRemainingPdfQuota } from "@/lib/domain/plans";
 import { postLedgerEntry } from "@/lib/domain/wallet";
 import { computeStaffInvoiceTotals, sanitizeExpenses, isValidTargetMonth, type StaffInvoiceExpense } from "@/lib/staffInvoiceTotals";
@@ -105,22 +105,7 @@ async function countPendingReports(companyId: string, staffUserId: string, targe
 // 一度請求に使った勤務は、二度と請求書に入れない（週払いで何枚出しても、前の月の分を後から付けても二重にならない）。
 // 「使った」は、提出済み・承認済みの請求書に入っていること（差し戻されたら外れて、出し直しに使える）。
 async function usedShiftIds(companyId: string, staffUserId: string, excludeInvoiceId: string | null) {
-  const rows = await prisma.staffInvoice.findMany({
-    where: {
-      companyId,
-      staffUserId,
-      status: { in: ["SUBMITTED", "APPROVED"] },
-      ...(excludeInvoiceId ? { id: { not: excludeInvoiceId } } : {}),
-    },
-    select: { workLines: true },
-  });
-  const ids = new Set<string>();
-  for (const r of rows) {
-    for (const l of (Array.isArray(r.workLines) ? r.workLines : []) as { shiftId?: string }[]) {
-      if (l?.shiftId) ids.add(l.shiftId);
-    }
-  }
-  return ids;
+  return staffInvoicedShiftIds(companyId, staffUserId, excludeInvoiceId);
 }
 
 // 前の月以前の未請求の分は、どこまでさかのぼって入れるか

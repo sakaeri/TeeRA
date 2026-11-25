@@ -30,6 +30,17 @@ function previousMonth() {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+// 請求書に入っている勤務の期間（例：「11/18〜11/22」）
+function workRangeLabel(workLines: unknown) {
+  const dates = ((Array.isArray(workLines) ? workLines : []) as { description?: string }[])
+    .map((l) => l.description?.match(/^\d{4}-\d{2}-\d{2}/)?.[0])
+    .filter((d): d is string => Boolean(d))
+    .sort();
+  if (dates.length === 0) return "";
+  const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+  return dates[0] === dates[dates.length - 1] ? md(dates[0]) : `${md(dates[0])}〜${md(dates[dates.length - 1])}`;
+}
+
 const ISSUED_ROW_CLASS = "flex items-center gap-3 rounded-lg border border-border bg-white/60 px-4 py-2.5 text-sm";
 const PDF_BUTTON_CLASS = "shrink-0 rounded-md border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/5";
 
@@ -89,6 +100,7 @@ export default async function PayrollPage({
     totals: ReturnType<typeof getTotals>;
     issues: { id: string; issuedAt: string; chargedTee: boolean; hidden: boolean }[];
     unresolved: { shiftId: string; workReportId: string; date: string; taskName: string; source: "workReport" | "shift" }[];
+    invoicedShiftCount: number;
   };
 
   let slipData: SlipData | null = null;
@@ -138,6 +150,7 @@ export default async function PayrollPage({
       totals,
       issues: issues.map((i) => ({ id: i.id, issuedAt: i.issuedAt.toISOString(), chargedTee: i.chargedTee, hidden: i.hiddenAt !== null })),
       unresolved: slip.unresolved,
+      invoicedShiftCount: slip.invoicedCount,
     };
   }
 
@@ -333,6 +346,12 @@ export default async function PayrollPage({
                       className="flex min-w-0 flex-1 items-center gap-1.5 font-medium text-primary underline"
                     >
                       <span className="truncate">{inv.staff.name}</span>
+                      {/* 週払いなどで同じ人の請求書が何枚もある時は、どの期間の分かを添えて見分けられるようにする */}
+                      {approvedInvoices.filter((x) => x.staffUserId === inv.staffUserId).length > 1 ? (
+                        <span className="shrink-0 text-xs font-normal text-muted no-underline" data-testid="invoice-work-range">
+                          {workRangeLabel(inv.workLines)}
+                        </span>
+                      ) : null}
                       <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-800 no-underline">請求書</span>
                     </Link>
                     <span className="shrink-0 tabular-nums text-muted">{inv.total.toLocaleString()}円</span>
