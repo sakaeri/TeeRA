@@ -1339,6 +1339,8 @@ model SalarySlipIssue {
   chargedTee         Boolean // false on free re-issue
   countsAgainstQuota Boolean  @default(false) // true if it consumed the plan's monthly free-PDF quota instead of Tee
   issuedAt           DateTime @default(now())
+  // 会社が発行履歴から「削除」した過去の発行分（画面に出さないだけ。無料枠・Teeの数え方に使うので記録は残す）
+  hiddenAt           DateTime?
 
   salarySlip SalarySlip @relation(fields: [salarySlipId], references: [id], onDelete: Cascade)
 }
@@ -1503,6 +1505,8 @@ model InvoiceIssue {
   snapshot           Json
   countsAgainstQuota Boolean  @default(false) // true if it consumed the plan's monthly free-PDF quota instead of Tee
   issuedAt           DateTime @default(now())
+  // 会社が発行履歴から「削除」した過去の発行分（画面に出さないだけ。無料枠の数え方に使うので記録は残す）
+  hiddenAt           DateTime?
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 }

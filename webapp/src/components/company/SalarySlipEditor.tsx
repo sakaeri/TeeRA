@@ -244,8 +244,8 @@ export function SalarySlipEditor({
           })}
         </div>
         <p className="text-xs text-muted">
-          {showWorkplace ? "例：袖ヶ浦カンツリー倶楽部（キャディ）" : "例：キャディ（勤務先が違っても、同じ業務内容・単価ならまとめます）"}
-          。翌月の明細も、ここで選んだ載せ方で始まります。
+          {showWorkplace ? "" : "勤務先が違っても、同じ業務内容・単価ならまとめます。"}
+          翌月の明細も、ここで選んだ載せ方で始まります。
         </p>
         {isEditable ? (
           <PdfLink sample href={`/api/salary-slips/${slip.id}/pdf`} className="mt-3 inline-block text-sm font-semibold text-primary underline">
@@ -256,8 +256,10 @@ export function SalarySlipEditor({
 
       <section className="rounded-2xl border-2 border-primary bg-white/60 p-6">
         <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
-          <span>支給合計 {slip.totals.gross}円 ／ 控除合計 {slip.totals.totalDeductions}円</span>
-          <span className="text-lg font-bold text-primary">差引支給額 {slip.totals.net}円</span>
+          <span>
+            支給合計 {slip.totals.gross.toLocaleString()}円 ／ 控除合計 {slip.totals.totalDeductions.toLocaleString()}円
+          </span>
+          <span className="text-lg font-bold text-primary">差引支給額 {slip.totals.net.toLocaleString()}円</span>
         </div>
 
         {isEditable ? (

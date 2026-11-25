@@ -13,6 +13,7 @@ import { todayJstParts, earliestAllowedMonth, cutoffMonthString } from "@/lib/da
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PdfLink } from "@/components/PdfLink";
+import { IssueHistory } from "@/components/company/IssueHistory";
 import { approvedStaffInvoiceStaffIds, hasContractorStaff, listReceivedStaffInvoices, staffInvoiceOpenCost, sanitizeExpenses } from "@/lib/domain/staffInvoices";
 import type { ComputedWorkLine } from "@/lib/domain/payroll";
 import { ReceivedStaffInvoiceList, ReceivedStaffInvoiceView, type ReceivedInvoiceDetail } from "@/components/company/ReceivedStaffInvoices";
@@ -28,6 +29,9 @@ function previousMonth() {
   const d = new Date(Date.UTC(today.year, today.month - 2, 1));
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
+
+const ISSUED_ROW_CLASS = "flex items-center gap-3 rounded-lg border border-border bg-white/60 px-4 py-2.5 text-sm";
+const PDF_BUTTON_CLASS = "shrink-0 rounded-md border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/5";
 
 export default async function PayrollPage({
   searchParams,
@@ -83,7 +87,7 @@ export default async function PayrollPage({
     paidLeaveBalance: number;
     paidLeaveNextGrantDate: string | null;
     totals: ReturnType<typeof getTotals>;
-    issues: { id: string; issuedAt: string; chargedTee: boolean }[];
+    issues: { id: string; issuedAt: string; chargedTee: boolean; hidden: boolean }[];
     unresolved: { shiftId: string; workReportId: string; date: string; taskName: string; source: "workReport" | "shift" }[];
   };
 
@@ -132,7 +136,7 @@ export default async function PayrollPage({
         ? staffMembership.nextPaidLeaveGrantDate.toISOString().slice(0, 10)
         : null,
       totals,
-      issues: issues.map((i) => ({ id: i.id, issuedAt: i.issuedAt.toISOString(), chargedTee: i.chargedTee })),
+      issues: issues.map((i) => ({ id: i.id, issuedAt: i.issuedAt.toISOString(), chargedTee: i.chargedTee, hidden: i.hiddenAt !== null })),
       unresolved: slip.unresolved,
     };
   }
@@ -183,7 +187,7 @@ export default async function PayrollPage({
         status: openedInvoice.status,
         submittedAt: new Date(openedInvoice.submittedAt!.getTime() + 9 * 3600e3).toISOString().slice(0, 10),
         periodRangeLabel: openedInvoice.periodRangeLabel,
-        // 「2026-11-18 袖ヶ浦カンツリー倶楽部（キャディ）」／業務内容だけなら「2026-11-18 キャディ」（PDFと同じ書き方）
+        // 「2026-11-18 〇〇ゴルフ場（キャディ）」／業務内容だけなら「2026-11-18 キャディ」（PDFと同じ書き方）
         lines: openedWorkLines.map((l) => ({
           ...l,
           label: `${l.description.slice(0, 10)} ${workLineLabel(l.description, openedWorkplaces.get(l.shiftId) ?? null, openedInvoice.showWorkplace)}`,
@@ -256,24 +260,7 @@ export default async function PayrollPage({
                 : null
             }
           />
-          {slipData.issues.length ? (
-            <div className="mt-6">
-              <p className="mb-1.5 text-xs text-muted">発行履歴</p>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                {slipData.issues.map((i, index) => (
-                  <PdfLink
-                    key={i.id}
-                    href={`/api/salary-slips/${slipData!.id}/pdf?issueId=${i.id}`}
-                    // 最新の発行分（issuesはissuedAt降順）だけ目立たせ、
-                    // 過去分は薄い色にして見分けやすくする。
-                    className={index === 0 ? "font-semibold text-primary underline" : "text-muted underline"}
-                  >
-                    PDF ({new Date(i.issuedAt).toLocaleString("ja-JP")})
-                  </PdfLink>
-                ))}
-              </div>
-            </div>
-          ) : null}
+          {slipData.issues.length ? <IssueHistory kind="salary" docId={slipData.id} issues={slipData.issues} /> : null}
         </>
       ) : (
         <>
@@ -340,20 +327,17 @@ export default async function PayrollPage({
             ) : (
               <ul className="flex flex-col gap-1">
                 {approvedInvoices.map((inv) => (
-                  <li
-                    key={inv.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm"
-                  >
+                  <li key={inv.id} className={ISSUED_ROW_CLASS}>
                     <Link
                       href={`/company/payroll?month=${targetMonth}&staffInvoice=${inv.id}`}
-                      className="flex items-center gap-2 font-medium text-primary underline"
+                      className="flex min-w-0 flex-1 items-center gap-1.5 font-medium text-primary underline"
                     >
-                      {inv.staff.name}
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 no-underline">受け取った請求書</span>
+                      <span className="truncate">{inv.staff.name}</span>
+                      <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-800 no-underline">請求書</span>
                     </Link>
-                    <span className="text-muted">{inv.total.toLocaleString()}円</span>
-                    <PdfLink href={`/api/staff-invoices/${inv.id}/pdf`} className="text-xs text-primary underline">
-                      PDF（承認 {inv.reviewedAt ? new Date(inv.reviewedAt).toLocaleDateString("ja-JP") : ""}）
+                    <span className="shrink-0 tabular-nums text-muted">{inv.total.toLocaleString()}円</span>
+                    <PdfLink href={`/api/staff-invoices/${inv.id}/pdf`} className={PDF_BUTTON_CLASS}>
+                      PDF
                     </PdfLink>
                   </li>
                 ))}
@@ -364,22 +348,17 @@ export default async function PayrollPage({
                     i.issuedAt > latest.issuedAt ? i : latest,
                   );
                   return (
-                    <li
-                      key={slip.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm"
-                    >
+                    // 名前・金額・PDFを1行にそろえる（発行日時はPDFに書いてあるので一覧には出さない）
+                    <li key={slip.id} className={ISSUED_ROW_CLASS}>
                       <Link
                         href={`/company/payroll?month=${targetMonth}&staff=${slip.staffUserId}`}
-                        className="font-medium text-primary underline"
+                        className="min-w-0 flex-1 truncate font-medium text-primary underline"
                       >
                         {slip.staff.name}
                       </Link>
-                      <span className="text-muted">{getTotals(slip).net}円</span>
-                      <PdfLink
-                        href={`/api/salary-slips/${slip.id}/pdf?issueId=${latestIssue.id}`}
-                        className="text-xs text-primary underline"
-                      >
-                        PDF（{new Date(latestIssue.issuedAt).toLocaleString("ja-JP")}）
+                      <span className="shrink-0 tabular-nums text-muted">{getTotals(slip).net.toLocaleString()}円</span>
+                      <PdfLink href={`/api/salary-slips/${slip.id}/pdf?issueId=${latestIssue.id}`} className={PDF_BUTTON_CLASS}>
+                        PDF
                       </PdfLink>
                     </li>
                   );

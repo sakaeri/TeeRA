@@ -121,7 +121,7 @@ try {
   log("発行済みスタッフが発行履歴に出る", salaryHistoryText.includes("発行済み給与スタッフ"));
   log("下書き中スタッフは発行履歴に出ない", !salaryHistoryText.includes("下書き給与スタッフ"));
 
-  const salaryPdfLink = salaryHistorySection.locator("a", { hasText: "PDF（" }).first();
+  const salaryPdfLink = salaryHistorySection.getByRole("link", { name: "PDF", exact: true }).first();
   const salaryPdfHref = await salaryPdfLink.getAttribute("href");
   log("発行履歴のPDFリンクが正しいエンドポイントを指す", salaryPdfHref?.includes(`/api/salary-slips/${issuedSlipId}/pdf`));
 
@@ -134,7 +134,7 @@ try {
   log("発行済み依頼主が発行履歴に出る", invoiceHistoryText.includes("発行済み請求依頼主"));
   log("下書き中の依頼主は発行履歴に出ない", !invoiceHistoryText.includes("下書き請求依頼主"));
 
-  const invoicePdfLink = invoiceHistorySection.locator("a", { hasText: "PDF（" }).first();
+  const invoicePdfLink = invoiceHistorySection.getByRole("link", { name: "PDF", exact: true }).first();
   const invoicePdfHref = await invoicePdfLink.getAttribute("href");
   log("請求書の発行履歴PDFリンクが正しいエンドポイントを指す", invoicePdfHref?.includes(`/api/invoices/${issuedInvoiceId}/pdf`));
 

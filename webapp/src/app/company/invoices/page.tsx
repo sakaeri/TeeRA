@@ -21,6 +21,7 @@ import { CreateRecordButton } from "@/components/company/CreateRecordButton";
 import { todayJstParts, earliestAllowedMonth, cutoffMonthString } from "@/lib/date";
 import Link from "next/link";
 import { PdfLink } from "@/components/PdfLink";
+import { IssueHistory } from "@/components/company/IssueHistory";
 import { invoiceRecipientName } from "@/lib/invoiceRecipient";
 
 function currentMonth() {
@@ -89,7 +90,7 @@ export default async function InvoicesPage({
     accountHolderName: string;
     lines: { id: string; staffName: string; description: string; hours: number; unit: string | null; rate: number; amount: number; taxRatePercent: number }[];
     totals: ReturnType<typeof computeInvoiceTotals>;
-    issues: { id: string; issuedAt: string }[];
+    issues: { id: string; issuedAt: string; hidden: boolean }[];
     unresolved: { shiftId: string; date: string; staffName: string; taskName: string | null }[];
     groupLinesByTask: boolean;
     attachWorkRecord: boolean;
@@ -142,7 +143,7 @@ export default async function InvoicesPage({
         taxRatePercent: l.taxRatePercent,
       })),
       totals,
-      issues: issues.map((i) => ({ id: i.id, issuedAt: i.issuedAt.toISOString() })),
+      issues: issues.map((i) => ({ id: i.id, issuedAt: i.issuedAt.toISOString(), hidden: i.hiddenAt !== null })),
       unresolved: invoice.unresolved,
       groupLinesByTask: invoice.groupLinesByTask,
       attachWorkRecord: invoice.attachWorkRecord,
@@ -217,24 +218,7 @@ export default async function InvoicesPage({
                 : null
             }
           />
-          {invoiceData.issues.length ? (
-            <div className="mt-6">
-              <p className="mb-1.5 text-xs text-muted">発行履歴</p>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                {invoiceData.issues.map((i, index) => (
-                  <PdfLink
-                    key={i.id}
-                    href={`/api/invoices/${invoiceData!.id}/pdf?issueId=${i.id}`}
-                    // 最新の発行分（issuesはissuedAt降順）だけ目立たせ、
-                    // 過去分は薄い色にして見分けやすくする。
-                    className={index === 0 ? "font-semibold text-primary underline" : "text-muted underline"}
-                  >
-                    PDF ({new Date(i.issuedAt).toLocaleString("ja-JP")})
-                  </PdfLink>
-                ))}
-              </div>
-            </div>
-          ) : null}
+          {invoiceData.issues.length ? <IssueHistory kind="invoice" docId={invoiceData.id} issues={invoiceData.issues} /> : null}
         </>
       ) : (
         <>
@@ -301,22 +285,20 @@ export default async function InvoicesPage({
                     i.issuedAt > latest.issuedAt ? i : latest,
                   );
                   return (
-                    <li
-                      key={inv.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-white/60 px-4 py-2 text-sm"
-                    >
+                    // 名前・金額・PDFを1行にそろえる（発行日時はPDFに書いてあるので一覧には出さない）
+                    <li key={inv.id} className="flex items-center gap-3 rounded-lg border border-border bg-white/60 px-4 py-2.5 text-sm">
                       <Link
                         href={`/company/invoices?month=${periodLabel}&client=${inv.companyRelationshipId}`}
-                        className="font-medium text-primary underline"
+                        className="min-w-0 flex-1 truncate font-medium text-primary underline"
                       >
                         {inv.companyRelationship.clientCompany?.name ?? inv.companyRelationship.proxyName}
                       </Link>
-                      <span className="text-muted">{totals.total}円</span>
+                      <span className="shrink-0 tabular-nums text-muted">{totals.total.toLocaleString()}円</span>
                       <PdfLink
                         href={`/api/invoices/${inv.id}/pdf?issueId=${latestIssue.id}`}
-                        className="text-xs text-primary underline"
+                        className="shrink-0 rounded-md border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/5"
                       >
-                        PDF（{new Date(latestIssue.issuedAt).toLocaleString("ja-JP")}）
+                        PDF
                       </PdfLink>
                     </li>
                   );
