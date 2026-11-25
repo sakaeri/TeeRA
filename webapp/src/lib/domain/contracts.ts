@@ -463,6 +463,16 @@ export async function listStaffContracts(staffUserId: string, companyId: string)
 // バージョンを1つ選ぶ純粋関数 — invoicing.ts / payroll.ts の単価解決で使う。
 // weekendOrHolidayを渡すと、土日祝の単価（holidayAmount）が設定されていれば
 // そちらを返す（isHolidayRateで土日祝単価を使ったかどうかが分かる）。
+// 単価の一番最初の開始日（金額の入っているもの）。勤務日がこれより前なら「単価の開始日より前」
+export function firstPricedEffectiveFrom(versions: { wageType: WageType | null; amount: number | null; effectiveFrom: Date }[]) {
+  let first: Date | null = null;
+  for (const v of versions) {
+    if (v.wageType === null || v.amount === null) continue;
+    if (!first || v.effectiveFrom < first) first = v.effectiveFrom;
+  }
+  return first;
+}
+
 export function resolveRateVersion<
   T extends { wageType: WageType | null; amount: number | null; holidayAmount?: number | null; effectiveFrom: Date },
 >(

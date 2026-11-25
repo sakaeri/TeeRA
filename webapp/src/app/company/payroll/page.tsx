@@ -99,7 +99,16 @@ export default async function PayrollPage({
     paidLeaveNextGrantDate: string | null;
     totals: ReturnType<typeof getTotals>;
     issues: { id: string; issuedAt: string; chargedTee: boolean; hidden: boolean }[];
-    unresolved: { shiftId: string; workReportId: string; date: string; taskName: string; source: "workReport" | "shift" }[];
+    unresolved: {
+      shiftId: string;
+      workReportId: string;
+      date: string;
+      taskName: string;
+      source: "workReport" | "shift";
+      companyRelationshipId: string | null;
+      rateId: string | null;
+      rateStartsFrom: string | null;
+    }[];
     invoicedShiftCount: number;
   };
 
@@ -253,17 +262,13 @@ export default async function PayrollPage({
           <Link href={`/company/payroll?month=${targetMonth}`} className="mb-4 inline-block text-sm text-primary underline">
             ← 一覧に戻る
           </Link>
-          {staffUserId && invoicedStaffIds.has(staffUserId) ? (
-            <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-              この月は{selectedStaffName}さんから請求書を受け取り、承認済みです（支払明細の発行は要りません）。
-            </p>
-          ) : null}
           {payrollPeriodRange ? (
             <p className="mb-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-900" data-testid="payroll-period-range">
               対象期間：{payrollPeriodRange}（{payrollClosingLabel}）
             </p>
           ) : null}
           <SalarySlipEditor
+            staffUserId={staffUserId!}
             slip={slipData}
             staffName={selectedStaffName}
             willUseFreeQuota={pdfQuota.unlimited || (pdfQuota.quota > 0 && pdfQuota.remaining > 0)}

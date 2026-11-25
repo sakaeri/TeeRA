@@ -91,7 +91,7 @@ export default async function InvoicesPage({
     lines: { id: string; staffName: string; description: string; hours: number; unit: string | null; rate: number; amount: number; taxRatePercent: number }[];
     totals: ReturnType<typeof computeInvoiceTotals>;
     issues: { id: string; issuedAt: string; hidden: boolean }[];
-    unresolved: { shiftId: string; date: string; staffName: string; taskName: string | null }[];
+    unresolved: { shiftId: string; date: string; staffName: string; taskName: string | null; rateId: string | null; rateStartsFrom: string | null }[];
     groupLinesByTask: boolean;
     attachWorkRecord: boolean;
     unbilledEarlier: { shiftId: string; date: string; staffName: string; label: string }[];

@@ -561,3 +561,47 @@ export async function mergeTaskNamesAction(companyRelationshipId: string, from: 
   revalidatePath("/company/invoices");
   revalidatePath("/company/settings");
 }
+
+// --- 単価の開始日を前にずらす（給料明細・請求書の「単価の開始日より前」の案内から） ---
+// 一番最初の（金額の入っている）単価の開始日を、指定した日にずらす。金額は変えない
+async function moveFirstVersionStart(
+  versions: { id: string; wageType: string | null; amount: number | null; effectiveFrom: Date }[],
+  newFrom: string,
+  update: (id: string, effectiveFrom: Date) => Promise<unknown>,
+) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(newFrom)) throw new Error("invalid_date");
+  const priced = versions.filter((v) => v.wageType !== null && v.amount !== null).sort((a, b) => a.effectiveFrom.getTime() - b.effectiveFrom.getTime());
+  const first = priced[0];
+  const date = new Date(`${newFrom}T00:00:00.000Z`);
+  if (!first || date >= first.effectiveFrom) throw new Error("not_earlier");
+  await update(first.id, date);
+}
+
+export async function movePlacementRateStartAction(placementRateId: string, newFrom: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const rate = await prisma.companyPlacementRate.findFirstOrThrow({
+    where: { id: placementRateId, companyId: membership.companyId },
+    include: { versions: true },
+  });
+  const clientTeamIds = rate.companyRelationshipId ? await getClientTeamIds(rate.companyRelationshipId) : [];
+  if (!canManageAny(membership, clientTeamIds)) throw new Error("forbidden");
+  await moveFirstVersionStart(rate.versions, newFrom, (id, effectiveFrom) =>
+    prisma.companyPlacementRateVersion.update({ where: { id }, data: { effectiveFrom } }),
+  );
+  revalidatePath("/company/invoices");
+  revalidatePath("/company/roster");
+}
+
+export async function moveStaffTaskRateStartAction(staffTaskRateId: string, newFrom: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const rate = await prisma.staffTaskRate.findFirstOrThrow({
+    where: { id: staffTaskRateId, companyId: membership.companyId },
+    include: { versions: true },
+  });
+  if (!canManageAny(membership, await getStaffTeamIds(rate.staffUserId))) throw new Error("forbidden");
+  await moveFirstVersionStart(rate.versions, newFrom, (id, effectiveFrom) =>
+    prisma.staffTaskRateVersion.update({ where: { id }, data: { effectiveFrom } }),
+  );
+  revalidatePath("/company/payroll");
+  revalidatePath("/company/roster");
+}

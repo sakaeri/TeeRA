@@ -126,6 +126,21 @@ try {
   log("全部18,000円（残した方の単価）", psql(`select string_agg(distinct rate::text, ',') from "InvoiceLine" where "invoiceId"='${invoiceId}';`) === "18000");
   log("まとめた後は案内が消える", (await page.getByTestId("task-name-split-notice").count()) === 0);
 
+  // 単価が無い業務内容の勤務：請求書の画面でその場で単価を入れると明細に入る
+  addShift(relId, 9, "ハウス清掃");
+  await page.goto(invoiceUrl);
+  const fix = page.getByTestId("rate-fix-group").filter({ hasText: "ハウス清掃" });
+  await fix.waitFor({ timeout: 15000 });
+  log("請求書に「『ハウス清掃』の単価がまだ登録されていません」と出る", (await fix.innerText()).includes("「ハウス清掃」の単価がまだ登録されていません"));
+  await fix.getByRole("button", { name: "単価を入れる" }).click();
+  await fix.getByLabel("金額").fill("9000");
+  log("開始日は一番古い勤務日が入っている", (await fix.locator('input[type="date"]').inputValue()) === day(9));
+  await fix.getByRole("button", { name: "保存" }).click();
+  await page.waitForTimeout(2000);
+  await page.goto(invoiceUrl);
+  await page.waitForTimeout(1500);
+  log("単価を入れると、その勤務が明細に入る", descriptions().includes("（ハウス清掃）"));
+
   // 依頼主の単価タブからも開ける
   await page.goto(`http://localhost:3000/company/roster?client=${relId}&clientTab=rates`);
   await page.getByRole("button", { name: "業務内容をまとめる" }).first().waitFor({ timeout: 15000 });

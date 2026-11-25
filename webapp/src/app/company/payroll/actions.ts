@@ -21,6 +21,7 @@ import {
   type DeductionItem,
   setSalarySlipGroupShiftLines,
   setSalarySlipShowWorkplace,
+  acknowledgeBaseWageTaskNames,
 } from "@/lib/domain/payroll";
 
 async function assertAccess(salarySlipId: string) {
@@ -206,5 +207,12 @@ export async function hideSalarySlipIssueAction(salarySlipId: string, issueId: s
   });
   if (!latest || latest.id === issueId) throw new Error("cannot_hide_latest");
   await prisma.salarySlipIssue.updateMany({ where: { id: issueId, salarySlipId }, data: { hiddenAt: new Date() } });
+  revalidatePath("/company/payroll");
+}
+
+// 単価未設定の案内で「基本給のままでいい（次から聞かない）」
+export async function acknowledgeBaseWageTaskNamesAction(salarySlipId: string, taskNames: string[]) {
+  const { slip } = await assertAccess(salarySlipId);
+  await acknowledgeBaseWageTaskNames(slip.companyId, slip.staffUserId, Array.isArray(taskNames) ? taskNames.map(String) : []);
   revalidatePath("/company/payroll");
 }

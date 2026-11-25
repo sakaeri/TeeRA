@@ -163,7 +163,10 @@ try {
   const staffUserIdForSlip = staffId;
   await admin.goto(`http://localhost:3000/company/payroll?month=${month}&staff=${staffUserIdForSlip}`);
   await admin.getByTestId("invoiced-shift-note").waitFor({ timeout: 15000 });
-  log("支払明細の画面に「◯件の勤務は、スタッフの請求書で受け取り済み」と出る", /\d+件の勤務は、スタッフの請求書で受け取り済み/.test(await admin.getByTestId("invoiced-shift-note").innerText()));
+  // この人のこの月の勤務は全部請求書に入っているので「すべて受け取り済み」（支払明細は要らない等の余計な一言は付けない）
+  const noteText = await admin.getByTestId("invoiced-shift-note").innerText();
+  log("支払明細の画面に「この月の勤務は、すべてスタッフの請求書で受け取り済みです。」と出る", noteText === "この月の勤務は、すべてスタッフの請求書で受け取り済みです。");
+  log("「この月は…承認済みです（支払明細の発行は要りません）」の案内は出ない", !(await admin.textContent("body")).includes("支払明細の発行は要りません"));
   const invoicedIds = psql(
     `select string_agg(l->>'shiftId', ',') from "StaffInvoice" s, jsonb_array_elements(s."workLines") l where s."staffUserId"='${staffId}';`,
   ).split(",");

@@ -2,7 +2,7 @@ import "server-only";
 import { closingPeriod } from "@/lib/closingPeriod";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
-import { resolveRateVersion, resolveContractWageVersion, pickStaffTaskRate, isRateEndedAt } from "@/lib/domain/contracts";
+import { resolveRateVersion, resolveContractWageVersion, pickStaffTaskRate, isRateEndedAt, firstPricedEffectiveFrom } from "@/lib/domain/contracts";
 import { isWeekendOrHoliday } from "@/lib/holidays";
 import { recordPaidLeaveUsageDelta } from "@/lib/domain/paidLeave";
 import { hasRemainingPdfQuota } from "@/lib/domain/plans";
@@ -191,6 +191,10 @@ export type UnresolvedSalaryShift = {
   date: string;
   taskName: string;
   source: "workReport" | "shift";
+  // その場で単価を入れる時の勤務先（社内はnull）と、既にある単価の行・その開始日（勤務日より後から始まっている時）
+  companyRelationshipId: string | null;
+  rateId: string | null;
+  rateStartsFrom: string | null;
 };
 
 export type ComputedWorkLine = { shiftId: string; description: string; hours: number; rate: number; amount: number };
@@ -266,12 +270,16 @@ export async function computeApprovedWorkLines(params: {
     // 個別単価を「終了」にしている場合も、意図して基本給に戻したので警告しない
     const rateEnded = matchedRow ? isRateEndedAt(matchedRow.versions, r.shift.date) : false;
     if (!matchedWage && baseWageVersion && effectiveTaskName && !isBaseContractTask && !rateEnded) {
+      const firstFrom = matchedRow ? firstPricedEffectiveFrom(matchedRow.versions) : null;
       unresolved.push({
         shiftId: r.shiftId,
         workReportId: r.id,
         date: r.shift.date.toISOString().slice(0, 10),
         taskName: effectiveTaskName,
         source: r.taskName ? "workReport" : "shift",
+        companyRelationshipId: r.shift.companyRelationshipId,
+        rateId: matchedRow?.id ?? null,
+        rateStartsFrom: firstFrom && firstFrom > r.shift.date ? firstFrom.toISOString().slice(0, 10) : null,
       });
     }
     const wage = matchedWage ?? {
@@ -391,7 +399,24 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     });
   });
 
-  return { slip, unresolved, invoicedCount };
+  // 「基本給のままでいい」にした業務内容は、単価未設定の案内に出さない
+  const membership = await prisma.companyMembership.findFirst({
+    where: { companyId: params.companyId, userId: params.staffUserId },
+    select: { baseWageTaskNames: true },
+  });
+  const baseWageTaskNames = new Set(Array.isArray(membership?.baseWageTaskNames) ? (membership.baseWageTaskNames as string[]) : []);
+  return { slip, unresolved: unresolved.filter((u) => !baseWageTaskNames.has(u.taskName)), invoicedCount };
+}
+
+// 単価未設定の案内の「基本給のままでいい（次から聞かない）」：このスタッフのこの業務内容は基本給で計算すると覚える
+export async function acknowledgeBaseWageTaskNames(companyId: string, staffUserId: string, taskNames: string[]) {
+  const membership = await prisma.companyMembership.findFirstOrThrow({
+    where: { companyId, userId: staffUserId },
+    select: { id: true, baseWageTaskNames: true },
+  });
+  const current = Array.isArray(membership.baseWageTaskNames) ? (membership.baseWageTaskNames as string[]) : [];
+  const next = [...new Set([...current, ...taskNames.map((t) => t.trim()).filter(Boolean)])];
+  await prisma.companyMembership.update({ where: { id: membership.id }, data: { baseWageTaskNames: next } });
 }
 
 // 業務委託のスタッフが請求書に入れた勤務（提出済み・承認済み。差し戻されたら外れる）。

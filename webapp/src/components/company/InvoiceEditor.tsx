@@ -6,6 +6,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { TaskNameSplitNotice } from "@/components/company/TaskNameMerge";
+import { RateFixList } from "@/components/company/RateFixList";
 import {
   addCustomLineAction,
   updateLineAction,
@@ -63,7 +64,14 @@ function sameBank(a: BankFields, b: BankFields) {
   );
 }
 
-type UnresolvedShift = { shiftId: string; date: string; staffName: string; taskName: string | null };
+type UnresolvedShift = {
+  shiftId: string;
+  date: string;
+  staffName: string;
+  taskName: string | null;
+  rateId: string | null;
+  rateStartsFrom: string | null;
+};
 
 const STATUS_LABEL: Record<string, string> = { DRAFT: "下書き", ISSUED: "発行済み" };
 
@@ -222,23 +230,16 @@ export function InvoiceEditor({
 
       {invoice.unresolved.length > 0 ? (
         <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-          <p className="mb-2 font-semibold">単価未設定のため明細に計上されていないシフトがあります</p>
-          <ul className="flex flex-col gap-1">
-            {invoice.unresolved.map((u) => (
-              <li key={u.shiftId}>
-                {u.date} ／ {u.staffName} ／ {u.taskName ?? "業務内容未選択"}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-xs">
-            名簿の「依頼主」から{clientName}を開き、「単価」タブで該当の業務内容の請求単価を設定すると、この画面を開き直したときに自動で明細に入ります。
-          </p>
+          <p className="mb-2 font-semibold">単価が決まらず、明細に入っていない勤務があります</p>
+          {clientRelationshipId ? (
+            <RateFixList kind="client" items={invoice.unresolved} companyRelationshipId={clientRelationshipId} />
+          ) : null}
           {clientRelationshipId ? (
             <a
               href={`/company/roster?client=${clientRelationshipId}&clientTab=rates`}
-              className="mt-3 inline-block rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white"
+              className="mt-3 inline-block text-xs text-amber-900 underline"
             >
-              {clientName}の単価を設定する →
+              {clientName}の単価の一覧を開く →
             </a>
           ) : null}
         </section>
