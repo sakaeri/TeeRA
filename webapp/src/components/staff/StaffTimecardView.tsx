@@ -164,12 +164,15 @@ export function ShiftCard({
   const [workplaceId, setWorkplaceId] = useState(shift.companyRelationshipId ?? "");
   const workplaceChanged = workplaceId !== (shift.companyRelationshipId ?? "");
   const [comment, setComment] = useState(shift.comment ?? "");
-  const [taskName, setTaskName] = useState(shift.taskName ?? "");
   // 業務内容の候補は、選んでいる勤務先に紐付いているものだけ（今入っている業務内容は残す）。
   // 1つも無い勤務先は最初から「新しい業務内容」の入力欄を開く
   const workplaceTaskNames = (id: string) => taskNamesForWorkplace(taskNamesByWorkplace, shift.companyId, id || null);
   const ownTaskNames = workplaceTaskNames(workplaceId);
   const knownTaskNames = shift.taskName && !ownTaskNames.includes(shift.taskName) && ownTaskNames.length > 0 ? [shift.taskName, ...ownTaskNames] : ownTaskNames;
+  // 勤務先に業務内容が1つだけなら、最初から選んでおく
+  const [taskName, setTaskName] = useState(shift.taskName ?? (ownTaskNames.length === 1 ? ownTaskNames[0] : ""));
+  // 勤務先に業務内容が登録されているのに選んでいない時は提出できない（業務内容が無いと単価が決まらず、請求書に載らないため）
+  const taskMissing = ownTaskNames.length > 0 && !taskName.trim();
   const [taskNameMode, setTaskNameMode] = useState<"pick" | "custom">(
     ownTaskNames.length > 0 ? "pick" : "custom",
   );
@@ -368,7 +371,10 @@ export function ShiftCard({
           value={workplaceId}
           onChange={(e) => {
             setWorkplaceId(e.target.value);
-            setTaskNameMode(workplaceTaskNames(e.target.value).length > 0 ? "pick" : "custom");
+            const names = workplaceTaskNames(e.target.value);
+            setTaskNameMode(names.length > 0 ? "pick" : "custom");
+            // 勤務先を変えたら、その勤務先の業務内容から選び直す（1つだけならそれを選んでおく）
+            if (names.length > 0 && !names.includes(taskName)) setTaskName(names.length === 1 ? names[0] : "");
           }}
           className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
           data-testid="report-workplace"
@@ -558,9 +564,10 @@ export function ShiftCard({
                 {taskNameInput}
                 {commentInput}
                 {error ? <p className="text-xs text-red-600">{error}</p> : null}
+                {taskMissing ? <p className="text-xs text-amber-700">業務内容を選んでください。</p> : null}
                 <button
                   type="button"
-                  disabled={pending}
+                  disabled={pending || taskMissing}
                   onClick={() =>
                     startTransition(async () => {
                       setError(null);
@@ -621,9 +628,10 @@ export function ShiftCard({
               {taskNameInput}
               {commentInput}
               {error ? <p className="text-xs text-red-600">{error}</p> : null}
+              {taskMissing ? <p className="text-xs text-amber-700">業務内容を選んでください。</p> : null}
               <button
                 type="button"
-                disabled={pending || !clockInEdit || !clockOutEdit || hasInvalidTimeRange}
+                disabled={pending || !clockInEdit || !clockOutEdit || hasInvalidTimeRange || taskMissing}
                 onClick={() =>
                   startTransition(async () => {
                     try {

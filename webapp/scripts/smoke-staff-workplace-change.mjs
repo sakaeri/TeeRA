@@ -153,9 +153,10 @@ try {
   const modal = staff.locator("div.fixed").filter({ has: staff.getByTestId("task-suggestions") }).last();
   await staff.getByTestId("task-suggestions").waitFor({ timeout: 15000 }).catch(() => {});
   const chips = await staff.getByTestId("task-suggestions").innerText().catch(() => "");
-  log("最近使った業務内容が候補に出る", chips.includes("キャディ"));
-  await staff.getByTestId("task-suggestions").getByRole("button", { name: "キャディ" }).click();
-  log("候補を押すと業務内容に入る", (await staff.locator('input[list="unscheduled-task-names"]').inputValue()) === "キャディ");
+  // 勤務先を「先ゴルフ倶楽部」に変えた時、業務内容はその勤務先の1つだけの業務内容（先の登録業務）が自動で選ばれている
+  log("最近使った業務内容が候補に出る", chips.includes("先の登録業務"));
+  await staff.getByTestId("task-suggestions").getByRole("button", { name: "先の登録業務" }).click();
+  log("候補を押すと業務内容に入る", (await staff.locator('input[list="unscheduled-task-names"]').inputValue()) === "先の登録業務");
   void modal;
 
   console.log(process.exitCode ? "STAFF WORKPLACE CHANGE SMOKE TEST HAD FAILURES" : "STAFF WORKPLACE CHANGE SMOKE TEST PASSED");
