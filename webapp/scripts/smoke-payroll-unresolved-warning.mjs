@@ -112,8 +112,9 @@ try {
   await admin.goto(`http://localhost:3000/company/payroll?month=${thisMonth}&staff=${staffUserId}`);
   await admin.waitForTimeout(500);
   let body = await admin.textContent("body");
-  log("warning box shown for unresolved task rate", body.includes("業務内容専用の単価が未設定") && body.includes("警告確認業務"));
-  log("warning shows the shift's date", body.includes(shiftDate));
+  log("warning box shown for unresolved task rate", body.includes("業務内容の単価が決まらず、基本給で計算している勤務があります"));
+  log("理由（まだ登録されていない）と勤務日が出る", body.includes("「警告確認業務」の単価がまだ登録されていません") && body.includes(`${Number(shiftDate.slice(5, 7))}/${Number(shiftDate.slice(8, 10))}`));
+  log("その場で直す「単価を入れる」ボタンがある", (await admin.getByTestId("rate-fix-group").getByRole("button", { name: "単価を入れる" }).count()) === 1);
 
   const rateInputValue = await admin.locator("table input[type=number]").nth(1).inputValue();
   log("shift line still auto-generated at base wage (1000)", rateInputValue === "1000");
@@ -123,7 +124,7 @@ try {
   await admin.waitForTimeout(800);
   await admin.reload();
   await admin.waitForTimeout(500);
-  log("「基本給のままでいい」で、この業務内容の案内が出なくなる", !(await admin.textContent("body")).includes("業務内容専用の単価が未設定"));
+  log("「基本給のままでいい」で、この業務内容の案内が出なくなる", !(await admin.textContent("body")).includes("業務内容の単価が決まらず"));
   log(
     "スタッフごとに業務内容を覚える",
     psql(`select "baseWageTaskNames"::text from "CompanyMembership" where "userId"='${staffUserId}';`).includes("警告確認業務"),
@@ -163,10 +164,27 @@ try {
   await admin.goto(`http://localhost:3000/company/payroll?month=${thisMonth}&staff=${staffUserId}`);
   await admin.waitForTimeout(500);
   body = await admin.textContent("body");
-  log("warning is gone now that the task rate is set", !body.includes("業務内容専用の単価が未設定"));
+  log("warning is gone now that the task rate is set", !body.includes("業務内容の単価が決まらず"));
 
   const updatedRateInputValue = await admin.locator("table input[type=number]").nth(1).inputValue();
   log("shift line now recalculated at the new task rate (1500)", updatedRateInputValue === "1500");
+
+  // 単価の開始日を勤務日より後にしてしまった時：「単価は◯/◯からです」と理由を出し、その場で開始日を直せる
+  psql(
+    `update "StaffTaskRateVersion" set "effectiveFrom" = '${shiftDate}'::date + 3 where "staffTaskRateId" in (select id from "StaffTaskRate" where "staffUserId"='${staffUserId}' and "taskName"='警告確認業務') and amount is not null;`,
+  );
+  await admin.goto(`http://localhost:3000/company/payroll?month=${thisMonth}&staff=${staffUserId}`);
+  const lateGroup = admin.getByTestId("rate-fix-group").first();
+  await lateGroup.waitFor({ timeout: 15000 });
+  log("開始日が勤務日より後の時は「単価は◯/◯からです…開始日より前」と出る", /単価は\d+\/\d+からです.*開始日より前/.test(await lateGroup.innerText()));
+  await lateGroup.getByRole("button", { name: /開始日を.*に直す/ }).click();
+  await admin.getByTestId("rate-fix-list").waitFor({ state: "detached", timeout: 15000 });
+  log(
+    "「開始日を直す」で単価の開始日が勤務日になる",
+    psql(
+      `select min("effectiveFrom")::text from "StaffTaskRateVersion" where "staffTaskRateId" in (select id from "StaffTaskRate" where "staffUserId"='${staffUserId}' and "taskName"='警告確認業務') and amount is not null;`,
+    ) === shiftDate,
+  );
 
   console.log(process.exitCode ? "PAYROLL UNRESOLVED-WARNING SMOKE TEST HAD FAILURES" : "PAYROLL UNRESOLVED-WARNING SMOKE TEST PASSED");
 } catch (err) {

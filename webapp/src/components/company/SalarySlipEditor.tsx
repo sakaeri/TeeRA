@@ -1,5 +1,6 @@
 "use client";
 
+import { RateFixList } from "@/components/company/RateFixList";
 import { PdfLink } from "@/components/PdfLink";
 import { useEffect, useState, useTransition } from "react";
 import {
@@ -28,14 +29,26 @@ type Line = { id: string; kind: string; description: string; hours: number; rate
 // 従来通りの扱いになる。
 type Deduction = { id: string; label: string; amount: number; ratePercent?: number; quantity?: number; unitPrice?: number };
 type Totals = { grossFromShifts: number; paidLeaveAmount: number; gross: number; totalDeductions: number; net: number };
-type UnresolvedShift = { shiftId: string; workReportId: string; date: string; taskName: string; source: "workReport" | "shift" };
+type UnresolvedShift = {
+  shiftId: string;
+  workReportId: string;
+  date: string;
+  taskName: string;
+  source: "workReport" | "shift";
+  companyRelationshipId: string | null;
+  rateId: string | null;
+  rateStartsFrom: string | null;
+};
 
 export function SalarySlipEditor({
   slip,
   staffName,
+  staffUserId,
   willUseFreeQuota,
   pdfQuota,
 }: {
+  // 単価をその場で入れる時のスタッフ
+  staffUserId: string;
   slip: {
     id: string;
     status: string;
@@ -92,7 +105,7 @@ export function SalarySlipEditor({
             : "この月の勤務は、すべてスタッフの請求書で受け取り済みです。"}
         </p>
       ) : null}
-      {slip.unresolved.length > 0 ? <UnresolvedWarning salarySlipId={slip.id} unresolved={slip.unresolved} /> : null}
+      {slip.unresolved.length > 0 ? <UnresolvedWarning salarySlipId={slip.id} staffUserId={staffUserId} unresolved={slip.unresolved} /> : null}
 
       <section className="rounded-2xl border border-border bg-white/60 p-6">
         <div className="mb-3 flex items-center justify-between">
@@ -417,7 +430,17 @@ function AddLineModal({
   );
 }
 
-function UnresolvedWarning({ salarySlipId, unresolved }: { salarySlipId: string; unresolved: UnresolvedShift[] }) {
+function UnresolvedWarning({
+  salarySlipId,
+  staffUserId,
+  unresolved,
+}: {
+  salarySlipId: string;
+  staffUserId: string;
+  unresolved: UnresolvedShift[];
+}) {
+  // 表記ゆれ（業務内容名の違い）を直す欄は、必要な時だけ開く
+  const [showRename, setShowRename] = useState(false);
   const [pending, startTransition] = useTransition();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showRenameForm, setShowRenameForm] = useState(false);
@@ -447,7 +470,27 @@ function UnresolvedWarning({ salarySlipId, unresolved }: { salarySlipId: string;
 
   return (
     <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-      <p className="mb-2 font-semibold">業務内容専用の単価が未設定のため、基本給で計算されているシフトがあります</p>
+      <p className="mb-2 font-semibold">業務内容の単価が決まらず、基本給で計算している勤務があります</p>
+      <RateFixList kind="staff" items={unresolved} staffUserId={staffUserId} />
+      {/* 基本給で正しい場合は、次から聞かないようにできる（業務内容ごと） */}
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() =>
+          startTransition(async () => {
+            await acknowledgeBaseWageTaskNamesAction(salarySlipId, [...new Set(unresolved.map((u) => u.taskName))]);
+          })
+        }
+        className="mt-3 rounded-lg border border-amber-500 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 disabled:opacity-60"
+        data-testid="acknowledge-base-wage"
+      >
+        基本給のままでいい（{[...new Set(unresolved.map((u) => u.taskName))].join("・")}は次から聞かない）
+      </button>
+      <button type="button" onClick={() => setShowRename((v) => !v)} className="ml-3 mt-3 text-xs text-amber-900 underline">
+        {showRename ? "業務内容名を直す欄を閉じる" : "業務内容名の表記ゆれを直す"}
+      </button>
+      {showRename ? (
+        <div className="mt-2">
       <ul className="flex flex-col gap-1">
         {unresolved.map((u) => (
           <li key={u.shiftId} className="flex items-center gap-2">
@@ -463,20 +506,6 @@ function UnresolvedWarning({ salarySlipId, unresolved }: { salarySlipId: string;
           </li>
         ))}
       </ul>
-      {/* 基本給で正しい場合は、次から聞かないようにできる（業務内容ごと） */}
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() =>
-          startTransition(async () => {
-            await acknowledgeBaseWageTaskNamesAction(salarySlipId, [...new Set(unresolved.map((u) => u.taskName))]);
-          })
-        }
-        className="mt-3 rounded-lg border border-amber-500 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 disabled:opacity-60"
-        data-testid="acknowledge-base-wage"
-      >
-        基本給のままでいい（{[...new Set(unresolved.map((u) => u.taskName))].join("・")}は次から聞かない）
-      </button>
       <p className="mt-2 text-xs">
         スタッフ詳細の「業務内容単価」で該当の業務内容に単価を設定するか、表記ゆれ（例：「キャディ」と「キャディ業務」）が原因の場合は下でまとめて業務内容名を直せます。次回の編集画面表示時に自動で反映されます。
       </p>
@@ -522,6 +551,8 @@ function UnresolvedWarning({ salarySlipId, unresolved }: { salarySlipId: string;
           </button>
         </div>
       )}
+        </div>
+      ) : null}
     </section>
   );
 }

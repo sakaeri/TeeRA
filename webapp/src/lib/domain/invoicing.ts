@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { postLedgerEntry } from "@/lib/domain/wallet";
-import { resolveRateVersion } from "@/lib/domain/contracts";
+import { resolveRateVersion, firstPricedEffectiveFrom } from "@/lib/domain/contracts";
 import { isWeekendOrHoliday } from "@/lib/holidays";
 import { hasRemainingPdfQuota } from "@/lib/domain/plans";
 import { workRecordRowsForShiftIds } from "@/lib/domain/workRecord";
@@ -41,7 +41,15 @@ async function alreadyInvoicedShiftIds(companyRelationshipId: string, excludeInv
 // 明細行を作らず、未計上として警告表示する（他の業務の単価を誤って
 // 流用しない）。
 
-export type UnresolvedInvoiceShift = { shiftId: string; date: string; staffName: string; taskName: string | null };
+// rateId：その業務内容の依頼主の単価（無ければnull）。rateStartsFrom：単価はあるが、勤務日より後から始まっている時のその開始日
+export type UnresolvedInvoiceShift = {
+  shiftId: string;
+  date: string;
+  staffName: string;
+  taskName: string | null;
+  rateId: string | null;
+  rateStartsFrom: string | null;
+};
 
 // 請求書の対象シフト: this agency's own shifts performed AT that client
 // (source=CLIENT), with approved WORKED hours, not already locked into a
@@ -207,6 +215,7 @@ async function regenerateLines(invoiceId: string) {
     }),
   ]);
   const ratesByTask = new Map(relationshipRates.map((r) => [r.taskName, r.versions]));
+  const rateIdByTask = new Map(relationshipRates.map((r) => [r.taskName, r.id]));
 
   const unresolved: UnresolvedInvoiceShift[] = [];
   const manuallyExcludedShiftIds = new Set((invoice.excludedShiftIds as string[]) ?? []);
@@ -271,7 +280,15 @@ async function regenerateLines(invoiceId: string) {
         ? resolveRateVersion(versions, s.date, { weekendOrHoliday: isWeekendOrHoliday(s.date.toISOString().slice(0, 10)) })
         : null;
       if (!taskRate || taskRate.wageType === "MONTHLY") {
-        unresolved.push({ shiftId: s.id, date: s.date.toISOString().slice(0, 10), staffName: s.staff.name, taskName: effectiveTaskName });
+        const firstFrom = versions ? firstPricedEffectiveFrom(versions) : null;
+        unresolved.push({
+          shiftId: s.id,
+          date: s.date.toISOString().slice(0, 10),
+          staffName: s.staff.name,
+          taskName: effectiveTaskName,
+          rateId: effectiveTaskName ? (rateIdByTask.get(effectiveTaskName) ?? null) : null,
+          rateStartsFrom: firstFrom && firstFrom > s.date ? firstFrom.toISOString().slice(0, 10) : null,
+        });
         continue;
       }
       const isHourly = taskRate.wageType === "HOURLY";

@@ -99,7 +99,16 @@ export default async function PayrollPage({
     paidLeaveNextGrantDate: string | null;
     totals: ReturnType<typeof getTotals>;
     issues: { id: string; issuedAt: string; chargedTee: boolean; hidden: boolean }[];
-    unresolved: { shiftId: string; workReportId: string; date: string; taskName: string; source: "workReport" | "shift" }[];
+    unresolved: {
+      shiftId: string;
+      workReportId: string;
+      date: string;
+      taskName: string;
+      source: "workReport" | "shift";
+      companyRelationshipId: string | null;
+      rateId: string | null;
+      rateStartsFrom: string | null;
+    }[];
     invoicedShiftCount: number;
   };
 
@@ -259,6 +268,7 @@ export default async function PayrollPage({
             </p>
           ) : null}
           <SalarySlipEditor
+            staffUserId={staffUserId!}
             slip={slipData}
             staffName={selectedStaffName}
             willUseFreeQuota={pdfQuota.unlimited || (pdfQuota.quota > 0 && pdfQuota.remaining > 0)}
