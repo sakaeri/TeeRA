@@ -2,9 +2,17 @@
 // 金額など桁が多い時は、枠からはみ出さないようにスマホでは少し小さくする。
 export function StatNumber({ value, unit, className = "" }: { value: string | number; unit: string; className?: string }) {
   const text = typeof value === "number" ? value.toLocaleString() : value;
-  const size = text.length > 5 ? "text-base sm:text-lg" : "text-lg";
+  // 「1,407,813」（9文字）のような100万円台以上は、枠に収まるよう段階的に小さくする
+  const size =
+    text.length > 10
+      ? "text-xs sm:text-base"
+      : text.length > 8
+        ? "text-sm sm:text-lg"
+        : text.length > 5
+          ? "text-base sm:text-lg"
+          : "text-lg";
   return (
-    <p className={`whitespace-nowrap font-bold ${size} ${className}`}>
+    <p className={`whitespace-nowrap font-bold tracking-tight ${size} ${className}`}>
       {text}
       <span className="ml-0.5 text-xs font-semibold">{unit}</span>
     </p>

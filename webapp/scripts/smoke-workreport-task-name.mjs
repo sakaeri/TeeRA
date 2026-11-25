@@ -121,6 +121,13 @@ try {
   const hasPicker = (await picker.count()) > 0;
   log("既存の業務名がピッカーとして表示される", hasPicker);
   if (hasPicker) {
+    log("業務内容が1つだけの勤務先は、最初から選ばれている", (await picker.inputValue()) === "キャディ業務");
+    // 未選択にすると「業務内容を選んでください」が出て、勤務終了（提出）を押せない
+    await picker.selectOption("");
+    log(
+      "業務内容を選ばないと提出できない",
+      (await staff.getByText("業務内容を選んでください。").count()) > 0 && (await staff.getByRole("button", { name: /勤務終了/ }).last().isDisabled()),
+    );
     await picker.selectOption({ label: "キャディ業務" });
   }
   await staff.getByRole("button", { name: "勤務終了" }).click();

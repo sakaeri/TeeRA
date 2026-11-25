@@ -55,6 +55,17 @@ try {
     `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "computedMinutes", "approvalStatus", "submittedAt", "updatedAt") values (gen_random_uuid()::text, '${shiftId}', '${staffId}', 'CANCELLED_BY_EMPLOYER', 0, 'PENDING', now(), now());`,
   );
 
+  // 業務内容が入っていないシフト（単価が決まらず請求書に載らない）は「業務内容なし」と目立たせる
+  const noTaskShift = psql(
+    `with ins as (insert into "Shift" (id, "companyId", "staffUserId", "companyRelationshipId", source, date, "startTime", "endTime", "createdVia", "updatedAt") values (gen_random_uuid()::text, '${companyId}', '${staffId}', '${relId}', 'CLIENT', '${today}', '08:00', '17:00', 'ASSIGN', now()) returning id) select id from ins;`,
+  );
+  psql(
+    `insert into "WorkReport" (id, "shiftId", "staffUserId", outcome, "computedMinutes", "approvalStatus", "submittedAt", "updatedAt") values (gen_random_uuid()::text, '${noTaskShift}', '${staffId}', 'WORKED', 480, 'PENDING', now(), now());`,
+  );
+  await page.goto(`http://localhost:3000/company/roster?client=${relId}`);
+  await page.getByTestId("missing-task-name").first().waitFor({ timeout: 15000 });
+  log("依頼主の稼働履歴で、業務内容が無い行に「業務内容なし」と出る", (await page.getByTestId("missing-task-name").count()) === 1);
+
   // 依頼主の詳細から業務報告の詳細を開いて承認する
   await page.goto(`http://localhost:3000/company/roster?client=${relId}`);
   await page.getByRole("button", { name: /キャンセル報告スタッフ/ }).first().click();

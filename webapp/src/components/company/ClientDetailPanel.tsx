@@ -741,7 +741,14 @@ export function ClientDetailPanel({
                         <span>{d.date.slice(5)}</span>
                         <span className="min-w-0">
                           <span className="block truncate font-medium">{d.staffName}</span>
-                          {d.taskName ? <span className="block truncate text-[11px] text-muted">{d.taskName}</span> : null}
+                          {d.taskName ? (
+                            <span className="block truncate text-[11px] text-muted">{d.taskName}</span>
+                          ) : (
+                            // 業務内容が無いと単価が決まらず請求書に載らないので、目立たせる（タップして直せる）
+                            <span className="block truncate text-[11px] font-semibold text-amber-700" data-testid="missing-task-name">
+                              業務内容なし
+                            </span>
+                          )}
                         </span>
                         <span className="whitespace-nowrap text-muted">{timeLabel(d)}</span>
                         {d.approvalStatus ? (
