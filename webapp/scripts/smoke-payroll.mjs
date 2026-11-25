@@ -217,6 +217,21 @@ try {
   const balanceAfterReopenReissue = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
   log("修正して再発行しても同月内は引き続き無料（still 9）", balanceAfterReopenReissue === 9);
 
+  // 発行履歴：最新の1件だけ出し、過去の発行はたたんで削除できる（記録は残す）
+  await admin.reload();
+  const history = admin.getByTestId("slip-issue-history");
+  await history.waitFor();
+  log("発行履歴は最新の1件と「過去の発行（1件）」", (await history.innerText()).includes("過去の発行（1件）"));
+  await history.getByRole("button", { name: /過去の発行/ }).click();
+  admin.once("dialog", (d) => d.accept());
+  await history.getByRole("button", { name: "削除" }).click();
+  await admin.waitForTimeout(1000);
+  const issueRows = psql(
+    `select count(*)||'|'||count("hiddenAt") from "SalarySlipIssue" i join "SalarySlip" s on s.id=i."salarySlipId" where s."companyId"='${companyId}';`,
+  );
+  log("過去の発行を削除すると見えなくなる（記録は残る：2件中1件が非表示）", issueRows === "2|1");
+  log("削除すると「過去の発行」も消える", !(await history.innerText()).includes("過去の発行"));
+
   // fetch the PDF
   const pdfLink = await admin.locator('a[href*="/api/salary-slips/"]').first().getAttribute("href");
   const pdfResp = await admin.request.get(`http://localhost:3000${pdfLink}`);

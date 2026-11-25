@@ -261,7 +261,7 @@ try {
   log("承認するとやることから消える", (await admin.locator("li", { hasText: `請求書（${monthLabel}）が届いています` }).count()) === 0);
   await admin.goto(`http://localhost:3000/company/payroll?month=${month}`);
   const historyText = await admin.locator("section", { hasText: "発行履歴" }).last().innerText();
-  log("承認した請求書は「発行履歴」に移る", historyText.includes("委託太郎") && historyText.includes("受け取った請求書"));
+  log("承認した請求書は「発行履歴」に移る（「請求書」の印つき）", historyText.includes("委託太郎") && historyText.includes("請求書"));
   await admin.goto(`http://localhost:3000/company/payroll?month=${month}&staff=${staffId}`);
   log("給料明細の画面に「請求書を受け取り、承認済み」と出る", (await admin.locator("main").innerText()).includes("請求書を受け取り、承認済みです"));
   const staffPdf = await staff.request.get(`http://localhost:3000/api/staff-invoices/${invoiceId}/pdf`);

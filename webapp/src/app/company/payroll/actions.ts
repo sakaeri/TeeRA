@@ -195,3 +195,16 @@ export async function updateContractorShowWorkplaceAction(invoiceId: string, sho
   });
   revalidatePath("/company/payroll");
 }
+
+// 明細の発行履歴から、過去の発行分を消す（画面に出さないだけ。最新の発行分は消せない）
+export async function hideSalarySlipIssueAction(salarySlipId: string, issueId: string) {
+  await assertAccess(salarySlipId);
+  const latest = await prisma.salarySlipIssue.findFirst({
+    where: { salarySlipId },
+    orderBy: { issuedAt: "desc" },
+    select: { id: true },
+  });
+  if (!latest || latest.id === issueId) throw new Error("cannot_hide_latest");
+  await prisma.salarySlipIssue.updateMany({ where: { id: issueId, salarySlipId }, data: { hiddenAt: new Date() } });
+  revalidatePath("/company/payroll");
+}

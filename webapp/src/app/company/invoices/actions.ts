@@ -181,3 +181,12 @@ export async function setInvoiceRecipientNameAction(invoiceId: string, name: str
   });
   revalidatePath("/company/invoices");
 }
+
+// 請求書の発行履歴から、過去の発行分を消す（画面に出さないだけ。最新の発行分は消せない）
+export async function hideInvoiceIssueAction(invoiceId: string, issueId: string) {
+  await assertAccess(invoiceId);
+  const latest = await prisma.invoiceIssue.findFirst({ where: { invoiceId }, orderBy: { issuedAt: "desc" }, select: { id: true } });
+  if (!latest || latest.id === issueId) throw new Error("cannot_hide_latest");
+  await prisma.invoiceIssue.updateMany({ where: { id: issueId, invoiceId }, data: { hiddenAt: new Date() } });
+  revalidatePath("/company/invoices");
+}
