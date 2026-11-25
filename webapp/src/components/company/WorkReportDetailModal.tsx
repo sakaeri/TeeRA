@@ -10,6 +10,7 @@ import {
   revokeWorkReportApprovalAction,
 } from "@/app/company/workreports/actions";
 import { WorkReportCorrectionForm } from "@/components/company/WorkReportCorrectionForm";
+import { CancellationFeeModal } from "@/components/company/CancellationFeeModal";
 
 type WorkReportDetail = Awaited<ReturnType<typeof getWorkReportDetailAction>>;
 
@@ -52,6 +53,8 @@ export function WorkReportDetailModal({
   const [detail, setDetail] = useState<WorkReportDetail | null>(null);
   const [error, setError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  // 勤務先キャンセルのキャンセル料を確認・変えるポップアップ
+  const [feeOpen, setFeeOpen] = useState(false);
   // 承認の取り消し：確認（その報告が入っている発行済みの書類）→ 取り消し
   const [revokeDocs, setRevokeDocs] = useState<string[] | null>(null);
   const [revokeMessage, setRevokeMessage] = useState<string | null>(null);
@@ -230,6 +233,41 @@ export function WorkReportDetailModal({
                 <p className="mb-1 text-xs text-muted">スタッフのコメント</p>
                 <p className="whitespace-pre-wrap break-words rounded-xl bg-background px-3 py-2 text-xs">{detail.comment}</p>
               </div>
+            ) : null}
+
+            {/* 勤務先キャンセル：依頼主へのキャンセル料（承認した時に規定から入れた金額。ここから変えられる） */}
+            {detail.cancellationFee ? (
+              <div
+                className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-xs ${
+                  detail.cancellationFee.pending ? "bg-amber-50 text-amber-900" : "bg-background"
+                }`}
+                data-testid="report-cancellation-fee"
+              >
+                <span>
+                  {detail.workplaceLabel}へのキャンセル料：
+                  <span className="font-semibold">
+                    {detail.cancellationFee.amount > 0 ? `${detail.cancellationFee.amount.toLocaleString()}円` : "なし"}
+                  </span>
+                  {detail.cancellationFee.pending ? "（確認待ち）" : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFeeOpen(true)}
+                  className="shrink-0 rounded-md border border-primary/40 bg-white px-2.5 py-1 font-semibold text-primary"
+                >
+                  {detail.cancellationFee.pending ? "確認する" : "変える"}
+                </button>
+              </div>
+            ) : null}
+            {feeOpen ? (
+              <CancellationFeeModal
+                shiftId={shiftId}
+                onClose={() => setFeeOpen(false)}
+                onSaved={() => {
+                  setReloadKey((k) => k + 1);
+                  onChanged?.();
+                }}
+              />
             ) : null}
 
             {detail.timeline.length > 0 && mode !== "correct" ? (

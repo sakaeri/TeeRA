@@ -490,6 +490,8 @@ async function recordStaffReportedClientCancellation(
       cancelledByCompanyId: shift.companyId,
       source: "STAFF_REPORTED",
       feeAmount: evaluation.kind === "fee" ? evaluation.amount : 0,
+      // 規定から出した金額で記録しておき、会社に「キャンセル料の確認」で確かめてもらう（やることに出る）
+      feeReviewPending: true,
     },
   });
 }
@@ -797,6 +799,7 @@ export async function getWorkReportDetail(shiftId: string) {
       staff: true,
       companyRelationship: { include: { clientCompany: true } },
       workReport: { include: { approver: true, corrector: true } },
+      cancellation: { select: { feeAmount: true, feeReviewPending: true, source: true } },
     },
   });
   const r = shift.workReport;
@@ -884,6 +887,11 @@ export async function getWorkReportDetail(shiftId: string) {
     breakMinutes: r?.breakMinutes ?? 0,
     computedMinutes: r?.computedMinutes ?? 0,
     comment: r?.comment ?? null,
+    // スタッフが「勤務先キャンセル」と報告して承認した依頼主の現場のシフト：記録したキャンセル料（ここから変えられる）
+    cancellationFee:
+      submitted && r!.outcome === "CANCELLED_BY_EMPLOYER" && shift.cancellation?.source === "STAFF_REPORTED"
+        ? { amount: shift.cancellation.feeAmount, pending: shift.cancellation.feeReviewPending }
+        : null,
     timeline,
     // 再提出されて承認待ちに戻った場合も、前回の差し戻し理由は参考に出す
     previousRejectionReason:

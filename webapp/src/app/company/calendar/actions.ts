@@ -555,7 +555,10 @@ export async function setTransferCancellationFeeAction(shiftId: string, feeAmoun
   const { membership } = await requireCompanyAdminOrEditor();
   const shift = await prisma.shift.findUniqueOrThrow({ where: { id: shiftId }, include: { cancellation: true } });
   if (shift.companyId !== membership.companyId || !canManageShifts(membership, shift.teamId)) throw new Error("forbidden");
-  if (!shift.cancellation?.transferredByStaff) throw new Error("not_transfer");
+  // 振替と、スタッフが報告した「勤務先キャンセル」の分だけ（依頼主からの取り消しはカレンダーで扱う）
+  if (!shift.cancellation || !(shift.cancellation.transferredByStaff || shift.cancellation.source === "STAFF_REPORTED")) {
+    throw new Error("not_staff_reported");
+  }
   const fee = Math.max(0, Math.min(10_000_000, Math.round(Number(feeAmount) || 0)));
   await prisma.shiftCancellation.update({
     where: { shiftId },
@@ -570,13 +573,23 @@ export async function getTransferFeeReviewAction(shiftId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   const shift = await prisma.shift.findUniqueOrThrow({
     where: { id: shiftId },
-    include: { cancellation: true, staff: { select: { name: true } }, companyRelationship: { include: { clientCompany: true } } },
+    include: {
+      cancellation: true,
+      workReport: { select: { submittedAt: true } },
+      staff: { select: { name: true } },
+      companyRelationship: { include: { clientCompany: true } },
+    },
   });
   if (shift.companyId !== membership.companyId || !canManageShifts(membership, shift.teamId)) throw new Error("forbidden");
-  if (!shift.cancellation?.transferredByStaff) throw new Error("not_transfer");
+  if (!shift.cancellation || !(shift.cancellation.transferredByStaff || shift.cancellation.source === "STAFF_REPORTED")) {
+    throw new Error("not_staff_reported");
+  }
+  const isTransfer = shift.cancellation.transferredByStaff;
   const clientName = shift.companyRelationship?.clientCompany?.name ?? shift.companyRelationship?.proxyName ?? "依頼主";
   // 振り替えた先（同じ日にスタッフの業務報告から作られたシフト）
-  const moved = await prisma.shift.findFirst({
+  const moved = !isTransfer
+    ? null
+    : await prisma.shift.findFirst({
     where: {
       companyId: shift.companyId,
       staffUserId: shift.staffUserId,
@@ -592,14 +605,20 @@ export async function getTransferFeeReviewAction(shiftId: string) {
       ? (moved.companyRelationship.clientCompany?.name ?? moved.companyRelationship.proxyName ?? "依頼主")
       : "社内"
     : null;
-  // 規定は、振り替えた（取り消しになった）時点で判定する
+  // 規定は、振り替えた（取り消しになった）時点、勤務先キャンセルはスタッフが報告した時点で判定する
   const rule = await findCancelRule(prisma, {
     companyId: shift.companyId,
     companyRelationshipId: shift.companyRelationshipId,
     taskName: shift.taskName,
   });
-  const evaluation = evaluateCancellation(shift.date, rule, shift.cancellation.createdAt);
+  const evaluation = evaluateCancellation(
+    shift.date,
+    rule,
+    isTransfer ? shift.cancellation.createdAt : (shift.workReport?.submittedAt ?? shift.cancellation.createdAt),
+  );
   return {
+    kind: isTransfer ? ("transfer" as const) : ("cancel" as const),
+    currentFee: shift.cancellation.feeAmount,
     shiftId: shift.id,
     staffName: shift.staff.name,
     date: shift.date.toISOString().slice(0, 10),

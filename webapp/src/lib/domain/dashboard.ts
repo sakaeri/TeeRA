@@ -375,7 +375,7 @@ export function computePendingReportEntries(data: DashboardData, companyId?: str
 
 export type AutoTodoItem = {
   id: string;
-  kind: "業務報告" | "欠員" | "シフト" | "調整中" | "振替" | "契約書" | "契約満了" | "有給付与" | "販促品" | "請求書";
+  kind: "業務報告" | "欠員" | "シフト" | "調整中" | "振替" | "契約書" | "契約満了" | "有給付与" | "販促品" | "請求書" | "キャンセル";
   text: string;
   actionLabel: string;
   actionHref: string;
@@ -458,8 +458,10 @@ export function computeAutoTodoItems(data: DashboardData, pendingShipments: Pend
     const clientName = c.shift.companyRelationship?.clientCompany?.name ?? c.shift.companyRelationship?.proxyName ?? "依頼主";
     items.push({
       id: `transfer-fee-${c.id}`,
-      kind: "振替",
-      text: `${c.shift.staff.name}さんが${dateStr}に${clientName}から別の現場に振り替えました（${clientName}へのキャンセル料を確認してください）`,
+      kind: c.transferredByStaff ? "振替" : "キャンセル",
+      text: c.transferredByStaff
+        ? `${c.shift.staff.name}さんが${dateStr}に${clientName}から別の現場に振り替えました（${clientName}へのキャンセル料を確認してください）`
+        : `${c.shift.staff.name}さんの${dateStr}の${clientName}は勤務先キャンセルでした（${clientName}へのキャンセル料を確認してください）`,
       actionLabel: "キャンセル料を決める",
       actionHref: `/company/calendar?date=${dateStr}`,
       transferShiftId: c.shiftId,
