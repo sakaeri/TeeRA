@@ -50,6 +50,8 @@ export function SalarySlipEditor({
     paidLeaveNextGrantDate: string | null;
     totals: Totals;
     unresolved: UnresolvedShift[];
+    // スタッフの請求書で受け取った（ので載せていない）勤務の数
+    invoicedShiftCount?: number;
     issues: { id: string }[];
   };
   staffName: string;
@@ -82,6 +84,11 @@ export function SalarySlipEditor({
         対象スタッフ：<span className="font-semibold text-foreground">{staffName}</span>
       </p>
 
+      {slip.invoicedShiftCount ? (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900" data-testid="invoiced-shift-note">
+          {slip.invoicedShiftCount}件の勤務は、スタッフの請求書で受け取り済みのため載せていません。
+        </p>
+      ) : null}
       {slip.unresolved.length > 0 ? <UnresolvedWarning salarySlipId={slip.id} unresolved={slip.unresolved} /> : null}
 
       <section className="rounded-2xl border border-border bg-white/60 p-6">

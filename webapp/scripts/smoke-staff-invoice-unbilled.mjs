@@ -152,6 +152,25 @@ try {
   await admin.waitForURL(/staffInvoice=/);
   const afterSecond = Number(psql(`select "teeBalance" from "Company" where id='${companyId}';`));
   log("1枚目を開くと1Tee、同じ月の2枚目は無料", afterFirst === 4 && afterSecond === 4);
+
+  // 2枚とも承認すると、発行履歴に同じ名前が2行並ぶので、どの期間の分かを添える
+  psql(`update "StaffInvoice" set status='APPROVED', "reviewedAt"=now() where "staffUserId"='${staffId}';`);
+  await admin.goto(`http://localhost:3000/company/payroll?month=${month}`);
+  const ranges = await admin.getByTestId("invoice-work-range").allInnerTexts();
+  log("同じ人の請求書が2枚ある時は、名前の横に期間が出る（2行とも）", ranges.length === 2 && ranges.every((r) => /\d+\/\d+/.test(r)) && ranges[0] !== ranges[1]);
+
+  // 支払明細（給料明細）には、請求書に入れた勤務を載せない（二重払いにしない）
+  const staffUserIdForSlip = staffId;
+  await admin.goto(`http://localhost:3000/company/payroll?month=${month}&staff=${staffUserIdForSlip}`);
+  await admin.getByTestId("invoiced-shift-note").waitFor({ timeout: 15000 });
+  log("支払明細の画面に「◯件の勤務は、スタッフの請求書で受け取り済み」と出る", /\d+件の勤務は、スタッフの請求書で受け取り済み/.test(await admin.getByTestId("invoiced-shift-note").innerText()));
+  const invoicedIds = psql(
+    `select string_agg(l->>'shiftId', ',') from "StaffInvoice" s, jsonb_array_elements(s."workLines") l where s."staffUserId"='${staffId}';`,
+  ).split(",");
+  const slipShiftIds = psql(
+    `select coalesce(string_agg(l."shiftId", ','), '') from "SalarySlipLine" l join "SalarySlip" s on s.id=l."salarySlipId" where s."staffUserId"='${staffId}' and s."targetMonth"='${month}' and l.kind='SHIFT';`,
+  ).split(",").filter(Boolean);
+  log("請求書に入れた勤務は、支払明細の勤務の行に入らない", slipShiftIds.every((id) => !invoicedIds.includes(id)));
 } catch (e) {
   console.error(e);
   process.exitCode = 1;

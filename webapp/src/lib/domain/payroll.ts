@@ -314,20 +314,35 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     },
     include: { _count: { select: { issues: true } } },
   });
-  if (slip.status !== "DRAFT") return { slip, unresolved: [] as UnresolvedSalaryShift[] };
+  if (slip.status !== "DRAFT") return { slip, unresolved: [] as UnresolvedSalaryShift[], invoicedCount: 0 };
   // 一度でも発行された明細を「内容を修正する」で下書きに戻した場合は、
   // SHIFT行の自動再生成をスキップする。ここでスキップしないと、発行後に
   // 登録された遡及の単価変更（過去日付でeffectiveFromを持つ単価改定等）
   // によって、発行済み金額と食い違う金額へ警告も無く黙って変わって
   // しまう。まだ一度も発行していない下書きだけ、これまで通りシフト実績
   // から毎回フレッシュに再生成する。
-  if (slip._count.issues > 0) return { slip, unresolved: [] as UnresolvedSalaryShift[] };
+  if (slip._count.issues > 0) return { slip, unresolved: [] as UnresolvedSalaryShift[], invoicedCount: 0 };
 
   const manuallyExcludedShiftIds = new Set((slip.excludedShiftIds as string[]) ?? []);
+  // 業務委託のスタッフが請求書（確認待ち・承認済み）に入れた勤務は、支払明細には載せない（二重に払わないため）
+  const invoicedShiftIds = await staffInvoicedShiftIds(params.companyId, params.staffUserId);
   const { lines, unresolved, hasContract } = await computeApprovedWorkLines({
     ...params,
-    excludedShiftIds: manuallyExcludedShiftIds,
+    excludedShiftIds: new Set([...manuallyExcludedShiftIds, ...invoicedShiftIds]),
   });
+  const period = await payrollPeriod(params.companyId, params.targetMonth);
+  const invoicedCount =
+    invoicedShiftIds.size > 0
+      ? await prisma.workReport.count({
+          where: {
+            staffUserId: params.staffUserId,
+            outcome: "WORKED",
+            approvalStatus: "APPROVED",
+            shiftId: { in: [...invoicedShiftIds] },
+            shift: { companyId: params.companyId, date: { gte: period.start, lt: period.end } },
+          },
+        })
+      : 0;
 
   await prisma.$transaction(async (tx) => {
     // 雇用契約が無いスタッフは自動計上できない。
@@ -376,7 +391,28 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     });
   });
 
-  return { slip, unresolved };
+  return { slip, unresolved, invoicedCount };
+}
+
+// 業務委託のスタッフが請求書に入れた勤務（提出済み・承認済み。差し戻されたら外れる）。
+// 請求書どうしの二重請求と、支払明細との二重払いを防ぐのに使う
+export async function staffInvoicedShiftIds(companyId: string, staffUserId: string, excludeInvoiceId: string | null = null) {
+  const rows = await prisma.staffInvoice.findMany({
+    where: {
+      companyId,
+      staffUserId,
+      status: { in: ["SUBMITTED", "APPROVED"] },
+      ...(excludeInvoiceId ? { id: { not: excludeInvoiceId } } : {}),
+    },
+    select: { workLines: true },
+  });
+  const ids = new Set<string>();
+  for (const r of rows) {
+    for (const l of (Array.isArray(r.workLines) ? r.workLines : []) as { shiftId?: string }[]) {
+      if (l?.shiftId) ids.add(l.shiftId);
+    }
+  }
+  return ids;
 }
 
 // 給与計算画面の「単価未設定」警告から、対象のシフトをまとめて選んで
@@ -496,12 +532,12 @@ export async function getOrCreateSalarySlip(params: {
     await carryOverCustomLines(slip.id, prevSlip);
   }
 
-  const { unresolved } = await regenerateShiftLines(params);
+  const { unresolved, invoicedCount } = await regenerateShiftLines(params);
   const full = await prisma.salarySlip.findUniqueOrThrow({
     where: { id: slip.id },
     include: { lines: { orderBy: { sortOrder: "asc" } } },
   });
-  return { ...full, unresolved };
+  return { ...full, unresolved, invoicedCount };
 }
 
 export async function addCustomLine(params: {
