@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useTransition } from "react";
 import {
+  alignStaffRateNamesAction,
   getTaskNameMergeOptionsAction,
+  listStaffRateNameMismatchesAction,
   mergeTaskNamesAction,
   previewTaskNameMergeAction,
 } from "@/app/company/contracts/actions";
@@ -214,6 +216,63 @@ export function TaskNameMergeModal({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// 取引先の単価タブ：スタッフの単価で、取引先の業務内容に無い名前（以前シフトから自動で作られた「キャディ」など）を
+// 取引先の名前（「キャディ業務」）にまとめてそろえる。名前がずれていると、入れた単価が使われず基本給で計算されてしまう
+export function StaffRateAlignNotice({ relationshipId, onAligned }: { relationshipId: string; onAligned?: () => void | Promise<void> }) {
+  const [items, setItems] = useState<Awaited<ReturnType<typeof listStaffRateNameMismatchesAction>> | null>(null);
+  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listStaffRateNameMismatchesAction(relationshipId)
+      .then((r) => {
+        if (!cancelled) setItems(r);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [relationshipId]);
+
+  if (!items || items.length === 0) return null;
+  const staffCount = new Set(items.map((i) => i.staffName)).size;
+  return (
+    <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="staff-rate-align-notice">
+      <p>
+        スタッフの単価で、この取引先の業務内容と名前がずれているものがあります（{staffCount}人分）。名前がずれていると、入れた単価が使われず基本給で計算されます。
+      </p>
+      <button type="button" onClick={() => setOpen((v) => !v)} className="mt-1 underline">
+        {open ? "▲ 閉じる" : "▼ 中身を見る"}
+      </button>
+      {open ? (
+        <ul className="mt-1 flex flex-col gap-0.5">
+          {items.map((i) => (
+            <li key={i.staffTaskRateId}>
+              {i.staffName}：{i.from}
+              {i.priced ? "" : "（単価未設定）"} → {i.to}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() =>
+          startTransition(async () => {
+            await alignStaffRateNamesAction(relationshipId);
+            setItems(await listStaffRateNameMismatchesAction(relationshipId));
+            await onAligned?.();
+          })
+        }
+        className="mt-2 block rounded-md border border-amber-700/40 bg-white px-2.5 py-1 font-semibold disabled:opacity-60"
+      >
+        取引先の名前にそろえる
+      </button>
     </div>
   );
 }

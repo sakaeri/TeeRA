@@ -214,8 +214,10 @@ try {
   await admin.waitForTimeout(300);
   const panel2 = admin.locator("div.fixed.inset-0.z-30").last();
   await panel2.getByRole("button", { name: "業務内容単価" }).click();
+  // 単価の入っていない行は「▼ 単価が入っていない業務内容（◯件）」にたたまれている
+  await panel2.getByTestId("unpriced-rates").getByRole("button", { name: /単価が入っていない業務内容/ }).click();
   const panelText2 = await panel2.textContent();
-  log("スタッフ詳細の単価タブに「受付業務」が未設定のまま一覧表示される", panelText2.includes("受付業務") && panelText2.includes("単価未設定"));
+  log("スタッフ詳細の単価タブに「受付業務」が単価の入っていない業務内容として出る", panelText2.includes("受付業務") && panelText2.includes("単価が入っていない業務内容"));
 
   console.log(process.exitCode ? "WORKREPORT TASK NAME SMOKE TEST HAD FAILURES" : "WORKREPORT TASK NAME SMOKE TEST PASSED");
 } catch (err) {

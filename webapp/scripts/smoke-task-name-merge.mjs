@@ -147,6 +147,45 @@ try {
   await page.getByRole("button", { name: "業務内容をまとめる" }).first().click();
   log("依頼主の単価タブから「業務内容をまとめる」を開ける", await page.getByTestId("task-name-merge-modal").isVisible());
 
+  // --- スタッフの単価の名前が取引先の業務内容とずれている（「キャディ」12,000円／取引先は「キャディ業務」） ---
+  await page.keyboard.press("Escape").catch(() => {});
+  psql(`insert into "CompanyMembership" (id, "userId", "companyId", role, "createdAt") values (gen_random_uuid()::text, '${staffId}', '${companyId}', 'STAFF', now()) on conflict do nothing;`);
+  const pricedStaffRate = psql(
+    `with ins as (insert into "StaffTaskRate" (id, "companyId", "staffUserId", "taskName", "companyRelationshipId", "createdAt") values (gen_random_uuid()::text, '${companyId}', '${staffId}', 'キャディ', '${relId}', now()) returning id) select id from ins;`,
+  );
+  psql(
+    `insert into "StaffTaskRateVersion" (id, "staffTaskRateId", "wageType", amount, "effectiveFrom", "createdAt") values (gen_random_uuid()::text, '${pricedStaffRate}', 'DAILY', 12000, '2020-01-01', now());`,
+  );
+  // シフトの名前（キャディ業務）の行は単価未設定（さっき「まとめる」でキャディー→キャディ業務にした行）
+  log("まとめる時、単価の入っていない行は名前だけそろう", psql(`select "taskName" from "StaffTaskRate" where id='${staffRateId}';`) === "キャディ業務");
+  await page.goto(`http://localhost:3000/company/roster?client=${relId}&clientTab=rates`);
+  const alignNotice = page.getByTestId("staff-rate-align-notice");
+  await alignNotice.waitFor({ timeout: 15000 });
+  log("取引先の単価タブに「スタッフの単価で名前がずれているもの（1人分）」が出る", (await alignNotice.innerText()).includes("1人分"));
+  await alignNotice.getByRole("button", { name: "取引先の名前にそろえる" }).click();
+  await alignNotice.waitFor({ state: "detached", timeout: 15000 });
+  const staffRates = psql(
+    `select string_agg(r."taskName"||':'||coalesce((select max(amount)::text from "StaffTaskRateVersion" v where v."staffTaskRateId"=r.id),'none'), ',' order by r."taskName") from "StaffTaskRate" r where r."staffUserId"='${staffId}' and r."companyRelationshipId"='${relId}';`,
+  );
+  log("12,000円の行が「キャディ業務」になり、単価未設定の「キャディ業務」の行は消える", staffRates === "キャディ業務:12000");
+
+  // スタッフ詳細：単価が入っていない業務内容はたたんで、まとめて削除できる
+  psql(
+    `insert into "StaffTaskRate" (id, "companyId", "staffUserId", "taskName", "companyRelationshipId", "createdAt") values (gen_random_uuid()::text, '${companyId}', '${staffId}', '古い名前', '${otherRelId}', now());`,
+  );
+  await page.goto("http://localhost:3000/company/roster");
+  await page.getByText("まとめスタッフ").first().click();
+  const panel = page.locator("div.fixed.inset-0.z-30").last();
+  await panel.getByRole("button", { name: "業務内容単価", exact: true }).click();
+  const unpriced = panel.getByTestId("unpriced-rates");
+  await unpriced.waitFor({ timeout: 15000 });
+  log("単価が入っていない業務内容は「▼ 単価が入っていない業務内容（1件）」にたたまれる", (await unpriced.innerText()).includes("単価が入っていない業務内容（1件）"));
+  await unpriced.getByRole("button", { name: /単価が入っていない業務内容/ }).click();
+  page.once("dialog", (d) => d.accept());
+  await unpriced.getByTestId("delete-all-unpriced").click();
+  await unpriced.waitFor({ state: "detached", timeout: 15000 });
+  log("まとめて削除すると、単価の入っていない行が消える", psql(`select count(*) from "StaffTaskRate" where "staffUserId"='${staffId}' and "taskName"='古い名前';`) === "0");
+
   console.log(process.exitCode ? "TASK NAME MERGE SMOKE TEST HAD FAILURES" : "TASK NAME MERGE SMOKE TEST PASSED");
 } catch (e) {
   console.error("TASK NAME MERGE SMOKE TEST FAILED", e);

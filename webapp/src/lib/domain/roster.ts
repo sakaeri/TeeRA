@@ -8,6 +8,7 @@ import { reportDisplay, isReportSubmitted } from "@/lib/workReportDisplay";
 import { createInvite } from "@/lib/domain/invites";
 import { todayJst, todayJstParts } from "@/lib/date";
 import { resolveRateVersion, resolveContractWageVersion, excludeBaselineVersion, isRateEndedAt } from "@/lib/domain/contracts";
+import { suggestClientTaskName } from "@/lib/domain/taskNameMerge";
 import { getTotals } from "@/lib/domain/payroll";
 import { getPaidLeaveInfo } from "@/lib/domain/paidLeave";
 import type { TeamRole } from "@/generated/prisma/enums";
@@ -312,6 +313,18 @@ export async function getStaffMonthDetail(params: {
     },
     orderBy: { createdAt: "asc" },
   });
+  // 取引先ごとの業務内容（スタッフの単価の名前がずれていないかを見る）
+  const relIds = [...new Set(taskRates.map((r) => r.companyRelationshipId).filter((id): id is string => Boolean(id)))];
+  const clientTaskNamesByRel = new Map<string, string[]>();
+  if (relIds.length > 0) {
+    for (const p of await prisma.companyPlacementRate.findMany({
+      where: { companyId: params.companyId, companyRelationshipId: { in: relIds } },
+      select: { companyRelationshipId: true, taskName: true },
+    })) {
+      if (!p.companyRelationshipId) continue;
+      clientTaskNamesByRel.set(p.companyRelationshipId, [...(clientTaskNamesByRel.get(p.companyRelationshipId) ?? []), p.taskName]);
+    }
+  }
   // effectiveFromはJST日付を"YYYY-MM-DDT00:00:00.000Z"として保存している
   // ため、比較対象の「今日」もJST日付の終わり(23:59:59.999Z)にしないと、
   // サーバーのUTC時刻がまだ前日のうちは「今日」から始まる単価が未来日
@@ -487,6 +500,13 @@ export async function getStaffMonthDetail(params: {
         workplaceLabel: r.companyRelationshipId
           ? (r.companyRelationship?.clientCompany?.name ?? r.companyRelationship?.proxyName ?? "取引先")
           : "勤務先問わず",
+        // 単価が一度も入っていない行（シフトから自動で作られた名前だけの行）
+        unpriced: !r.versions.some((v) => v.wageType !== null && v.amount !== null),
+        // 取引先の業務内容に無い名前の時、そろえる先（似た名前が1つだけある時）
+        alignTo:
+          r.companyRelationshipId && !(clientTaskNamesByRel.get(r.companyRelationshipId) ?? []).includes(r.taskName)
+            ? suggestClientTaskName(r.taskName, clientTaskNamesByRel.get(r.companyRelationshipId) ?? [])
+            : null,
         currentLabel: current
           ? `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円${current.holidayAmount != null ? `／土日祝${current.holidayAmount}円` : ""}`
           : isRateEndedAt(r.versions, today)

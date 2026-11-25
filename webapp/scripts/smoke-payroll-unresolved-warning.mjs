@@ -148,7 +148,9 @@ try {
   await staffPanel.getByRole("button", { name: "業務内容単価", exact: true }).click();
   // 単価未設定のまま自動で登録された行があるので、その行の「単価を変更」から単価を入れる
   // （「＋業務内容を追加」には、このスタッフに既にある業務内容は出さない）
-  await staffPanel.locator("li", { hasText: "警告確認業務" }).getByRole("button", { name: "単価を変更" }).click();
+  // （単価の入っていない行は「▼ 単価が入っていない業務内容」にたたまれているので、開いて「単価を入れる」）
+  await staffPanel.getByTestId("unpriced-rates").getByRole("button", { name: /単価が入っていない業務内容/ }).click();
+  await staffPanel.getByTestId("unpriced-rates").locator("div", { hasText: "警告確認業務" }).last().getByRole("button", { name: "単価を入れる" }).click();
   const amendModal = admin.locator("div.fixed.inset-0.z-40").last();
   await amendModal.locator('input[placeholder="金額"]').fill("1500");
   await amendModal.getByRole("button", { name: "保存" }).click();

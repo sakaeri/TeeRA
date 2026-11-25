@@ -845,6 +845,8 @@ export async function isStaffTaskRateUsed(staffTaskRateId: string): Promise<bool
 }
 
 export async function deleteStaffTaskRate(id: string) {
-  if (await isStaffTaskRateUsed(id)) throw new Error("rate_in_use");
+  // 単価が一度も入っていない行（シフトから自動で作られた名前だけの行）は計算に使われていないので、いつでも消せる
+  const priced = await prisma.staffTaskRateVersion.count({ where: { staffTaskRateId: id, wageType: { not: null }, amount: { not: null } } });
+  if (priced > 0 && (await isStaffTaskRateUsed(id))) throw new Error("rate_in_use");
   return prisma.staffTaskRate.delete({ where: { id } });
 }
