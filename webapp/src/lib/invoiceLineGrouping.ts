@@ -63,9 +63,9 @@ export function groupInvoiceLines<T extends GroupableInvoiceLine>(lines: T[], op
     if (!grouped) return g;
     // スタッフ名は内容の欄に入れたので、PDFで二重に出さない
     g.staffName = "";
-    const hours = Math.round(g.hours * 100) / 100;
-    // 時給の業務は数量が時間になるので、何件分かを添える（日給・キャンセル料は数量＝件数）
-    return { ...g, hours, description: hours !== count ? `${g.description}（${count}件）` : g.description };
+    void count;
+    // 何件分かは2ページ目の実績表でわかるので、内容の欄には添えない
+    return { ...g, hours: Math.round(g.hours * 100) / 100 };
   });
 }
 

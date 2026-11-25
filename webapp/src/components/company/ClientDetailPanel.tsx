@@ -1,5 +1,6 @@
 "use client";
 
+import { TaskNameMergeModal, TaskNameSplitNotice } from "@/components/company/TaskNameMerge";
 import { WorkReportDetailModal } from "@/components/company/WorkReportDetailModal";
 import { StatNumber } from "@/components/company/StatNumber";
 import { CLOSING_DAY_OPTIONS, closingDayLabel } from "@/lib/closingPeriod";
@@ -1262,6 +1263,7 @@ function PlacementRatesTab({
   const [newNoCharge, setNewNoCharge] = useState(false);
   const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
+  const [showMerge, setShowMerge] = useState(false);
   const [newTaskNameMode, setNewTaskNameMode] = useState<"pick" | "custom">("custom");
   const [newTaskName, setNewTaskName] = useState("");
   const [newWageType, setNewWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
@@ -1344,7 +1346,17 @@ function PlacementRatesTab({
         onChanged={onChanged}
       />
 
-      <div className="mb-1 mt-2 flex items-center justify-end">
+      <TaskNameSplitNotice key={rates.map((r) => r.taskName).join("/")} relationshipId={relationshipId} onMerged={onChanged} />
+      <div className="mb-1 mt-2 flex items-center justify-end gap-2">
+        {rates.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setShowMerge(true)}
+            className="rounded-lg border border-primary/40 px-3 py-1.5 text-xs font-semibold text-primary"
+          >
+            業務内容をまとめる
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={openNewForm}
@@ -1353,6 +1365,16 @@ function PlacementRatesTab({
           ＋業務内容を追加
         </button>
       </div>
+      {showMerge ? (
+        <TaskNameMergeModal
+          relationshipId={relationshipId}
+          onClose={() => setShowMerge(false)}
+          onMerged={async () => {
+            setShowMerge(false);
+            await onChanged();
+          }}
+        />
+      ) : null}
 
       <ul className="flex flex-col gap-2">
         {rates.map((r) => (
