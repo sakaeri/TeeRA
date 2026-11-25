@@ -119,8 +119,8 @@ try {
   const pdfUrl = `http://localhost:3000/api/invoices/${invoiceId}/pdf`;
   let pages = await pdfPages(page, pdfUrl);
   const first = pages[0] ?? "";
-  // キャディ：6h + 4.5h + 5h = 15.5h × 1,500円 = 23,250円（3件）
-  log("キャディは1行にまとまり、時間の合計と件数が出る", first.includes("キャディ（3件）") && first.includes("15.5") && first.includes("23,250円"));
+  // キャディ：6h + 4.5h + 5h = 15.5h × 1,500円 = 23,250円
+  log("キャディは1行にまとまり、時間の合計が出る（件数は添えない）", first.includes("キャディ") && !first.includes("（3件）") && first.includes("15.5") && first.includes("23,250円"));
   log("清掃（日給）は件数を添えず1行", first.includes("清掃") && !first.includes("清掃（") && first.includes("8,000円"));
   log("数量に単位が付く（時給の業務は「時間」、日給の業務は「日」）", first.includes("15.5時間") && first.includes("1日"));
   log("手で足した交通費はそのまま1行（業務の行の後）", first.includes("交通費") && first.includes("1,500円") && first.indexOf("交通費") > first.indexOf("清掃"));
@@ -136,13 +136,14 @@ try {
   await page.waitForTimeout(800);
   log("「スタッフ・業務ごと」が保存される", psql(`select "groupLinesByTask" from "Invoice" where id='${invoiceId}';`) === "f");
   pages = await pdfPages(page, pdfUrl);
-  // 甲のキャディ：6h + 4.5h = 10.5h（2件）= 15,750円、乙のキャディ：5h（1件）、乙の清掃：1日
+  // 甲のキャディ：6h + 4.5h = 10.5h = 15,750円、乙のキャディ：5h、乙の清掃：1日
   log(
     "スタッフ・業務ごとのときは、スタッフ×業務で1行ずつ（日付は出ない）",
-    pages[0].includes("明細スタッフ甲 ／ キャディ（2件）") &&
+    pages[0].includes("明細スタッフ甲 ／ キャディ") &&
+      !pages[0].includes("件）") &&
       pages[0].includes("10.5") &&
       pages[0].includes("15,750円") &&
-      pages[0].includes("明細スタッフ乙 ／ キャディ（1件）") &&
+      pages[0].includes("明細スタッフ乙 ／ キャディ") &&
       pages[0].includes("明細スタッフ乙 ／ 清掃") &&
       !pages[0].includes(`${day(5)} 勤務`),
   );
@@ -174,7 +175,7 @@ try {
   // 発行後に報告の時間が変わっても、発行済みの実績表は変わらない
   psql(`update "WorkReport" set "clockOut" = "clockIn" + interval '1 minute' where "shiftId"='${shifts.a1}';`);
   pages = await pdfPages(page, `${pdfUrl}?issueId=${issueId}`);
-  log("発行済みPDFもまとめた明細＋実績表", pages[0].includes("キャディ（3件）") && pages.length >= 2);
+  log("発行済みPDFもまとめた明細＋実績表", pages[0].includes("キャディ") && pages[0].includes("23,250円") && pages.length >= 2);
   log("発行済みのPDFには見本の透かしが入らない", !pages.join("").includes("TeeRA見本"));
   log("発行済みの実績表は発行時点の時間のまま", pages.slice(1).join("").includes("09:00〜15:00"));
 

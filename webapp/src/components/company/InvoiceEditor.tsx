@@ -4,6 +4,8 @@ import { formatQuantity, isQuantityUnit, QUANTITY_UNIT_LABEL } from "@/lib/quant
 import { PdfLink } from "@/components/PdfLink";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { TaskNameSplitNotice } from "@/components/company/TaskNameMerge";
 import {
   addCustomLineAction,
   updateLineAction,
@@ -108,6 +110,7 @@ export function InvoiceEditor({
   pdfQuota: { remaining: number; quota: number; unlimited?: boolean; monthLabel?: string } | null;
 }) {
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
   const currentRecipient = recipientName || clientName;
   const [editingRecipient, setEditingRecipient] = useState(false);
   const [recipientDraft, setRecipientDraft] = useState(currentRecipient);
@@ -239,6 +242,11 @@ export function InvoiceEditor({
             </a>
           ) : null}
         </section>
+      ) : null}
+
+      {/* 同じ仕事が別の名前で入っていて行が分かれている時の案内（まとめると明細を作り直す） */}
+      {clientRelationshipId && isEditable ? (
+        <TaskNameSplitNotice relationshipId={clientRelationshipId} onMerged={() => router.refresh()} />
       ) : null}
 
       <section className="rounded-2xl border border-border bg-white/60 p-6">

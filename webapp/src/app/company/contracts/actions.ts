@@ -26,6 +26,7 @@ import {
   type UploadOnlyTemplateInput,
 } from "@/lib/domain/contracts";
 import { createStaffNotice } from "@/lib/domain/notices";
+import { findSimilarTaskNames, listClientTaskNames, mergeClientTaskNames, taskNameMergePreview } from "@/lib/domain/taskNameMerge";
 
 const WAGE_TYPE_LABEL: Record<string, string> = { HOURLY: "時給", DAILY: "日給", MONTHLY: "月給" };
 
@@ -523,4 +524,40 @@ export async function listPlacementTaskNamesByWorkplaceAction(): Promise<Record<
     if (!map[key].includes(r.taskName)) map[key].push(r.taskName);
   }
   return map;
+}
+
+// --- 業務内容をまとめる（依頼主ごと） ---
+async function assertClientAccess(companyRelationshipId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const rel = await prisma.companyRelationship.findFirst({
+    where: { id: companyRelationshipId, ownerCompanyId: membership.companyId },
+    select: { id: true },
+  });
+  if (!rel) throw new Error("not_found");
+  if (!canManageAny(membership, await getClientTeamIds(companyRelationshipId))) throw new Error("forbidden");
+  return membership;
+}
+
+export async function getTaskNameMergeOptionsAction(companyRelationshipId: string) {
+  const membership = await assertClientAccess(companyRelationshipId);
+  const [names, rates] = await Promise.all([
+    listClientTaskNames(membership.companyId, companyRelationshipId),
+    prisma.companyPlacementRate.findMany({ where: { companyId: membership.companyId, companyRelationshipId }, select: { taskName: true } }),
+  ]);
+  // 単価に登録している名前（まとめる時に「残す方」の候補として先に選んでおく）
+  return { names, similar: findSimilarTaskNames(names), rateNames: rates.map((r) => r.taskName) };
+}
+
+export async function previewTaskNameMergeAction(companyRelationshipId: string, from: string, to: string) {
+  const membership = await assertClientAccess(companyRelationshipId);
+  return taskNameMergePreview(membership.companyId, companyRelationshipId, String(from), String(to));
+}
+
+export async function mergeTaskNamesAction(companyRelationshipId: string, from: string, to: string) {
+  const membership = await assertClientAccess(companyRelationshipId);
+  await mergeClientTaskNames({ companyId: membership.companyId, companyRelationshipId, from: String(from), to: String(to) });
+  revalidatePath("/company/roster");
+  revalidatePath("/company/calendar");
+  revalidatePath("/company/invoices");
+  revalidatePath("/company/settings");
 }
