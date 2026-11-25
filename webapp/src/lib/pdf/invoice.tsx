@@ -222,7 +222,8 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
                 {l.staffName ? `${l.staffName} / ` : ""}
                 {l.description}
               </Text>
-              <Text style={styles.tableColQty}>{formatQuantity(l.hours, l.unit)}</Text>
+              {/* 依頼主への請求書の数量は数字だけ（キャディの「1.5R」のように、時間・日で数えない業務もあるため） */}
+              <Text style={styles.tableColQty}>{formatQuantity(l.hours, null)}</Text>
               <Text style={styles.tableColRate}>{l.rate.toLocaleString()}円</Text>
               <Text style={styles.tableColTax}>{l.taxRatePercent === 0 ? "なし" : `${l.taxRatePercent}%`}</Text>
               <Text style={styles.tableColAmount}>{l.amount.toLocaleString()}円</Text>
