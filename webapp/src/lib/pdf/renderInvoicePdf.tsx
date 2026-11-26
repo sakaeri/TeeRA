@@ -13,6 +13,8 @@ function workRecordData(data: InvoicePdfData, workRecord: InvoiceWorkRecord): Ca
     companyName: data.issuingCompanyName,
     year,
     month,
+    periodRangeLabel: data.periodRangeLabel ?? null,
+    periodStart: data.periodStart ?? null,
     issuedAt: data.issuedAt,
     filterLabel: `依頼主：${data.clientName}`,
     thirdColumn: "task",

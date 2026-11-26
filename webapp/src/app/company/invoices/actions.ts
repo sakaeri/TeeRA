@@ -24,6 +24,7 @@ import {
   includeEarlierShifts,
   markEarlierShiftsBilled,
   unmarkShiftBilled,
+  restoreExcludedShift,
 } from "@/lib/domain/invoicing";
 
 async function assertAccess(invoiceId: string) {
@@ -188,5 +189,13 @@ export async function hideInvoiceIssueAction(invoiceId: string, issueId: string)
   const latest = await prisma.invoiceIssue.findFirst({ where: { invoiceId }, orderBy: { issuedAt: "desc" }, select: { id: true } });
   if (!latest || latest.id === issueId) throw new Error("cannot_hide_latest");
   await prisma.invoiceIssue.updateMany({ where: { id: issueId, invoiceId }, data: { hiddenAt: new Date() } });
+  revalidatePath("/company/invoices");
+}
+
+// 「明細から外した」勤務を明細に戻す
+export async function restoreExcludedShiftAction(invoiceId: string, shiftId: string) {
+  const { invoice } = await assertAccess(invoiceId);
+  if (invoice.status !== "DRAFT") throw new Error("not_draft");
+  await restoreExcludedShift(invoiceId, shiftId);
   revalidatePath("/company/invoices");
 }

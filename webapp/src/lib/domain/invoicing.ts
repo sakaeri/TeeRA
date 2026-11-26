@@ -717,3 +717,78 @@ export async function listInvoicesForCompany(companyId: string, periodLabel: str
     orderBy: { createdAt: "asc" },
   });
 }
+
+// この請求書の期間に承認済み（またはキャンセル料がかかった）なのに、明細に入っていない勤務と、その理由。
+// 理由がわからないまま請求書から漏れないよう、請求書の画面に出す（外した・請求済みにした分は戻せる）
+export type MissingInvoiceShift = {
+  shiftId: string;
+  date: string;
+  staffName: string;
+  taskName: string | null;
+  reason: "excluded" | "billed_manually" | "other_invoice" | "no_charge" | "cancelled_no_fee";
+  otherPeriodLabel?: string | null;
+};
+
+export async function listMissingInvoiceShifts(invoiceId: string): Promise<MissingInvoiceShift[]> {
+  const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId }, include: { lines: { select: { shiftId: true } } } });
+  const { start, end } = await invoicePeriod(invoice.companyRelationshipId, invoice.periodLabel);
+  const inLines = new Set(invoice.lines.map((l) => l.shiftId).filter(Boolean));
+  const excluded = new Set((invoice.excludedShiftIds as string[]) ?? []);
+  const [shifts, others, rates] = await Promise.all([
+    prisma.shift.findMany({
+      where: {
+        companyId: invoice.issuingCompanyId,
+        companyRelationshipId: invoice.companyRelationshipId,
+        source: "CLIENT",
+        date: { gte: start, lt: end },
+        status: { not: "SUPERSEDED" },
+      },
+      include: { staff: { select: { name: true } }, workReport: true, cancellation: true },
+      orderBy: { date: "asc" },
+    }),
+    prisma.invoice.findMany({
+      where: { companyRelationshipId: invoice.companyRelationshipId, id: { not: invoice.id } },
+      select: { periodLabel: true, status: true, invoicedShiftIds: true, includedEarlierShiftIds: true },
+    }),
+    prisma.companyPlacementRate.findMany({
+      where: { companyId: invoice.issuingCompanyId, companyRelationshipId: invoice.companyRelationshipId },
+      include: { versions: true },
+    }),
+  ]);
+  const otherBy = new Map<string, string>();
+  for (const o of others) {
+    const ids = [...((o.status === "ISSUED" ? o.invoicedShiftIds : []) as string[]), ...((o.includedEarlierShiftIds as string[]) ?? [])];
+    for (const id of ids) otherBy.set(id, o.periodLabel);
+  }
+  const ratesByTask = new Map(rates.map((r) => [r.taskName, r.versions]));
+
+  const result: MissingInvoiceShift[] = [];
+  for (const s of shifts) {
+    if (inLines.has(s.id)) continue;
+    const cancelledLike = Boolean(s.cancellation) || s.status === "CANCELLED" || s.status === "ON_HOLD";
+    const r = s.workReport;
+    const worked = Boolean(r && r.outcome === "WORKED" && r.approvalStatus === "APPROVED" && r.computedMinutes > 0);
+    // 承認済みの勤務か、キャンセル料のかかった取り消しだけを見る（未承認・欠勤などはもともと載らない）
+    if (!worked && !(cancelledLike && (s.cancellation?.feeAmount ?? 0) > 0)) continue;
+    const taskName = r?.taskName ?? s.taskName;
+    const base = { shiftId: s.id, date: s.date.toISOString().slice(0, 10), staffName: s.staff.name, taskName };
+    if (excluded.has(s.id)) result.push({ ...base, reason: "excluded" });
+    else if (s.clientBilledManuallyAt) result.push({ ...base, reason: "billed_manually" });
+    else if (otherBy.has(s.id)) result.push({ ...base, reason: "other_invoice", otherPeriodLabel: otherBy.get(s.id) });
+    else if (worked && cancelledLike) result.push({ ...base, reason: "cancelled_no_fee" });
+    else if (worked) {
+      const versions = taskName ? ratesByTask.get(taskName) : undefined;
+      const rate = versions ? resolveRateVersion(versions, s.date, { weekendOrHoliday: isWeekendOrHoliday(base.date) }) : null;
+      // 単価が無いものは「単価が決まらない勤務」の案内に出ているので、ここには出さない
+      if (rate && rate.amount === 0) result.push({ ...base, reason: "no_charge" });
+    }
+  }
+  return result;
+}
+
+// 「明細から外した」勤務を明細に戻す（次に請求書を開いた時に作り直される）
+export async function restoreExcludedShift(invoiceId: string, shiftId: string) {
+  const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
+  const excluded = ((invoice.excludedShiftIds as string[]) ?? []).filter((id) => id !== shiftId);
+  await prisma.invoice.update({ where: { id: invoiceId }, data: { excludedShiftIds: excluded } });
+}

@@ -11,6 +11,7 @@ import {
   listBankAccounts,
   unbilledEarlierShifts,
   manuallyBilledEarlierShifts,
+  listMissingInvoiceShifts,
 } from "@/lib/domain/invoicing";
 import { pdfQuotaRemaining } from "@/lib/domain/plans";
 import { prisma } from "@/lib/prisma";
@@ -96,6 +97,7 @@ export default async function InvoicesPage({
     attachWorkRecord: boolean;
     unbilledEarlier: { shiftId: string; date: string; staffName: string; label: string }[];
     manuallyBilledEarlier: { shiftId: string; date: string; staffName: string; label: string }[];
+    missingShifts: Awaited<ReturnType<typeof listMissingInvoiceShifts>>;
   };
 
   let invoiceData: InvoiceData | null = null;
@@ -150,6 +152,7 @@ export default async function InvoicesPage({
       // 前の月以前に請求していなかったシフト（「この請求書に入れる」で確認してから入れる）
       unbilledEarlier: await unbilledEarlierShifts(invoice.id),
       manuallyBilledEarlier: await manuallyBilledEarlierShifts(invoice.id),
+      missingShifts: await listMissingInvoiceShifts(invoice.id),
     };
   }
 
