@@ -120,7 +120,7 @@ try {
   };
   const caddyShift = addWork(addDays(today, -30), "キャディ業務", 390);
   const accShift = addWork(addDays(today, -10), "キャディー", 360);
-  addWork(addDays(today, -15), "研修", 240);
+  const trainingShift = addWork(addDays(today, -15), "研修", 240);
 
   // 届いた請求書（提出した時の金額：キャディ業務は時給で78,000円、キャディーは基本給11,000円）
   const workLines = JSON.stringify([
@@ -209,6 +209,23 @@ try {
     changedAfter.includes("78,000円 → 12,000円") && changedAfter.includes("11,000円 → 14,000円"),
   );
   log("直した後：基本給で計算した勤務は無くなる", (await admin.getByTestId("received-invoice-unresolved").count()) === 0);
+
+  // 8) 給料明細：×で外した勤務を「明細に戻す」で戻せる
+  const slipMonth = addDays(today, -15).slice(0, 7);
+  await admin.goto(`http://localhost:3000/company/payroll?month=${slipMonth}&staff=${staffId}`);
+  const trainingRow = admin.locator("tr").filter({ hasText: "研修" });
+  await trainingRow.first().waitFor();
+  await trainingRow.first().getByRole("button", { name: "✕" }).click();
+  await admin.getByTestId("excluded-salary-shifts").waitFor({ timeout: 10000 });
+  const slipId = psql(`select id from "SalarySlip" where "staffUserId"='${staffId}' and "targetMonth"='${slipMonth}';`);
+  log("×で外すと、明細の下に「×で外した勤務」が出る", psql(`select count(*) from "SalarySlipLine" where "salarySlipId"='${slipId}' and "shiftId"='${trainingShift}';`) === "0");
+  await admin.reload();
+  await admin.getByTestId("excluded-salary-shifts").getByRole("button").first().click();
+  await admin.getByTestId("excluded-salary-shift-row").filter({ hasText: "研修" }).getByRole("button", { name: "明細に戻す" }).click();
+  await admin.waitForTimeout(1000);
+  log("「明細に戻す」で明細に戻る", psql(`select count(*) from "SalarySlipLine" where "salarySlipId"='${slipId}' and "shiftId"='${trainingShift}';`) === "1");
+  await admin.reload();
+  log("戻した後は、外した勤務の一覧から消える", (await admin.getByTestId("excluded-salary-shifts").count()) === 0);
 
   console.log(process.exitCode ? "STAFF RATE HISTORY SMOKE TEST HAD FAILURES" : "STAFF RATE HISTORY SMOKE TEST PASSED");
 } catch (err) {

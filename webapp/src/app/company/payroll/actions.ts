@@ -22,6 +22,7 @@ import {
   setSalarySlipGroupShiftLines,
   setSalarySlipShowWorkplace,
   acknowledgeBaseWageTaskNames,
+  restoreExcludedSalaryShift,
 } from "@/lib/domain/payroll";
 
 async function assertAccess(salarySlipId: string) {
@@ -51,6 +52,13 @@ export async function deleteLineAction(lineId: string) {
   const line = await prisma.salarySlipLine.findUniqueOrThrow({ where: { id: lineId } });
   await assertAccess(line.salarySlipId);
   await deleteLine(lineId);
+  revalidatePath("/company/payroll");
+}
+
+// ×で外した勤務を明細に戻す
+export async function restoreExcludedSalaryShiftAction(salarySlipId: string, shiftId: string) {
+  await assertAccess(salarySlipId);
+  await restoreExcludedSalaryShift(salarySlipId, String(shiftId));
   revalidatePath("/company/payroll");
 }
 

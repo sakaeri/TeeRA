@@ -2,7 +2,7 @@ import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { closingDayLabel } from "@/lib/closingPeriod";
 import { canManageAny, isCompanyScopeAdmin, isLeaderOnly } from "@/lib/auth/permissions";
 import { listStaff } from "@/lib/domain/roster";
-import { payrollPeriod, getOrCreateSalarySlip, getTotals, listSalarySlipsForCompany, resolveWorkplaceNamesByShiftId, workLineLabel } from "@/lib/domain/payroll";
+import { payrollPeriod, getOrCreateSalarySlip, listExcludedSalaryShifts, getTotals, listSalarySlipsForCompany, resolveWorkplaceNamesByShiftId, workLineLabel } from "@/lib/domain/payroll";
 import { pdfQuotaRemaining } from "@/lib/domain/plans";
 import { prisma } from "@/lib/prisma";
 import { SalarySlipEditor } from "@/components/company/SalarySlipEditor";
@@ -110,6 +110,7 @@ export default async function PayrollPage({
       rateStartsFrom: string | null;
     }[];
     invoicedShiftCount: number;
+    excludedShifts: Awaited<ReturnType<typeof listExcludedSalaryShifts>>;
   };
 
   let slipData: SlipData | null = null;
@@ -160,6 +161,7 @@ export default async function PayrollPage({
       issues: issues.map((i) => ({ id: i.id, issuedAt: i.issuedAt.toISOString(), chargedTee: i.chargedTee, hidden: i.hiddenAt !== null })),
       unresolved: slip.unresolved,
       invoicedShiftCount: slip.invoicedCount,
+      excludedShifts: slip.status === "DRAFT" ? await listExcludedSalaryShifts(slip.id) : [],
     };
   }
 

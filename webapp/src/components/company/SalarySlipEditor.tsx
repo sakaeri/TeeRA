@@ -17,6 +17,7 @@ import {
   issueSalarySlipAction,
   reopenSalarySlipAction,
   renameUnresolvedTaskNamesAction,
+  restoreExcludedSalaryShiftAction,
 } from "@/app/company/payroll/actions";
 
 type Line = { id: string; kind: string; description: string; hours: number; rate: number; amount: number };
@@ -66,6 +67,8 @@ export function SalarySlipEditor({
     unresolved: UnresolvedShift[];
     // スタッフの請求書で受け取った（ので載せていない）勤務の数
     invoicedShiftCount?: number;
+    // ×で外した勤務（「明細に戻す」で戻せる）
+    excludedShifts?: { shiftId: string; date: string; taskName: string | null; workplace: string | null }[];
     issues: { id: string }[];
   };
   staffName: string;
@@ -174,6 +177,10 @@ export function SalarySlipEditor({
           </tbody>
         </table>
         </div>
+
+        {isEditable && slip.excludedShifts && slip.excludedShifts.length > 0 ? (
+          <ExcludedShifts salarySlipId={slip.id} items={slip.excludedShifts} />
+        ) : null}
 
         {isEditable ? (
           <div className="mt-3">
@@ -932,6 +939,44 @@ function AddDeductionModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ×で外した勤務。理由がわからないまま戻せなくならないよう、明細の下に出して戻せるようにする
+function ExcludedShifts({
+  salarySlipId,
+  items,
+}: {
+  salarySlipId: string;
+  items: { shiftId: string; date: string; taskName: string | null; workplace: string | null }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  return (
+    <div className="mt-3 text-xs" data-testid="excluded-salary-shifts">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="font-semibold text-foreground/80 underline">
+        {open ? "▲ 閉じる" : `▼ ×で外した勤務（${items.length}件）`}
+      </button>
+      {open ? (
+        <ul className="mt-2 flex flex-col divide-y divide-border/60">
+          {items.map((m) => (
+            <li key={m.shiftId} className="flex flex-wrap items-center justify-between gap-2 py-1.5" data-testid="excluded-salary-shift-row">
+              <span className="min-w-0">
+                {Number(m.date.slice(5, 7))}/{Number(m.date.slice(8, 10))}　{[m.workplace, m.taskName].filter(Boolean).join("・")}
+              </span>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => startTransition(() => restoreExcludedSalaryShiftAction(salarySlipId, m.shiftId))}
+                className="shrink-0 rounded-md border border-primary/40 px-2 py-0.5 font-semibold text-primary disabled:opacity-60"
+              >
+                明細に戻す
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
