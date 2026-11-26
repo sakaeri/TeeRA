@@ -267,6 +267,16 @@ export async function addStaffTaskRateVersionAction(input: {
     createdByUserId: userId,
   });
 
+  // スタッフの単価で新しく入れた業務内容（研修など）は、その勤務先の業務内容にも単価未設定で登録しておく
+  // （取引先の業務内容とスタッフの単価の名前がずれないように。取引先への請求の単価は取引先の「単価」で入れる）
+  if (input.companyRelationshipId) {
+    await registerPlacementTaskName({
+      companyId: membership.companyId,
+      companyRelationshipId: input.companyRelationshipId,
+      taskName: input.taskName,
+    });
+  }
+
   if (isNewRate && input.companyRelationshipId) {
     await prisma.staffPlacement.upsert({
       where: {

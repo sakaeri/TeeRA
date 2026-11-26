@@ -70,6 +70,8 @@ type ClientOption = { id: string; name: string };
 
 // 業務内容を追加の画面で、勤務先をまだ選んでいない状態
 const UNSELECTED_WORKPLACE = "__unselected__";
+// 業務内容の選択肢の「＋ 新しい業務内容」
+const NEW_TASK_SENTINEL = "__new_task__";
 
 type StaffNote = {
   id: string;
@@ -1857,6 +1859,7 @@ function StaffTaskRatesTab({
   const [endDate, setEndDate] = useState(todayJst());
   const [showNewForm, setShowNewForm] = useState(false);
   const [newTaskName, setNewTaskName] = useState("");
+  const [newTaskCustom, setNewTaskCustom] = useState(false);
   const [newCompanyRelationshipId, setNewCompanyRelationshipId] = useState("");
   const [newWageType, setNewWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("HOURLY");
   const [newAmount, setNewAmount] = useState("");
@@ -1868,6 +1871,7 @@ function StaffTaskRatesTab({
   function openNewForm() {
     setShowNewForm(true);
     setNewTaskName("");
+    setNewTaskCustom(false);
     // 勤務先は最初は未選択（勤務先 → 業務内容 → 単価 の順に選んでもらう）
     setNewCompanyRelationshipId(UNSELECTED_WORKPLACE);
     setPlacementTaskNames(null);
@@ -1888,8 +1892,11 @@ function StaffTaskRatesTab({
     placementTaskNames === null
       ? null
       : registeredForWorkplace.filter(
-          (name) => !rates.some((r) => r.taskName === name && (r.companyRelationshipId ?? "") === newCompanyRelationshipId),
+          // 単価の入っていない行（たたんである名前だけの行）しか無い業務内容は選べるようにする（選ぶとその行に単価が入る）
+          (name) => !rates.some((r) => r.taskName === name && (r.companyRelationshipId ?? "") === newCompanyRelationshipId && !r.unpriced),
         );
+  // 勤務先に無い業務内容（研修など）を、ここで新しく入れる時（取引先の単価にも単価未設定で登録される）
+  const showNewTaskInput = newTaskCustom || (newTaskOptions !== null && newTaskOptions.length === 0);
 
   function startAmend(r: StaffTaskRate) {
     setAmendingId(r.id);
@@ -2290,6 +2297,7 @@ function StaffTaskRatesTab({
                   onChange={(e) => {
                     setNewCompanyRelationshipId(e.target.value);
                     setNewTaskName("");
+                    setNewTaskCustom(false);
                   }}
                   className="rounded-lg border border-border px-2 py-2 text-sm text-foreground"
                   data-testid="new-rate-workplace"
@@ -2306,20 +2314,44 @@ function StaffTaskRatesTab({
               {newCompanyRelationshipId !== UNSELECTED_WORKPLACE ? (
                 newTaskOptions === null ? (
                   <p className="text-xs text-muted">読み込み中…</p>
-                ) : newTaskOptions.length === 0 ? (
-                  <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="new-rate-no-tasks">
-                    {registeredForWorkplace.length === 0
-                      ? newCompanyRelationshipId
-                        ? "この勤務先には業務内容が登録されていません。依頼主の詳細の「単価」で追加してください。"
-                        : "社内の業務内容が登録されていません。"
-                      : "この勤務先の業務内容は、すべて単価を登録済みです。"}
-                  </p>
+                ) : showNewTaskInput ? (
+                  <label className="flex flex-col gap-0.5 text-xs">
+                    <span className="text-muted">業務内容（新しく入れる）</span>
+                    <input
+                      type="text"
+                      value={newTaskName}
+                      onChange={(e) => setNewTaskName(e.target.value)}
+                      placeholder="例：研修"
+                      className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+                      data-testid="new-rate-task-input"
+                    />
+                    <span className="text-muted" data-testid="new-rate-no-tasks">
+                      {newCompanyRelationshipId ? "この勤務先の業務内容にも追加されます（取引先への請求の単価は、取引先の「単価」で入れてください）。" : "社内の業務内容として追加されます。"}
+                    </span>
+                    {newTaskOptions.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewTaskCustom(false);
+                          setNewTaskName("");
+                        }}
+                        className="self-start text-primary underline"
+                      >
+                        ← 登録済みの業務内容から選ぶ
+                      </button>
+                    ) : null}
+                  </label>
                 ) : (
                   <label className="flex flex-col gap-0.5 text-xs">
                     <span className="text-muted">業務内容</span>
                     <select
                       value={newTaskName}
-                      onChange={(e) => setNewTaskName(e.target.value)}
+                      onChange={(e) => {
+                        if (e.target.value === NEW_TASK_SENTINEL) {
+                          setNewTaskCustom(true);
+                          setNewTaskName("");
+                        } else setNewTaskName(e.target.value);
+                      }}
                       className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
                       data-testid="new-rate-task"
                     >
@@ -2329,6 +2361,7 @@ function StaffTaskRatesTab({
                           {name}
                         </option>
                       ))}
+                      <option value={NEW_TASK_SENTINEL}>＋ 新しい業務内容</option>
                     </select>
                   </label>
                 )
