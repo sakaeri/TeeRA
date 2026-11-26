@@ -107,6 +107,7 @@ try {
   const record = pages.slice(1).join("");
   const [pm, plm] = [Number(prevMonth.slice(5)), lm];
   log(`実績表の見出しは「対象期間: ${pm}/21〜${plm}/20」`, record.includes(`対象期間: ${pm}/21〜${plm}/20`) && !record.includes("対象月"));
+  log("実績表の下に説明文（※請求書の明細の内訳です…）は出さない", !record.includes("請求書の明細の内訳です"));
   log("前の月の21日以降の勤務があっても「前の月以前の未請求分を含む」と出ない", record.includes(`${pm}月25日`) && !record.includes("前の月以前の未請求分を含む"));
 
   console.log(process.exitCode ? "INVOICE MISSING SHIFTS SMOKE TEST HAD FAILURES" : "INVOICE MISSING SHIFTS SMOKE TEST PASSED");
