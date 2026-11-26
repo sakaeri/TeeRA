@@ -4,6 +4,7 @@ import { allowedDesires } from "@/lib/requestDesire";
 import { notifyCompanyOfConfirmedOffCancelled } from "@/lib/domain/emailNotifications";
 
 import { revalidatePath } from "next/cache";
+import { setShiftAllowances, type ShiftAllowanceInput } from "@/lib/domain/allowances";
 import type { NoteAttachmentInput } from "@/lib/noteAttachments";
 import { requireCompanyStaffRole } from "@/lib/auth/session";
 import { submitShiftRequest } from "@/lib/domain/shifts";
@@ -141,6 +142,8 @@ export async function submitWorkReportAction(input: {
   clockOutTime?: string;
   // 勤務先を変えた時（null＝社内）。undefinedなら変えない
   companyRelationshipId?: string | null;
+  // 手当（帯同手当・チップなど）。undefinedなら変えない
+  allowances?: ShiftAllowanceInput[];
 }) {
   const { userId } = await requireCompanyStaffRole();
   await assertOwnShift(input.shiftId, userId);
@@ -181,6 +184,9 @@ export async function submitWorkReportAction(input: {
     clockInTime: input.clockInTime,
     clockOutTime: input.clockOutTime,
   });
+  if (input.outcome === "WORKED" && Array.isArray(input.allowances)) {
+    await setShiftAllowances({ shiftId, items: input.allowances, actorUserId: userId, byStaff: true });
+  }
   // 通知メールの失敗で、提出済みの業務報告自体が失敗したかのように
   // 利用者に見えてしまわないよう、ここだけ独立してcatchする。
   // 勤務先を変えた時は、新しい勤務先（承認する側）に知らせる
@@ -200,10 +206,15 @@ export async function clockOutAndSubmitAction(input: {
   taskName?: string | null;
   comment?: string | null;
   clockInTime?: string;
+  allowances?: ShiftAllowanceInput[];
 }) {
   const { userId } = await requireCompanyStaffRole();
   await assertOwnShift(input.shiftId, userId);
-  const report = await clockOutAndSubmit({ ...input, staffUserId: userId });
+  const { allowances, ...rest } = input;
+  const report = await clockOutAndSubmit({ ...rest, staffUserId: userId });
+  if (Array.isArray(allowances)) {
+    await setShiftAllowances({ shiftId: input.shiftId, items: allowances, actorUserId: userId, byStaff: true });
+  }
   await notifyCompanyOfWorkReportSubmission(report.id).catch((err) =>
     console.error("[email] work report submitted notify failed", err),
   );
@@ -307,6 +318,7 @@ export async function submitUnscheduledWorkReportAction(input: {
   breakMinutes: number;
   taskName?: string;
   comment?: string;
+  allowances?: ShiftAllowanceInput[];
 }) {
   const { userId } = await requireCompanyStaffRole();
   const membership = await prisma.companyMembership.findUnique({
@@ -332,6 +344,9 @@ export async function submitUnscheduledWorkReportAction(input: {
       taskName: input.taskName || undefined,
       comment: input.comment || undefined,
     });
+    if (Array.isArray(input.allowances) && input.allowances.length > 0) {
+      await setShiftAllowances({ shiftId: report.shiftId, items: input.allowances, actorUserId: userId, byStaff: true });
+    }
     await notifyCompanyOfWorkReportSubmission(report.id).catch((err) =>
       console.error("[email] unscheduled work report notify failed", err),
     );

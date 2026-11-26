@@ -10,6 +10,7 @@ import {
 } from "@/app/company/workreports/companyEntryActions";
 import { todayJst } from "@/lib/date";
 import { leadingBlankCount, orderedWeekdays, useMondayFirst } from "@/components/week/WeekStart";
+import { AllowancePicker, missingAmounts, selectionFromAllowances, selectionToItems, type AllowanceSelection } from "@/components/AllowancePicker";
 
 const inputClass = "w-full rounded-lg border border-border bg-white px-2 py-2 text-sm text-foreground";
 const NEW_TASK = "__new__";
@@ -99,8 +100,10 @@ export function CompanyReportEntryForm({ shiftId, staffIsProxy, onDone }: { shif
   const [clockOut, setClockOut] = useState("");
   const [breakMinutes, setBreakMinutes] = useState("0");
   const [taskName, setTaskName] = useState("");
+  const [allowanceSelection, setAllowanceSelection] = useState<AllowanceSelection>({});
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const allowanceMissing = opts ? missingAmounts(allowanceSelection, opts.allowanceOptions) : [];
 
   useEffect(() => {
     let cancelled = false;
@@ -111,6 +114,8 @@ export function CompanyReportEntryForm({ shiftId, staffIsProxy, onDone }: { shif
         setClockIn(o.startTime ?? "");
         setClockOut(o.endTime ?? "");
         setTaskName(o.taskName ?? (o.taskOptions.length === 1 ? o.taskOptions[0] : ""));
+        // シフトを作る時に付けた手当は、最初から選んでおく
+        setAllowanceSelection(selectionFromAllowances(o.allowances, o.allowanceOptions));
       })
       .catch(() => {
         if (!cancelled) setError("読み込めませんでした。");
@@ -129,6 +134,7 @@ export function CompanyReportEntryForm({ shiftId, staffIsProxy, onDone }: { shif
         clockOut,
         breakMinutes: Number(breakMinutes) || 0,
         taskName,
+        allowances: opts && opts.allowanceOptions.length > 0 ? selectionToItems(allowanceSelection) : undefined,
       });
       if (result.status === "error") {
         setError(result.reason);
@@ -187,12 +193,18 @@ export function CompanyReportEntryForm({ shiftId, staffIsProxy, onDone }: { shif
               <TaskPicker value={taskName} options={opts.taskOptions} onChange={setTaskName} />
             </label>
           </div>
+          {opts.allowanceOptions.length > 0 ? (
+            <div className="flex flex-col gap-1 text-xs">
+              <span className="text-muted">手当（あれば）</span>
+              <AllowancePicker options={opts.allowanceOptions} value={allowanceSelection} onChange={setAllowanceSelection} />
+            </div>
+          ) : null}
         </>
       ) : null}
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
       <button
         type="button"
-        disabled={pending || (outcome === "WORKED" && (!clockIn || !clockOut))}
+        disabled={pending || (outcome === "WORKED" && (!clockIn || !clockOut || allowanceMissing.length > 0))}
         onClick={submit}
         className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
       >
@@ -281,6 +293,7 @@ export function PastWorkModal({ staffUserId, onClose, onDone }: { staffUserId: s
   const [clockIn, setClockIn] = useState("");
   const [clockOut, setClockOut] = useState("");
   const [breakMinutes, setBreakMinutes] = useState("0");
+  const [allowanceSelection, setAllowanceSelection] = useState<AllowanceSelection>({});
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -322,6 +335,7 @@ export function PastWorkModal({ staffUserId, onClose, onDone }: { staffUserId: s
           clockIn,
           clockOut,
           breakMinutes: Number(breakMinutes) || 0,
+          allowances: selectionToItems(allowanceSelection),
         });
         if (r.status === "error") failed.push(`${md(date)}（${r.reason}）`);
         else if (!r.approved) pendingClient += 1;
@@ -404,8 +418,17 @@ export function PastWorkModal({ staffUserId, onClose, onDone }: { staffUserId: s
                 <input type="number" min="0" value={breakMinutes} onChange={(e) => setBreakMinutes(e.target.value)} className={inputClass} />
               </label>
             </div>
+            {opts.allowanceOptions.length > 0 ? (
+              <div className="flex flex-col gap-1 text-xs">
+                <span className="text-muted">手当（あれば）</span>
+                <AllowancePicker options={opts.allowanceOptions} value={allowanceSelection} onChange={setAllowanceSelection} />
+              </div>
+            ) : null}
             {message ? <p className={`text-xs ${message.ok ? "text-emerald-700" : "text-red-600"}`} data-testid="past-work-message">{message.text}</p> : null}
-            <button type="button" disabled={pending || dates.length === 0 || !clockIn || !clockOut} onClick={submit} className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">
+            <button
+              type="button"
+              disabled={pending || dates.length === 0 || !clockIn || !clockOut || missingAmounts(allowanceSelection, opts.allowanceOptions).length > 0}
+              onClick={submit} className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">
               {pending ? "追加中…" : dates.length > 1 ? `${dates.length}日分を追加して承認済みにする` : "追加して承認済みにする"}
             </button>
           </div>

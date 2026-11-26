@@ -207,7 +207,12 @@ async function regenerateLines(invoiceId: string) {
         // 取り消されたシフトも、依頼主の取り消しでキャンセル料がかかった分は明細に載せる
         status: { not: "SUPERSEDED" },
       },
-      include: { staff: true, workReport: true, cancellation: true },
+      include: {
+        staff: true,
+        workReport: true,
+        cancellation: true,
+        allowances: { include: { allowance: { select: { name: true } } }, orderBy: { createdAt: "asc" } },
+      },
     }),
     prisma.companyPlacementRate.findMany({
       where: { companyId: invoice.issuingCompanyId, companyRelationshipId: invoice.companyRelationshipId },
@@ -233,6 +238,27 @@ async function regenerateLines(invoiceId: string) {
     const manuallyEditedShiftIds = new Set(existingLines.filter((l) => l.isManuallyEdited).map((l) => l.shiftId));
     const autoShiftIds = new Set(existingLines.filter((l) => !l.isManuallyEdited).map((l) => l.shiftId));
     const validShiftIds = new Set<string>();
+
+    // 「依頼主にも請求する」にした手当（チップなど）の行
+    async function createAllowanceLines(s: (typeof shifts)[number]) {
+      for (const a of s.allowances) {
+        if (a.clientAmount == null || a.clientAmount <= 0) continue;
+        await tx.invoiceLine.create({
+          data: {
+            invoiceId: invoice.id,
+            shiftId: s.id,
+            staffName: s.staff.name,
+            description: `${s.date.toISOString().slice(0, 10)} ${a.allowance.name}`,
+            hours: 1,
+            unit: "COUNT",
+            rate: a.clientAmount,
+            amount: a.clientAmount,
+            taxRatePercent: 10,
+          },
+        });
+      }
+    }
+    const hasBilledAllowance = (s: (typeof shifts)[number]) => s.allowances.some((a) => (a.clientAmount ?? 0) > 0);
 
     for (const s of shifts) {
       if (excluded.has(s.id) || manuallyExcludedShiftIds.has(s.id)) continue;
@@ -289,6 +315,13 @@ async function regenerateLines(invoiceId: string) {
           rateId: effectiveTaskName ? (rateIdByTask.get(effectiveTaskName) ?? null) : null,
           rateStartsFrom: firstFrom && firstFrom > s.date ? firstFrom.toISOString().slice(0, 10) : null,
         });
+        // 単価が決まらなくても、請求する手当は載せる
+        if (hasBilledAllowance(s)) {
+          validShiftIds.add(s.id);
+          if (manuallyEditedShiftIds.has(s.id)) continue;
+          if (autoShiftIds.has(s.id)) await tx.invoiceLine.deleteMany({ where: { invoiceId: invoice.id, shiftId: s.id } });
+          await createAllowanceLines(s);
+        }
         continue;
       }
       const isHourly = taskRate.wageType === "HOURLY";
@@ -301,8 +334,11 @@ async function regenerateLines(invoiceId: string) {
       if (autoShiftIds.has(s.id)) {
         await tx.invoiceLine.deleteMany({ where: { invoiceId: invoice.id, shiftId: s.id } });
       }
-      // 「請求なし」（0円。研修など）の業務内容は請求書に載せない（単価未設定の注意にも出さない）
-      if (rate === 0) continue;
+      // 「請求なし」（0円。研修など）の業務内容は請求書に載せない（単価未設定の注意にも出さない）。請求する手当は載せる
+      if (rate === 0) {
+        await createAllowanceLines(s);
+        continue;
+      }
 
       await tx.invoiceLine.create({
         data: {
@@ -317,6 +353,7 @@ async function regenerateLines(invoiceId: string) {
           taxRatePercent: 10,
         },
       });
+      await createAllowanceLines(s);
     }
 
     // 対象月の承認済み実績と対応しなくなった自動生成行（業務報告の承認が

@@ -1,5 +1,6 @@
 "use client";
 
+import { AllowancesSettings, type AllowanceRow } from "@/components/company/AllowancesSettings";
 import { CLOSING_DAY_OPTIONS, closingDayLabel } from "@/lib/closingPeriod";
 import { useEffect, useState, useTransition } from "react";
 import { InfoPopupButton } from "@/components/InfoPopupButton";
@@ -98,6 +99,7 @@ type WorkReportRow = {
 const TABS = [
   { key: "basic", label: "基本情報" },
   { key: "contracts", label: "契約関連" },
+  { key: "allowances", label: "手当" },
   { key: "workreports", label: "業務報告" },
   { key: "howto", label: "使い方" },
 ] as const;
@@ -124,6 +126,7 @@ export function SettingsView({
   contractTemplates,
   contractClients,
   workReports,
+  allowances,
 }: {
   initialTab: string;
   initialCreate?: "template" | "team";
@@ -146,10 +149,11 @@ export function SettingsView({
   contractTemplates: ContractTemplate[];
   contractClients: ContractClientOption[];
   workReports: WorkReportRow[];
+  allowances: AllowanceRow[];
 }) {
   const router = useRouter();
   // 契約書テンプレートは本部が管理するため、チームマネージャーには出さない
-  const tabs = isCompanyAdmin ? TABS : TABS.filter((t) => t.key !== "contracts");
+  const tabs = isCompanyAdmin ? TABS : TABS.filter((t) => t.key !== "contracts" && t.key !== "allowances");
   const tab: TabKey = tabs.some((t) => t.key === initialTab) ? (initialTab as TabKey) : "basic";
   // 「よく使う操作」から来た時の作成の指定（?create=）は一度開いたら消す（再読み込みで何度も開かないように）
   useEffect(() => {
@@ -224,6 +228,8 @@ export function SettingsView({
           openCreate={initialCreate === "template"}
         />
       ) : null}
+
+      {tab === "allowances" ? <AllowancesSettings allowances={allowances} /> : null}
 
       {tab === "workreports" ? <WorkReportsQueue reports={workReports} workplaceOptions={contractClients} /> : null}
 

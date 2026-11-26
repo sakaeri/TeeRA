@@ -101,7 +101,7 @@ export async function resolveWorkplaceNamesByShiftId(shiftIds: string[]): Promis
 }
 
 // unit：勤務の行は時給なら HOUR（時間）、日給なら DAY（日）。手で足した行は単位なし
-export type SalarySlipPdfLine = { description: string; hours: number; rate: number; amount: number; unit?: "HOUR" | "DAY" | null };
+export type SalarySlipPdfLine = { description: string; hours: number; rate: number; amount: number; unit?: "HOUR" | "DAY" | "COUNT" | null };
 
 // SHIFT行は「勤務先（業務内容）」×単価でまとめて1行に合算する（1日ごとの内訳は
 // PDFでは冗長なため）。日給は「勤務先（業務内容）（日給）」として別の行にし、数量＝日数。
@@ -123,8 +123,13 @@ export function buildSalarySlipPdfLines(
   const ordered = [...lines].sort((a, b) =>
     a.kind === "SHIFT" && b.kind === "SHIFT" ? dateOf(a.description).localeCompare(dateOf(b.description)) : 0,
   );
+  // 手当の行は勤務の行のあとにまとめて載せる（まとめる時は「帯同手当」×回数）
+  const allowanceLines = ordered
+    .filter((l) => l.kind === "ALLOWANCE")
+    .sort((a, b) => dateOf(a.description).localeCompare(dateOf(b.description)));
 
   for (const line of ordered) {
+    if (line.kind === "ALLOWANCE") continue;
     if (line.kind !== "SHIFT" || !line.shiftId) {
       result.push({ description: line.description, hours: line.hours, rate: line.rate, amount: line.amount });
       continue;
@@ -148,6 +153,24 @@ export function buildSalarySlipPdfLines(
     } else {
       const fresh: SalarySlipPdfLine = { description: label, hours: line.hours, rate: line.rate, amount: line.amount, unit: isDaily ? "DAY" : "HOUR" };
       grouped.set(key, fresh);
+      result.push(fresh);
+    }
+  }
+  const groupedAllowances = new Map<string, SalarySlipPdfLine>();
+  for (const line of allowanceLines) {
+    const name = line.description.replace(/^\d{4}-\d{2}-\d{2} /, "");
+    if (!groupShiftLines) {
+      result.push({ description: line.description, hours: line.hours, rate: line.rate, amount: line.amount, unit: "COUNT" });
+      continue;
+    }
+    const key = `${name}__${line.rate}`;
+    const existing = groupedAllowances.get(key);
+    if (existing) {
+      existing.hours += line.hours;
+      existing.amount += line.amount;
+    } else {
+      const fresh: SalarySlipPdfLine = { description: name, hours: line.hours, rate: line.rate, amount: line.amount, unit: "COUNT" };
+      groupedAllowances.set(key, fresh);
       result.push(fresh);
     }
   }
@@ -197,7 +220,12 @@ export type UnresolvedSalaryShift = {
   rateStartsFrom: string | null;
 };
 
-export type ComputedWorkLine = { shiftId: string; description: string; hours: number; rate: number; amount: number };
+// kind="ALLOWANCE"は勤務に付けた手当の行（description＝「YYYY-MM-DD 手当の名前」、hours＝1、rate＝金額）
+export type ComputedWorkLine = { shiftId: string; description: string; hours: number; rate: number; amount: number; kind?: "ALLOWANCE" };
+
+export function isAllowanceLine(l: { kind?: string }) {
+  return l.kind === "ALLOWANCE";
+}
 
 // 対象月の承認済みの業務報告から、勤務の行（単価×時間/日数）を計算する。給与明細（regenerateShiftLines）と、
 // 業務委託のスタッフが出す請求書（staffInvoices.ts）の両方で使う — どちらも同じ単価で計算されるようにするため。
@@ -219,7 +247,7 @@ export async function computeApprovedWorkLines(params: {
       approvalStatus: "APPROVED",
       shift: { companyId: params.companyId, date: { gte: start, lt: end } },
     },
-    include: { shift: true },
+    include: { shift: { include: { allowances: { include: { allowance: { select: { name: true } } }, orderBy: { createdAt: "asc" } } } } },
   });
 
   const contracts = await contractsWithWageVersions(params.companyId, params.staffUserId);
@@ -241,6 +269,17 @@ export async function computeApprovedWorkLines(params: {
     if (params.excludedShiftIds?.has(r.shiftId)) continue;
     const workedHours = Math.round((r.computedMinutes / 60) * 100) / 100;
     if (workedHours <= 0) continue;
+    // 勤務に付けた手当（帯同手当・チップなど）。単価が決まらない・月給の勤務でも手当は払う
+    for (const a of r.shift.allowances) {
+      lines.push({
+        shiftId: r.shiftId,
+        kind: "ALLOWANCE",
+        description: `${r.shift.date.toISOString().slice(0, 10)} ${a.allowance.name}`,
+        hours: 1,
+        rate: a.amount,
+        amount: a.amount,
+      });
+    }
     // 業務報告の時点で業務内容が選び直されていればそちらを優先し（提出時点
     // で確定）、無ければシフト作成時の予定（shift.taskName）を使う。
     const effectiveTaskName = r.taskName ?? r.shift.taskName;
@@ -355,8 +394,24 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
   await prisma.$transaction(async (tx) => {
     // 雇用契約が無いスタッフは自動計上できない。
     if (!hasContract) {
-      await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, kind: "SHIFT" } });
+      await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, kind: { in: ["SHIFT", "ALLOWANCE"] } } });
       return;
+    }
+
+    // 手当の行は手で直せないので、毎回作り直す
+    await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, kind: "ALLOWANCE" } });
+    for (const line of lines.filter(isAllowanceLine)) {
+      await tx.salarySlipLine.create({
+        data: {
+          salarySlipId: slip.id,
+          shiftId: line.shiftId,
+          kind: "ALLOWANCE",
+          description: line.description,
+          hours: line.hours,
+          rate: line.rate,
+          amount: line.amount,
+        },
+      });
     }
 
     // 管理者が単価/時間を手動で直したSHIFT行（isManuallyEdited）は上書き
@@ -372,7 +427,7 @@ export async function regenerateShiftLines(params: { companyId: string; staffUse
     const autoShiftIds = new Set(existingLines.filter((l) => !l.isManuallyEdited).map((l) => l.shiftId));
     const validShiftIds = new Set<string>();
 
-    for (const line of lines) {
+    for (const line of lines.filter((l) => !isAllowanceLine(l))) {
       validShiftIds.add(line.shiftId);
       if (manuallyEditedShiftIds.has(line.shiftId)) continue;
       if (autoShiftIds.has(line.shiftId)) {
@@ -794,11 +849,18 @@ export async function restoreExcludedSalaryShift(salarySlipId: string, shiftId: 
       targetMonth: slip.targetMonth,
       range: { start: day, end: new Date(day.getTime() + 24 * 3600e3) },
     });
-    const line = lines.find((l) => l.shiftId === shiftId);
+    const line = lines.find((l) => l.shiftId === shiftId && !isAllowanceLine(l));
     const exists = await tx.salarySlipLine.count({ where: { salarySlipId: slip.id, shiftId, kind: "SHIFT" } });
     if (line && exists === 0) {
       await tx.salarySlipLine.create({
         data: { salarySlipId: slip.id, shiftId, kind: "SHIFT", description: line.description, hours: line.hours, rate: line.rate, amount: line.amount },
+      });
+    }
+    // その勤務の手当も戻す
+    await tx.salarySlipLine.deleteMany({ where: { salarySlipId: slip.id, shiftId, kind: "ALLOWANCE" } });
+    for (const a of lines.filter((l) => l.shiftId === shiftId && isAllowanceLine(l))) {
+      await tx.salarySlipLine.create({
+        data: { salarySlipId: slip.id, shiftId, kind: "ALLOWANCE", description: a.description, hours: a.hours, rate: a.rate, amount: a.amount },
       });
     }
   });

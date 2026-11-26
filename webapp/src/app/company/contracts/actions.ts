@@ -28,6 +28,7 @@ import {
   type UploadOnlyTemplateInput,
 } from "@/lib/domain/contracts";
 import { createStaffNotice } from "@/lib/domain/notices";
+import { listAllowances } from "@/lib/domain/allowances";
 import {
   alignStaffRateName,
   alignStaffRateNames,
@@ -564,8 +565,12 @@ export async function getTaskNameMergeOptionsAction(companyRelationshipId: strin
     listClientTaskNames(membership.companyId, companyRelationshipId),
     prisma.companyPlacementRate.findMany({ where: { companyId: membership.companyId, companyRelationshipId }, select: { taskName: true } }),
   ]);
+  // まとめた勤務に付けられる手当（決まった金額のものだけ）
+  const allowances = (await listAllowances(membership.companyId))
+    .filter((a) => a.amountType === "FIXED")
+    .map((a) => ({ id: a.id, name: a.name, staffAmount: a.staffAmount }));
   // 単価に登録している名前（まとめる時に「残す方」の候補として先に選んでおく）
-  return { names, similar: findSimilarTaskNames(names), rateNames: rates.map((r) => r.taskName) };
+  return { names, similar: findSimilarTaskNames(names), rateNames: rates.map((r) => r.taskName), allowances };
 }
 
 export async function previewTaskNameMergeAction(companyRelationshipId: string, from: string, to: string) {
@@ -573,9 +578,18 @@ export async function previewTaskNameMergeAction(companyRelationshipId: string, 
   return taskNameMergePreview(membership.companyId, companyRelationshipId, String(from), String(to));
 }
 
-export async function mergeTaskNamesAction(companyRelationshipId: string, from: string, to: string) {
+export async function mergeTaskNamesAction(companyRelationshipId: string, from: string, to: string, allowanceId?: string | null) {
   const membership = await assertClientAccess(companyRelationshipId);
-  await mergeClientTaskNames({ companyId: membership.companyId, companyRelationshipId, from: String(from), to: String(to) });
+  const { userId } = await requireCompanyAdminOrEditor();
+  await mergeClientTaskNames({
+    companyId: membership.companyId,
+    companyRelationshipId,
+    from: String(from),
+    to: String(to),
+    allowanceId: allowanceId ? String(allowanceId) : null,
+    actorUserId: userId,
+  });
+  revalidatePath("/company/payroll");
   revalidatePath("/company/roster");
   revalidatePath("/company/calendar");
   revalidatePath("/company/invoices");

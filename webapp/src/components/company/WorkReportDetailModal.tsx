@@ -12,6 +12,14 @@ import {
 import { WorkReportCorrectionForm } from "@/components/company/WorkReportCorrectionForm";
 import { CancellationFeeModal } from "@/components/company/CancellationFeeModal";
 import { CompanyReportEntryForm } from "@/components/company/CompanyReportEntry";
+import { setShiftAllowancesAction } from "@/app/company/allowanceActions";
+import {
+  AllowancePicker,
+  missingAmounts,
+  selectionFromAllowances,
+  selectionToItems,
+  type AllowanceSelection,
+} from "@/components/AllowancePicker";
 
 type WorkReportDetail = Awaited<ReturnType<typeof getWorkReportDetailAction>>;
 
@@ -256,6 +264,19 @@ export function WorkReportDetailModal({
               )
             ) : null}
 
+            {detail.ownShift && detail.outcome !== "ABSENT" && detail.outcome !== "CANCELLED_BY_EMPLOYER" && (detail.allowances.length > 0 || detail.allowanceOptions.length > 0) ? (
+              <AllowanceSection
+                shiftId={shiftId}
+                allowances={detail.allowances}
+                options={detail.allowanceOptions}
+                onSaved={() => {
+                  setReloadKey((k) => k + 1);
+                  onChanged?.();
+                  router.refresh();
+                }}
+              />
+            ) : null}
+
             {detail.comment ? (
               <div>
                 <p className="mb-1 text-xs text-muted">スタッフのコメント</p>
@@ -462,6 +483,104 @@ export function WorkReportDetailModal({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// 勤務に付けた手当（帯同手当・チップなど）。ここから付け外し・金額の直しができる
+function AllowanceSection({
+  shiftId,
+  allowances,
+  options,
+  onSaved,
+}: {
+  shiftId: string;
+  allowances: { allowanceId: string; name: string; amount: number; clientAmount: number | null }[];
+  options: { id: string; name: string; amountType: "FIXED" | "VARIABLE"; staffAmount: number | null }[];
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  // しまった手当でも、付いているものは選び直せるように候補に残す
+  const pickerOptions = [
+    ...options,
+    ...allowances
+      .filter((a) => !options.some((o) => o.id === a.allowanceId))
+      .map((a) => ({ id: a.allowanceId, name: a.name, amountType: "VARIABLE" as const, staffAmount: null })),
+  ];
+  const [selection, setSelection] = useState<AllowanceSelection>(() => selectionFromAllowances(allowances, pickerOptions));
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function save() {
+    const missing = missingAmounts(selection, pickerOptions);
+    if (missing.length > 0) {
+      setError(`「${missing.join("」「")}」の金額を入れてください`);
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const r = await setShiftAllowancesAction(shiftId, selectionToItems(selection));
+      if (r.status === "error") {
+        setError(r.reason);
+        return;
+      }
+      setEditing(false);
+      onSaved();
+    });
+  }
+
+  return (
+    <div className="rounded-xl bg-background px-3 py-2 text-xs" data-testid="report-allowances">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-muted">手当</span>
+        {!editing ? (
+          <button
+            type="button"
+            onClick={() => {
+              setSelection(selectionFromAllowances(allowances, pickerOptions));
+              setEditing(true);
+            }}
+            className="rounded-md border border-primary/40 bg-white px-2.5 py-1 font-semibold text-primary"
+          >
+            {allowances.length > 0 ? "直す" : "手当を付ける"}
+          </button>
+        ) : null}
+      </div>
+      {!editing ? (
+        allowances.length > 0 ? (
+          <ul className="mt-1 flex flex-col gap-0.5">
+            {allowances.map((a) => (
+              <li key={a.allowanceId} className="flex justify-between gap-2" data-testid="report-allowance-row">
+                <span>{a.name}</span>
+                <span>
+                  {a.amount.toLocaleString()}円
+                  {a.clientAmount != null ? <span className="ml-1 text-muted">（依頼主に{a.clientAmount.toLocaleString()}円）</span> : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-1 text-muted">付いていません</p>
+        )
+      ) : (
+        <div className="mt-2 flex flex-col gap-2">
+          <AllowancePicker options={pickerOptions} value={selection} onChange={setSelection} />
+          {error ? <p className="text-red-600">{error}</p> : null}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={save}
+              className="rounded-md bg-primary px-3 py-1.5 font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              保存
+            </button>
+            <button type="button" onClick={() => setEditing(false)} className="underline">
+              やめる
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

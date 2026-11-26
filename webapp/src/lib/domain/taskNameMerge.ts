@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { resolveRateVersion } from "@/lib/domain/contracts";
 import { todayJst } from "@/lib/date";
+import { addAllowanceToShifts } from "@/lib/domain/allowances";
 
 // 依頼主ごとの「業務内容をまとめる」。同じ仕事が「キャディ業務」「キャディー」のように別の名前で
 // 入っていると、請求書の行が分かれてしまうため、片方の名前にそろえる。
@@ -81,11 +82,32 @@ export async function taskNameMergePreview(companyId: string, companyRelationshi
   };
 }
 
-export async function mergeClientTaskNames(params: { companyId: string; companyRelationshipId: string; from: string; to: string }) {
+export async function mergeClientTaskNames(params: {
+  companyId: string;
+  companyRelationshipId: string;
+  from: string;
+  to: string;
+  // まとめた勤務（まとめる方の名前だった勤務）に付ける手当（例：帯同研修キャディ→キャディ＋帯同手当）
+  allowanceId?: string | null;
+  actorUserId?: string;
+}) {
   const { companyId, companyRelationshipId } = params;
   const from = params.from.trim();
   const to = params.to.trim();
   if (!from || !to || from === to) throw new Error("invalid_task_names");
+  // 名前を変える前に、まとめる方の名前だった勤務を覚えておく（業務報告で選び直した分も含む）
+  const mergedShiftIds = params.allowanceId
+    ? (
+        await prisma.shift.findMany({
+          where: {
+            companyId,
+            companyRelationshipId,
+            OR: [{ taskName: from, workReport: { is: null } }, { taskName: from, workReport: { taskName: null } }, { workReport: { taskName: from } }],
+          },
+          select: { id: true },
+        })
+      ).map((s) => s.id)
+    : [];
 
   await prisma.$transaction(async (tx) => {
     await tx.shift.updateMany({ where: { companyId, companyRelationshipId, taskName: from }, data: { taskName: to } });
@@ -116,6 +138,10 @@ export async function mergeClientTaskNames(params: { companyId: string; companyR
       await tx.invoiceLine.update({ where: { id: l.id }, data: { description: l.description.split(`（${from}）`).join(`（${to}）`) } });
     }
   });
+  if (params.allowanceId && mergedShiftIds.length > 0) {
+    return addAllowanceToShifts({ companyId, shiftIds: mergedShiftIds, allowanceId: params.allowanceId, actorUserId: params.actorUserId ?? "" });
+  }
+  return 0;
 }
 
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];

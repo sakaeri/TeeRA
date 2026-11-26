@@ -153,7 +153,7 @@ async function computeStaffInvoiceWorkLines(params: {
     allLines,
     rangeLabel,
     includesEarlier,
-    earlierCount: allLines.filter((l) => new Date(`${l.description.slice(0, 10)}T00:00:00.000Z`) < period.start).length,
+    earlierCount: allLines.filter((l) => !l.kind && new Date(`${l.description.slice(0, 10)}T00:00:00.000Z`) < period.start).length,
     until,
   };
 }
@@ -546,9 +546,11 @@ export async function checkStaffInvoiceRates(invoice: { companyId: string; staff
     targetMonth: invoice.targetMonth,
     range: { start, end },
   });
-  const currentByShift = new Map(lines.filter((l) => shiftIds.has(l.shiftId)).map((l) => [l.shiftId, l]));
+  // 勤務の行は勤務ごと、手当の行は勤務と手当の名前ごとに比べる
+  const keyOf = (l: ComputedWorkLine) => (l.kind === "ALLOWANCE" ? `${l.shiftId}|${l.description}` : l.shiftId);
+  const currentByKey = new Map(lines.filter((l) => shiftIds.has(l.shiftId)).map((l) => [keyOf(l), l]));
   const changed = submitted
-    .map((l) => ({ shiftId: l.shiftId, date: l.description.slice(0, 10), before: l.amount, after: currentByShift.get(l.shiftId)?.amount ?? null }))
+    .map((l) => ({ shiftId: keyOf(l), date: l.description.slice(0, 10), before: l.amount, after: currentByKey.get(keyOf(l))?.amount ?? null }))
     .filter((c) => c.after !== null && c.after !== c.before) as { shiftId: string; date: string; before: number; after: number }[];
   const membership = await prisma.companyMembership.findFirst({
     where: { companyId: invoice.companyId, userId: invoice.staffUserId },

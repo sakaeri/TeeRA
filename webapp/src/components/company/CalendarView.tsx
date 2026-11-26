@@ -36,6 +36,8 @@ import {
 } from "@/app/company/calendar/actions";
 import { registerPlacementTaskNameAction } from "@/app/company/contracts/actions";
 import { WorkReportDetailModal } from "@/components/company/WorkReportDetailModal";
+import { listAllowanceOptionsAction } from "@/app/company/allowanceActions";
+import { AllowancePicker, missingAmounts, selectionToItems, type AllowanceOption, type AllowanceSelection } from "@/components/AllowancePicker";
 
 type ShiftRow = {
   id: string;
@@ -3718,6 +3720,15 @@ function AssignShiftModal({
   // 相当の判定は「社内」「依頼主から選択」とは別軸として持つ。
   const [agencyRelationshipId, setAgencyRelationshipId] = useState("");
   const [taskName, setTaskName] = useState("");
+  // 手当（帯同手当など）。前もってわかっている日は、シフトを作る時に付けておける
+  const [allowanceOptions, setAllowanceOptions] = useState<AllowanceOption[]>([]);
+  const [allowanceSelection, setAllowanceSelection] = useState<AllowanceSelection>({});
+  useEffect(() => {
+    listAllowanceOptionsAction()
+      .then((list) => setAllowanceOptions(list))
+      .catch(() => setAllowanceOptions([]));
+  }, []);
+  const allowanceMissing = missingAmounts(allowanceSelection, allowanceOptions);
   // このモーダル内で新しく追加した業務名（サーバー側のplacementRates propは
   // ページ全体のrevalidateを待たないと更新されないので、追加直後にその場で
   // 選べるようローカルにも保持しておく）。revalidate後はplacementRates側にも
@@ -3831,6 +3842,10 @@ function AssignShiftModal({
 
   function submit() {
     setError(null);
+    if (allowanceMissing.length > 0) {
+      setError(`「${allowanceMissing.join("」「")}」の金額を入れてください。`);
+      return;
+    }
     startTransition(async () => {
       try {
         const overridesByDate = conflictsByDate
@@ -3852,6 +3867,7 @@ function AssignShiftModal({
           taskName: taskName || undefined,
           overridesByDate,
           confirmedOffDates: offRequestDates?.filter((d) => offConfirmedDates.has(d)),
+          allowances: agencyRelationshipId ? undefined : selectionToItems(allowanceSelection),
         });
         if (result.status === "off_request") {
           setOffRequestDates(result.offRequestDates);
@@ -4319,6 +4335,14 @@ function AssignShiftModal({
             </div>
           ) : null}
         </dl>
+
+        {allowanceOptions.length > 0 && !agencyRelationshipId ? (
+          <div className="flex flex-col gap-1.5 rounded-xl border border-border px-4 py-3 text-sm" data-testid="assign-allowances">
+            <span className="text-xs text-muted">手当（あれば。作るシフト全部に付きます）</span>
+            <AllowancePicker options={allowanceOptions} value={allowanceSelection} onChange={setAllowanceSelection} />
+            {allowanceMissing.length > 0 ? <span className="text-xs text-amber-700">「{allowanceMissing.join("」「")}」の金額を入れてください。</span> : null}
+          </div>
+        ) : null}
 
         {offRequestDates && !conflictsByDate ? (
           <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-xs text-red-800" data-testid="off-confirm">

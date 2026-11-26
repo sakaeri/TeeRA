@@ -11,7 +11,7 @@ type Invoice = {
   id: string | null;
   status: "DRAFT" | "SUBMITTED" | "RETURNED" | "APPROVED";
   editable: boolean;
-  workLines: { shiftId: string; description: string; hours: number; rate: number; amount: number }[];
+  workLines: { shiftId: string; description: string; hours: number; rate: number; amount: number; kind?: "ALLOWANCE" }[];
   expenses: StaffInvoiceExpense[];
   note: string;
   issuerName: string;
@@ -175,13 +175,17 @@ export function StaffInvoiceEditor({
           <p className="text-sm text-muted">まだ請求していない承認済みの勤務はありません。</p>
         ) : (
           <ul className="divide-y divide-border/60 text-sm">
-            {invoice.workLines.map((l) => {
+            {/* 手当の行は、その日の勤務の下に「＋帯同手当」で出す（✅は勤務と一緒に付け外しされる） */}
+            {invoice.workLines
+              .filter((l) => l.kind !== "ALLOWANCE" || !invoice.workLines.some((w) => w.kind !== "ALLOWANCE" && w.shiftId === l.shiftId))
+              .map((l) => {
               const v = splitLine(l.description);
+              const allowances = l.kind === "ALLOWANCE" ? [] : invoice.workLines.filter((a) => a.kind === "ALLOWANCE" && a.shiftId === l.shiftId);
               const off = editable && unchecked.has(l.shiftId);
               return (
                 // 直せる間は、行のどこを押しても✅を付け外しできる（小さい四角を狙わなくていいように）
                 <li
-                  key={l.shiftId}
+                  key={`${l.shiftId}-${l.description}`}
                   onClick={editable ? () => toggleLine(l.shiftId) : undefined}
                   className={`flex items-center justify-between gap-3 py-2 ${off ? "opacity-50" : ""} ${editable ? "cursor-pointer select-none" : ""}`}
                   data-testid="staff-invoice-line-row"
@@ -201,13 +205,22 @@ export function StaffInvoiceEditor({
                     ) : null}
                     <span className="min-w-0">
                     <span className="mr-2 text-muted">{v.date}</span>
-                    {v.label}
-                    <span className="ml-2 text-xs text-muted">
-                      {v.isDaily ? "1日" : `${l.hours}時間`} × {yen(l.rate)}
-                    </span>
+                    {l.kind === "ALLOWANCE" ? l.description.slice(11) : v.label}
+                    {l.kind === "ALLOWANCE" ? null : (
+                      <span className="ml-2 text-xs text-muted">
+                        {v.isDaily ? "1日" : `${l.hours}時間`} × {yen(l.rate)}
+                      </span>
+                    )}
+                    {allowances.map((a) => (
+                      <span key={a.description} className="block text-xs text-muted" data-testid="staff-invoice-allowance">
+                        ＋{a.description.slice(11)} {yen(a.amount)}
+                      </span>
+                    ))}
                     </span>
                   </span>
-                  <span className={`shrink-0 font-medium ${off ? "line-through" : ""}`}>{yen(l.amount)}</span>
+                  <span className={`shrink-0 font-medium ${off ? "line-through" : ""}`}>
+                    {yen(l.amount + allowances.reduce((sum, a) => sum + a.amount, 0))}
+                  </span>
                 </li>
               );
             })}

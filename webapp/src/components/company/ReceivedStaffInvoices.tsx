@@ -159,7 +159,7 @@ export type ReceivedInvoiceDetail = {
   status: string;
   submittedAt: string;
   periodRangeLabel: string | null;
-  lines: { shiftId: string; label: string; isDaily: boolean; hours: number; rate: number; amount: number }[];
+  lines: { shiftId: string; label: string; isDaily: boolean; isAllowance?: boolean; hours: number; rate: number; amount: number }[];
   showWorkplace: boolean;
   expenses: { label: string; quantity: number; unitPrice: number; amount: number }[];
   note: string | null;
@@ -256,12 +256,14 @@ export function ReceivedStaffInvoiceView({ invoice }: { invoice: ReceivedInvoice
       <section className="rounded-2xl border border-border bg-white/60 p-4">
         <ul className="divide-y divide-border/60 text-sm">
           {invoice.lines.map((l) => (
-            <li key={l.shiftId} className="flex justify-between gap-3 py-1.5" data-testid="received-invoice-line">
+            <li key={`${l.shiftId}-${l.label}`} className="flex justify-between gap-3 py-1.5" data-testid="received-invoice-line">
               <span>
                 {l.label}
-                <span className="ml-2 text-xs text-muted">
-                  {l.isDaily ? "1日" : `${l.hours}時間`} × {yen(l.rate)}
-                </span>
+                {l.isAllowance ? null : (
+                  <span className="ml-2 text-xs text-muted">
+                    {l.isDaily ? "1日" : `${l.hours}時間`} × {yen(l.rate)}
+                  </span>
+                )}
               </span>
               <span className="shrink-0">{yen(l.amount)}</span>
             </li>

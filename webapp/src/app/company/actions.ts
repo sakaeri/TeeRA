@@ -4,6 +4,7 @@ import { normalizeAllowedRequestDesire } from "@/lib/requestDesire";
 
 import { normalizeClosingDay } from "@/lib/closingPeriod";
 import { revalidatePath } from "next/cache";
+import { listAllowances, listShiftAllowances } from "@/lib/domain/allowances";
 import type { NoteAttachmentInput } from "@/lib/noteAttachments";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import {
@@ -884,7 +885,10 @@ export async function getWorkReportDetailAction(shiftId: string) {
     detail.approvalStatus === "PENDING" && ownShift
       ? (await listClients(membership.companyId)).map((c) => ({ id: c.id, name: c.clientCompany?.name ?? c.proxyName ?? "(名称未設定)" }))
       : [];
-  return { ...detail, workplaceOptions, workplaceLocked: detail.fromOrder || !ownShift, ownShift };
+  // 勤務に付けた手当と、付ける手当の候補（自社のシフトだけ）
+  const allowances = ownShift ? ((await listShiftAllowances([shiftId])).get(shiftId) ?? []) : [];
+  const allowanceOptions = ownShift ? await listAllowances(membership.companyId) : [];
+  return { ...detail, workplaceOptions, workplaceLocked: detail.fromOrder || !ownShift, ownShift, allowances, allowanceOptions };
 }
 
 // 会社からスタッフへのお知らせ。本部はどの宛先にも出せる。チームのマネージャーは

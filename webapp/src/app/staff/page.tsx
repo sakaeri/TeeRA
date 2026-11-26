@@ -12,6 +12,7 @@ import { TodayShiftPopup } from "@/components/staff/TodayShiftPopup";
 import { isDone } from "@/lib/staffShiftStatus";
 import { isMonthlyApproval } from "@/lib/reportApprovalTiming";
 import { reportDisplay } from "@/lib/workReportDisplay";
+import { staffAllowanceContext } from "@/lib/domain/allowances";
 
 function formatJstTime(date: Date) {
   return new Intl.DateTimeFormat("ja-JP", {
@@ -52,6 +53,7 @@ export default async function StaffHomePage({
   const todayStr = todayJst();
   // 今日の分に加え、前日以前の未提出も出す（日付が変わると前日の未提出に
   // 気付く場所がなかったため）。
+  const allowanceCtx = await staffAllowanceContext(companyIds, shiftsNeedingReport.map((s) => s.id));
   const popupCandidates = shiftsNeedingReport
     .filter((s) => s.date.toISOString().slice(0, 10) <= todayStr)
     .map((s) => ({
@@ -79,6 +81,8 @@ export default async function StaffHomePage({
       rejectionReason: s.workReport?.rejectionReason ?? null,
       computedMinutes: s.workReport?.computedMinutes ?? 0,
       submittedAt: s.workReport?.submittedAt?.toISOString() ?? null,
+      allowances: allowanceCtx.byShift.get(s.id) ?? [],
+      allowanceOptions: allowanceCtx.optionsByCompany.get(s.companyId) ?? [],
     }))
     .filter((s) => !isDone(s));
   const todayShifts = popupCandidates.filter((s) => s.date === todayStr);

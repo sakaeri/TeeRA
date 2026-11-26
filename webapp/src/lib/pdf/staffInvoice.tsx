@@ -13,7 +13,7 @@ export type StaffInvoicePdfData = {
   issuerName: string;
   issuerAddress: string | null;
   registrationNumber: string | null;
-  lines: { description: string; hours: number; rate: number; amount: number; isDaily: boolean }[];
+  lines: { description: string; hours: number; rate: number; amount: number; isDaily: boolean; unit?: string | null }[];
   expenses: { label: string; quantity: number; unitPrice: number; amount: number }[];
   workSubtotal: number;
   taxExclusive: boolean;
@@ -103,7 +103,7 @@ export function StaffInvoiceDocument({ data }: { data: StaffInvoicePdfData }) {
         {data.lines.map((l, i) => (
           <View key={i} style={styles.tr} wrap={false}>
             <Text style={styles.colDesc}>{l.description}</Text>
-            <Text style={styles.colQty}>{l.isDaily ? `${l.hours}日` : `${Math.round(l.hours * 100) / 100}時間`}</Text>
+            <Text style={styles.colQty}>{l.unit === "COUNT" ? `${l.hours}件` : l.isDaily ? `${l.hours}日` : `${Math.round(l.hours * 100) / 100}時間`}</Text>
             <Text style={styles.colRate}>{yen(l.rate)}</Text>
             <Text style={styles.colAmount}>{yen(l.amount)}</Text>
           </View>

@@ -8,6 +8,7 @@ import { listTemplates } from "@/lib/domain/contracts";
 import { listClients } from "@/lib/domain/relationships";
 import { listPendingReportsForCompany } from "@/lib/domain/workReports";
 import { SettingsView } from "@/components/company/SettingsView";
+import { listAllowances } from "@/lib/domain/allowances";
 
 const OUTCOME_LABEL: Record<string, string> = {
   WORKED: "出勤した",
@@ -71,6 +72,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/company
     <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10 print:p-0">
       <SettingsView
         initialTab={initialTab}
+        allowances={isCompanyAdmin ? await listAllowances(membership.companyId, { includeArchived: true }) : []}
         initialCreate={initialCreate}
         isCompanyAdmin={isCompanyAdmin}
         currentUserId={userId}

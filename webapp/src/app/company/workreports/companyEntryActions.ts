@@ -11,6 +11,7 @@ import { listClients } from "@/lib/domain/relationships";
 import { getStaffTeamIds } from "@/lib/domain/teams";
 import { createStaffNotice } from "@/lib/domain/notices";
 import { taskNamesForWorkplace } from "@/lib/workplaceTaskNames";
+import { AllowanceError, listAllowances, listShiftAllowances, setShiftAllowances, type ShiftAllowanceInput } from "@/lib/domain/allowances";
 
 // スタッフが出していない業務報告を、会社が代わりに入力する（入力と同時に承認済みにする）。
 // 仮アカウントのスタッフ・報告し忘れた過去の分を、請求書や給料明細に入れるため。
@@ -21,6 +22,8 @@ export type CompanyEntryInput = {
   clockOut?: string;
   breakMinutes?: number;
   taskName?: string | null;
+  // 手当（帯同手当・チップなど）。undefinedなら変えない（シフトを作る時に付けた手当はそのまま）
+  allowances?: ShiftAllowanceInput[];
 };
 
 const ENTRY_ERROR_LABEL: Record<string, string> = {
@@ -64,6 +67,10 @@ async function enterForShift(shiftId: string, input: CompanyEntryInput, enteredB
     },
   });
 
+  if (input.outcome === "WORKED" && Array.isArray(input.allowances)) {
+    await setShiftAllowances({ shiftId: shift.id, items: input.allowances, actorUserId: enteredByUserId });
+  }
+
   // 承認する会社が自分の時はそのまま承認済みにする（依頼主が本アカウントの現場は、依頼主の承認を待つ）
   let approved = false;
   if ((await resolveApproverCompanyId(shift.id)) === companyId) {
@@ -91,6 +98,7 @@ function revalidateAll() {
 }
 
 function errorResult(error: unknown) {
+  if (error instanceof AllowanceError) return { status: "error" as const, reason: error.message };
   if (error instanceof Error) return { status: "error" as const, reason: ENTRY_ERROR_LABEL[error.message] ?? "入力できませんでした" };
   throw error;
 }
@@ -133,12 +141,18 @@ export async function getCompanyEntryOptionsAction(shiftId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   const shift = await prisma.shift.findUniqueOrThrow({ where: { id: shiftId } });
   if (shift.companyId !== membership.companyId || !canManageShifts(membership, shift.teamId)) throw new Error("forbidden");
-  const map = await listTaskNamesByWorkplace([shift.companyId], shift.staffUserId);
+  const [map, allowanceOptions, allowancesByShift] = await Promise.all([
+    listTaskNamesByWorkplace([shift.companyId], shift.staffUserId),
+    listAllowances(shift.companyId),
+    listShiftAllowances([shift.id]),
+  ]);
   return {
     startTime: shift.startTime,
     endTime: shift.endTime,
     taskName: shift.taskName,
     taskOptions: taskNamesForWorkplace(map, shift.companyId, shift.companyRelationshipId),
+    allowanceOptions,
+    allowances: allowancesByShift.get(shift.id) ?? [],
   };
 }
 
@@ -161,6 +175,7 @@ export async function getPastWorkOptionsAction(staffUserId: string) {
   ];
   return {
     workplaces,
+    allowanceOptions: await listAllowances(membership.companyId),
     taskNamesByWorkplace: Object.fromEntries(
       workplaces.map((w) => [w.id, taskNamesForWorkplace(map, membership.companyId, w.id || null)]),
     ) as Record<string, string[]>,
@@ -176,6 +191,7 @@ export async function addPastWorkByCompanyAction(input: {
   clockIn: string;
   clockOut: string;
   breakMinutes: number;
+  allowances?: ShiftAllowanceInput[];
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   try {
@@ -216,7 +232,14 @@ export async function addPastWorkByCompanyAction(input: {
     try {
       result = await enterForShift(
         shift.id,
-        { outcome: "WORKED", clockIn: input.clockIn, clockOut: input.clockOut, breakMinutes: input.breakMinutes, taskName: input.taskName },
+        {
+          outcome: "WORKED",
+          clockIn: input.clockIn,
+          clockOut: input.clockOut,
+          breakMinutes: input.breakMinutes,
+          taskName: input.taskName,
+          allowances: input.allowances,
+        },
         userId,
         membership.companyId,
       );

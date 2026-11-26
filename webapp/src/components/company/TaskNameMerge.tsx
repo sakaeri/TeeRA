@@ -97,6 +97,9 @@ export function TaskNameMergeModal({
   onMerged: () => void | Promise<void>;
 }) {
   const [names, setNames] = useState<string[] | null>(null);
+  // まとめた勤務に付ける手当（任意）
+  const [allowances, setAllowances] = useState<{ id: string; name: string; staffAmount: number | null }[]>([]);
+  const [allowanceId, setAllowanceId] = useState("");
   const [from, setFrom] = useState(initialFrom);
   const [to, setTo] = useState(initialTo);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -107,7 +110,10 @@ export function TaskNameMergeModal({
     let cancelled = false;
     getTaskNameMergeOptionsAction(relationshipId)
       .then((o) => {
-        if (!cancelled) setNames(o.names);
+        if (!cancelled) {
+          setNames(o.names);
+          setAllowances(o.allowances);
+        }
       })
       .catch(() => {
         if (!cancelled) setNames([]);
@@ -135,7 +141,7 @@ export function TaskNameMergeModal({
     setError(null);
     startTransition(async () => {
       try {
-        await mergeTaskNamesAction(relationshipId, from, to);
+        await mergeTaskNamesAction(relationshipId, from, to, allowanceId || null);
         await onMerged();
       } catch {
         setError("まとめられませんでした。もう一度お試しください。");
@@ -203,6 +209,26 @@ export function TaskNameMergeModal({
                   </p>
                 ) : null}
               </div>
+            ) : null}
+            {ready && allowances.length > 0 ? (
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-muted">まとめた勤務（「{from}」だった勤務）に手当を付ける（任意）</span>
+                <select value={allowanceId} onChange={(e) => setAllowanceId(e.target.value)} className={selectClass} data-testid="merge-allowance">
+                  <option value="">付けない</option>
+                  {allowances.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                      {a.staffAmount != null ? `（${a.staffAmount.toLocaleString()}円）` : ""}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-muted">例：「帯同研修キャディ」を「キャディ」にまとめて、帯同手当を付ける。発行済みの給料明細・請求書は変わりません。</span>
+                {allowanceId ? (
+                  <span className="text-xs font-semibold text-amber-800">
+                    スタッフの単価で「{from}」を手当の分だけ高くしていた人は、まとめた後に「{to}」の単価を確かめてください（二重に払わないように）。
+                  </span>
+                ) : null}
+              </label>
             ) : null}
             {error ? <p className="text-xs text-red-600">{error}</p> : null}
             <button
