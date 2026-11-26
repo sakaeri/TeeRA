@@ -147,8 +147,10 @@ export default async function CompanyDashboardPage({ searchParams }: PageProps<"
           pointsCost: p.pointsCost,
           stock: p.stock,
           description: p.description,
+          visibility: p.visibility === "PUBLIC" ? ("PUBLIC" as const) : ("OWN_STAFF" as const),
         }))}
         promoOrders={redemptions.map((r) => ({
+          external: r.external,
           id: r.id,
           itemName: r.promoItem.name,
           itemImageUrl: r.promoItem.imageUrl,

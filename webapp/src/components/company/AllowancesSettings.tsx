@@ -112,7 +112,7 @@ export function AllowancesSettings({ allowances }: { allowances: AllowanceRow[] 
       {active.length === 0 ? <p className="py-6 text-center text-sm text-muted">手当はまだありません。</p> : null}
       <ul className="flex flex-col gap-2">
         {active.map((a) => (
-          <li key={a.id} className="flex items-center justify-between gap-2 rounded-lg border border-border p-3 text-sm" data-testid="allowance-row">
+          <li key={a.id} className="flex items-center justify-between gap-2 rounded-lg border border-border bg-white p-3 text-sm" data-testid="allowance-row">
             <span className="min-w-0">
               <span className="block font-semibold">{a.name}</span>
               <span className="block text-xs text-muted">{allowanceSummary(a)}</span>
