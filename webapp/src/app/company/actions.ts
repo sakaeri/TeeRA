@@ -884,7 +884,7 @@ export async function getWorkReportDetailAction(shiftId: string) {
     detail.approvalStatus === "PENDING" && ownShift
       ? (await listClients(membership.companyId)).map((c) => ({ id: c.id, name: c.clientCompany?.name ?? c.proxyName ?? "(名称未設定)" }))
       : [];
-  return { ...detail, workplaceOptions, workplaceLocked: detail.fromOrder || !ownShift };
+  return { ...detail, workplaceOptions, workplaceLocked: detail.fromOrder || !ownShift, ownShift };
 }
 
 // 会社からスタッフへのお知らせ。本部はどの宛先にも出せる。チームのマネージャーは

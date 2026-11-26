@@ -1,5 +1,6 @@
 "use client";
 
+import { BulkCompanyEntryModal, PastWorkModal } from "@/components/company/CompanyReportEntry";
 import { StatNumber } from "@/components/company/StatNumber";
 import { NoteAttachmentList, NoteAttachmentPicker } from "@/components/NoteAttachments";
 import type { NoteAttachmentInput, NoteAttachmentView } from "@/lib/noteAttachments";
@@ -229,6 +230,9 @@ export function StaffDetailPanel({
   const [tab, setTab] = useState<"history" | "contracts" | "rates" | "note">(initialTab ?? "history");
   const [data, setData] = useState<StaffMonthDetail | null>(null);
   const [reportDetailShiftId, setReportDetailShiftId] = useState<string | null>(null);
+  // 会社が代わりに入力：未提出の勤務をまとめて／シフトが無い過去の勤務を追加
+  const [bulkEntryOpen, setBulkEntryOpen] = useState(false);
+  const [pastWorkOpen, setPastWorkOpen] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState("");
@@ -775,6 +779,44 @@ export function StaffDetailPanel({
                   </button>
                 </div>
 
+                {/* スタッフが出していない勤務・シフトが無い過去の勤務を、会社が代わりに入力する（入力と同時に承認済み） */}
+                <div className="mb-2 flex flex-wrap justify-end gap-2 text-xs">
+                  {data.days.some((d) => !d.approvalStatus && !d.outcome && d.date <= todayJst()) ? (
+                    <button
+                      type="button"
+                      onClick={() => setBulkEntryOpen(true)}
+                      className="rounded-md border border-primary/40 px-2.5 py-1 font-semibold text-primary"
+                      data-testid="open-bulk-entry"
+                    >
+                      未提出の勤務をまとめて入力
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setPastWorkOpen(true)}
+                    className="rounded-md border border-primary/40 px-2.5 py-1 font-semibold text-primary"
+                    data-testid="open-past-work"
+                  >
+                    ＋過去の勤務を追加
+                  </button>
+                </div>
+                {bulkEntryOpen ? (
+                  <BulkCompanyEntryModal
+                    days={data.days
+                      .filter((d) => !d.approvalStatus && !d.outcome && d.date <= todayJst())
+                      .map((d) => ({
+                        shiftId: d.shiftId,
+                        date: d.date,
+                        startTime: d.startTime,
+                        endTime: d.endTime,
+                        workplaceLabel: d.workplaceLabel,
+                        taskName: d.taskName,
+                      }))}
+                    onClose={() => setBulkEntryOpen(false)}
+                    onDone={() => void refresh()}
+                  />
+                ) : null}
+                {pastWorkOpen ? <PastWorkModal staffUserId={userId} onClose={() => setPastWorkOpen(false)} onDone={() => void refresh()} /> : null}
                 <ul className="flex flex-col gap-1">
                   {data.days.map((d) => (
                     <li key={d.shiftId} className="border-b border-border/50">

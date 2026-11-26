@@ -11,6 +11,7 @@ import {
 } from "@/app/company/workreports/actions";
 import { WorkReportCorrectionForm } from "@/components/company/WorkReportCorrectionForm";
 import { CancellationFeeModal } from "@/components/company/CancellationFeeModal";
+import { CompanyReportEntryForm } from "@/components/company/CompanyReportEntry";
 
 type WorkReportDetail = Awaited<ReturnType<typeof getWorkReportDetailAction>>;
 
@@ -53,6 +54,8 @@ export function WorkReportDetailModal({
   const [detail, setDetail] = useState<WorkReportDetail | null>(null);
   const [error, setError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  // スタッフが出していない勤務を、会社が代わりに入力している時
+  const [entering, setEntering] = useState(false);
   // 勤務先キャンセルのキャンセル料を確認・変えるポップアップ
   const [feeOpen, setFeeOpen] = useState(false);
   // 承認の取り消し：確認（その報告が入っている発行済みの書類）→ 取り消し
@@ -226,6 +229,31 @@ export function WorkReportDetailModal({
 
             {!detail.submitted ? (
               <p className="text-xs text-muted">スタッフがまだ業務報告を提出していません。</p>
+            ) : null}
+            {/* 出していない勤務は、会社が代わりに入力できる（入力と同時に承認済み） */}
+            {detail.canCompanyEnter && detail.ownShift ? (
+              entering ? (
+                <CompanyReportEntryForm
+                  shiftId={shiftId}
+                  staffIsProxy={detail.staffIsProxy}
+                  onDone={(message) => {
+                    setEntering(false);
+                    setDoneMessage(message);
+                    setReloadKey((k) => k + 1);
+                    onChanged?.();
+                    router.refresh();
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEntering(true)}
+                  className="w-full rounded-lg border border-primary px-4 py-2.5 text-sm font-semibold text-primary"
+                  data-testid="company-enter-report"
+                >
+                  会社が代わりに入力する
+                </button>
+              )
             ) : null}
 
             {detail.comment ? (

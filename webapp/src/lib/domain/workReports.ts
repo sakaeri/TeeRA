@@ -806,13 +806,21 @@ export async function getWorkReportDetail(shiftId: string) {
   const revoker = r?.approvalRevokedByUserId
     ? await prisma.user.findUnique({ where: { id: r.approvalRevokedByUserId }, select: { name: true } })
     : null;
+  const enterer = r?.enteredByCompanyUserId
+    ? await prisma.user.findUnique({ where: { id: r.enteredByCompanyUserId }, select: { name: true } })
+    : null;
   const submitted = Boolean(r && (r.submittedAt || r.approvalStatus !== "PENDING"));
 
   // sortAt：起きた順に並べ直すための時刻（修正のあとに出し直した時など、提出が後に来るように）
   const timeline: { label: string; at: string | null; by: string | null; note?: string; sortAt?: number }[] = [];
   if (r && submitted) {
     if (r.submittedAt) {
-      timeline.push({ label: "提出", at: formatJstDateTime(r.submittedAt), by: shift.staff.name, sortAt: r.submittedAt.getTime() });
+      // スタッフが出していない分を会社が代わりに入力したものは「会社が入力」
+      timeline.push(
+        r.enteredByCompanyUserId
+          ? { label: "会社が入力", at: formatJstDateTime(r.submittedAt), by: enterer?.name ?? null, sortAt: r.submittedAt.getTime() }
+          : { label: "提出", at: formatJstDateTime(r.submittedAt), by: shift.staff.name, sortAt: r.submittedAt.getTime() },
+      );
     }
     if (r.approvalRevokedAt) {
       timeline.push({
@@ -880,6 +888,9 @@ export async function getWorkReportDetail(shiftId: string) {
         : (shift.companyRelationship?.clientCompany?.name ?? shift.companyRelationship?.proxyName ?? "依頼主"),
     taskName: r?.taskName ?? shift.taskName,
     submitted,
+    // まだ出していない、勤務した日を過ぎた（今日を含む）勤務は、会社が代わりに入力できる
+    canCompanyEnter: !submitted && shift.date.toISOString().slice(0, 10) <= todayJst(),
+    staffIsProxy: shift.staff.isProxy,
     outcome: submitted ? r!.outcome : null,
     approvalStatus: submitted ? r!.approvalStatus : null,
     clockIn: r?.clockIn ? formatJstClock(r.clockIn) : null,

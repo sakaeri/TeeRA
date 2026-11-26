@@ -1071,6 +1071,8 @@ model WorkReport {
   // 承認を取り消した（承認前に戻した）記録。直して承認し直しても残す
   approvalRevokedAt       DateTime?
   approvalRevokedByUserId String?
+  // スタッフが出していない業務報告を、会社が代わりに入力した時の入力者（入力と同時に承認済みにする）
+  enteredByCompanyUserId String?
   // 差し戻し（REJECTED）の理由。企業が「差し戻す」時に必須で入力させる。
   rejectionReason      String?
   // 差し戻し時に企業が打刻・休憩時間を手修正した場合の記録（誰が・いつ）。
