@@ -146,13 +146,18 @@ export async function getCompanyEntryOptionsAction(shiftId: string) {
 export async function getPastWorkOptionsAction(staffUserId: string) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManageAny(membership, await getStaffTeamIds(staffUserId))) throw new Error("forbidden");
-  const [clients, map] = await Promise.all([
+  const [clients, map, placements] = await Promise.all([
     listClients(membership.companyId),
     listTaskNamesByWorkplace([membership.companyId], staffUserId),
+    prisma.staffPlacement.findMany({ where: { staffUserId, active: true }, select: { companyRelationshipId: true } }),
   ]);
+  // 配属されている勤務先を上に並べ、最初はその先頭を選んでおく
+  const placedIds = new Set(placements.map((p) => p.companyRelationshipId));
+  const named = clients.map((c) => ({ id: c.id, name: c.clientCompany?.name ?? c.proxyName ?? "(名称未設定)", placed: placedIds.has(c.id) }));
   const workplaces = [
-    { id: "", name: "社内" },
-    ...clients.map((c) => ({ id: c.id, name: c.clientCompany?.name ?? c.proxyName ?? "(名称未設定)" })),
+    ...named.filter((w) => w.placed),
+    { id: "", name: "社内", placed: false },
+    ...named.filter((w) => !w.placed),
   ];
   return {
     workplaces,
