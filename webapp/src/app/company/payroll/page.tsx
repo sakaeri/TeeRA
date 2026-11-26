@@ -14,7 +14,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PdfLink } from "@/components/PdfLink";
 import { IssueHistory } from "@/components/company/IssueHistory";
-import { approvedStaffInvoiceStaffIds, hasContractorStaff, listReceivedStaffInvoices, staffInvoiceOpenCost, sanitizeExpenses } from "@/lib/domain/staffInvoices";
+import { approvedStaffInvoiceStaffIds, checkStaffInvoiceRates, hasContractorStaff, listReceivedStaffInvoices, staffInvoiceOpenCost, sanitizeExpenses } from "@/lib/domain/staffInvoices";
 import type { ComputedWorkLine } from "@/lib/domain/payroll";
 import { ReceivedStaffInvoiceList, ReceivedStaffInvoiceView, type ReceivedInvoiceDetail } from "@/components/company/ReceivedStaffInvoices";
 
@@ -201,6 +201,8 @@ export default async function PayrollPage({
   const openedInvoice = staffInvoiceId ? receivedInvoices.find((i) => i.id === staffInvoiceId && i.chargeSettledAt) : undefined;
   const openedWorkLines = openedInvoice ? (openedInvoice.workLines as ComputedWorkLine[]) : [];
   const openedWorkplaces = await resolveWorkplaceNamesByShiftId(openedWorkLines.map((l) => l.shiftId));
+  // 確認待ちの請求書は、今の単価と合っているかを確かめる（単価を直した時は差し戻して出し直してもらう）
+  const rateCheck = openedInvoice && openedInvoice.status === "SUBMITTED" ? await checkStaffInvoiceRates(openedInvoice) : null;
   const invoiceDetail: ReceivedInvoiceDetail | null = openedInvoice
     ? {
         id: openedInvoice.id,
@@ -232,6 +234,9 @@ export default async function PayrollPage({
         expensesTotal: openedInvoice.expensesTotal,
         total: openedInvoice.total,
         returnReason: openedInvoice.returnReason,
+        staffUserId: openedInvoice.staffUserId,
+        rateChanged: rateCheck?.changed ?? [],
+        rateUnresolved: rateCheck?.unresolved ?? [],
       }
     : null;
 

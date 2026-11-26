@@ -5,7 +5,7 @@ import { noteAttachmentView, type NoteAttachmentInput } from "@/lib/noteAttachme
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { reportDisplay } from "@/lib/workReportDisplay";
-import { resolveRateVersion, excludeBaselineVersion } from "@/lib/domain/contracts";
+import { resolveRateVersion } from "@/lib/domain/contracts";
 import { computeInvoiceTotals } from "@/lib/domain/invoicing";
 import { describeCancelRule, type CancelRule } from "@/lib/domain/cancellation";
 import { todayJstParts } from "@/lib/date";
@@ -581,9 +581,11 @@ export async function getClientMonthDetail(params: {
             : `${WAGE_TYPE_LABEL[current.wageType]}${current.amount}円${current.holidayAmount != null ? `／土日祝${current.holidayAmount}円` : ""}`
           : "単価未設定",
         unpriced: !current,
+        currentWageType: current?.wageType ?? null,
         // 業務内容ごとの例外（falseなら依頼主共通の規定に従う）
         cancelRule: r.cancelRuleOverride ? serializeCancelRule(r) : null,
-        versions: excludeBaselineVersion(r.versions).map((v) => ({
+        // 最初に登録した単価も含めて全部出す
+        versions: r.versions.map((v) => ({
           id: v.id,
           label:
             v.wageType && v.amount != null

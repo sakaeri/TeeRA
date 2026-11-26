@@ -850,3 +850,23 @@ export async function deleteStaffTaskRate(id: string) {
   if (priced > 0 && (await isStaffTaskRateUsed(id))) throw new Error("rate_in_use");
   return prisma.staffTaskRate.delete({ where: { id } });
 }
+
+// スタッフの単価の履歴を1件消す（間違えて入れた単価など）。消すとその期間は、ほかの履歴（無ければ基本給）で計算し直される。
+// 最後の1件は消せない（単価ごと消す「削除する」を使う。使用済みの単価を黙って基本給に戻さないため）
+export async function deleteStaffTaskRateVersion(staffTaskRateId: string, versionId: string) {
+  const versions = await prisma.staffTaskRateVersion.findMany({ where: { staffTaskRateId } });
+  if (!versions.some((v) => v.id === versionId)) throw new Error("not_found");
+  const remaining = versions.filter((v) => v.id !== versionId);
+  if (!remaining.some((v) => v.wageType !== null && v.amount !== null)) throw new Error("last_version");
+  await prisma.staffTaskRateVersion.delete({ where: { id: versionId } });
+}
+
+// スタッフの単価の履歴の開始日を直す（同じ日に始まる履歴が他にある時は直せない）
+export async function moveStaffTaskRateVersion(staffTaskRateId: string, versionId: string, effectiveFrom: Date) {
+  const versions = await prisma.staffTaskRateVersion.findMany({ where: { staffTaskRateId } });
+  if (!versions.some((v) => v.id === versionId)) throw new Error("not_found");
+  if (versions.some((v) => v.id !== versionId && v.effectiveFrom.getTime() === effectiveFrom.getTime())) {
+    throw new Error("same_date");
+  }
+  await prisma.staffTaskRateVersion.update({ where: { id: versionId }, data: { effectiveFrom } });
+}

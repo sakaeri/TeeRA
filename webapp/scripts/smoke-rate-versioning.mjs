@@ -106,17 +106,16 @@ try {
   const versionCount = psql(`select count(*) from "CompanyPlacementRateVersion" where "placementRateId"='${placementRateId}';`);
   log("two versions now exist (old one preserved, not overwritten)", versionCount === "2");
 
-  // 履歴には作成時点の初期値(1000円)は出さず、実際に改定した分(1500円)だけ
-  // を表示する（作成時点の1件が常に「履歴」に混ざって「変わってたの？」と
-  // 誤解させないための仕様 — 他セッションの変更）。
+  // 履歴には最初に登録した単価(1000円)も出す（隠すと、いつから・どの種類で
+  // 計算されているかが分からず、間違えて入れた単価に気づけないため）。
   // 履歴は「単価を変更」の中に出る
   await panel.getByRole("button", { name: "単価を変更" }).click();
   const amendModal = admin.locator("div.fixed.inset-0.z-40").last();
   await amendModal.getByTestId("rate-history").waitFor();
   let panelText = await amendModal.getByTestId("rate-history").textContent();
   log(
-    "history tab shows only the real amendment (1500円), not the creation baseline (1000円)",
-    panelText.includes("時給1500円") && !panelText.includes("時給1000円"),
+    "history shows both the first rate (1000円) and the amendment (1500円)",
+    panelText.includes("時給1500円") && panelText.includes("時給1000円"),
   );
   await amendModal.getByRole("button", { name: "閉じる" }).click();
   await panel.click("text=閉じる");

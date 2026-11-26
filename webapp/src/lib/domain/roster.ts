@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { reportDisplay, isReportSubmitted } from "@/lib/workReportDisplay";
 import { createInvite } from "@/lib/domain/invites";
 import { todayJst, todayJstParts } from "@/lib/date";
-import { resolveRateVersion, resolveContractWageVersion, excludeBaselineVersion, isRateEndedAt } from "@/lib/domain/contracts";
+import { resolveRateVersion, resolveContractWageVersion, excludeBaselineVersion, isRateEndedAt, firstPricedEffectiveFrom } from "@/lib/domain/contracts";
 import { suggestClientTaskName } from "@/lib/domain/taskNameMerge";
 import { getTotals } from "@/lib/domain/payroll";
 import { getPaidLeaveInfo } from "@/lib/domain/paidLeave";
@@ -325,6 +325,37 @@ export async function getStaffMonthDetail(params: {
       clientTaskNamesByRel.set(p.companyRelationshipId, [...(clientTaskNamesByRel.get(p.companyRelationshipId) ?? []), p.taskName]);
     }
   }
+  // 単価の開始日より前にある承認済みの勤務（その分は単価が使われず基本給で計算されている）。
+  // 「単価を変更」で知らせて、開始日を最初の勤務日に直せるようにする
+  const workedForRates =
+    taskRates.length > 0
+      ? await prisma.workReport.findMany({
+          where: {
+            staffUserId: params.userId,
+            outcome: "WORKED",
+            approvalStatus: "APPROVED",
+            shift: { companyId: params.companyId },
+          },
+          select: { taskName: true, shift: { select: { taskName: true, companyRelationshipId: true, date: true } } },
+        })
+      : [];
+  function workedBeforeStart(rate: (typeof taskRates)[number]) {
+    const first = firstPricedEffectiveFrom(rate.versions);
+    if (!first) return { count: 0, earliest: null as string | null };
+    const hasExact = (relId: string | null) =>
+      taskRates.some((t) => t.taskName === rate.taskName && t.companyRelationshipId === relId);
+    const dates = workedForRates
+      .filter((w) => (w.taskName ?? w.shift.taskName) === rate.taskName)
+      .filter((w) =>
+        rate.companyRelationshipId
+          ? w.shift.companyRelationshipId === rate.companyRelationshipId
+          : !hasExact(w.shift.companyRelationshipId),
+      )
+      .map((w) => w.shift.date)
+      .filter((d) => d < first)
+      .sort((a, b) => a.getTime() - b.getTime());
+    return { count: dates.length, earliest: dates[0]?.toISOString().slice(0, 10) ?? null };
+  }
   // effectiveFromはJST日付を"YYYY-MM-DDT00:00:00.000Z"として保存している
   // ため、比較対象の「今日」もJST日付の終わり(23:59:59.999Z)にしないと、
   // サーバーのUTC時刻がまだ前日のうちは「今日」から始まる単価が未来日
@@ -514,7 +545,14 @@ export async function getStaffMonthDetail(params: {
             : "単価未設定",
         // 今日時点で終了している、または終了日を先に入れてある（＝もう終了の操作は要らない）
         ended: r.versions.length > 0 && r.versions[0].wageType === null,
-        versions: excludeBaselineVersion(r.versions).map((v) => ({
+        // 今の単価の種類（「単価を変更」を開いた時に最初から選んでおく）
+        currentWageType: current?.wageType ?? null,
+        // 単価の開始日より前の勤務（基本給で計算されている分）
+        workedBeforeStart: workedBeforeStart(r),
+        // 取引先の業務内容（名前がずれている時に、そろえる先を選べるように）
+        clientTaskNames: r.companyRelationshipId ? (clientTaskNamesByRel.get(r.companyRelationshipId) ?? []) : [],
+        // 最初に登録した単価も含めて全部出す（隠すと、いつから・どの種類で計算されているか分からなくなる）
+        versions: r.versions.map((v) => ({
           id: v.id,
           label:
             v.wageType && v.amount != null
