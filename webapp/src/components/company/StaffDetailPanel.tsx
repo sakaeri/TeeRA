@@ -70,6 +70,20 @@ type ClientOption = { id: string; name: string };
 
 // 業務内容を追加の画面で、勤務先をまだ選んでいない状態
 const UNSELECTED_WORKPLACE = "__unselected__";
+// スタッフの単価を勤務先（依頼主）ごとにまとめる。依頼主は名前順、「勤務先問わず」は一番下
+function groupRatesByWorkplace<T extends { companyRelationshipId: string | null; workplaceLabel: string; taskName: string }>(rates: T[]) {
+  const groups = new Map<string, { key: string; label: string; rates: T[] }>();
+  for (const r of rates) {
+    const key = r.companyRelationshipId ?? "";
+    const g = groups.get(key) ?? { key: key || "any", label: r.workplaceLabel, rates: [] };
+    g.rates.push(r);
+    groups.set(key, g);
+  }
+  return [...groups.entries()]
+    .sort(([a, ga], [b, gb]) => (a === "" ? 1 : b === "" ? -1 : ga.label.localeCompare(gb.label, "ja")))
+    .map(([, g]) => g);
+}
+
 // 業務内容の選択肢の「＋ 新しい業務内容」
 const NEW_TASK_SENTINEL = "__new_task__";
 
@@ -2012,41 +2026,49 @@ function StaffTaskRatesTab({
             ) : null}
           </li>
         ) : null}
-        {rates.filter((r) => !r.unpriced).map((r) => (
-          // 依頼主・業務内容・今の単価だけを出す。履歴・終了・削除は「単価を変更」の中
-          <li key={r.id} className="rounded-lg border border-border p-3 text-sm" data-testid="staff-rate-card">
-            <p className="font-medium">{r.workplaceLabel}</p>
-            <p className="text-xs text-muted">{r.taskName}</p>
-            {r.alignTo ? (
-              // 取引先の業務内容と名前がずれていると、この単価は使われない（シフトは取引先の名前で入るため）
-              <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900" data-testid="staff-rate-align">
-                <span>{r.workplaceLabel}の業務内容にない名前です</span>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() =>
-                    startTransition(async () => {
-                      await alignStaffRateNameAction(r.id, r.alignTo!);
-                      await onChanged();
-                    })
-                  }
-                  className="rounded-md border border-amber-700/40 bg-white px-2 py-0.5 font-semibold disabled:opacity-60"
-                >
-                  →「{r.alignTo}」にそろえる
-                </button>
-              </div>
-            ) : null}
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="font-semibold">{r.currentLabel}</span>
-              <button
-                type="button"
-                onClick={() => startAmend(r)}
-                className="shrink-0 rounded-md border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/5"
-              >
-                単価を変更
-              </button>
+        {/* 依頼主ごとにまとめ、その下に業務内容を1行ずつ（業務内容・今の単価・単価を変更）。履歴・終了・削除は「単価を変更」の中 */}
+        {groupRatesByWorkplace(rates.filter((r) => !r.unpriced)).map((g) => (
+          <li key={g.key} className="list-none rounded-lg border border-border p-3 text-sm" data-testid="staff-rate-group">
+            <p className="mb-1 font-medium">{g.label}</p>
+            <div className="flex flex-col divide-y divide-border/60">
+              {g.rates.map((r) => (
+                <div key={r.id} className="py-2" data-testid="staff-rate-card">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs text-muted">{r.taskName}</span>
+                      <span className="font-semibold">{r.currentLabel}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => startAmend(r)}
+                      className="shrink-0 rounded-md border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/5"
+                    >
+                      単価を変更
+                    </button>
+                  </div>
+                  {r.alignTo ? (
+                    // 取引先の業務内容と名前がずれていると、この単価は使われない（シフトは取引先の名前で入るため）
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900" data-testid="staff-rate-align">
+                      <span>{r.workplaceLabel}の業務内容にない名前です</span>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() =>
+                          startTransition(async () => {
+                            await alignStaffRateNameAction(r.id, r.alignTo!);
+                            await onChanged();
+                          })
+                        }
+                        className="rounded-md border border-amber-700/40 bg-white px-2 py-0.5 font-semibold disabled:opacity-60"
+                      >
+                        →「{r.alignTo}」にそろえる
+                      </button>
+                    </div>
+                  ) : null}
+                  {deleteError?.id === r.id ? <p className="mt-1 text-xs text-red-600">{deleteError.message}</p> : null}
+                </div>
+              ))}
             </div>
-            {deleteError?.id === r.id ? <p className="mt-1 text-xs text-red-600">{deleteError.message}</p> : null}
           </li>
         ))}
         {/* 単価が一度も入っていない行（以前シフトから自動で作られた名前だけの行）はたたんでおき、片付けられるようにする */}
@@ -2058,8 +2080,8 @@ function StaffTaskRatesTab({
             {unpricedOpen ? (
               <div className="mt-1.5 flex flex-col gap-1">
                 <p className="text-muted">計算には使われていません（基本給で計算しています）。消しても金額は変わりません。</p>
-                {rates
-                  .filter((r) => r.unpriced)
+                {groupRatesByWorkplace(rates.filter((r) => r.unpriced))
+                  .flatMap((g) => g.rates)
                   .map((r) => (
                     <div key={r.id} className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-1.5">
                       <span className="min-w-0 truncate">
