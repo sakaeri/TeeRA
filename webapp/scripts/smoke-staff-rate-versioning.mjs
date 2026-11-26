@@ -176,7 +176,8 @@ try {
   await admin.locator("div.fixed.inset-0.z-40").last().getByRole("button", { name: "削除する" }).click();
   await admin.waitForTimeout(200);
   await admin.locator("div.fixed.inset-0").last().getByRole("button", { name: "削除する" }).click();
-  await admin.waitForTimeout(400);
+  // 削除の結果（エラーの文）が出るまで待つ（決まった時間だけ待つと、遅い時に読み落とす）
+  await panel2.getByText("使用されているため削除できません").waitFor({ timeout: 10000 }).catch(() => {});
   const panelTextAfterDeleteAttempt = await panel2.textContent();
   log(
     "使用済みの単価は削除できず、エラーメッセージが表示される",
@@ -188,7 +189,7 @@ try {
   // a never-used task rate CAN be deleted outright.
   await addStaffRateViaForm(admin, panel2, psql, { companyId, task: "未使用業務", wageType: "HOURLY", amount: 1200 });
   const unusedRateId = psql(`select id from "StaffTaskRate" where "taskName"='未使用業務' and "staffUserId"='${staffUserId}';`);
-  await panel2.locator("li", { hasText: "未使用業務" }).getByRole("button", { name: "単価を変更" }).click();
+  await panel2.getByTestId("staff-rate-card").filter({ hasText: "未使用業務" }).getByRole("button", { name: "単価を変更" }).click();
   await admin.locator("div.fixed.inset-0.z-40").last().getByRole("button", { name: "削除する" }).click();
   await admin.waitForTimeout(200);
   await admin.locator("div.fixed.inset-0").last().getByRole("button", { name: "削除する" }).click();
