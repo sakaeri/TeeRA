@@ -98,24 +98,23 @@ try {
   await past.getByTestId("past-work-workplace").waitFor();
   const firstOption = await past.getByTestId("past-work-workplace").locator("option").first().innerText();
   log("勤務先は配属されているものが一番上に並び、最初から選ばれている", firstOption === "配属ゴルフ場" && (await past.getByTestId("past-work-workplace").inputValue()) === placedRel);
-  await past.locator('input[type="date"]').fill(today);
+  // 日付はカレンダーで複数選べる（今日と、同じ月なら昨日）
+  const yesterday = new Date(Date.now() + 9 * 3600e3 - 24 * 3600e3).toISOString().slice(0, 10);
+  const picks = yesterday.slice(0, 7) === today.slice(0, 7) ? [yesterday, today] : [today];
+  for (const d of picks) await past.getByTestId("past-dates-picker").locator(`button[data-date="${d}"]`).click();
   await past.locator('input[type="time"]').first().fill("19:00");
   await past.locator('input[type="time"]').nth(1).fill("21:30");
-  await past.getByRole("button", { name: "追加して承認済みにする" }).click();
-  await past.getByTestId("past-work-message").waitFor({ timeout: 15000 });
+  await past.getByRole("button", { name: /追加して承認済みにする/ }).click();
+  await past.getByTestId("past-work-message").waitFor({ timeout: 20000 });
   log(
-    "過去の勤務を追加すると、シフトと承認済みの業務報告ができる（150分）",
-    psql(`select count(*) from "Shift" s join "WorkReport" w on w."shiftId"=s.id where s."staffUserId"='${staffId}' and s."startTime"='19:00' and w."approvalStatus"='APPROVED' and w."computedMinutes"=150;`) === "1",
+    `過去の勤務を追加すると、選んだ日（${picks.length}日）ぶんシフトと承認済みの業務報告ができる（150分）`,
+    psql(`select count(*) from "Shift" s join "WorkReport" w on w."shiftId"=s.id where s."staffUserId"='${staffId}' and s."startTime"='19:00' and w."approvalStatus"='APPROVED' and w."computedMinutes"=150;`) === String(picks.length),
   );
 
-  // --- これからの勤務は入力できない ---
+  // --- これからの日は選べない ---
   const tomorrow = new Date(Date.now() + 33 * 3600e3).toISOString().slice(0, 10);
-  await past.locator('input[type="date"]').fill(tomorrow);
-  await past.locator('input[type="time"]').first().fill("09:00");
-  await past.locator('input[type="time"]').nth(1).fill("10:00");
-  await past.getByRole("button", { name: "追加して承認済みにする" }).click();
-  await page.waitForTimeout(1500);
-  log("これからの日は追加できない（シフトも作られない）", psql(`select count(*) from "Shift" where "staffUserId"='${staffId}' and date='${tomorrow}';`) === "0");
+  const tomorrowButton = past.getByTestId("past-dates-picker").locator(`button[data-date="${tomorrow}"]`);
+  log("これからの日はカレンダーで選べない", (await tomorrowButton.count()) === 0 || (await tomorrowButton.isDisabled()));
 
   console.log(process.exitCode ? "COMPANY REPORT ENTRY SMOKE TEST HAD FAILURES" : "COMPANY REPORT ENTRY SMOKE TEST PASSED");
 } catch (e) {

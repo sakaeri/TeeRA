@@ -9,6 +9,7 @@ import {
   getPastWorkOptionsAction,
 } from "@/app/company/workreports/companyEntryActions";
 import { todayJst } from "@/lib/date";
+import { leadingBlankCount, orderedWeekdays, useMondayFirst } from "@/components/week/WeekStart";
 
 const inputClass = "w-full rounded-lg border border-border bg-white px-2 py-2 text-sm text-foreground";
 const NEW_TASK = "__new__";
@@ -38,6 +39,55 @@ function TaskPicker({ value, options, onChange }: { value: string; options: stri
       ))}
       <option value={NEW_TASK}>＋ 新しい業務内容</option>
     </select>
+  );
+}
+
+// 過去の日（今日まで）をタップで何日でも選べる月のカレンダー。これからの日は選べない
+function PastDatesPicker({ selected, onToggle }: { selected: string[]; onToggle: (d: string) => void }) {
+  const today = todayJst();
+  const [ym, setYm] = useState(today.slice(0, 7));
+  const mondayFirst = useMondayFirst();
+  const [y, m] = ym.split("-").map(Number);
+  const blanks = leadingBlankCount(y, m, mondayFirst);
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const move = (delta: number) => {
+    const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+    setYm(d.toISOString().slice(0, 7));
+  };
+  const set = new Set(selected);
+  return (
+    <div className="rounded-lg border border-border p-2" data-testid="past-dates-picker">
+      <div className="mb-1 flex items-center justify-between text-sm">
+        <button type="button" onClick={() => move(-1)} aria-label="前の月" className="px-2 text-muted">‹</button>
+        <span className="font-semibold">{y}年{m}月</span>
+        <button type="button" onClick={() => move(1)} aria-label="次の月" disabled={ym >= today.slice(0, 7)} className="px-2 text-muted disabled:opacity-30">›</button>
+      </div>
+      <div className="mb-1 grid grid-cols-7 text-center text-[11px] text-muted">
+        {orderedWeekdays(mondayFirst).map(({ label }) => (
+          <span key={label}>{label}</span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {Array.from({ length: blanks }, (_, i) => <span key={`b${i}`} />)}
+        {Array.from({ length: days }, (_, i) => {
+          const d = `${ym}-${String(i + 1).padStart(2, "0")}`;
+          const future = d > today;
+          return (
+            <button
+              key={d}
+              type="button"
+              disabled={future}
+              onClick={() => onToggle(d)}
+              data-date={d}
+              data-selected={set.has(d) ? "true" : undefined}
+              className={`rounded-lg py-1.5 text-xs ${future ? "cursor-not-allowed text-muted/40" : set.has(d) ? "bg-primary font-semibold text-primary-foreground" : "hover:bg-background"}`}
+            >
+              {i + 1}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -225,7 +275,7 @@ export function BulkCompanyEntryModal({ days, onClose, onDone }: { days: Unsubmi
 // スタッフ詳細：シフトが無い過去の勤務を追加する（シフトと承認済みの業務報告を一度に作る）
 export function PastWorkModal({ staffUserId, onClose, onDone }: { staffUserId: string; onClose: () => void; onDone: () => void }) {
   const [opts, setOpts] = useState<Awaited<ReturnType<typeof getPastWorkOptionsAction>> | null>(null);
-  const [date, setDate] = useState("");
+  const [dates, setDates] = useState<string[]>([]);
   const [workplace, setWorkplace] = useState("");
   const [taskName, setTaskName] = useState("");
   const [clockIn, setClockIn] = useState("");
@@ -255,24 +305,33 @@ export function PastWorkModal({ staffUserId, onClose, onDone }: { staffUserId: s
   }, [staffUserId]);
 
   const taskOptions = opts?.taskNamesByWorkplace[workplace] ?? [];
+  const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+  // 選んだ日ごとに、同じ勤務先・業務内容・時刻で追加する
   function submit() {
     setMessage(null);
+    const targets = [...dates].sort();
     startTransition(async () => {
-      const r = await addPastWorkByCompanyAction({
-        staffUserId,
-        date,
-        companyRelationshipId: workplace || null,
-        taskName: taskName || null,
-        clockIn,
-        clockOut,
-        breakMinutes: Number(breakMinutes) || 0,
-      });
-      if (r.status === "error") {
-        setMessage({ ok: false, text: r.reason });
-        return;
+      const failed: string[] = [];
+      let pendingClient = 0;
+      for (const date of targets) {
+        const r = await addPastWorkByCompanyAction({
+          staffUserId,
+          date,
+          companyRelationshipId: workplace || null,
+          taskName: taskName || null,
+          clockIn,
+          clockOut,
+          breakMinutes: Number(breakMinutes) || 0,
+        });
+        if (r.status === "error") failed.push(`${md(date)}（${r.reason}）`);
+        else if (!r.approved) pendingClient += 1;
       }
-      setMessage({ ok: true, text: `${date.slice(5).replace("-", "/")}の勤務を追加しました。${r.approved ? "" : "（依頼主の承認待ち）"}続けて追加できます。` });
-      setDate("");
+      const ok = targets.length - failed.length;
+      setMessage({
+        ok: failed.length === 0,
+        text: `${ok}日分を追加しました。${pendingClient > 0 ? `（うち${pendingClient}日は依頼主の承認待ち）` : ""}${failed.length > 0 ? `追加できなかった日：${failed.join("、")}` : ""}`,
+      });
+      setDates([]);
       onDone();
     });
   }
@@ -284,15 +343,15 @@ export function PastWorkModal({ staffUserId, onClose, onDone }: { staffUserId: s
           <h3 className="font-serif-jp text-lg font-bold text-primary">過去の勤務を追加</h3>
           <button type="button" onClick={onClose} aria-label="閉じる" className="text-muted hover:text-primary">✕</button>
         </div>
-        <p className="mb-3 text-xs text-muted">シフトが無い日の勤務を追加します。追加するとそのまま承認済みになり、給料明細・請求書に入ります。</p>
+        <p className="mb-3 text-xs text-muted">シフトが無い日の勤務を追加します。選んだ日すべてに同じ勤務先・時刻で入り、そのまま承認済みになります（日によって時刻が違う時は、追加した後にその日だけ直してください）。</p>
         {!opts ? (
           <p className="py-4 text-center text-sm text-muted">読み込み中…</p>
         ) : (
           <div className="flex flex-col gap-2.5">
-            <label className="flex flex-col gap-0.5 text-xs">
-              <span className="text-muted">日付</span>
-              <input type="date" value={date} max={todayJst()} onChange={(e) => setDate(e.target.value)} className={inputClass} />
-            </label>
+            <div className="flex flex-col gap-0.5 text-xs">
+              <span className="text-muted">日付（複数選べます）</span>
+              <PastDatesPicker selected={dates} onToggle={(d) => setDates((ds) => (ds.includes(d) ? ds.filter((x) => x !== d) : [...ds, d]))} />
+            </div>
             <label className="flex flex-col gap-0.5 text-xs">
               <span className="text-muted">勤務先</span>
               <select
@@ -346,8 +405,8 @@ export function PastWorkModal({ staffUserId, onClose, onDone }: { staffUserId: s
               </label>
             </div>
             {message ? <p className={`text-xs ${message.ok ? "text-emerald-700" : "text-red-600"}`} data-testid="past-work-message">{message.text}</p> : null}
-            <button type="button" disabled={pending || !date || !clockIn || !clockOut} onClick={submit} className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">
-              {pending ? "追加中…" : "追加して承認済みにする"}
+            <button type="button" disabled={pending || dates.length === 0 || !clockIn || !clockOut} onClick={submit} className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">
+              {pending ? "追加中…" : dates.length > 1 ? `${dates.length}日分を追加して承認済みにする` : "追加して承認済みにする"}
             </button>
           </div>
         )}
