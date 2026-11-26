@@ -48,6 +48,14 @@ try {
       `with ins as (insert into "Shift" (id, "companyId", "staffUserId", source, date, "startTime", "endTime", "createdVia", "updatedAt") values (gen_random_uuid()::text, '${companyId}', '${staffId}', 'INHOUSE', '${today}', '${start}', '${end}', 'ASSIGN', now()) returning id) select id from ins;`,
     );
   const shiftA = newShift("09:00", "17:00");
+  // 勤務先：配属されている「配属ゴルフ場」と、配属されていない「ほかのゴルフ場」
+  const newRel = (name) =>
+    psql(
+      `with ins as (insert into "CompanyRelationship" (id, "ownerCompanyId", "agencyCompanyId", "proxyName", status, "createdAt") values (gen_random_uuid()::text, '${companyId}', '${companyId}', '${name}', 'ACTIVE', now()) returning id) select id from ins;`,
+    );
+  newRel("あいうえおゴルフ場");
+  const placedRel = newRel("配属ゴルフ場");
+  psql(`insert into "StaffPlacement" (id, "staffUserId", "companyRelationshipId", active, "createdAt") values (gen_random_uuid()::text, '${staffId}', '${placedRel}', true, now());`);
 
   // --- 業務報告の詳細から代わりに入力 ---
   await page.goto("http://localhost:3000/company/roster");
@@ -87,6 +95,9 @@ try {
   await panel2.getByTestId("open-past-work").click();
   const past = page.getByTestId("past-work-modal");
   await past.waitFor();
+  await past.getByTestId("past-work-workplace").waitFor();
+  const firstOption = await past.getByTestId("past-work-workplace").locator("option").first().innerText();
+  log("勤務先は配属されているものが一番上に並び、最初から選ばれている", firstOption === "配属ゴルフ場" && (await past.getByTestId("past-work-workplace").inputValue()) === placedRel);
   await past.locator('input[type="date"]').fill(today);
   await past.locator('input[type="time"]').first().fill("19:00");
   await past.locator('input[type="time"]').nth(1).fill("21:30");

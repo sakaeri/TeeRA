@@ -238,7 +238,15 @@ export function PastWorkModal({ staffUserId, onClose, onDone }: { staffUserId: s
     let cancelled = false;
     getPastWorkOptionsAction(staffUserId)
       .then((o) => {
-        if (!cancelled) setOpts(o);
+        if (cancelled) return;
+        setOpts(o);
+        // 最初は配属されている勤務先（一番上）を選んでおく
+        const first = o.workplaces[0];
+        if (first) {
+          setWorkplace(first.id);
+          const names = o.taskNamesByWorkplace[first.id] ?? [];
+          setTaskName(names.length === 1 ? names[0] : "");
+        }
       })
       .catch(() => {});
     return () => {
@@ -289,6 +297,7 @@ export function PastWorkModal({ staffUserId, onClose, onDone }: { staffUserId: s
               <span className="text-muted">勤務先</span>
               <select
                 value={workplace}
+                data-testid="past-work-workplace"
                 onChange={(e) => {
                   setWorkplace(e.target.value);
                   const names = opts.taskNamesByWorkplace[e.target.value] ?? [];
@@ -296,11 +305,26 @@ export function PastWorkModal({ staffUserId, onClose, onDone }: { staffUserId: s
                 }}
                 className={inputClass}
               >
-                {opts.workplaces.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
-                ))}
+                {opts.workplaces.some((w) => w.placed) ? (
+                  <optgroup label="配属先">
+                    {opts.workplaces
+                      .filter((w) => w.placed)
+                      .map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                ) : null}
+                <optgroup label={opts.workplaces.some((w) => w.placed) ? "そのほか" : "勤務先"}>
+                  {opts.workplaces
+                    .filter((w) => !w.placed)
+                    .map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                      </option>
+                    ))}
+                </optgroup>
               </select>
             </label>
             <label className="flex flex-col gap-0.5 text-xs">
