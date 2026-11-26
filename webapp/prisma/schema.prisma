@@ -1680,6 +1680,8 @@ model PromoItem {
   pointsCost  Int
   stock       Int
   description String?
+  // 掲載先：OWN_STAFF＝自社のスタッフだけ／PUBLIC＝フリー掲載（TeeRAのスタッフなら誰でも交換できる）
+  visibility  String   @default("OWN_STAFF")
   createdAt   DateTime @default(now())
 
   company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)

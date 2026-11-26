@@ -13,6 +13,8 @@ type Item = {
   pointsCost: number;
   stock: number;
   description: string | null;
+  // ほかの会社がフリー掲載にしている販促品の、出している会社の名前（所属先の分はnull）
+  companyName?: string | null;
 };
 type Order = { id: string; itemName: string; itemImageUrl: string; pointsSpent: number; status: string; createdAt: string };
 type Tier = {
@@ -42,6 +44,7 @@ export function StaffPointsView({
   balance,
   tier,
   items,
+  publicItems = [],
   orders,
   pendingOrders,
   savedAddress,
@@ -52,6 +55,8 @@ export function StaffPointsView({
   balance: number;
   tier: Tier;
   items: Item[];
+  // ほかの会社のフリー掲載の販促品
+  publicItems?: Item[];
   orders: Order[];
   pendingOrders: Record<string, string>;
   savedAddress: string;
@@ -73,6 +78,9 @@ export function StaffPointsView({
   const [postalCode, setPostalCode] = useState(savedPostalCode);
 
   function redeem(id: string) {
+    // ほかの会社の販促品は、その会社に送り先が伝わることを確かめてから交換する
+    const item = [...items, ...publicItems].find((i) => i.id === id);
+    if (item?.companyName && !confirm(`${item.companyName}に、発送のための送り先（名前・住所・電話番号）が伝わります。交換しますか？`)) return;
     startTransition(async () => {
       const result = await redeemPromoItemAction(id, address, phone, recipientName, postalCode);
       if (result.error) {
@@ -86,7 +94,9 @@ export function StaffPointsView({
               ? "ポイントが不足しています。"
               : result.error === "redeem_conflict"
                 ? "混み合っています。もう一度お試しください。"
-                : "在庫がありません。",
+                : result.error === "not_available"
+                  ? "この販促品は交換できません。"
+                  : "在庫がありません。",
         }));
         return;
       }
@@ -95,6 +105,49 @@ export function StaffPointsView({
       router.refresh();
       setDetailItem(null);
     });
+  }
+
+  function renderGrid(list: Item[], emptyText: string) {
+    return (
+        <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+          {list.map((i) => {
+            const pendingSince = pendingOrders[i.id];
+            const outOfStock = i.stock <= 0;
+            return (
+              <li key={i.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // 前回この商品の交換に失敗した時のエラー文言が、状況が
+                    // 変わった後（在庫が戻った等）に再度開いた時まで残って
+                    // しまわないよう、開くたびにクリアする。
+                    setErrors((prev) => ({ ...prev, [i.id]: "" }));
+                    setDetailItem(i);
+                  }}
+                  className="block w-full rounded-xl border border-border bg-white/60 p-2 text-left text-sm hover:border-primary"
+                >
+                  <div className="relative mb-2 aspect-square w-full overflow-hidden rounded-lg bg-background">
+                    {i.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={i.imageUrl} alt="" className="h-full w-full object-cover" />
+                    ) : null}
+                    <span className="absolute left-1.5 top-1.5 rounded-md bg-primary/85 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-primary-foreground">
+                      {i.pointsCost}pt
+                    </span>
+                  </div>
+                  <div className="truncate font-medium">{i.name}</div>
+                  {pendingSince || outOfStock ? (
+                    <p className="text-xs text-muted">
+                      {pendingSince ? `${formatMD(pendingSince)}注文済み` : "在庫切れ"}
+                    </p>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+          {list.length === 0 && emptyText ? <p className="col-span-full text-center text-muted">{emptyText}</p> : null}
+        </ul>
+    );
   }
 
   const tierThreshold = tier.tierThreshold;
@@ -191,44 +244,19 @@ export function StaffPointsView({
       </div>
 
       {tab === "list" ? (
-        <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-          {items.map((i) => {
-            const pendingSince = pendingOrders[i.id];
-            const outOfStock = i.stock <= 0;
-            return (
-              <li key={i.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    // 前回この商品の交換に失敗した時のエラー文言が、状況が
-                    // 変わった後（在庫が戻った等）に再度開いた時まで残って
-                    // しまわないよう、開くたびにクリアする。
-                    setErrors((prev) => ({ ...prev, [i.id]: "" }));
-                    setDetailItem(i);
-                  }}
-                  className="block w-full rounded-xl border border-border bg-white/60 p-2 text-left text-sm hover:border-primary"
-                >
-                  <div className="relative mb-2 aspect-square w-full overflow-hidden rounded-lg bg-background">
-                    {i.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={i.imageUrl} alt="" className="h-full w-full object-cover" />
-                    ) : null}
-                    <span className="absolute left-1.5 top-1.5 rounded-md bg-primary/85 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-primary-foreground">
-                      {i.pointsCost}pt
-                    </span>
-                  </div>
-                  <div className="truncate font-medium">{i.name}</div>
-                  {pendingSince || outOfStock ? (
-                    <p className="text-xs text-muted">
-                      {pendingSince ? `${formatMD(pendingSince)}注文済み` : "在庫切れ"}
-                    </p>
-                  ) : null}
-                </button>
-              </li>
-            );
-          })}
-          {items.length === 0 ? <p className="col-span-full text-center text-muted">商品がありません。</p> : null}
-        </ul>
+        <div className="flex flex-col gap-5">
+          <div>
+            {publicItems.length > 0 ? <h3 className="mb-2 text-sm font-semibold text-primary">所属先の販促品</h3> : null}
+            {renderGrid(items, "商品がありません。")}
+          </div>
+          {publicItems.length > 0 ? (
+            <div data-testid="public-promo-items">
+              <h3 className="mb-0.5 text-sm font-semibold text-primary">みんなの販促品</h3>
+              <p className="mb-2 text-xs text-muted">TeeRAの会社がフリー掲載している販促品です。ポイントはどの会社で貯めた分でも使えます。</p>
+              {renderGrid(publicItems, "")}
+            </div>
+          ) : null}
+        </div>
       ) : (
         <ul className="flex flex-col gap-2">
           {orders.map((o) => (
@@ -320,6 +348,7 @@ function ItemDetailModal({
             ✕
           </button>
         </div>
+        {item.companyName ? <p className="-mt-2 mb-3 text-xs text-muted">提供：{item.companyName}（発送もこの会社がします）</p> : null}
         {images.length > 0 ? (
           <div className="relative mb-3">
             <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-background">

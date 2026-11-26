@@ -6,6 +6,26 @@ export async function listPromoItems(companyId: string) {
   return prisma.promoItem.findMany({ where: { companyId }, orderBy: { createdAt: "asc" } });
 }
 
+// 販促品の掲載先。OWN_STAFF＝自社のスタッフだけが見られる／PUBLIC＝フリー掲載（TeeRAのスタッフなら誰でも交換できる）
+export type PromoVisibility = "OWN_STAFF" | "PUBLIC";
+export function normalizeVisibility(v: unknown): PromoVisibility {
+  return v === "PUBLIC" ? "PUBLIC" : "OWN_STAFF";
+}
+
+// スタッフのポイント画面に出す販促品：今の所属先の分（自社スタッフのみ・フリー掲載とも）と、
+// ほかの会社がフリー掲載にしている分（出している会社の名前つき）
+export async function listPromoItemsForStaff(activeCompanyId: string) {
+  const [own, others] = await Promise.all([
+    prisma.promoItem.findMany({ where: { companyId: activeCompanyId }, orderBy: { createdAt: "asc" } }),
+    prisma.promoItem.findMany({
+      where: { visibility: "PUBLIC", companyId: { not: activeCompanyId } },
+      include: { company: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+  return { own, others };
+}
+
 export async function createPromoItem(params: {
   companyId: string;
   imageUrls: string[];
@@ -13,9 +33,10 @@ export async function createPromoItem(params: {
   pointsCost: number;
   stock: number;
   description?: string;
+  visibility?: PromoVisibility;
 }) {
-  const { imageUrls, ...rest } = params;
-  return prisma.promoItem.create({ data: { ...rest, ...promoImageColumns(imageUrls) } });
+  const { imageUrls, visibility, ...rest } = params;
+  return prisma.promoItem.create({ data: { ...rest, visibility: normalizeVisibility(visibility), ...promoImageColumns(imageUrls) } });
 }
 
 export async function updatePromoItem(
@@ -26,12 +47,17 @@ export async function updatePromoItem(
     pointsCost: number;
     stock: number;
     description: string;
+    visibility: PromoVisibility;
   }>,
 ) {
-  const { imageUrls, ...rest } = changes;
+  const { imageUrls, visibility, ...rest } = changes;
   return prisma.promoItem.update({
     where: { id },
-    data: { ...rest, ...(imageUrls ? promoImageColumns(imageUrls) : {}) },
+    data: {
+      ...rest,
+      ...(visibility ? { visibility: normalizeVisibility(visibility) } : {}),
+      ...(imageUrls ? promoImageColumns(imageUrls) : {}),
+    },
   });
 }
 
@@ -113,6 +139,14 @@ async function redeemPromoItemTx(params: {
   return prisma.$transaction(
     async (tx) => {
       const item = await tx.promoItem.findUniqueOrThrow({ where: { id: params.promoItemId } });
+      // 自社スタッフのみの販促品は、その会社に所属しているスタッフだけが交換できる
+      if (item.visibility !== "PUBLIC") {
+        const member = await tx.companyMembership.findFirst({
+          where: { userId: params.staffUserId, companyId: item.companyId },
+          select: { id: true },
+        });
+        if (!member) throw new Error("not_available");
+      }
       if (item.stock <= 0) throw new Error("out_of_stock");
 
       const latest = await tx.staffPointsLedgerEntry.findFirst({
@@ -181,11 +215,13 @@ export async function markRedemptionShipped(redemptionId: string) {
 }
 
 export async function listRedemptionsForCompany(companyId: string) {
-  return prisma.promoRedemption.findMany({
+  const rows = await prisma.promoRedemption.findMany({
     where: { promoItem: { companyId } },
-    include: { promoItem: true, staff: true },
+    include: { promoItem: true, staff: { include: { companyMemberships: { where: { companyId }, select: { id: true } } } } },
     orderBy: { createdAt: "desc" },
   });
+  // 自社のスタッフでない人（フリー掲載の販促品を交換した、ほかの会社のスタッフ）
+  return rows.map((r) => ({ ...r, external: r.staff.companyMemberships.length === 0 }));
 }
 
 export async function listRedemptionsForStaff(staffUserId: string) {

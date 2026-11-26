@@ -12,6 +12,7 @@ export async function createPromoItemAction(input: {
   pointsCost: number;
   stock: number;
   description?: string;
+  visibility?: "OWN_STAFF" | "PUBLIC";
 }) {
   const { membership } = await requireCompanyAdminOrEditor();
   if (!canManage(membership)) throw new Error("forbidden");
@@ -28,6 +29,7 @@ export async function updatePromoItemAction(
     pointsCost: number;
     stock: number;
     description: string;
+    visibility: "OWN_STAFF" | "PUBLIC";
   }>,
 ) {
   const { membership } = await requireCompanyAdminOrEditor();

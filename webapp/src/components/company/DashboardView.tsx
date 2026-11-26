@@ -162,9 +162,13 @@ type PromoItem = {
   pointsCost: number;
   stock: number;
   description: string | null;
+  // 掲載先：自社スタッフのみ／フリー掲載
+  visibility?: "OWN_STAFF" | "PUBLIC";
 };
 type PromoOrder = {
   id: string;
+  // 自社のスタッフでない人の注文（フリー掲載の販促品）
+  external?: boolean;
   itemName: string;
   itemImageUrl: string;
   staffName: string;
@@ -814,6 +818,7 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
   const [pointsCost, setPointsCost] = useState(editingItem ? String(editingItem.pointsCost) : "");
   const [stock, setStock] = useState(editingItem ? String(editingItem.stock) : "");
   const [description, setDescription] = useState(editingItem?.description ?? "");
+  const [visibility, setVisibility] = useState<"OWN_STAFF" | "PUBLIC">(editingItem?.visibility ?? "OWN_STAFF");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const infoRef = useClickOutside<HTMLDivElement>(showInfo, () => setShowInfo(false));
@@ -845,7 +850,7 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
           </div>
           {showInfo ? (
             <div className="absolute inset-x-0 top-full z-10 mx-auto mt-1.5 w-64 max-w-[calc(100vw-4rem)] rounded-lg border border-border bg-white p-3 text-xs font-normal normal-case leading-relaxed text-muted shadow-md">
-              TeeRAで稼働するスタッフに販促品を提供し、自社をPRできる機能です。スタッフは業務報告のたびにポイントが貯まり、そのポイントでこの販促品と交換できます。ポイントは会社をまたいで共通のため、他社スタッフからの注文が入ることもあります。商品の価値に見合った交換ポイント数を設定してください。
+              TeeRAで稼働するスタッフに販促品を提供し、自社をPRできる機能です。スタッフは業務報告のたびにポイントが貯まり、そのポイントでこの販促品と交換できます。「フリー掲載」にすると、自社のスタッフ以外（TeeRAで働くほかの会社のスタッフ）も交換できます。商品の価値に見合った交換ポイント数を設定してください。
             </div>
           ) : null}
         </div>
@@ -909,6 +914,35 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
           </label>
         </div>
 
+        <div className="mt-4 flex flex-col gap-1 text-xs" data-testid="promo-visibility">
+          <span>掲載先</span>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                ["OWN_STAFF", "自社スタッフのみ", "自社に所属しているスタッフだけが見られます"],
+                ["PUBLIC", "フリー掲載", "TeeRAで働くほかの会社のスタッフも交換できます"],
+              ] as const
+            ).map(([value, label, note]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={visibility === value}
+                onClick={() => setVisibility(value)}
+                className={`rounded-lg border px-3 py-2 text-left ${
+                  visibility === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-white"
+                }`}
+              >
+                <span className="block text-sm font-semibold">{label}</span>
+                <span className={`block text-[11px] ${visibility === value ? "text-primary-foreground/80" : "text-muted"}`}>{note}</span>
+              </button>
+            ))}
+          </div>
+          {visibility === "PUBLIC" ? (
+            <span className="text-muted">ほかの会社のスタッフが交換した時は、発送に必要な名前・住所・電話番号が届きます。</span>
+          ) : null}
+        </div>
+
         <button
           type="button"
           disabled={pending || !canSubmit}
@@ -920,6 +954,7 @@ function PromoItemModal({ editingItem, onClose }: { editingItem?: PromoItem; onC
                 pointsCost: Number(pointsCost),
                 stock: Number(stock),
                 description: description || undefined,
+                visibility,
               };
               if (editingItem) {
                 await updatePromoItemAction(editingItem.id, payload);
@@ -1867,6 +1902,14 @@ function TodoSection({
                   </span>
                 </div>
                 <p className="text-sm font-medium">{p.name}</p>
+                <span
+                  className={`self-start rounded-full px-2 py-0.5 text-[11px] ${
+                    p.visibility === "PUBLIC" ? "bg-accent/15 text-accent" : "bg-background text-muted"
+                  }`}
+                  data-testid="promo-visibility-badge"
+                >
+                  {p.visibility === "PUBLIC" ? "フリー掲載" : "自社スタッフのみ"}
+                </span>
                 <button
                   type="button"
                   onClick={() => onEditPromoItem(p)}
@@ -1933,6 +1976,11 @@ function TodoSection({
                         <span className="ml-2 text-muted">
                           注文者：{o.staffName} 注文日：{o.createdAt} 発送日：{o.status === "SHIPPED" ? "済" : "未定"}
                         </span>
+                        {o.external ? (
+                          <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800" data-testid="promo-order-external">
+                            外部
+                          </span>
+                        ) : null}
                         {o.status !== "SHIPPED" ? (
                           <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">発送待ち</span>
                         ) : null}

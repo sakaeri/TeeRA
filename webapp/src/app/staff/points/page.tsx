@@ -2,7 +2,7 @@ import { promoImageUrls } from "@/lib/promoImages";
 import { requireCompanyStaffRole } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import {
-  listPromoItems,
+  listPromoItemsForStaff,
   listRedemptionsForStaff,
   getStaffPointsBalance,
   getStaffTierProgress,
@@ -12,8 +12,8 @@ import { StaffPointsView } from "@/components/staff/StaffPointsView";
 export default async function StaffPointsPage() {
   const { userId, membership } = await requireCompanyStaffRole();
 
-  const [items, redemptions, balance, tier, user] = await Promise.all([
-    listPromoItems(membership.companyId),
+  const [{ own: items, others: publicItems }, redemptions, balance, tier, user] = await Promise.all([
+    listPromoItemsForStaff(membership.companyId),
     listRedemptionsForStaff(userId),
     getStaffPointsBalance(userId),
     getStaffTierProgress(userId),
@@ -38,6 +38,16 @@ export default async function StaffPointsPage() {
           pointsCost: i.pointsCost,
           stock: i.stock,
           description: i.description,
+        }))}
+        publicItems={publicItems.map((i) => ({
+          id: i.id,
+          imageUrl: i.imageUrl,
+          imageUrls: promoImageUrls(i),
+          name: i.name,
+          pointsCost: i.pointsCost,
+          stock: i.stock,
+          description: i.description,
+          companyName: i.company.name,
         }))}
         orders={redemptions.map((r) => ({
           id: r.id,
