@@ -757,3 +757,49 @@ export async function listSalarySlipsForCompany(companyId: string, targetMonth: 
     orderBy: { createdAt: "asc" },
   });
 }
+
+// 給料明細から×で外した勤務（承認済みの勤務だけ）。明細の下に出し、「明細に戻す」で戻せるようにする
+export async function listExcludedSalaryShifts(salarySlipId: string) {
+  const slip = await prisma.salarySlip.findUniqueOrThrow({ where: { id: salarySlipId } });
+  const ids = (slip.excludedShiftIds as string[]) ?? [];
+  if (ids.length === 0) return [];
+  const reports = await prisma.workReport.findMany({
+    where: { shiftId: { in: ids }, staffUserId: slip.staffUserId, outcome: "WORKED", approvalStatus: "APPROVED" },
+    include: { shift: { select: { id: true, date: true, taskName: true } } },
+  });
+  const workplaces = await resolveWorkplaceNamesByShiftId(reports.map((r) => r.shiftId));
+  return reports
+    .map((r) => ({
+      shiftId: r.shiftId,
+      date: r.shift.date.toISOString().slice(0, 10),
+      taskName: r.taskName ?? r.shift.taskName,
+      workplace: workplaces.get(r.shiftId) ?? null,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ×で外した勤務を明細に戻す（今の単価で計算し直した行を入れる）
+export async function restoreExcludedSalaryShift(salarySlipId: string, shiftId: string) {
+  const slip = await prisma.salarySlip.findUniqueOrThrow({ where: { id: salarySlipId } });
+  if (slip.status !== "DRAFT") throw new Error("not_draft");
+  const excluded = ((slip.excludedShiftIds as string[]) ?? []).filter((id) => id !== shiftId);
+  const report = await prisma.workReport.findFirst({ where: { shiftId }, include: { shift: { select: { date: true } } } });
+  await prisma.$transaction(async (tx) => {
+    await tx.salarySlip.update({ where: { id: slip.id }, data: { excludedShiftIds: excluded } });
+    if (!report) return;
+    const day = report.shift.date;
+    const { lines } = await computeApprovedWorkLines({
+      companyId: slip.companyId,
+      staffUserId: slip.staffUserId,
+      targetMonth: slip.targetMonth,
+      range: { start: day, end: new Date(day.getTime() + 24 * 3600e3) },
+    });
+    const line = lines.find((l) => l.shiftId === shiftId);
+    const exists = await tx.salarySlipLine.count({ where: { salarySlipId: slip.id, shiftId, kind: "SHIFT" } });
+    if (line && exists === 0) {
+      await tx.salarySlipLine.create({
+        data: { salarySlipId: slip.id, shiftId, kind: "SHIFT", description: line.description, hours: line.hours, rate: line.rate, amount: line.amount },
+      });
+    }
+  });
+}
