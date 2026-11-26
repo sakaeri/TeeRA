@@ -148,11 +148,16 @@ try {
   log("最初は勤務先を選ぶところから（業務内容の欄はまだ出ない）", (await newModal.getByTestId("new-rate-task").count()) === 0);
   await newModal.getByTestId("new-rate-workplace").selectOption(relAId);
   await newModal.getByTestId("new-rate-task").waitFor();
-  const aOptions = (await newModal.getByTestId("new-rate-task").locator("option").allInnerTexts()).filter((t) => t !== "業務内容を選択");
+  const aOptions = (await newModal.getByTestId("new-rate-task").locator("option").allInnerTexts()).filter((t) => t !== "業務内容を選択" && t !== "＋ 新しい業務内容");
   log(`A社を選ぶと、A社に登録されていて まだ単価の無い業務内容だけ出る（${aOptions.join("/")}）`, aOptions.join("/") === "A社だけの業務");
   await newModal.getByTestId("new-rate-workplace").selectOption(relBId);
   await newModal.getByTestId("new-rate-no-tasks").waitFor();
-  log("登録済みの業務内容に全部単価がある勤務先では、その旨が出て追加できない", (await newModal.getByTestId("new-rate-no-tasks").innerText()).includes("すべて単価を登録済み") && (await newModal.getByRole("button", { name: "追加", exact: true }).isDisabled()));
+  log(
+    "選べる業務内容が無い勤務先では、新しい業務内容を入れる欄が出る（入れるまで追加できない）",
+    (await newModal.getByTestId("new-rate-task-input").count()) === 1 &&
+      (await newModal.getByTestId("new-rate-no-tasks").innerText()).includes("この勤務先の業務内容にも追加されます") &&
+      (await newModal.getByRole("button", { name: "追加", exact: true }).isDisabled()),
+  );
   await newModal.getByRole("button", { name: "閉じる" }).click();
 
   const rateCount = psql(`select count(*) from "StaffTaskRate" where "staffUserId"='${staffUserId}';`);
@@ -225,6 +230,22 @@ try {
   await staff.waitForTimeout(800);
   const unreadAfterDismiss = psql(`select count(*) from "StaffNotice" where "staffUserId"='${staffUserId}' and "readAt" is null;`);
   log("お知らせを開くと既読になり未読件数が減る（DB上もreadAtが記録される）", unreadAfterDismiss === "2");
+
+  // スタッフの単価で新しい業務内容（研修）を入れると、その勤務先の業務内容にも登録される
+  await admin.goto("http://localhost:3000/company/roster");
+  await admin.locator("tbody tr", { hasText: "古山" }).click();
+  const panel3 = admin.locator("div.fixed.inset-0.z-30").last();
+  await panel3.getByRole("button", { name: "業務内容単価", exact: true }).click();
+  await panel3.getByRole("button", { name: "＋業務内容を追加" }).click();
+  const modal3 = admin.locator("div.fixed.inset-0.z-40").last();
+  await modal3.getByTestId("new-rate-workplace").selectOption(relAId);
+  await modal3.getByTestId("new-rate-task").selectOption({ label: "＋ 新しい業務内容" });
+  await modal3.getByTestId("new-rate-task-input").fill("研修");
+  await modal3.locator('input[placeholder="金額"]').fill("1000");
+  await modal3.getByRole("button", { name: "追加", exact: true }).click();
+  await admin.waitForTimeout(1200);
+  log("新しい業務内容（研修）の単価が入る", psql(`select count(*) from "StaffTaskRate" where "staffUserId"='${staffUserId}' and "taskName"='研修' and "companyRelationshipId"='${relAId}';`) === "1");
+  log("その勤務先（A社）の業務内容にも「研修」が登録される", psql(`select count(*) from "CompanyPlacementRate" where "companyRelationshipId"='${relAId}' and "taskName"='研修';`) === "1");
 
   console.log(process.exitCode ? "STAFF WORKPLACE RATE / NOTICES SMOKE TEST HAD FAILURES" : "STAFF WORKPLACE RATE / NOTICES SMOKE TEST PASSED");
 } catch (err) {
