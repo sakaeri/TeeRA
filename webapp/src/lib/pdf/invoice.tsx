@@ -133,6 +133,8 @@ export type InvoicePdfData = {
   periodLabel: string;
   // 締め日が末日でない依頼主の対象期間（例："10/21〜11/20"）。末日締めならnull
   periodRangeLabel?: string | null;
+  // 対象期間の初日（YYYY-MM-DD。実績表で「前の月以前の分」を見分ける）
+  periodStart?: string | null;
   dueDate: string | null;
   note: string | null;
   issuedAt: string;

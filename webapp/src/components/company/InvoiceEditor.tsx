@@ -24,6 +24,7 @@ import {
   includeEarlierShiftsAction,
   markEarlierShiftsBilledAction,
   unmarkShiftBilledAction,
+  restoreExcludedShiftAction,
 } from "@/app/company/invoices/actions";
 
 type Line = {
@@ -61,6 +62,70 @@ function sameBank(a: BankFields, b: BankFields) {
     a.accountType === b.accountType &&
     a.accountNumber === b.accountNumber &&
     a.accountHolderName === b.accountHolderName
+  );
+}
+
+type MissingShift = {
+  shiftId: string;
+  date: string;
+  staffName: string;
+  taskName: string | null;
+  reason: "excluded" | "billed_manually" | "other_invoice" | "no_charge" | "cancelled_no_fee";
+  otherPeriodLabel?: string | null;
+};
+
+const MISSING_REASON_LABEL: Record<MissingShift["reason"], string> = {
+  excluded: "明細から外した",
+  billed_manually: "請求済みにした",
+  other_invoice: "ほかの請求書に入っている",
+  no_charge: "請求なしの業務内容",
+  cancelled_no_fee: "キャンセル扱い（キャンセル料0円）",
+};
+
+// この期間に承認済みなのに明細に入っていない勤務。理由を出し、外した・請求済みにした分はここから戻せる
+function MissingShiftsSection({ invoiceId, items }: { invoiceId: string; items: MissingShift[] }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  return (
+    <section className="rounded-2xl border border-border bg-white/60 p-4 text-sm" data-testid="missing-shifts">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="text-left text-xs font-semibold text-foreground/80 underline">
+        {open ? "▲ 閉じる" : `▼ この期間に承認済みで、明細に入っていない勤務（${items.length}件）`}
+      </button>
+      {open ? (
+        <ul className="mt-2 flex flex-col divide-y divide-border/60 text-xs">
+          {items.map((m) => (
+            <li key={m.shiftId} className="flex flex-wrap items-center justify-between gap-2 py-1.5" data-testid="missing-shift-row">
+              <span className="min-w-0">
+                {m.date.slice(5).replace("-", "/")}　{m.staffName}
+                {m.taskName ? `（${m.taskName}）` : ""}
+                <span className="ml-2 text-muted">
+                  {m.reason === "other_invoice" && m.otherPeriodLabel
+                    ? `${Number(m.otherPeriodLabel.slice(5, 7))}月の請求書に入っている`
+                    : MISSING_REASON_LABEL[m.reason]}
+                </span>
+              </span>
+              {m.reason === "excluded" || m.reason === "billed_manually" ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      if (m.reason === "excluded") await restoreExcludedShiftAction(invoiceId, m.shiftId);
+                      else await unmarkShiftBilledAction(invoiceId, m.shiftId);
+                      router.refresh();
+                    })
+                  }
+                  className="shrink-0 rounded-md border border-primary/40 px-2 py-0.5 font-semibold text-primary disabled:opacity-60"
+                >
+                  明細に戻す
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   );
 }
 
@@ -110,6 +175,8 @@ export function InvoiceEditor({
     unbilledEarlier?: { shiftId: string; date: string; staffName: string; label: string }[];
     // 「請求済み」にした前の月以前の分（未請求に戻せる）
     manuallyBilledEarlier?: { shiftId: string; date: string; staffName: string; label: string }[];
+    // この期間に承認済みなのに明細に入っていない勤務と理由
+    missingShifts?: MissingShift[];
   };
   clientName: string;
   // 請求書の宛名（直していればその名前。無ければ clientName と同じ）
@@ -226,6 +293,10 @@ export function InvoiceEditor({
           items={invoice.unbilledEarlier ?? []}
           manuallyBilled={invoice.manuallyBilledEarlier ?? []}
         />
+      ) : null}
+
+      {invoice.status === "DRAFT" && (invoice.missingShifts?.length ?? 0) > 0 ? (
+        <MissingShiftsSection invoiceId={invoice.id} items={invoice.missingShifts!} />
       ) : null}
 
       {invoice.unresolved.length > 0 ? (

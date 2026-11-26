@@ -2,7 +2,7 @@ import { verifySession, getActiveMembership } from "@/lib/auth/session";
 import { isMonthHiddenByFreePlan, freePlanHiddenResponse } from "@/lib/domain/plans";
 import { isCompanyScopeAdmin } from "@/lib/auth/permissions";
 import { listClients } from "@/lib/domain/relationships";
-import { listInvoicesForCompany } from "@/lib/domain/invoicing";
+import { invoicePeriod, listInvoicesForCompany } from "@/lib/domain/invoicing";
 import { prisma } from "@/lib/prisma";
 import { type InvoicePdfData } from "@/lib/pdf/invoice";
 import { invoiceLineLayoutFromSnapshot } from "@/lib/invoiceLineGrouping";
@@ -54,6 +54,7 @@ export async function GET(request: Request) {
       clientName: (snap.clientName as string | undefined) ?? clientName,
       periodLabel: snap.periodLabel as string,
       periodRangeLabel: (snap.periodRangeLabel as string | null | undefined) ?? null,
+      periodStart: (await invoicePeriod(invoice.companyRelationshipId, invoice.periodLabel)).start.toISOString().slice(0, 10),
       dueDate: (snap.dueDate as string | undefined)?.slice(0, 10) ?? null,
       note: snap.note as string | null,
       issuedAt: (snap.issuedAt as string).slice(0, 10),

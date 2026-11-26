@@ -34,6 +34,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
 
   const clientName = invoiceRecipientName(invoice.companyRelationship);
 
+  const period = await invoicePeriod(invoice.companyRelationshipId, invoice.periodLabel);
   let data: InvoicePdfData;
   let workRecord: InvoiceWorkRecord | null = null;
   if (issueId) {
@@ -51,6 +52,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
       clientName: (snap.clientName as string | undefined) ?? clientName,
       periodLabel: snap.periodLabel as string,
       periodRangeLabel: (snap.periodRangeLabel as string | null | undefined) ?? null,
+      periodStart: period.start.toISOString().slice(0, 10),
       dueDate: (snap.dueDate as string | undefined)?.slice(0, 10) ?? null,
       note: snap.note as string | null,
       issuedAt: (snap.issuedAt as string).slice(0, 10),
@@ -82,7 +84,8 @@ export async function GET(request: Request, { params }: RouteContext<"/api/invoi
       issuingCompanyPhoneNumber: invoice.issuingCompany.phoneNumber,
       clientName,
       periodLabel: invoice.periodLabel,
-      periodRangeLabel: (await invoicePeriod(invoice.companyRelationshipId, invoice.periodLabel)).rangeLabel,
+      periodRangeLabel: period.rangeLabel,
+      periodStart: period.start.toISOString().slice(0, 10),
       dueDate: invoice.dueDate?.toISOString().slice(0, 10) ?? null,
       note: invoice.note,
       issuedAt: todayJst(),

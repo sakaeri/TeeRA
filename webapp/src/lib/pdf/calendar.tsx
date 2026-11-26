@@ -69,6 +69,9 @@ export type CalendarPdfData = {
   companyName: string;
   year: number;
   month: number;
+  // 締め日が末日でない時の対象期間（例：「10/21〜11/20」）と、その初日。あれば「対象月」の代わりに出す
+  periodRangeLabel?: string | null;
+  periodStart?: string | null;
   issuedAt: string;
   filterLabel?: string | null;
   title?: string;
@@ -107,8 +110,9 @@ export function CalendarPdfDocument({ data }: { data: CalendarPdfData }) {
   }
   const dates = Array.from(byDate.keys()).sort();
   // 対象月より前の日付が入っているか（請求書に前の月の未請求分を入れた時）
+  // 締め日が末日でない時は対象期間の初日で見る（20日締めの10/21〜10/31は「前の月」ではない）
   const monthPrefix = `${data.year}-${String(data.month).padStart(2, "0")}`;
-  const hasEarlierMonths = dates.some((d) => d.slice(0, 7) < monthPrefix);
+  const hasEarlierMonths = data.periodStart ? dates.some((d) => d < data.periodStart!) : dates.some((d) => d.slice(0, 7) < monthPrefix);
 
   return (
     <Document>
@@ -124,7 +128,7 @@ export function CalendarPdfDocument({ data }: { data: CalendarPdfData }) {
         ) : null}
         <Text style={styles.title}>{data.title ?? "シフト表"}</Text>
         <Text style={styles.subtitle}>
-          {data.companyName} ／ 対象月: {data.year}年{data.month}月
+          {data.companyName} ／ {data.periodRangeLabel ? `対象期間: ${data.periodRangeLabel}` : `対象月: ${data.year}年${data.month}月`}
           {hasEarlierMonths ? "（前の月以前の未請求分を含む）" : ""} ／ 発行日: {data.issuedAt}
           {data.filterLabel ? ` ／ 絞り込み: ${data.filterLabel}` : ""}
         </Text>
