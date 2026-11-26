@@ -30,6 +30,9 @@ export type ShiftRow = {
   workplaceChangedFrom?: string | null;
   // 今の勤務先（null は社内）。業務報告で勤務先を変える時の初期値
   companyRelationshipId?: string | null;
+  // 付いている手当と、スタッフが業務報告で選べる手当（帯同手当・チップなど）
+  allowances?: { allowanceId: string; name: string; amount: number }[];
+  allowanceOptions?: { id: string; name: string; amountType: "FIXED" | "VARIABLE"; staffAmount: number | null }[];
 };
 
 // 「済み」＝欠勤/キャンセルとして報告済み、または業務報告を提出して

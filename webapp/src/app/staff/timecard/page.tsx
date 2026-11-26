@@ -4,6 +4,7 @@ import { listOwnShiftsNeedingReport } from "@/lib/domain/workReports";
 import { listKnownTaskNames, listTaskNamesByWorkplace } from "@/lib/domain/contracts";
 import { StaffTimecardView } from "@/components/staff/StaffTimecardView";
 import { prisma } from "@/lib/prisma";
+import { staffAllowanceContext } from "@/lib/domain/allowances";
 
 function formatJstTime(date: Date) {
   return new Intl.DateTimeFormat("ja-JP", {
@@ -49,6 +50,8 @@ export default async function StaffTimecardPage({ searchParams }: PageProps<"/st
     // 業務内容の候補は勤務先ごとに出す
     listTaskNamesByWorkplace(companyIds, userId),
   ]);
+  // 業務報告で選べる手当と、付いている手当
+  const allowanceCtx = await staffAllowanceContext(companyIds, shifts.map((s) => s.id));
   const recentTaskNamesByCompany = new Map<string, string[]>();
   for (const r of recentReports) {
     const list = recentTaskNamesByCompany.get(r.shift.companyId) ?? [];
@@ -66,6 +69,7 @@ export default async function StaffTimecardPage({ searchParams }: PageProps<"/st
           companyId: m.companyId,
           companyName: m.companyName,
           recentTaskNames: recentTaskNamesByCompany.get(m.companyId) ?? [],
+          allowanceOptions: allowanceCtx.optionsByCompany.get(m.companyId) ?? [],
           workplaces: placements
             .filter((p) => p.companyRelationship.agencyCompanyId === m.companyId)
             .map((p) => ({
@@ -97,6 +101,8 @@ export default async function StaffTimecardPage({ searchParams }: PageProps<"/st
           rejectionReason: s.workReport?.rejectionReason ?? null,
           computedMinutes: s.workReport?.computedMinutes ?? 0,
           submittedAt: s.workReport?.submittedAt?.toISOString() ?? null,
+          allowances: allowanceCtx.byShift.get(s.id) ?? [],
+          allowanceOptions: allowanceCtx.optionsByCompany.get(s.companyId) ?? [],
         }))}
       />
     </main>

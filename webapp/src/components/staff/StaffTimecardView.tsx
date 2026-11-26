@@ -10,6 +10,7 @@ import {
   disputeCorrectedWorkReportAction,
 } from "@/app/staff/actions";
 import { isDone, type ShiftRow } from "@/lib/staffShiftStatus";
+import { AllowancePicker, missingAmounts, selectionFromAllowances, selectionToItems, type AllowanceSelection } from "@/components/AllowancePicker";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { todayJst } from "@/lib/date";
 import { UnscheduledReportButton, type UnscheduledCompanyOption } from "@/components/staff/UnscheduledReportForm";
@@ -177,6 +178,13 @@ export function ShiftCard({
     ownTaskNames.length > 0 ? "pick" : "custom",
   );
   const [error, setError] = useState<string | null>(null);
+  // 手当（帯同手当・チップなど）。会社が付けた手当で、スタッフが選べないものはここには出ない（そのまま残る）
+  const allowanceOptions = shift.allowanceOptions ?? [];
+  const [allowanceSelection, setAllowanceSelection] = useState<AllowanceSelection>(() =>
+    selectionFromAllowances((shift.allowances ?? []).filter((a) => allowanceOptions.some((o) => o.id === a.allowanceId)), allowanceOptions),
+  );
+  const allowanceMissing = missingAmounts(allowanceSelection, allowanceOptions);
+  const allowanceItems = allowanceOptions.length > 0 ? selectionToItems(allowanceSelection) : undefined;
   const [breakMinutes, setBreakMinutes] = useState(String(shift.breakMinutes ?? 0));
   // 提出済み（承認待ち）の内容を本人が直すとき
   const [editing, setEditing] = useState(false);
@@ -395,6 +403,15 @@ export function ShiftCard({
       </label>
     ) : null;
 
+  const allowanceInput =
+    allowanceOptions.length > 0 ? (
+      <div className="flex flex-col gap-1 text-xs">
+        <span className="text-muted">手当（あれば）</span>
+        <AllowancePicker options={allowanceOptions} value={allowanceSelection} onChange={setAllowanceSelection} />
+        {allowanceMissing.length > 0 ? <span className="text-amber-700">「{allowanceMissing.join("」「")}」の金額を入れてください。</span> : null}
+      </div>
+    ) : null;
+
   const commentInput = (
     <textarea
       value={comment}
@@ -562,12 +579,13 @@ export function ShiftCard({
                 </label>
                 {breakInput}
                 {taskNameInput}
+                {allowanceInput}
                 {commentInput}
                 {error ? <p className="text-xs text-red-600">{error}</p> : null}
                 {taskMissing ? <p className="text-xs text-amber-700">業務内容を選んでください。</p> : null}
                 <button
                   type="button"
-                  disabled={pending || taskMissing}
+                  disabled={pending || taskMissing || allowanceMissing.length > 0}
                   onClick={() =>
                     startTransition(async () => {
                       setError(null);
@@ -577,6 +595,7 @@ export function ShiftCard({
                           breakMinutes: Number(breakMinutes) || 0,
                           taskName: taskName.trim() || null,
                           comment: comment || null,
+                          allowances: allowanceItems,
                           // 本人が直したときだけ送る（画面を開いたままの間に別の所で直された時刻を古い値で上書きしない）
                           clockInTime: clockInEdit && clockInEdit !== shift.clockInTime ? clockInEdit : undefined,
                         });
@@ -626,12 +645,13 @@ export function ShiftCard({
               ) : null}
               {workplaceInput}
               {taskNameInput}
+              {allowanceInput}
               {commentInput}
               {error ? <p className="text-xs text-red-600">{error}</p> : null}
               {taskMissing ? <p className="text-xs text-amber-700">業務内容を選んでください。</p> : null}
               <button
                 type="button"
-                disabled={pending || !clockInEdit || !clockOutEdit || hasInvalidTimeRange || taskMissing}
+                disabled={pending || !clockInEdit || !clockOutEdit || hasInvalidTimeRange || taskMissing || allowanceMissing.length > 0}
                 onClick={() =>
                   startTransition(async () => {
                     try {
@@ -643,6 +663,7 @@ export function ShiftCard({
                         breakMinutes: Number(breakMinutes) || 0,
                         clockInTime: clockInEdit,
                         clockOutTime: clockOutEdit,
+                        allowances: allowanceItems,
                         ...(workplaceChanged ? { companyRelationshipId: workplaceId || null } : {}),
                       });
                       showToast(editing ? "業務報告を修正しました ✓" : "業務報告を提出しました ✓");

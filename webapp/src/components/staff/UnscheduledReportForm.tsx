@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { submitUnscheduledWorkReportAction } from "@/app/staff/actions";
 import { todayJst } from "@/lib/date";
 import { taskNamesForWorkplace } from "@/lib/workplaceTaskNames";
+import { AllowancePicker, missingAmounts, selectionToItems, type AllowanceOption, type AllowanceSelection } from "@/components/AllowancePicker";
 
 export type UnscheduledCompanyOption = {
   companyId: string;
@@ -12,6 +13,8 @@ export type UnscheduledCompanyOption = {
   workplaces: { companyRelationshipId: string; name: string }[];
   // 本人が最近使った業務内容（新しい順・入力候補に出す）
   recentTaskNames?: string[];
+  // スタッフが業務報告で選べる手当
+  allowanceOptions?: AllowanceOption[];
 };
 
 // シフトが作られていないまま働いた日（緊急の出勤など）の業務報告。
@@ -98,6 +101,10 @@ function UnscheduledReportModal({
   const workplaceTaskNames = relationshipId === null ? [] : knownTaskNames;
   const suggestions = [...new Set([...recent, ...workplaceTaskNames])].slice(0, 8);
 
+  const [allowanceSelection, setAllowanceSelection] = useState<AllowanceSelection>({});
+  const allowanceOptions = company.allowanceOptions ?? [];
+  const allowanceMissing = missingAmounts(allowanceSelection, allowanceOptions);
+
   function submit() {
     setError(null);
     startTransition(async () => {
@@ -110,6 +117,7 @@ function UnscheduledReportModal({
         breakMinutes: Number(breakMinutes) || 0,
         taskName: taskName.trim() || undefined,
         comment: comment.trim() || undefined,
+        allowances: selectionToItems(Object.fromEntries(Object.entries(allowanceSelection).filter(([id]) => allowanceOptions.some((o) => o.id === id)))),
       });
       if (result.status === "error") {
         setError(result.reason);
@@ -250,6 +258,14 @@ function UnscheduledReportModal({
             </label>
           </div>
 
+          {allowanceOptions.length > 0 ? (
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted">手当（あれば）</span>
+              <AllowancePicker options={allowanceOptions} value={allowanceSelection} onChange={setAllowanceSelection} />
+              {allowanceMissing.length > 0 ? <span className="text-xs text-amber-700">「{allowanceMissing.join("」「")}」の金額を入れてください。</span> : null}
+            </div>
+          ) : null}
+
           <label className="flex flex-col gap-1">
             <span className="text-xs text-muted">コメント（任意）</span>
             <textarea
@@ -265,7 +281,7 @@ function UnscheduledReportModal({
         {error ? <p className="mt-3 text-xs text-red-600">{error}</p> : null}
         <button
           type="button"
-          disabled={pending || relationshipId === null || !date || !clockIn || !clockOut}
+          disabled={pending || relationshipId === null || !date || !clockIn || !clockOut || allowanceMissing.length > 0}
           onClick={submit}
           className="mt-4 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >

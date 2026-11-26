@@ -138,7 +138,15 @@ export default async function PayrollPage({
     slipData = {
       id: slip.id,
       status: slip.status,
-      lines: slip.lines.map((l) => ({
+      // 勤務の行は日付順、手当の行はその日の勤務のすぐ下、手で足した行は最後
+      lines: [...slip.lines].sort((x, y) => {
+        const rank = (k: string) => (k === "CUSTOM" ? 1 : 0);
+        if (rank(x.kind) !== rank(y.kind)) return rank(x.kind) - rank(y.kind);
+        if (x.kind === "CUSTOM") return 0;
+        const d = x.description.slice(0, 10).localeCompare(y.description.slice(0, 10));
+        if (d !== 0) return d;
+        return (x.kind === "ALLOWANCE" ? 1 : 0) - (y.kind === "ALLOWANCE" ? 1 : 0);
+      }).map((l) => ({
         id: l.id,
         kind: l.kind,
         description: l.description,
@@ -216,8 +224,13 @@ export default async function PayrollPage({
         // 「2026-11-18 〇〇ゴルフ場（キャディ）」／業務内容だけなら「2026-11-18 キャディ」（PDFと同じ書き方）
         lines: openedWorkLines.map((l) => ({
           ...l,
-          label: `${l.description.slice(0, 10)} ${workLineLabel(l.description, openedWorkplaces.get(l.shiftId) ?? null, openedInvoice.showWorkplace)}`,
+          // 手当の行は「2026-11-18 帯同手当」のまま
+          label:
+            l.kind === "ALLOWANCE"
+              ? l.description
+              : `${l.description.slice(0, 10)} ${workLineLabel(l.description, openedWorkplaces.get(l.shiftId) ?? null, openedInvoice.showWorkplace)}`,
           isDaily: l.description.endsWith("（日給）"),
+          isAllowance: l.kind === "ALLOWANCE",
         })),
         showWorkplace: openedInvoice.showWorkplace,
         expenses: sanitizeExpenses(openedInvoice.expenses),

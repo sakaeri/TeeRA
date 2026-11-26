@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { setShiftAllowances, type ShiftAllowanceInput } from "@/lib/domain/allowances";
 import { requireCompanyAdminOrEditor } from "@/lib/auth/session";
 import { canManageShifts, isCompanyScopeAdmin } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
@@ -54,6 +55,8 @@ export async function createAssignedShiftAction(input: {
   taskName?: string;
   overridesByDate?: Record<string, string[]>; // date -> conflicting shift ids to supersede, set once confirmed
   confirmedOffDates?: string[]; // dates where a pending 休み希望 has already been confirmed by the caller
+  // 手当（帯同手当など）。作ったシフト全部に付ける（自社のシフトだけ）
+  allowances?: ShiftAllowanceInput[];
 }) {
   const { userId, membership } = await requireCompanyAdminOrEditor();
   if (!canManageShifts(membership, input.teamId)) throw new Error("forbidden");
@@ -150,6 +153,12 @@ export async function createAssignedShiftAction(input: {
       return { status: "off_request" as const, offRequestDates };
     }
     return { status: "conflict" as const, conflictsByDate };
+  }
+
+  if (shiftCompanyId === membership.companyId && Array.isArray(input.allowances) && input.allowances.length > 0) {
+    for (const id of createdShiftIds) {
+      await setShiftAllowances({ shiftId: id, items: input.allowances, actorUserId: userId });
+    }
   }
 
   revalidatePath("/company/calendar");

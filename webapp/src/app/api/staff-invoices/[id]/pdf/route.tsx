@@ -30,7 +30,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/api/staf
   const workLines = invoice.workLines as ComputedWorkLine[];
   const workplaceMap = await resolveWorkplaceNamesByShiftId(workLines.map((l) => l.shiftId));
   const grouped = buildSalarySlipPdfLines(
-    workLines.map((l) => ({ ...l, kind: "SHIFT" })),
+    workLines.map((l) => ({ ...l, kind: l.kind ?? "SHIFT" })),
     workplaceMap,
     { groupShiftLines: true, showWorkplace: invoice.showWorkplace },
   );
@@ -51,6 +51,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/api/staf
           rate: l.rate,
           amount: l.amount,
           isDaily: l.description.endsWith("（日給）"),
+          unit: l.unit ?? null,
         })),
         expenses: sanitizeExpenses(invoice.expenses),
         workSubtotal: invoice.workSubtotal,

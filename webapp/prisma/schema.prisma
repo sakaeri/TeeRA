@@ -176,6 +176,7 @@ model Company {
   todoItems            TodoItem[]
   inviteTokens         InviteToken[]
   planChangeEvents     PlanChangeEvent[]
+  allowances           Allowance[]
 
   @@index([name])
 }
@@ -874,6 +875,7 @@ model Shift {
   supersedes      ConflictOverride[] @relation("NewShift")
   salarySlipLines SalarySlipLine[]
   invoiceLines    InvoiceLine[]
+  allowances      ShiftAllowance[]
 
   @@index([staffUserId, date])
   @@index([companyId, date])
@@ -1311,6 +1313,7 @@ model SalarySlip {
 enum SalarySlipLineKind {
   SHIFT
   CUSTOM
+  ALLOWANCE
 }
 
 model SalarySlipLine {
@@ -1754,4 +1757,46 @@ model TodoComment {
 
   todoItem TodoItem @relation(fields: [todoItemId], references: [id], onDelete: Cascade)
   author   User     @relation(fields: [authorUserId], references: [id])
+}
+
+// 手当（帯同手当・チップなど）。名前は会社が自由に作る。勤務（シフト）ごとに付け、
+// 給料明細・スタッフの請求書に行として入り、「請求する」にした手当は依頼主への請求書にも入る。
+model Allowance {
+  id             String    @id @default(cuid())
+  companyId      String
+  name           String
+  // FIXED＝決まった金額（staffAmount）／VARIABLE＝付ける時に毎回金額を入れる（チップなど）
+  amountType     String    @default("FIXED")
+  staffAmount    Int?
+  billToClient   Boolean   @default(false)
+  // 依頼主に請求する金額（決まった金額の手当だけ。null＝スタッフに払う金額と同じ）
+  clientAmount   Int?
+  // スタッフが業務報告で自分で付けられるか
+  staffCanReport Boolean   @default(true)
+  // しまった手当（選ぶ候補に出さない。付けた勤務の分は残る）
+  archivedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  company Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  shifts  ShiftAllowance[]
+
+  @@index([companyId])
+}
+
+// 勤務に付けた手当。金額は付けた時点のもの（あとで手当の金額を変えても、付けた分は変わらない）
+model ShiftAllowance {
+  id              String   @id @default(cuid())
+  shiftId         String
+  allowanceId     String
+  // スタッフに払う金額
+  amount          Int
+  // 依頼主に請求する金額（null＝請求しない）
+  clientAmount    Int?
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  shift     Shift     @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  allowance Allowance @relation(fields: [allowanceId], references: [id], onDelete: Cascade)
+
+  @@unique([shiftId, allowanceId])
 }

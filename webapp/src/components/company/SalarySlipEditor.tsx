@@ -130,10 +130,14 @@ export function SalarySlipEditor({
           </thead>
           <tbody>
             {slip.lines.map((l) => (
-              <tr key={l.id} className="border-b border-border/60">
-                <td className="py-1">{l.description}</td>
+              <tr key={l.id} className="border-b border-border/60" data-kind={l.kind}>
                 <td className="py-1">
-                  {isEditable ? (
+                  {l.description}
+                  {/* 手当は勤務に付けたものから入るので、ここでは直さない（業務報告の詳細で付け外しする） */}
+                  {l.kind === "ALLOWANCE" ? <span className="ml-1 rounded bg-accent/15 px-1 text-[10px] text-accent">手当</span> : null}
+                </td>
+                <td className="py-1">
+                  {isEditable && l.kind !== "ALLOWANCE" ? (
                     <input
                       type="number"
                       defaultValue={l.hours}
@@ -147,7 +151,7 @@ export function SalarySlipEditor({
                   )}
                 </td>
                 <td className="py-1">
-                  {isEditable ? (
+                  {isEditable && l.kind !== "ALLOWANCE" ? (
                     <input
                       type="number"
                       defaultValue={l.rate}
@@ -162,7 +166,7 @@ export function SalarySlipEditor({
                 </td>
                 <td className="py-1">{l.amount}円</td>
                 <td className="py-1 text-right">
-                  {isEditable ? (
+                  {isEditable && l.kind !== "ALLOWANCE" ? (
                     <button
                       type="button"
                       onClick={() => startTransition(() => deleteLineAction(l.id))}
