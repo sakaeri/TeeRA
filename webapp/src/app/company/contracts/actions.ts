@@ -15,6 +15,8 @@ import {
   deletePlacementTaskName,
   addStaffTaskRateVersion,
   deleteStaffTaskRate,
+  deleteStaffTaskRateVersion,
+  moveStaffTaskRateVersion,
   endStaffTaskRate,
   generateStaffContractFromNewTemplate,
   generateStaffContractFromNewTemplateViaUpload,
@@ -622,6 +624,71 @@ export async function moveStaffTaskRateStartAction(staffTaskRateId: string, newF
   );
   revalidatePath("/company/payroll");
   revalidatePath("/company/roster");
+}
+
+// スタッフの単価の履歴を1件ずつ直す（開始日を直す・消す）。失敗した時は理由を返す
+const RATE_VERSION_ERROR: Record<string, string> = {
+  last_version: "最後の単価は消せません（単価ごと消す時は「削除する」を使ってください）",
+  same_date: "同じ日に始まる単価が他にあります",
+  invalid_date: "日付を入れてください",
+  not_found: "見つかりませんでした",
+};
+
+async function staffRateForEdit(staffTaskRateId: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  const rate = await prisma.staffTaskRate.findFirstOrThrow({ where: { id: staffTaskRateId, companyId: membership.companyId } });
+  if (!canManageAny(membership, await getStaffTeamIds(rate.staffUserId))) throw new Error("forbidden");
+  return rate;
+}
+
+function rateVersionResult(e: unknown) {
+  if (e instanceof Error && RATE_VERSION_ERROR[e.message]) return { status: "error" as const, reason: RATE_VERSION_ERROR[e.message] };
+  throw e;
+}
+
+export async function deleteStaffTaskRateVersionAction(staffTaskRateId: string, versionId: string) {
+  const rate = await staffRateForEdit(staffTaskRateId);
+  try {
+    await deleteStaffTaskRateVersion(rate.id, String(versionId));
+  } catch (e) {
+    return rateVersionResult(e);
+  }
+  revalidatePath("/company/payroll");
+  revalidatePath("/company/roster");
+  return { status: "ok" as const };
+}
+
+export async function moveStaffTaskRateVersionAction(staffTaskRateId: string, versionId: string, newFrom: string) {
+  const rate = await staffRateForEdit(staffTaskRateId);
+  try {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newFrom)) throw new Error("invalid_date");
+    await moveStaffTaskRateVersion(rate.id, String(versionId), new Date(`${newFrom}T00:00:00.000Z`));
+  } catch (e) {
+    return rateVersionResult(e);
+  }
+  revalidatePath("/company/payroll");
+  revalidatePath("/company/roster");
+  return { status: "ok" as const };
+}
+
+// 業務内容を追加する時に、開始日より前の勤務が基本給になってしまわないかを見るための、
+// その勤務先・業務内容での承認済みの勤務日（古い順）
+export async function listApprovedWorkDatesAction(staffUserId: string, companyRelationshipId: string | null, taskName: string) {
+  const { membership } = await requireCompanyAdminOrEditor();
+  if (!canManageAny(membership, await getStaffTeamIds(staffUserId))) throw new Error("forbidden");
+  const name = String(taskName).trim();
+  if (!name) return [];
+  const reports = await prisma.workReport.findMany({
+    where: {
+      staffUserId,
+      outcome: "WORKED",
+      approvalStatus: "APPROVED",
+      shift: { companyId: membership.companyId, ...(companyRelationshipId ? { companyRelationshipId } : {}) },
+      OR: [{ taskName: name }, { taskName: null, shift: { taskName: name } }],
+    },
+    select: { shift: { select: { date: true } } },
+  });
+  return [...new Set(reports.map((r) => r.shift.date.toISOString().slice(0, 10)))].sort();
 }
 
 // --- スタッフの単価の名前を、取引先の業務内容の名前にそろえる ---

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PdfLink } from "@/components/PdfLink";
+import { RateFixList, type RateFixItem } from "@/components/company/RateFixList";
 import { openStaffInvoiceAction, reviewStaffInvoiceAction, updateContractorSettingsAction, updateContractorShowWorkplaceAction } from "@/app/company/payroll/actions";
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
@@ -174,6 +175,11 @@ export type ReceivedInvoiceDetail = {
   expensesTotal: number;
   total: number;
   returnReason: string | null;
+  staffUserId: string;
+  // 今の単価で計算し直すと金額が変わる勤務（提出した時の金額 → 今の単価の金額）
+  rateChanged: { shiftId: string; date: string; before: number; after: number }[];
+  // 単価が決まらず基本給で計算している勤務
+  rateUnresolved: RateFixItem[];
 };
 
 const yen = (n: number) => `${n.toLocaleString()}円`;
@@ -224,6 +230,27 @@ export function ReceivedStaffInvoiceView({ invoice }: { invoice: ReceivedInvoice
       </p>
       {invoice.status === "RETURNED" && invoice.returnReason ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">差し戻した理由：{invoice.returnReason}（スタッフが直して再提出するのを待っています）</p>
+      ) : null}
+
+      {invoice.rateUnresolved.length > 0 ? (
+        <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" data-testid="received-invoice-unresolved">
+          <p className="mb-2 font-semibold">業務内容の単価が決まらず、基本給で計算している勤務があります</p>
+          <RateFixList kind="staff" items={invoice.rateUnresolved} staffUserId={invoice.staffUserId} />
+          <p className="mt-2 text-xs">単価を直したら、この請求書を差し戻して出し直してもらうと、直した単価で計算されます。</p>
+        </section>
+      ) : null}
+      {invoice.rateChanged.length > 0 ? (
+        <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" data-testid="received-invoice-rate-changed">
+          <p className="font-semibold">今の単価で計算すると、金額が変わる勤務があります</p>
+          <ul className="mt-1 text-xs">
+            {invoice.rateChanged.map((c) => (
+              <li key={c.shiftId}>
+                {Number(c.date.slice(5, 7))}/{Number(c.date.slice(8, 10))}：{yen(c.before)} → {yen(c.after)}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs">請求書の金額は、スタッフが出した時の単価のままです。差し戻して出し直してもらうと、今の単価で計算し直されます。</p>
+        </section>
       ) : null}
 
       <section className="rounded-2xl border border-border bg-white/60 p-4">

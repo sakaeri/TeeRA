@@ -28,6 +28,10 @@ import {
   addStaffTaskRateVersionAction,
   deleteStaffTaskRateAction,
   alignStaffRateNameAction,
+  deleteStaffTaskRateVersionAction,
+  moveStaffTaskRateVersionAction,
+  moveStaffTaskRateStartAction,
+  listApprovedWorkDatesAction,
   endStaffTaskRateAction,
   updateStaffContractWageAction,
   endStaffContractAction,
@@ -63,6 +67,12 @@ type StaffTaskRate = {
   unpriced?: boolean;
   // 取引先の業務内容に無い名前の時の、そろえる先
   alignTo?: string | null;
+  // 今の単価の種類（「単価を変更」を開いた時に最初から選んでおく）
+  currentWageType?: "HOURLY" | "DAILY" | "MONTHLY" | null;
+  // 単価の開始日より前の勤務（その分は基本給で計算されている）
+  workedBeforeStart?: { count: number; earliest: string | null };
+  // 取引先の業務内容（名前がずれている時に、そろえる先を選ぶ）
+  clientTaskNames?: string[];
   versions: { id: string; label: string; effectiveFrom: string }[];
 };
 
@@ -1879,6 +1889,15 @@ function StaffTaskRatesTab({
   const [newAmount, setNewAmount] = useState("");
   const [newHolidayAmount, setNewHolidayAmount] = useState("");
   const [newEffectiveFrom, setNewEffectiveFrom] = useState(todayJst());
+  // 追加する業務内容での承認済みの勤務日（開始日より前の分が基本給になるのを知らせる）
+  const [newWorkDates, setNewWorkDates] = useState<{ key: string | null; dates: string[] }>({ key: null, dates: [] });
+  // 履歴の開始日を直している行と、その日付・失敗した時の理由
+  const [movingVersionId, setMovingVersionId] = useState<string | null>(null);
+  const [movingVersionFrom, setMovingVersionFrom] = useState("");
+  const [versionError, setVersionError] = useState<string | null>(null);
+  // 取引先の業務内容にない名前の単価を、選んだ名前にそろえる
+  const [alignChoice, setAlignChoice] = useState<Record<string, string>>({});
+  const defaultWageType = baseContract?.wageType === "DAILY" ? "DAILY" : "HOURLY";
 
   // 勤務先ごとに単価へ登録されている業務内容（キーは勤務先のID、勤務先問わずは ""）。追加の画面を開いた時に読み込む
   const [placementTaskNames, setPlacementTaskNames] = useState<Record<string, string[]> | null>(null);
@@ -1892,7 +1911,7 @@ function StaffTaskRatesTab({
     listPlacementTaskNamesByWorkplaceAction()
       .then(setPlacementTaskNames)
       .catch(() => setPlacementTaskNames({}));
-    setNewWageType("HOURLY");
+    setNewWageType(defaultWageType);
     setNewAmount("");
     setNewHolidayAmount("");
     setNewEffectiveFrom(todayJst());
@@ -1914,7 +1933,10 @@ function StaffTaskRatesTab({
 
   function startAmend(r: StaffTaskRate) {
     setAmendingId(r.id);
-    setAmendWageType("HOURLY");
+    // 今の単価と同じ種類を選んでおく（日給なのに時給で入れてしまわないように）
+    setAmendWageType(r.currentWageType ?? defaultWageType);
+    setMovingVersionId(null);
+    setVersionError(null);
     setAmendAmount("");
     setAmendHolidayAmount("");
     setAmendEffectiveFrom(todayJst());
@@ -1956,6 +1978,61 @@ function StaffTaskRatesTab({
       await onChanged();
     });
   }
+
+  function moveVersion(r: StaffTaskRate, versionId: string, newFrom: string) {
+    setVersionError(null);
+    startTransition(async () => {
+      const res = await moveStaffTaskRateVersionAction(r.id, versionId, newFrom);
+      if (res.status === "error") {
+        setVersionError(res.reason);
+        return;
+      }
+      setMovingVersionId(null);
+      await onChanged();
+    });
+  }
+
+  function deleteVersion(r: StaffTaskRate, versionId: string, label: string) {
+    if (!confirm(`履歴の「${label}」を消します。この期間は、ほかの履歴（無ければ基本給）で計算し直されます。よろしいですか？`)) return;
+    setVersionError(null);
+    startTransition(async () => {
+      const res = await deleteStaffTaskRateVersionAction(r.id, versionId);
+      if (res.status === "error") {
+        setVersionError(res.reason);
+        return;
+      }
+      await onChanged();
+    });
+  }
+
+  function startFromEarliest(r: StaffTaskRate) {
+    const earliest = r.workedBeforeStart?.earliest;
+    if (!earliest) return;
+    startTransition(async () => {
+      await moveStaffTaskRateStartAction(r.id, earliest);
+      await onChanged();
+    });
+  }
+
+  // 勤務先と業務内容を選んだら、その業務内容での勤務日を読む（選び直した時は、読んだ時の組み合わせと違えば使わない）
+  const newWorkKey =
+    showNewForm && newCompanyRelationshipId !== UNSELECTED_WORKPLACE && newTaskName.trim()
+      ? `${newCompanyRelationshipId}|${newTaskName.trim()}`
+      : null;
+  useEffect(() => {
+    if (!newWorkKey) return;
+    let cancelled = false;
+    const [relId, task] = [newWorkKey.slice(0, newWorkKey.indexOf("|")), newWorkKey.slice(newWorkKey.indexOf("|") + 1)];
+    listApprovedWorkDatesAction(userId, relId || null, task)
+      .then((d) => {
+        if (!cancelled) setNewWorkDates({ key: newWorkKey, dates: d });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, newWorkKey]);
+  const newWorkBefore = newWorkDates.key === newWorkKey ? newWorkDates.dates.filter((d) => d < newEffectiveFrom) : [];
 
   function submitNewTask() {
     if (!newTaskName.trim() || !newAmount || Number(newAmount) <= 0) return;
@@ -2064,6 +2141,46 @@ function StaffTaskRatesTab({
                         →「{r.alignTo}」にそろえる
                       </button>
                     </div>
+                  ) : r.companyRelationshipId && r.clientTaskNames && !r.clientTaskNames.includes(r.taskName) ? (
+                    // 似た名前が無くても、取引先の業務内容から選んでそろえられるようにする（例：セルフポーター作業→作業）
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900" data-testid="staff-rate-align-pick">
+                      <span>{r.workplaceLabel}の業務内容にない名前です（シフトの業務内容と名前が違うと、この単価は使われません）</span>
+                      {r.clientTaskNames.length > 0 ? (
+                        <span className="flex items-center gap-1">
+                          <select
+                            value={alignChoice[r.id] ?? ""}
+                            onChange={(e) => setAlignChoice((m) => ({ ...m, [r.id]: e.target.value }))}
+                            className="rounded-md border border-amber-700/40 bg-white px-1.5 py-0.5"
+                            aria-label="そろえる業務内容"
+                          >
+                            <option value="">業務内容を選ぶ</option>
+                            {r.clientTaskNames.map((n) => (
+                              <option key={n} value={n}>
+                                {n}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            disabled={pending || !alignChoice[r.id]}
+                            onClick={() =>
+                              startTransition(async () => {
+                                await alignStaffRateNameAction(r.id, alignChoice[r.id]);
+                                await onChanged();
+                              })
+                            }
+                            className="rounded-md border border-amber-700/40 bg-white px-2 py-0.5 font-semibold disabled:opacity-60"
+                          >
+                            にそろえる
+                          </button>
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {r.workedBeforeStart && r.workedBeforeStart.count > 0 ? (
+                    <p className="mt-1 text-xs text-amber-800" data-testid="staff-rate-before-start">
+                      開始日より前の勤務{r.workedBeforeStart.count}件は基本給で計算されています（「単価を変更」で直せます）
+                    </p>
                   ) : null}
                   {deleteError?.id === r.id ? <p className="mt-1 text-xs text-red-600">{deleteError.message}</p> : null}
                 </div>
@@ -2247,16 +2364,78 @@ function StaffTaskRatesTab({
             >
               保存
             </button>
-            {/* これまでの単価 */}
+            {amendingRate.workedBeforeStart && amendingRate.workedBeforeStart.count > 0 && amendingRate.workedBeforeStart.earliest ? (
+              <div className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="rate-before-start">
+                <p>この単価の開始日より前の勤務{amendingRate.workedBeforeStart.count}件は、単価が使われず基本給で計算されています。</p>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => startFromEarliest(amendingRate)}
+                  className="mt-1.5 rounded-md border border-amber-700/40 bg-white px-2 py-1 font-semibold disabled:opacity-60"
+                >
+                  最初の勤務日（{amendingRate.workedBeforeStart.earliest}）から使う
+                </button>
+              </div>
+            ) : null}
+            {/* これまでの単価（最初に登録したものも含めて全部）。間違えて入れた履歴は、開始日を直すか消せる */}
             <p className="mt-4 text-xs font-semibold text-muted">履歴</p>
             <ul className="mt-1 flex flex-col text-xs text-muted" data-testid="rate-history">
               {amendingRate.versions.map((v) => (
-                <li key={v.id} className="flex items-center justify-between border-t border-border/50 py-1">
-                  <span>{v.effectiveFrom} 〜</span>
-                  <span>{v.label}</span>
+                <li key={v.id} className="border-t border-border/50 py-1.5" data-testid="rate-history-row">
+                  <div className="flex items-center justify-between gap-2">
+                    <span>{v.effectiveFrom} 〜</span>
+                    <span className="text-foreground">{v.label}</span>
+                  </div>
+                  {movingVersionId === v.id ? (
+                    <div className="mt-1 flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={movingVersionFrom}
+                        onChange={(e) => setMovingVersionFrom(e.target.value)}
+                        className="rounded-md border border-border px-2 py-1 text-xs text-foreground"
+                        aria-label="新しい開始日"
+                      />
+                      <button
+                        type="button"
+                        disabled={pending || !movingVersionFrom}
+                        onClick={() => moveVersion(amendingRate, v.id, movingVersionFrom)}
+                        className="rounded-md bg-primary px-2 py-1 font-semibold text-primary-foreground disabled:opacity-60"
+                      >
+                        保存
+                      </button>
+                      <button type="button" onClick={() => setMovingVersionId(null)} className="underline">
+                        やめる
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-0.5 flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMovingVersionId(v.id);
+                          setMovingVersionFrom(v.effectiveFrom);
+                          setVersionError(null);
+                        }}
+                        className="text-primary underline"
+                      >
+                        開始日を直す
+                      </button>
+                      {amendingRate.versions.length > 1 ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => deleteVersion(amendingRate, v.id, `${v.effectiveFrom}〜 ${v.label}`)}
+                          className="hover:text-red-600 disabled:opacity-60"
+                        >
+                          消す
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
+            {versionError ? <p className="mt-1 text-xs text-red-600">{versionError}</p> : null}
             <div className="mt-4 flex justify-end gap-4 border-t border-border pt-3 text-xs">
               {!amendingRate.ended ? (
                 <button
@@ -2428,6 +2607,19 @@ function StaffTaskRatesTab({
                   />
                 </label>
               </div>
+              {newWorkBefore.length > 0 ? (
+                // 開始日より前の勤務は、この単価が使われず基本給で計算される
+                <div className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="new-rate-before-start">
+                  <p>開始日より前に、この業務内容の勤務が{newWorkBefore.length}件あります。その分は基本給で計算されます。</p>
+                  <button
+                    type="button"
+                    onClick={() => setNewEffectiveFrom(newWorkBefore[0])}
+                    className="mt-1.5 rounded-md border border-amber-700/40 bg-white px-2 py-1 font-semibold"
+                  >
+                    最初の勤務日（{newWorkBefore[0]}）からにする
+                  </button>
+                </div>
+              ) : null}
               <button
                 type="button"
                 disabled={pending || !newTaskName.trim() || !newAmount || Number(newAmount) <= 0}

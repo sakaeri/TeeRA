@@ -57,6 +57,8 @@ type PlacementRate = {
   currentLabel: string;
   // 今日時点の単価が無い（未設定・終了）。単価を変えていない＝履歴が0件とは別
   unpriced: boolean;
+  // 今の単価の種類（「単価を変更」を開いた時に最初から選んでおく）
+  currentWageType?: "HOURLY" | "DAILY" | "MONTHLY" | null;
   versions: { id: string; label: string; effectiveFrom: string }[];
   // 業務内容ごとの例外（nullなら依頼主共通の規定に従う）
   cancelRule: CancelRule | null;
@@ -1289,7 +1291,7 @@ function PlacementRatesTab({
 
   function startAmend(r: PlacementRate) {
     setAmendingId(r.id);
-    setAmendWageType("HOURLY");
+    setAmendWageType(r.currentWageType ?? "HOURLY");
     setAmendAmount("");
     setAmendHolidayAmount("");
     setAmendEffectiveFrom(todayJst());

@@ -530,3 +530,33 @@ export async function approvedStaffInvoiceStaffIds(companyId: string, targetMont
   });
   return new Set(rows.map((r) => r.staffUserId));
 }
+
+// 届いた請求書の確認：提出した時の金額と、今の単価で計算し直した金額が違う勤務と、単価が決まらず基本給で
+// 計算している勤務。請求書の金額は提出した時のままなので、単価を直した時は差し戻して出し直してもらう。
+export async function checkStaffInvoiceRates(invoice: { companyId: string; staffUserId: string; targetMonth: string; workLines: unknown }) {
+  const submitted = (Array.isArray(invoice.workLines) ? invoice.workLines : []) as ComputedWorkLine[];
+  if (submitted.length === 0) return { changed: [], unresolved: [] };
+  const dates = submitted.map((l) => l.description.slice(0, 10)).sort();
+  const start = new Date(`${dates[0]}T00:00:00.000Z`);
+  const end = new Date(new Date(`${dates[dates.length - 1]}T00:00:00.000Z`).getTime() + DAY_MS);
+  const shiftIds = new Set(submitted.map((l) => l.shiftId));
+  const { lines, unresolved } = await computeApprovedWorkLines({
+    companyId: invoice.companyId,
+    staffUserId: invoice.staffUserId,
+    targetMonth: invoice.targetMonth,
+    range: { start, end },
+  });
+  const currentByShift = new Map(lines.filter((l) => shiftIds.has(l.shiftId)).map((l) => [l.shiftId, l]));
+  const changed = submitted
+    .map((l) => ({ shiftId: l.shiftId, date: l.description.slice(0, 10), before: l.amount, after: currentByShift.get(l.shiftId)?.amount ?? null }))
+    .filter((c) => c.after !== null && c.after !== c.before) as { shiftId: string; date: string; before: number; after: number }[];
+  const membership = await prisma.companyMembership.findFirst({
+    where: { companyId: invoice.companyId, userId: invoice.staffUserId },
+    select: { baseWageTaskNames: true },
+  });
+  const acknowledged = new Set(Array.isArray(membership?.baseWageTaskNames) ? (membership.baseWageTaskNames as string[]) : []);
+  return {
+    changed,
+    unresolved: unresolved.filter((u) => shiftIds.has(u.shiftId) && !acknowledged.has(u.taskName)),
+  };
+}
