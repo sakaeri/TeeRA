@@ -63,6 +63,12 @@ try {
   await person.goto(extractMagicLinkFromLog());
   await person.waitForURL("http://localhost:3000/register/company");
   log("会社を作る画面に「スタッフとして働く方」の案内が出る", (await person.getByTestId("staff-guide").count()) === 1);
+  await person.getByRole("button", { name: "スタッフとして働く方はこちら" }).click();
+  log(
+    "「スタッフとして働く方はこちら」で会社を作る欄が隠れ、招待URLからの参加のしかたが出る",
+    (await person.getByTestId("staff-guide-open").count()) === 1 && (await person.locator("#name").count()) === 0,
+  );
+  await person.getByRole("button", { name: "← 会社として使う方はこちら" }).click();
   // 案内を読まずに会社を作ってしまう
   await person.fill("#name", `間違え会社${suffix}`);
   await person.click("button[type=submit]");
