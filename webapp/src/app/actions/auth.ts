@@ -13,6 +13,7 @@ import {
 } from "@/lib/validation/auth";
 import { verifySession, getActiveMembership, ACTIVE_COMPANY_COOKIE } from "@/lib/auth/session";
 import { redeemInvite, lookupInvite, redeemCompanyRelationshipInvite } from "@/lib/domain/invites";
+import { deleteOwnCompany } from "@/lib/domain/companyDeletion";
 import {
   requestPasswordReset,
   resetPassword,
@@ -53,7 +54,7 @@ export async function registerAction(
     user = await registerPendingUser(parsed.data);
   } catch (error) {
     if (error instanceof Error && error.message === "email_already_registered") {
-      return { errors: { email: ["このメールアドレスは既に登録されています。"] } };
+      return { errors: { email: ["このメールアドレスは既に登録されています。"], alreadyRegistered: ["1"] } };
     }
     throw error;
   }
@@ -367,4 +368,30 @@ function z_flatten(
     if (value) out[key] = value;
   }
   return out;
+}
+
+// 間違えて作った会社を、作った本人が消す（まだ何も使っていない会社だけ）。
+// 消したあとは、残っている会社（スタッフとして入っている会社など）へ移る
+export async function deleteOwnCompanyAction() {
+  const { userId } = await verifySession();
+  const membership = await getActiveMembership(userId);
+  if (!membership) throw new Error("forbidden");
+  try {
+    await deleteOwnCompany(membership.companyId, userId);
+  } catch (error) {
+    if (error instanceof Error && error.message === "not_deletable") {
+      return { error: "この会社は使われているため削除できません。" };
+    }
+    throw error;
+  }
+  const store = await cookies();
+  const rest = await prisma.companyMembership.findMany({ where: { userId }, select: { companyId: true, role: true } });
+  if (rest.length > 0) {
+    // 残っている会社を次から開く会社にする（スタッフとして入っている会社を優先）
+    const next = rest.find((m) => m.role === "STAFF") ?? rest[0];
+    store.set(ACTIVE_COMPANY_COOKIE, next.companyId, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 365 });
+    redirect(next.role === "STAFF" ? "/staff" : "/company");
+  }
+  store.delete(ACTIVE_COMPANY_COOKIE);
+  redirect("/register/company");
 }
