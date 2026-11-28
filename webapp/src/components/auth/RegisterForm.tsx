@@ -64,6 +64,22 @@ export function RegisterForm({ inviteToken }: { inviteToken?: string }) {
         {state?.errors?.email ? (
           <p className="text-xs text-red-600">{state.errors.email[0]}</p>
         ) : null}
+        {state?.errors?.alreadyRegistered ? (
+          // もうアカウントがある人は、登録し直さずにログインすれば（招待もそのまま）参加できる
+          <div className="mt-1 rounded-lg bg-accent/10 px-3 py-2.5 text-xs" data-testid="already-registered">
+            <p className="mb-2 text-foreground/80">
+              {inviteToken
+                ? "このメールアドレスのアカウントはもうあります。ログインすると、そのまま招待に参加できます。"
+                : "このメールアドレスのアカウントはもうあります。ログインしてください。"}
+            </p>
+            <Link
+              href={inviteToken ? `/login?from=/invite/${inviteToken}` : "/login"}
+              className="block rounded-lg bg-primary px-3 py-2 text-center text-sm font-semibold text-primary-foreground"
+            >
+              {inviteToken ? "ログインして参加する" : "ログインする"}
+            </Link>
+          </div>
+        ) : null}
       </div>
 
       {state?.message ? (

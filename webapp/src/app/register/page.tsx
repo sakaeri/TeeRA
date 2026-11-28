@@ -16,6 +16,11 @@ export default async function RegisterPage({
         <h1 className="mb-6 text-center text-lg font-semibold">
           アカウントを作成
         </h1>
+        {inviteToken ? null : (
+          <p className="-mt-3 mb-5 rounded-lg bg-accent/10 px-3 py-2 text-xs text-foreground/80" data-testid="register-staff-note">
+            スタッフとして働く方は、ここではなく、所属先の会社から届いた招待URLから登録してください。
+          </p>
+        )}
         <RegisterForm inviteToken={inviteToken} />
       </div>
     </main>

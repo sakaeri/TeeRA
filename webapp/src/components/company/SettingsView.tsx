@@ -30,6 +30,7 @@ import {
 import { ContractsView } from "@/components/company/ContractsView";
 import { WorkReportsQueue } from "@/components/company/WorkReportsQueue";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { deleteOwnCompanyAction } from "@/app/actions/auth";
 import { CopyUrlField } from "@/components/CopyUrlField";
 
 type Admin = {
@@ -127,6 +128,7 @@ export function SettingsView({
   contractClients,
   workReports,
   allowances,
+  canDeleteCompany = false,
 }: {
   initialTab: string;
   initialCreate?: "template" | "team";
@@ -150,6 +152,8 @@ export function SettingsView({
   contractClients: ContractClientOption[];
   workReports: WorkReportRow[];
   allowances: AllowanceRow[];
+  // まだ何も使っていない会社（間違えて作った会社）なら、作った本人が消せる
+  canDeleteCompany?: boolean;
 }) {
   const router = useRouter();
   // 契約書テンプレートは本部が管理するため、チームマネージャーには出さない
@@ -217,6 +221,7 @@ export function SettingsView({
             currentUserId={currentUserId}
             openCreate={initialCreate === "team"}
           />
+          {canDeleteCompany ? <DeleteOwnCompanySection companyName={companyName} /> : null}
         </div>
       ) : null}
 
@@ -2004,5 +2009,46 @@ function TeamInviteForm({
         </div>
       ) : null}
     </div>
+  );
+}
+
+// 間違えて作った会社を消す（スタッフとして招待された人が、自分でも会社を作ってしまった時など）。
+// まだ何も使っていない会社にだけ出す。消したあとは、スタッフとして入っている会社などへ移る
+function DeleteOwnCompanySection({ companyName }: { companyName: string }) {
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  return (
+    <section className="rounded-2xl border border-red-200 bg-white p-5" data-testid="delete-own-company">
+      <h2 className="font-serif-jp text-base font-bold text-red-700">この会社を削除</h2>
+      <p className="mt-1 text-xs text-muted">
+        間違えて会社を作ってしまった時に使います。スタッフとして働く方は、この会社を削除すると、所属先の会社のスタッフの画面が開くようになります。
+      </p>
+      {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className="mt-3 rounded-lg border border-red-300 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50"
+      >
+        この会社を削除する
+      </button>
+      {confirming ? (
+        <ConfirmDialog
+          message={`「${companyName}」を削除します。元に戻せません。よろしいですか？`}
+          confirmLabel="削除する"
+          pending={pending}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() =>
+            startTransition(async () => {
+              const r = await deleteOwnCompanyAction();
+              if (r?.error) {
+                setError(r.error);
+                setConfirming(false);
+              }
+            })
+          }
+        />
+      ) : null}
+    </section>
   );
 }

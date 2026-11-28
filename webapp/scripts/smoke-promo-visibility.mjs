@@ -71,8 +71,8 @@ try {
     psql(
       `insert into "PromoItem" (id, "companyId", "imageUrl", name, "pointsCost", stock, visibility, "createdAt") values (gen_random_uuid()::text, '${companyA}', 'https://example.com/x.png', '${name}', 10, 5, '${visibility}', now()) returning id;`,
     );
-  const ownOnlyId = addItem("A社社員限定タオル", "OWN_STAFF");
-  const publicId = addItem("A社フリーキャップ", "PUBLIC");
+  const ownOnlyId = addItem(`A社社員限定タオル${suffix}`, "OWN_STAFF");
+  const publicId = addItem(`A社フリーキャップ${suffix}`, "PUBLIC");
 
   // A社の画面：掲載先の表示と、登録画面の選択
   await ownerA.goto("http://localhost:3000/company");
@@ -93,11 +93,11 @@ try {
   const pub = staffB.getByTestId("public-promo-items");
   await pub.waitFor();
   const pubText = await pub.innerText();
-  log("ほかの会社のフリー掲載は「みんなの販促品」に出る", pubText.includes("A社フリーキャップ"));
-  log("ほかの会社の自社スタッフのみは出ない", !(await staffB.locator("body").innerText()).includes("A社社員限定タオル"));
+  log("ほかの会社のフリー掲載は「みんなの販促品」に出る", pubText.includes(`A社フリーキャップ${suffix}`));
+  log("ほかの会社の自社スタッフのみは出ない", !(await staffB.locator("body").innerText()).includes(`A社社員限定タオル${suffix}`));
 
   // フリー掲載を交換する
-  await pub.getByText("A社フリーキャップ").click();
+  await pub.getByText(`A社フリーキャップ${suffix}`).click();
   await staffB.getByText(`提供：販促A社${suffix}`).waitFor();
   await staffB.getByPlaceholder("例：山田 太郎").fill("B社 太郎");
   await staffB.getByPlaceholder("例：123-4567").fill("100-0001");
